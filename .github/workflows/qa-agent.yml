@@ -1,0 +1,53 @@
+name: QA Agent
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  workflow_dispatch:
+
+jobs:
+  automated-qa:
+    name: Automated QA Review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install & Test
+        id: tests
+        run: |
+          npm ci --ignore-scripts
+          npm run lint 2>&1 | tee lint-output.txt || true
+          npm test 2>&1 | tee test-output.txt || true
+          npm run build 2>&1 | tee build-output.txt || true
+        continue-on-error: true
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-results
+          path: |
+            lint-output.txt
+            test-output.txt
+            build-output.txt
+      - name: Claude QA Analysis
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          direct_prompt: |
+            Du bist ein QA-Agent. Analysiere diesen PR auf Deutsch.
+            
+            Prüfe:
+            1. Sind Tests für alle neuen Funktionen vorhanden?
+            2. Gibt es Edge Cases die nicht getestet werden?
+            3. Sind die Tests aussagekräftig (kein reines Mock-Testing)?
+            4. Ist der Code lesbar und wartbar?
+            5. Gibt es potenzielle Performance-Probleme?
+            
+            Antworte strukturiert mit: ✅ OK | ⚠️ Verbesserung | ❌ Blockiert
