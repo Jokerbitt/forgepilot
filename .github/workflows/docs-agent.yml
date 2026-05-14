@@ -1,0 +1,38 @@
+name: Documentation Agent
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  update-docs:
+    name: Update Documentation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Get changed files
+        id: changed
+        run: |
+          echo "files=$(git diff --name-only HEAD~1 HEAD | tr '\n' ' ')" >> $GITHUB_OUTPUT
+      - name: Claude Documentation Update
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          direct_prompt: |
+            Du bist ein Documentation-Agent. Folgende Dateien wurden geändert:
+            ${{ steps.changed.outputs.files }}
+            
+            Aufgaben:
+            1. Prüfe ob README.md noch aktuell ist
+            2. Prüfe ob CHANGELOG.md einen Eintrag braucht
+            3. Schlage konkrete Dokumentations-Updates vor
+            
+            Wenn Updates nötig sind: Erstelle einen PR mit den Änderungen.
+            Antworte auf Deutsch.
