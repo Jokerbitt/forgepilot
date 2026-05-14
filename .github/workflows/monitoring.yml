@@ -1,0 +1,92 @@
+name: Monitoring & Health Check
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # Alle 15 Minuten
+  workflow_dispatch:           # Manuell auslösbar
+    inputs:
+      environment:
+        description: "Environment to check"
+        required: true
+        default: "production"
+        type: choice
+        options: [production, staging]
+
+jobs:
+  # ── Health Check: Ist die App erreichbar? ───────────────────────
+  health-check:
+    name: Health Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check production health endpoint
+        id: health
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 10 \
+            "${{ vars.PRODUCTION_URL }}/health" || echo "000")
+          echo "status=$STATUS" >> $GITHUB_OUTPUT
+          echo "Health check status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Health check failed with status $STATUS"
+            exit 1
+          fi
+      - name: Create Linear incident ticket on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const response = await fetch('https://api.linear.app/graphql', {
+              method: 'POST',
+              headers: {
+                'Authorization': process.env.LINEAR_API_KEY,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                query: `mutation {
+                  issueCreate(input: {
+                    teamId: "${{ vars.LINEAR_TEAM_ID }}"
+                    title: "🚨 Production Down: Health Check failed"
+                    description: "Automatisch erkannt um ${new Date().toISOString()}\nStatus Code: ${{ steps.health.outputs.status }}\nURL: ${{ vars.PRODUCTION_URL }}"
+                    priority: 1
+                    labelIds: ["${{ vars.LINEAR_BUG_LABEL_ID }}"]
+                  }) { success issue { identifier } }
+                }`
+              })
+            });
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+
+  # ── Performance Check: Ist die App schnell genug? ───────────────
+  performance-check:
+    name: Performance Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          urls: ${{ vars.PRODUCTION_URL }}
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+
+  # ── Dependency Check: Neue kritische CVEs? ──────────────────────
+  cve-check:
+    name: CVE Check
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 6 * * *'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci --ignore-scripts
+      - name: Check for critical vulnerabilities
+        run: |
+          CRITICAL=$(npm audit --json | jq '.metadata.vulnerabilities.critical')
+          HIGH=$(npm audit --json | jq '.metadata.vulnerabilities.high')
+          echo "Critical: $CRITICAL, High: $HIGH"
+          if [ "$CRITICAL" -gt "0" ]; then
+            echo "::error::$CRITICAL critical vulnerabilities found!"
+            exit 1
+          fi
