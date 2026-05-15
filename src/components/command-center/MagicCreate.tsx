@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { ManualTicketModal } from './ManualTicketModal'
 
 const SUGGESTIONS = [
   "✨ Neues Feature: ",
@@ -11,8 +12,11 @@ const SUGGESTIONS = [
 
 export function MagicCreate() {
   const [prompt, setPrompt] = useState('')
+  const [projectId, setProjectId] = useState('')
+  const [milestone, setMilestone] = useState('')
   const [loading, setLoading] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -34,7 +38,12 @@ export function MagicCreate() {
       await fetch('/api/magic-create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({ 
+          mode: 'magic',
+          prompt,
+          projectId: projectId.trim() || undefined,
+          milestone: milestone.trim() || undefined
+        })
       })
       
       setPrompt('')
@@ -102,6 +111,37 @@ export function MagicCreate() {
           </ul>
         </div>
       )}
+
+      {/* Metadaten (Project / Milestone) */}
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          value={projectId}
+          onChange={(e) => setProjectId(e.target.value)}
+          placeholder="Projekt (z.B. LOCAL_IDEAS)"
+          className="bg-gray-900 border border-gray-800 text-gray-300 text-xs rounded-md px-3 py-1.5 focus:outline-none focus:border-blue-500 w-48"
+        />
+        <input
+          type="text"
+          value={milestone}
+          onChange={(e) => setMilestone(e.target.value)}
+          placeholder="Meilenstein (z.B. M5)"
+          className="bg-gray-900 border border-gray-800 text-gray-300 text-xs rounded-md px-3 py-1.5 focus:outline-none focus:border-blue-500 w-48"
+        />
+        <div className="flex-1" />
+        <button
+          type="button"
+          onClick={() => setIsManualModalOpen(true)}
+          className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-md border border-gray-700 transition-colors flex items-center gap-1"
+        >
+          <span>➕</span> Manuell anlegen
+        </button>
+      </div>
+
+      <ManualTicketModal 
+        isOpen={isManualModalOpen}
+        onClose={() => setIsManualModalOpen(false)}
+      />
     </div>
   )
 }

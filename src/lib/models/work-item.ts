@@ -10,6 +10,7 @@ export interface WorkItem {
   title: string
   url: string
   projectId: string
+  milestone?: string
   status: WorkItemStatus
   /** 0 = urgent, 1 = high, 2 = medium, 3 = low, 4 = none */
   priority: 0 | 1 | 2 | 3 | 4

@@ -1,39 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
-import type { WorkItem } from '@/lib/models/work-item'
+import type { WorkItem, RiskClass } from '@/lib/models/work-item'
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt } = await request.json()
-    if (!prompt) {
-      return NextResponse.json({ error: 'Prompt is required' }, { status: 400 })
-    }
-
-    // SIMULATION: Magic Refine (Later this will be a real LLM call)
-    // We analyze the prompt and generate a structured local ticket
+    const body = await request.json()
+    const { mode } = body // 'magic' or 'manual'
     
-    let riskClass: 'A' | 'B' | 'C' = 'C'
-    let title = prompt
-    if (prompt.toLowerCase().includes('urgent') || prompt.toLowerCase().includes('bug')) riskClass = 'A'
-    else if (prompt.toLowerCase().includes('refactor') || prompt.toLowerCase().length > 50) riskClass = 'B'
+    let newItem: WorkItem
 
-    const newItem: WorkItem = {
-      id: `LOCAL-${Math.floor(Math.random() * 10000)}`,
-      source: 'linear', // Use linear as fallback for UI purposes, could be 'local' if added
-      type: 'ticket',
-      title: title.length > 60 ? title.substring(0, 60) + '...' : title,
-      url: '#',
-      projectId: 'LOCAL_IDEAS',
-      status: 'todo',
-      priority: riskClass === 'A' ? 1 : 2,
-      blocked: false,
-      risk: riskClass,
-      aiDelegable: true,
-      estimatedMinutes: Math.floor(Math.random() * 120) + 30,
-      labels: ['magic-create', 'local'],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+    if (mode === 'manual') {
+      // Manual ticket creation
+      const { title, description, projectId, milestone, riskClass, priority, estimate } = body
+      if (!title) return NextResponse.json({ error: 'Title is required' }, { status: 400 })
+
+      newItem = {
+        id: `LOCAL-${Date.now().toString().slice(-4)}`,
+        source: 'local' as any, // casting as we haven't updated all types strictly
+        type: 'ticket',
+        title,
+        url: '#',
+        projectId: projectId || 'LOCAL_IDEAS',
+        milestone,
+        status: 'todo',
+        priority: priority !== undefined ? priority : 2,
+        blocked: false,
+        risk: riskClass || 'C',
+        aiDelegable: true,
+        estimatedMinutes: estimate || 60,
+        labels: ['manual', 'local'],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    } else {
+      // Magic create
+      const { prompt, projectId, milestone } = body
+      if (!prompt) {
+        return NextResponse.json({ error: 'Prompt is required' }, { status: 400 })
+      }
+
+      let riskClass: RiskClass = 'C'
+      let title = prompt
+      if (prompt.toLowerCase().includes('urgent') || prompt.toLowerCase().includes('bug')) riskClass = 'A'
+      else if (prompt.toLowerCase().includes('refactor') || prompt.toLowerCase().length > 50) riskClass = 'B'
+
+      newItem = {
+        id: `LOCAL-${Date.now().toString().slice(-4)}`,
+        source: 'local' as any,
+        type: 'ticket',
+        title: title.length > 60 ? title.substring(0, 60) + '...' : title,
+        url: '#',
+        projectId: projectId || 'LOCAL_IDEAS',
+        milestone,
+        status: 'todo',
+        priority: riskClass === 'A' ? 1 : 2,
+        blocked: false,
+        risk: riskClass,
+        aiDelegable: true,
+        estimatedMinutes: Math.floor(Math.random() * 120) + 30,
+        labels: ['magic-create', 'local'],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
     }
 
     const localItemsPath = path.join(process.cwd(), 'config', 'local-items.json')
@@ -49,7 +78,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, item: newItem })
   } catch (error) {
     return NextResponse.json(
-      { error: 'Failed to create magic ticket', message: error instanceof Error ? error.message : String(error) },
+      { error: 'Failed to create ticket', message: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     )
   }
