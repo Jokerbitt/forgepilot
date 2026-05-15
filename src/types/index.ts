@@ -1,0 +1,19 @@
+export type { WorkItem, WorkItemSource, WorkItemType, WorkItemStatus, RiskClass } from '@/lib/models/work-item'
+export type { TaskContract, Delegation, DelegationStatus, ExecutionRoute, PrivacyMode } from '@/lib/models/delegation'
+export type { AgentRun, AgentRunStatus, TraceEvent, TraceEventType } from '@/lib/models/agent-run'
+export type { ApprovalRequest, ApprovalStatus } from '@/lib/models/approval'
+export type { CostEntry, CostBudget, CostSummary, CostPeriod, CostCategory } from '@/lib/models/cost'
+export type { NBARecommendation, NBAScore, SuggestedAction } from '@/lib/models/nba'
+export type { ConnectorManifest, ConnectorHealth, ConnectorCategory, ConnectorAuthType, ConnectorHealthStatus, ConnectorCapability, ConfigField, ConfigFieldType } from '@/lib/connectors/types'
+export { githubConnectorManifest } from '@/lib/connectors/github'
+export type { GitHubConnectorConfig } from '@/lib/connectors/github'
+export { linearConnectorManifest } from '@/lib/connectors/linear'
+export type { LinearConnectorConfig } from '@/lib/connectors/linear'
+export {
+  connectorRegistry,
+  getAllConnectorHealth,
+  getConnectorManifest,
+  getConnectorHealth,
+  listConnectorManifests,
+} from '@/lib/connectors/registry'
+export type { ConnectorHealthView, ConnectorConfigMap, ConnectorId } from '@/lib/connectors/registry'
