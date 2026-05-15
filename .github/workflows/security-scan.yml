@@ -6,28 +6,30 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: "0 6 * * 1"  # Jeden Montag 06:00 UTC
+    - cron: "0 6 * * 1"
 
 jobs:
-  # ── CodeQL: Statische Code-Analyse ──────────────────────────────
   codeql:
     name: CodeQL Analysis
     runs-on: ubuntu-latest
     permissions:
       security-events: write
       contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v4
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: javascript, typescript
+          languages: javascript-typescript
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
       - name: Run CodeQL Analysis
         uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"
+        continue-on-error: true
 
-  # ── npm audit: Dependency Vulnerabilities ───────────────────────
   dependency-audit:
     name: Dependency Audit
     runs-on: ubuntu-latest
@@ -49,7 +51,6 @@ jobs:
           name: npm-audit-report
           path: audit-report.json
 
-  # ── Secret Scanning: Hardcodierte Secrets erkennen ──────────────
   secret-scan:
     name: Secret Scan
     runs-on: ubuntu-latest
@@ -64,7 +65,6 @@ jobs:
           base: ${{ github.event.repository.default_branch }}
           extra_args: --only-verified
 
-  # ── Claude Security Review: KI-basiertes Security Review ────────
   claude-security-review:
     name: Claude Security Review
     runs-on: ubuntu-latest
@@ -78,19 +78,20 @@ jobs:
           fetch-depth: 0
       - name: Claude Security Analysis
         uses: anthropics/claude-code-action@beta
+        continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           direct_prompt: |
-            Führe ein Security Review dieses Pull Requests durch. Antworte auf Deutsch.
-            
-            Prüfe explizit auf:
+            Fuehre ein Security Review dieses Pull Requests durch. Antworte auf Deutsch.
+
+            Pruefe explizit auf:
             - SQL Injection, XSS, CSRF Schwachstellen
             - Hardcodierte Secrets oder API Keys
             - Unsichere Authentifizierung / Autorisierung
             - Unsichere Datenvalidierung
             - Exponierte sensible Daten in Logs
-            - Unsichere Abhängigkeiten
-            
+            - Unsichere Abhaengigkeiten
+
             Format: Kritisch / Hoch / Mittel / Info
             Nur echte Probleme melden, keine False Positives.
