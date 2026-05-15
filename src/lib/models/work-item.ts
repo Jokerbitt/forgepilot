@@ -21,6 +21,9 @@ export interface WorkItem {
   costEstimateUsd?: number
   labels?: string[]
   assigneeId?: string
+  assigneeName?: string
+  assigneeAvatarUrl?: string
+  estimate?: number
   updatedAt: string
   createdAt: string
 }

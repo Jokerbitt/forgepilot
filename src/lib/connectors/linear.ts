@@ -29,7 +29,10 @@ interface LinearIssueView {
   }
   assignee?: {
     id: string
+    name?: string
+    avatarUrl?: string
   }
+  estimate?: number
   updatedAt: string
   createdAt: string
 }
@@ -134,6 +137,9 @@ export function mapLinearIssueToWorkItem(issue: LinearIssueView): WorkItem {
     aiDelegable: risk !== 'C' && status !== 'done' && status !== 'cancelled',
     labels,
     assigneeId: issue.assignee?.id,
+    assigneeName: issue.assignee?.name,
+    assigneeAvatarUrl: issue.assignee?.avatarUrl,
+    estimate: issue.estimate,
     updatedAt: issue.updatedAt,
     createdAt: issue.createdAt,
   }

@@ -1,6 +1,6 @@
 import type { WorkItem } from '../models/work-item'
 import type { NBAScore } from '../models/nba'
-import { NBA_CONFIG } from './nba-config'
+import { getNBAConfig } from './nba-config'
 
 export function calculateScore(item: WorkItem): NBAScore {
   // Urgency (0-25)
@@ -25,11 +25,19 @@ export function calculateScore(item: WorkItem): NBAScore {
   
   // Time-Decay Penalty für alte Tickets (aus Config)
   let decayPenalty = 0
-  if (NBA_CONFIG.penalizeOldBacklogs && item.updatedAt) {
+  const config = getNBAConfig()
+  
+  if (config.penalizeOldBacklogs && item.updatedAt) {
     const ageDays = (Date.now() - new Date(item.updatedAt).getTime()) / (1000 * 60 * 60 * 24)
-    if (ageDays >= NBA_CONFIG.backlogPenaltyAgeDays) {
-      decayPenalty = NBA_CONFIG.backlogPenaltyScore
+    if (ageDays >= config.backlogPenaltyAgeDays) {
+      decayPenalty = config.backlogPenaltyScore
     }
+  }
+
+  // Pinned Items boost
+  const isPinned = config.pinnedItems.includes(item.id)
+  if (isPinned) {
+    baseScore += 1000 // Boost pinned items to the very top
   }
 
   // Berechne Total-Score (Urgency + Impact + Delegability + Readiness)

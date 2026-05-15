@@ -15,7 +15,8 @@ const ISSUES_QUERY = `
         project { id }
         team { id }
         labels { nodes { name } }
-        assignee { id }
+        assignee { id name avatarUrl }
+        estimate
         updatedAt
         createdAt
       }

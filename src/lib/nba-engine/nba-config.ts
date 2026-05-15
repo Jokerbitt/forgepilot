@@ -1,15 +1,40 @@
-export const NBA_CONFIG = {
-  // Harte Filter
-  ignoreStatuses: ['done', 'cancelled', 'duplicate', 'archived'],
-  
-  // Time-Decay (Verrottende Backlogs)
-  penalizeOldBacklogs: true,
-  backlogPenaltyAgeDays: 90,   // Ab wann gilt es als verstaubt?
-  backlogPenaltyScore: 20,     // Wie viele Punkte Abzug? (wird abgezogen, also positiv angeben)
+import fs from 'fs'
+import path from 'path'
 
-  // Triage
-  showTriageJoker: true,       // Soll gelegentlich ein altes Backlog-Ticket auftauchen?
+export interface NBAConfig {
+  ignoreStatuses: string[]
+  penalizeOldBacklogs: boolean
+  backlogPenaltyAgeDays: number
+  backlogPenaltyScore: number
+  showTriageJoker: boolean
+  maxRecommendations: number
+  pinnedItems: string[]
+}
 
-  // UI Anzeige
-  maxRecommendations: 5        // Wie viele Karten zeigt das Dashboard?
+const CONFIG_PATH = path.join(process.cwd(), 'config', 'nba-settings.json')
+
+export function getNBAConfig(): NBAConfig {
+  try {
+    const data = fs.readFileSync(CONFIG_PATH, 'utf-8')
+    return JSON.parse(data) as NBAConfig
+  } catch (error) {
+    // Fallback if file doesn't exist
+    return {
+      ignoreStatuses: ['done', 'cancelled', 'duplicate', 'archived'],
+      penalizeOldBacklogs: true,
+      backlogPenaltyAgeDays: 90,
+      backlogPenaltyScore: 20,
+      showTriageJoker: true,
+      maxRecommendations: 5,
+      pinnedItems: []
+    }
+  }
+}
+
+export function saveNBAConfig(config: NBAConfig): void {
+  const dir = path.dirname(CONFIG_PATH)
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true })
+  }
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8')
 }

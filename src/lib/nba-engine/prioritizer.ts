@@ -2,12 +2,14 @@ import type { WorkItem } from '../models/work-item'
 import type { NBARecommendation, SuggestedAction } from '../models/nba'
 import type { ExecutionRoute } from '../models/delegation'
 import { calculateScore } from './scorer'
-import { NBA_CONFIG } from './nba-config'
+import { getNBAConfig } from './nba-config'
 
 export function prioritizeItems(items: WorkItem[]): NBARecommendation[] {
+  const config = getNBAConfig()
+  
   // Filtern nach Status-Ignorier-Regeln aus Config
   const relevantItems = items.filter(
-    (item) => !NBA_CONFIG.ignoreStatuses.includes(item.status.toLowerCase())
+    (item) => !config.ignoreStatuses.includes(item.status.toLowerCase())
   )
 
   const recs: NBARecommendation[] = relevantItems.map(item => {
@@ -61,11 +63,11 @@ export function prioritizeItems(items: WorkItem[]): NBARecommendation[] {
   const sortedRecs = recs.sort((a, b) => b.score.total - a.score.total)
 
   // Triage Joker (Falls Config aktiv und genügend Items da sind)
-  if (NBA_CONFIG.showTriageJoker && sortedRecs.length > NBA_CONFIG.maxRecommendations) {
-    const oldItems = sortedRecs.slice(NBA_CONFIG.maxRecommendations).filter(rec => {
+  if (config.showTriageJoker && sortedRecs.length > config.maxRecommendations) {
+    const oldItems = sortedRecs.slice(config.maxRecommendations).filter(rec => {
       if (!rec.workItem.updatedAt) return false
       const ageDays = (Date.now() - new Date(rec.workItem.updatedAt).getTime()) / (1000 * 60 * 60 * 24)
-      return ageDays >= NBA_CONFIG.backlogPenaltyAgeDays
+      return ageDays >= config.backlogPenaltyAgeDays
     })
     
     if (oldItems.length > 0) {
@@ -79,9 +81,9 @@ export function prioritizeItems(items: WorkItem[]): NBARecommendation[] {
       joker.score.total = 1 // Ganz unten in den Top X, aber sichtbar
       
       // Ersetze das letzte angezeigte Element durch den Joker
-      sortedRecs[NBA_CONFIG.maxRecommendations - 1] = joker
+      sortedRecs[config.maxRecommendations - 1] = joker
     }
   }
 
-  return sortedRecs.slice(0, NBA_CONFIG.maxRecommendations)
+  return sortedRecs.slice(0, config.maxRecommendations)
 }
