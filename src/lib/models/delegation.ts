@@ -16,6 +16,7 @@ export interface TaskContract {
   branchStrategy: 'feature' | 'fix' | 'chore'
   requiresApproval: boolean
   privacyMode: PrivacyMode
+  llmModel?: string
   createdAt: string
 }
 

@@ -9,6 +9,7 @@ export interface NBAConfig {
   showTriageJoker: boolean
   maxRecommendations: number
   pinnedItems: string[]
+  customLlmModels: string[]
 }
 
 const CONFIG_PATH = path.join(process.cwd(), 'config', 'nba-settings.json')
@@ -26,7 +27,8 @@ export function getNBAConfig(): NBAConfig {
       backlogPenaltyScore: 20,
       showTriageJoker: true,
       maxRecommendations: 5,
-      pinnedItems: []
+      pinnedItems: [],
+      customLlmModels: []
     }
   }
 }

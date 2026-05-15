@@ -6,6 +6,7 @@ import type { NBAConfig } from '@/lib/nba-engine/nba-config'
 export default function SettingsPage() {
   const [config, setConfig] = useState<NBAConfig | null>(null)
   const [saving, setSaving] = useState(false)
+  const [newModel, setNewModel] = useState('')
 
   useEffect(() => {
     fetch('/api/settings')
@@ -97,6 +98,52 @@ export default function SettingsPage() {
                 <span className="text-xs text-gray-500">Mischt gelegentlich ein uraltes Ticket ins Dashboard, um es aufzuräumen.</span>
               </div>
             </label>
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold text-gray-300">Eigene KI-Modelle</h2>
+          <div className="bg-gray-900 p-4 rounded-lg space-y-4">
+            <p className="text-sm text-gray-400">Füge eigene oder lokale LLM-Modelle hinzu, die du bei der Delegation auswählen möchtest.</p>
+            
+            <div className="flex space-x-2">
+              <input 
+                type="text" 
+                value={newModel}
+                onChange={e => setNewModel(e.target.value)}
+                placeholder="z.B. ollama/llama-3-8b"
+                className="flex-1 bg-gray-800 text-white px-3 py-2 rounded border border-gray-700"
+              />
+              <button 
+                onClick={() => {
+                  if (newModel && !config.customLlmModels?.includes(newModel)) {
+                    setConfig({...config, customLlmModels: [...(config.customLlmModels || []), newModel]})
+                    setNewModel('')
+                  }
+                }}
+                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-bold transition-colors"
+              >
+                Hinzufügen
+              </button>
+            </div>
+            
+            <div className="flex flex-wrap gap-2 pt-2">
+              {(config.customLlmModels || []).length === 0 ? (
+                <span className="text-sm text-gray-500 italic">Keine eigenen Modelle hinterlegt.</span>
+              ) : (
+                (config.customLlmModels || []).map(model => (
+                  <div key={model} className="bg-gray-800 border border-gray-700 rounded-full px-3 py-1 flex items-center space-x-2 text-sm text-gray-300">
+                    <span>{model}</span>
+                    <button 
+                      onClick={() => setConfig({...config, customLlmModels: config.customLlmModels.filter(m => m !== model)})}
+                      className="text-gray-500 hover:text-red-400"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </section>
 

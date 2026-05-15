@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { NBARecommendation } from '@/lib/models/nba'
 import type { Delegation, ExecutionRoute, PrivacyMode } from '@/lib/models/delegation'
 
@@ -19,7 +19,18 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
   const [branchStrategy, setBranchStrategy] = useState<'feature' | 'fix' | 'chore'>('feature')
   const [privacyMode, setPrivacyMode] = useState<PrivacyMode>('local')
   const [executionRoute, setExecutionRoute] = useState<ExecutionRoute>('local-agent')
+  const [llmModel, setLlmModel] = useState<string>('claude-3-7-sonnet')
+  const [customLlmModels, setCustomLlmModels] = useState<string[]>([])
   
+  // Fetch custom models
+  useEffect(() => {
+    fetch('/api/settings').then(res => res.json()).then(data => {
+      if (data && data.customLlmModels) {
+        setCustomLlmModels(data.customLlmModels)
+      }
+    }).catch(console.error)
+  }, [])
+
   if (!isOpen || !rec) return null
 
   const handleDelegate = async () => {
@@ -41,6 +52,7 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
         branchStrategy: isExpertMode ? branchStrategy : 'feature',
         requiresApproval: true,
         privacyMode: isExpertMode ? privacyMode : 'local',
+        llmModel: isExpertMode ? llmModel : 'claude-3-7-sonnet',
         createdAt: new Date().toISOString()
       },
       status: 'pending', // Execution router will pick this up
@@ -146,11 +158,43 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
                 <label className="block text-sm font-medium text-gray-400 mb-1">Bevorzugter Agent (Route)</label>
                 <select 
                   value={executionRoute} onChange={e => setExecutionRoute(e.target.value as any)}
-                  className="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2 text-white"
+                  className="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2 text-white mb-2"
                 >
                   <option value="local-agent">Antigravity (Local Agent)</option>
                   <option value="direct-chat">Claude Code (CLI)</option>
                   <option value="runner">n8n Workflow Runner</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Gewünschtes LLM-Modell</label>
+                <select 
+                  value={llmModel} onChange={e => setLlmModel(e.target.value)}
+                  className="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2 text-white"
+                >
+                  <optgroup label="Anthropic">
+                    <option value="claude-3-7-sonnet">Claude 3.7 Sonnet (Empfohlen)</option>
+                    <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
+                    <option value="claude-3-opus">Claude 3 Opus</option>
+                  </optgroup>
+                  <optgroup label="Google">
+                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                  </optgroup>
+                  <optgroup label="OpenAI">
+                    <option value="gpt-4o">GPT-4o</option>
+                    <option value="o1-preview">o1 Preview (Für komplexe Logik)</option>
+                  </optgroup>
+                  <optgroup label="Lokal / Open Source">
+                    <option value="llama-3-70b">Llama 3 70B (Ollama)</option>
+                    <option value="deepseek-coder">DeepSeek Coder V2</option>
+                  </optgroup>
+                  {customLlmModels.length > 0 && (
+                    <optgroup label="Eigene Modelle">
+                      {customLlmModels.map(model => (
+                        <option key={model} value={model}>{model}</option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </div>
             </div>
