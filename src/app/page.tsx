@@ -4,6 +4,9 @@ import { NBAPanel } from '@/components/command-center/NBAPanel'
 export default function Home() {
   return (
     <main className="min-h-screen bg-gray-950 text-white">
+      <div className="bg-blue-600 text-white text-center py-2 font-bold animate-pulse">
+        🚀 LIVEDEMO AKTIV – Wenn du das siehst, bist du auf dem neuesten Stand! (Drücke F5, falls nicht)
+      </div>
       <ConnectorHealthBar />
       <div className="max-w-4xl mx-auto p-6">
         <header className="mb-8 mt-4">

@@ -1,5 +1,14 @@
 import type { NBARecommendation } from '@/lib/models/nba'
 
+const actionTranslations: Record<string, string> = {
+  'do-now': 'JETZT MACHEN',
+  'delegate-ai': 'AN KI DELEGIEREN',
+  'delegate-runner': 'AN RUNNER DELEGIEREN',
+  'research': 'RECHERCHE NÖTIG',
+  'wait': 'WARTEN',
+  'blocked': 'BLOCKIERT'
+}
+
 export function NBACard({ rec }: { rec: NBARecommendation }) {
   const { workItem, score, suggestedAction, rationale } = rec
   
@@ -32,7 +41,7 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
       <div className="border-t border-gray-800 pt-3 flex justify-between items-center">
         <p className="text-sm text-gray-400">{rationale}</p>
         <span className={`text-xs font-bold px-3 py-1.5 rounded ${suggestedAction === 'delegate-ai' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300'}`}>
-          {suggestedAction.replace('-', ' ').toUpperCase()}
+          {actionTranslations[suggestedAction] || suggestedAction.replace('-', ' ').toUpperCase()}
         </span>
       </div>
     </div>

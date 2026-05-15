@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import type { NBARecommendation } from '@/lib/models/nba'
 import { NBACard } from './NBACard'
+import { NBA_CONFIG } from '@/lib/nba-engine/nba-config'
 
 export function NBAPanel() {
   const [recs, setRecs] = useState<NBARecommendation[]>([])
@@ -40,7 +41,7 @@ export function NBAPanel() {
 
   return (
     <div className="space-y-4">
-      {recs.slice(0, 5).map(rec => (
+      {recs.slice(0, NBA_CONFIG.maxRecommendations).map(rec => (
         <NBACard key={rec.workItem.id} rec={rec} />
       ))}
     </div>

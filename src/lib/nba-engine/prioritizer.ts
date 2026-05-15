@@ -2,32 +2,38 @@ import type { WorkItem } from '../models/work-item'
 import type { NBARecommendation, SuggestedAction } from '../models/nba'
 import type { ExecutionRoute } from '../models/delegation'
 import { calculateScore } from './scorer'
+import { NBA_CONFIG } from './nba-config'
 
 export function prioritizeItems(items: WorkItem[]): NBARecommendation[] {
-  const recommendations: NBARecommendation[] = items.map(item => {
+  // Filtern nach Status-Ignorier-Regeln aus Config
+  const relevantItems = items.filter(
+    (item) => !NBA_CONFIG.ignoreStatuses.includes(item.status.toLowerCase())
+  )
+
+  const recs: NBARecommendation[] = relevantItems.map(item => {
     const score = calculateScore(item)
     
     let suggestedAction: SuggestedAction = 'wait'
     let executionRoute: ExecutionRoute = 'manual'
-    let rationale = 'Low priority item'
+    let rationale = 'Niedrige Priorität'
     const risks: string[] = []
 
     if (item.blocked) {
       suggestedAction = 'blocked'
-      rationale = 'Item is blocked'
+      rationale = 'Ticket ist blockiert'
       if (item.blockedBy && item.blockedBy.length > 0) {
-        rationale += ` by ${item.blockedBy.join(', ')}`
+        rationale += ` durch ${item.blockedBy.join(', ')}`
       }
     } else if (score.total >= 70 && score.delegability >= 15) {
       suggestedAction = 'delegate-ai'
       executionRoute = 'local-agent'
-      rationale = 'High score and delegable to AI'
+      rationale = 'Hoher Score und KI-delegierbar'
     } else if (score.total >= 60) {
       suggestedAction = 'do-now'
-      rationale = 'High impact or urgency'
+      rationale = 'Hoher Impact oder Dringlichkeit'
     } else if (item.type === 'ci-alert') {
       suggestedAction = 'do-now'
-      rationale = 'CI alert needs immediate attention'
+      rationale = 'CI-Alert erfordert sofortige Aufmerksamkeit'
     }
 
     if (item.risk === 'C') {
@@ -35,7 +41,7 @@ export function prioritizeItems(items: WorkItem[]): NBARecommendation[] {
       if (suggestedAction === 'delegate-ai') {
         suggestedAction = 'do-now'
         executionRoute = 'manual'
-        rationale = 'Too risky for autonomous AI delegation'
+        rationale = 'Zu riskant für autonome KI-Delegation'
       }
     }
 
@@ -52,7 +58,30 @@ export function prioritizeItems(items: WorkItem[]): NBARecommendation[] {
   })
 
   // Sort descending by total score
-  recommendations.sort((a, b) => b.score.total - a.score.total)
+  const sortedRecs = recs.sort((a, b) => b.score.total - a.score.total)
 
-  return recommendations
+  // Triage Joker (Falls Config aktiv und genügend Items da sind)
+  if (NBA_CONFIG.showTriageJoker && sortedRecs.length > NBA_CONFIG.maxRecommendations) {
+    const oldItems = sortedRecs.slice(NBA_CONFIG.maxRecommendations).filter(rec => {
+      if (!rec.workItem.updatedAt) return false
+      const ageDays = (Date.now() - new Date(rec.workItem.updatedAt).getTime()) / (1000 * 60 * 60 * 24)
+      return ageDays >= NBA_CONFIG.backlogPenaltyAgeDays
+    })
+    
+    if (oldItems.length > 0) {
+      // Wähle ein zufälliges altes Ticket
+      const randomIndex = Math.floor(Math.random() * oldItems.length)
+      const joker = oldItems[randomIndex]
+      
+      // Passe es für Triage an
+      joker.suggestedAction = 'research'
+      joker.rationale = 'Triage-Joker: Altes Ticket prüfen / aufräumen'
+      joker.score.total = 1 // Ganz unten in den Top X, aber sichtbar
+      
+      // Ersetze das letzte angezeigte Element durch den Joker
+      sortedRecs[NBA_CONFIG.maxRecommendations - 1] = joker
+    }
+  }
+
+  return sortedRecs.slice(0, NBA_CONFIG.maxRecommendations)
 }
