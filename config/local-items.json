@@ -1,1 +1,22 @@
-[]
+[
+  {
+    "id": "LOCAL-7873",
+    "source": "linear",
+    "type": "ticket",
+    "title": "dark mode implementieren",
+    "url": "#",
+    "projectId": "LOCAL_IDEAS",
+    "status": "todo",
+    "priority": 2,
+    "blocked": false,
+    "risk": "C",
+    "aiDelegable": true,
+    "estimatedMinutes": 149,
+    "labels": [
+      "magic-create",
+      "local"
+    ],
+    "createdAt": "2026-05-15T23:35:16.268Z",
+    "updatedAt": "2026-05-15T23:35:16.268Z"
+  }
+]
