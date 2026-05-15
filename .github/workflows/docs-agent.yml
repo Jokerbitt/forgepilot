@@ -22,17 +22,18 @@ jobs:
           echo "files=$(git diff --name-only HEAD~1 HEAD | tr '\n' ' ')" >> $GITHUB_OUTPUT
       - name: Claude Documentation Update
         uses: anthropics/claude-code-action@beta
+        continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           direct_prompt: |
-            Du bist ein Documentation-Agent. Folgende Dateien wurden geändert:
+            Du bist ein Documentation-Agent. Folgende Dateien wurden geaendert:
             ${{ steps.changed.outputs.files }}
-            
+
             Aufgaben:
-            1. Prüfe ob README.md noch aktuell ist
-            2. Prüfe ob CHANGELOG.md einen Eintrag braucht
+            1. Pruefe ob README.md noch aktuell ist
+            2. Pruefe ob CHANGELOG.md einen Eintrag braucht
             3. Schlage konkrete Dokumentations-Updates vor
-            
-            Wenn Updates nötig sind: Erstelle einen PR mit den Änderungen.
+
+            Wenn Updates noetig sind: Erstelle einen PR mit den Aenderungen.
             Antworte auf Deutsch.
