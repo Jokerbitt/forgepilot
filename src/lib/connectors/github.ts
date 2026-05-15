@@ -66,10 +66,10 @@ export const githubConnectorManifest: ConnectorManifest = {
       placeholder: 'Jokerbitt',
     },
     repositories: {
-      type: 'string',
+      type: 'string-list',
       label: 'Repositories',
       required: true,
-      description: 'Comma-separated repository names to include in ForgePilot',
+      description: 'Komma-separierte Repository-Namen die in ForgePilot synchronisiert werden',
       placeholder: 'forgepilot,daily-briefing',
     },
   },

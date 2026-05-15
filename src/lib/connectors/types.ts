@@ -13,7 +13,7 @@ export type ConnectorCapability =
   | 'run-agent'
   | 'trigger-workflow'
 
-export type ConfigFieldType = 'string' | 'secret' | 'url' | 'path' | 'boolean'
+export type ConfigFieldType = 'string' | 'string-list' | 'secret' | 'url' | 'path' | 'boolean'
 
 export interface ConfigField {
   type: ConfigFieldType

@@ -9,3 +9,11 @@ export { githubConnectorManifest } from '@/lib/connectors/github'
 export type { GitHubConnectorConfig } from '@/lib/connectors/github'
 export { linearConnectorManifest } from '@/lib/connectors/linear'
 export type { LinearConnectorConfig } from '@/lib/connectors/linear'
+export {
+  connectorRegistry,
+  getAllConnectorHealth,
+  getConnectorManifest,
+  getConnectorHealth,
+  listConnectorManifests,
+} from '@/lib/connectors/registry'
+export type { ConnectorHealthView, ConnectorConfigMap, ConnectorId } from '@/lib/connectors/registry'
