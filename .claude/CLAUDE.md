@@ -65,6 +65,15 @@ Alle Interfaces sind in `src/lib/models/` definiert. Re-exports via `src/types/i
 - RiskClass C → IMMER erst den User fragen
 - Jede Funktion in `lib/` hat einen Test in `*.test.ts`
 
+## Single Source of Truth
+
+- ForgePilot SSOT: `Z:\NAS\Codex\KI Betriebssystem`
+- Projektregeln: `Z:\NAS\Codex\KI Betriebssystem\AGENTS.md`
+- Zusammenarbeit Claude Code/Codex: `Z:\NAS\Codex\KI Betriebssystem\CLAUDE-CODE-CODEX-ZUSAMMENARBEIT-LEITFADEN.md`
+- Second Brain / Obsidian: `Z:\NAS\SecondBrain`
+
+Vor strategischen Entscheidungen oder groesseren Tasks erst den NAS-SSOT lesen.
+
 ## Aktueller Sprint
 
 M0: Foundation — läuft
@@ -103,5 +112,5 @@ git push -u origin feature/JOK-XX-was-gebaut-wird
 
 - Codex/SSOT: `Z:\NAS\Codex\KI Betriebssystem\`
 - AGENTS.md: `Z:\NAS\Codex\KI Betriebssystem\AGENTS.md`
-- ADRs: `Z:\NAS\SecondBrain\01_Projects\forgepilot\ADRs\`
-- GUI-Standard: `Z:\NAS\Claude\Skills\gui-ux-standard.md`
+- ADRs: `Z:\NAS\Codex\KI Betriebssystem\03_ADRs\`
+- GUI-Standard: `Z:\NAS\Codex\KI Betriebssystem\02_Standards\GUI-UX-Standard.md`
