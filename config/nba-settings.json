@@ -10,7 +10,5 @@
   "backlogPenaltyScore": 20,
   "showTriageJoker": true,
   "maxRecommendations": 5,
-  "pinnedItems": [
-    "e57e3e3a-1a2d-4032-8aba-23b39699129a"
-  ]
+  "pinnedItems": []
 }

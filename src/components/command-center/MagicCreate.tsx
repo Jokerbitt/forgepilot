@@ -12,12 +12,38 @@ const SUGGESTIONS = [
 
 export function MagicCreate() {
   const [prompt, setPrompt] = useState('')
-  const [projectId, setProjectId] = useState('')
-  const [milestone, setMilestone] = useState('')
   const [loading, setLoading] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [isManualModalOpen, setIsManualModalOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
+
+  // Config State
+  const [availableProjects, setAvailableProjects] = useState<string[]>(['LOCAL_IDEAS'])
+  const [availableMilestones, setAvailableMilestones] = useState<string[]>(['Backlog'])
+  
+  const [projectId, setProjectId] = useState('LOCAL_IDEAS')
+  const [milestone, setMilestone] = useState('Backlog')
+  
+  const [isNewProjectMode, setIsNewProjectMode] = useState(false)
+  const [isNewMilestoneMode, setIsNewMilestoneMode] = useState(false)
+  
+  const [newProject, setNewProject] = useState('')
+  const [newMilestone, setNewMilestone] = useState('')
+
+  useEffect(() => {
+    fetch('/api/settings').then(res => res.json()).then(data => {
+      if (data) {
+        if (data.projects && data.projects.length > 0) {
+          setAvailableProjects(data.projects)
+          if (!data.projects.includes(projectId)) setProjectId(data.projects[0])
+        }
+        if (data.milestones && data.milestones.length > 0) {
+          setAvailableMilestones(data.milestones)
+          if (!data.milestones.includes(milestone)) setMilestone(data.milestones[0])
+        }
+      }
+    }).catch(console.error)
+  }, [])
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -29,20 +55,50 @@ export function MagicCreate() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
+  const saveNewConfig = async (key: 'projects' | 'milestones', newValue: string, list: string[]) => {
+    try {
+      const newList = [...list, newValue]
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [key]: newList })
+      })
+      return newList
+    } catch (e) {
+      console.error(e)
+      return list
+    }
+  }
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!prompt.trim() || loading) return
 
     setLoading(true)
     try {
+      let finalProjectId = projectId
+      let finalMilestone = milestone
+
+      if (isNewProjectMode && newProject.trim()) {
+        const updated = await saveNewConfig('projects', newProject.trim(), availableProjects)
+        setAvailableProjects(updated)
+        finalProjectId = newProject.trim()
+      }
+
+      if (isNewMilestoneMode && newMilestone.trim()) {
+        const updated = await saveNewConfig('milestones', newMilestone.trim(), availableMilestones)
+        setAvailableMilestones(updated)
+        finalMilestone = newMilestone.trim()
+      }
+
       await fetch('/api/magic-create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           mode: 'magic',
           prompt,
-          projectId: projectId.trim() || undefined,
-          milestone: milestone.trim() || undefined
+          projectId: finalProjectId,
+          milestone: finalMilestone
         })
       })
       
@@ -81,7 +137,7 @@ export function MagicCreate() {
           <span className="text-gray-500 hover:text-blue-400 text-lg transition-colors">ℹ️</span>
           <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-gray-800 text-xs text-gray-300 rounded shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
             <strong>Wie funktioniert Magic Create?</strong><br/>
-            Tippe eine kurze Idee ein. ForgePilot erstellt daraus lokal ein priorisiertes Ticket. In der Karte kannst du später per "Magic Refine" daraus eine professionelle User Story generieren lassen.
+            Tippe eine kurze Idee ein. ForgePilot erstellt daraus lokal ein priorisiertes Ticket im ausgewählten Projekt.
           </div>
         </div>
 
@@ -94,7 +150,7 @@ export function MagicCreate() {
 
       {/* Suggestions Dropdown */}
       {showSuggestions && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-40 overflow-hidden">
+        <div className="absolute top-14 left-0 right-0 mt-2 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-40 overflow-hidden">
           <div className="p-2 text-xs font-bold text-gray-500 uppercase tracking-wider bg-gray-950 border-b border-gray-800">
             Vorschläge
           </div>
@@ -114,33 +170,86 @@ export function MagicCreate() {
 
       {/* Metadaten (Project / Milestone) */}
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <input
-          type="text"
-          value={projectId}
-          onChange={(e) => setProjectId(e.target.value)}
-          placeholder="Projekt (z.B. LOCAL_IDEAS)"
-          className="bg-gray-900 border border-gray-800 text-gray-300 text-xs rounded-md px-3 py-1.5 focus:outline-none focus:border-blue-500 w-48"
-        />
-        <input
-          type="text"
-          value={milestone}
-          onChange={(e) => setMilestone(e.target.value)}
-          placeholder="Meilenstein (z.B. M5)"
-          className="bg-gray-900 border border-gray-800 text-gray-300 text-xs rounded-md px-3 py-1.5 focus:outline-none focus:border-blue-500 w-48"
-        />
+        <div className="flex items-center gap-1">
+          {isNewProjectMode ? (
+            <input
+              type="text"
+              autoFocus
+              value={newProject}
+              onChange={e => setNewProject(e.target.value)}
+              placeholder="Neues Projekt..."
+              className="bg-gray-900 border border-gray-800 text-gray-300 text-xs rounded-md px-3 py-1.5 focus:outline-none focus:border-blue-500 w-36"
+            />
+          ) : (
+            <select
+              value={projectId}
+              onChange={e => setProjectId(e.target.value)}
+              className="bg-gray-900 border border-gray-800 text-gray-300 text-xs rounded-md px-3 py-1.5 focus:outline-none focus:border-blue-500 w-36 cursor-pointer"
+            >
+              {availableProjects.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          )}
+          <button 
+            type="button"
+            onClick={() => setIsNewProjectMode(!isNewProjectMode)}
+            className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-400 px-2 py-1.5 rounded-md border border-gray-700 transition-colors"
+            title={isNewProjectMode ? "Abbrechen" : "Neues Projekt anlegen"}
+          >
+            {isNewProjectMode ? "✕" : "➕ Neu"}
+          </button>
+        </div>
+
+        <div className="flex items-center gap-1">
+          {isNewMilestoneMode ? (
+            <input
+              type="text"
+              autoFocus
+              value={newMilestone}
+              onChange={e => setNewMilestone(e.target.value)}
+              placeholder="Neuer Meilenstein..."
+              className="bg-gray-900 border border-gray-800 text-gray-300 text-xs rounded-md px-3 py-1.5 focus:outline-none focus:border-blue-500 w-36"
+            />
+          ) : (
+            <select
+              value={milestone}
+              onChange={e => setMilestone(e.target.value)}
+              className="bg-gray-900 border border-gray-800 text-gray-300 text-xs rounded-md px-3 py-1.5 focus:outline-none focus:border-blue-500 w-36 cursor-pointer"
+            >
+              {availableMilestones.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          )}
+          <button 
+            type="button"
+            onClick={() => setIsNewMilestoneMode(!isNewMilestoneMode)}
+            className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-400 px-2 py-1.5 rounded-md border border-gray-700 transition-colors"
+            title={isNewMilestoneMode ? "Abbrechen" : "Neuen Meilenstein anlegen"}
+          >
+            {isNewMilestoneMode ? "✕" : "➕ Neu"}
+          </button>
+        </div>
+
         <div className="flex-1" />
+        
         <button
           type="button"
           onClick={() => setIsManualModalOpen(true)}
           className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-md border border-gray-700 transition-colors flex items-center gap-1"
         >
-          <span>➕</span> Manuell anlegen
+          <span>📋</span> Manuell anlegen
         </button>
       </div>
 
       <ManualTicketModal 
         isOpen={isManualModalOpen}
         onClose={() => setIsManualModalOpen(false)}
+        availableProjects={availableProjects}
+        availableMilestones={availableMilestones}
+        onConfigUpdate={async (key, value) => {
+          const list = key === 'projects' ? availableProjects : availableMilestones
+          const updated = await saveNewConfig(key, value, list)
+          if (key === 'projects') setAvailableProjects(updated)
+          else setAvailableMilestones(updated)
+        }}
       />
     </div>
   )

@@ -10,6 +10,8 @@ export interface NBAConfig {
   maxRecommendations: number
   pinnedItems: string[]
   customLlmModels: string[]
+  projects: string[]
+  milestones: string[]
 }
 
 const CONFIG_PATH = path.join(process.cwd(), 'config', 'nba-settings.json')
@@ -28,7 +30,9 @@ export function getNBAConfig(): NBAConfig {
       showTriageJoker: true,
       maxRecommendations: 5,
       pinnedItems: [],
-      customLlmModels: []
+      customLlmModels: [],
+      projects: ['LOCAL_IDEAS', 'FORGEPILOT'],
+      milestones: ['M1', 'Backlog']
     }
   }
 }
