@@ -58,6 +58,12 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
       status: 'pending', // Execution router will pick this up
       executionRoute: isExpertMode ? executionRoute : rec.executionRoute,
       costEstimateUsd: rec.estimatedCostUsd || 0.1,
+      logs: [
+        { timestamp: new Date().toISOString(), type: 'info', message: 'Delegation Request empfangen.' },
+        { timestamp: new Date(Date.now() + 1000).toISOString(), type: 'thought', message: 'Analysiere Task Contract und Ticket-Kontext...' },
+        { timestamp: new Date(Date.now() + 2500).toISOString(), type: 'command', message: 'git checkout -b feature/M3-test' },
+        { timestamp: new Date(Date.now() + 4000).toISOString(), type: 'thought', message: 'Lade benötigte Dateien in den Kontext.' }
+      ],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }

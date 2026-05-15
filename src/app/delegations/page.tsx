@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { Delegation } from '@/lib/models/delegation'
+import { DelegationLogsModal } from '@/components/delegation/DelegationLogsModal'
 
 const STATUS_COLORS: Record<string, string> = {
   'pending': 'bg-yellow-900/50 text-yellow-500 border-yellow-700',
@@ -15,6 +16,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default function DelegationsPage() {
   const [delegations, setDelegations] = useState<Delegation[]>([])
   const [loading, setLoading] = useState(true)
+  const [selectedDelegation, setSelectedDelegation] = useState<Delegation | null>(null)
 
   const loadDelegations = () => {
     fetch('/api/delegations')
@@ -106,11 +108,17 @@ export default function DelegationsPage() {
                       <td className="p-4 text-sm text-gray-400">
                         ${del.costEstimateUsd?.toFixed(2) || '0.00'}
                       </td>
-                      <td className="p-4 text-right space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <td className="p-4 text-right space-x-2 opacity-0 group-hover:opacity-100 transition-opacity flex justify-end items-center gap-2">
+                        <button 
+                          onClick={() => setSelectedDelegation(del)}
+                          className="text-xs bg-gray-800 text-gray-300 hover:text-white px-2 py-1 rounded border border-gray-700"
+                        >
+                          🔍 Logs
+                        </button>
                         {del.status === 'running' && (
                           <button 
                             onClick={() => handleStatusChange(del.id, 'failed')}
-                            className="text-xs bg-red-900/50 text-red-400 hover:text-red-300 px-2 py-1 rounded"
+                            className="text-xs bg-red-900/50 text-red-400 hover:text-red-300 px-2 py-1 rounded border border-red-900/50"
                           >
                             Stop
                           </button>
@@ -118,7 +126,7 @@ export default function DelegationsPage() {
                         {(del.status === 'failed' || del.status === 'cancelled') && (
                           <button 
                             onClick={() => handleStatusChange(del.id, 'pending')}
-                            className="text-xs bg-blue-900/50 text-blue-400 hover:text-blue-300 px-2 py-1 rounded"
+                            className="text-xs bg-blue-900/50 text-blue-400 hover:text-blue-300 px-2 py-1 rounded border border-blue-900/50"
                           >
                             Retry
                           </button>
@@ -126,9 +134,9 @@ export default function DelegationsPage() {
                         {del.status === 'running' && (
                           <button 
                             onClick={() => handleStatusChange(del.id, 'completed')}
-                            className="text-xs bg-green-900/50 text-green-400 hover:text-green-300 px-2 py-1 rounded"
+                            className="text-xs bg-green-900/50 text-green-400 hover:text-green-300 px-2 py-1 rounded border border-green-900/50"
                           >
-                            Force Complete
+                            Complete
                           </button>
                         )}
                       </td>
@@ -140,6 +148,12 @@ export default function DelegationsPage() {
           </div>
         )}
       </div>
+
+      <DelegationLogsModal 
+        delegation={selectedDelegation}
+        isOpen={!!selectedDelegation}
+        onClose={() => setSelectedDelegation(null)}
+      />
     </main>
   )
 }

@@ -54,5 +54,34 @@
     "costEstimateUsd": 0.1,
     "createdAt": "2026-05-15T22:52:52.170Z",
     "updatedAt": "2026-05-15T22:52:52.170Z"
+  },
+  {
+    "id": "del-1778885916720",
+    "contract": {
+      "id": "tc-1778885916720",
+      "workItemId": "e57e3e3a-1a2d-4032-8aba-23b39699129a",
+      "goal": "Erledige Aufgabe: JOK-31: M2: NBA Engine - Scoring + /api/recommendations",
+      "context": "",
+      "definitionOfDone": [
+        "Code kompiliert",
+        "Tests grün",
+        "Keine Linter-Fehler"
+      ],
+      "riskClass": "B",
+      "maxBudgetUsd": 1,
+      "allowedTools": [
+        "all"
+      ],
+      "branchStrategy": "feature",
+      "requiresApproval": true,
+      "privacyMode": "public",
+      "llmModel": "claude-3-7-sonnet",
+      "createdAt": "2026-05-15T22:58:36.720Z"
+    },
+    "status": "running",
+    "executionRoute": "local-agent",
+    "costEstimateUsd": 0.1,
+    "createdAt": "2026-05-15T22:58:36.744Z",
+    "updatedAt": "2026-05-15T22:58:36.744Z"
   }
 ]

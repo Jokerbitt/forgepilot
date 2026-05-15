@@ -4,6 +4,12 @@ export type ExecutionRoute = 'direct-chat' | 'local-agent' | 'runner' | 'n8n' | 
 export type PrivacyMode = 'local' | 'private-cloud' | 'public'
 export type DelegationStatus = 'pending' | 'approved' | 'running' | 'completed' | 'failed' | 'cancelled'
 
+export interface AgentLog {
+  timestamp: string
+  type: 'info' | 'error' | 'success' | 'command' | 'thought'
+  message: string
+}
+
 export interface TaskContract {
   id: string
   workItemId: string
@@ -30,6 +36,7 @@ export interface Delegation {
   agentRunId?: string
   approvalId?: string
   errorMessage?: string
+  logs?: AgentLog[]
   createdAt: string
   updatedAt: string
 }
