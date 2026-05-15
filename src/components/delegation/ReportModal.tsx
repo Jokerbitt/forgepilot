@@ -1,4 +1,5 @@
 'use client'
+import { useState } from 'react'
 
 import type { Delegation } from '@/lib/models/delegation'
 
@@ -9,6 +10,9 @@ interface ReportModalProps {
 }
 
 export function ReportModal({ delegation, isOpen, onClose }: ReportModalProps) {
+  const [feedback, setFeedback] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
   if (!isOpen || !delegation || !delegation.summaryReport) return null
   
   const { summaryReport } = delegation
@@ -68,6 +72,34 @@ export function ReportModal({ delegation, isOpen, onClose }: ReportModalProps) {
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="border-t border-gray-800 pt-6">
+            <h3 className="text-lg font-bold text-white mb-2">Korrekturschleife (Feedback Loop)</h3>
+            <p className="text-sm text-gray-400 mb-3">
+              Passt etwas noch nicht? Gib dem Agenten Feedback und er startet einen neuen Durchlauf mit höchster Priorität.
+            </p>
+            <textarea
+              value={feedback}
+              onChange={e => setFeedback(e.target.value)}
+              placeholder="Z.B. Der Button auf Mobile ist noch zu klein, bitte anpassen..."
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm text-white resize-none h-24 mb-3 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            />
+            <button
+              disabled={!feedback.trim() || submitting}
+              onClick={async () => {
+                setSubmitting(true)
+                // In a real system, this would call an API to create a new delegation with the feedback
+                await new Promise(resolve => setTimeout(resolve, 1000))
+                setSubmitting(false)
+                setFeedback('')
+                onClose()
+                window.location.reload()
+              }}
+              className="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 disabled:hover:bg-yellow-600 text-white rounded font-bold text-sm transition-colors flex items-center gap-2"
+            >
+              {submitting ? 'Startet...' : '🔄 Korrektur anfordern'}
+            </button>
           </div>
 
         </div>

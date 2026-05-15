@@ -21,6 +21,7 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
   const [executionRoute, setExecutionRoute] = useState<ExecutionRoute>('local-agent')
   const [llmModel, setLlmModel] = useState<string>('claude-3-7-sonnet')
   const [customLlmModels, setCustomLlmModels] = useState<string[]>([])
+  const [customContext, setCustomContext] = useState<string>('')
   
   // Fetch custom models
   useEffect(() => {
@@ -44,7 +45,7 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
         id: `tc-${Date.now()}`,
         workItemId: rec.workItem.id,
         goal: `Erledige Aufgabe: ${rec.workItem.title}`,
-        context: '',
+        context: customContext,
         definitionOfDone: ['Code kompiliert', 'Tests grün', 'Keine Linter-Fehler'],
         riskClass: rec.riskClass,
         maxBudgetUsd: isExpertMode ? maxBudgetUsd : 1.0,
@@ -130,6 +131,15 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
             </div>
           ) : (
             <div className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">Zusätzlicher Kontext (Optional)</label>
+                <textarea 
+                  value={customContext} onChange={e => setCustomContext(e.target.value)}
+                  placeholder="Gibt dem Agenten Hinweise zur Ausführung (z.B. 'Bitte nutze Tailwind für das Styling...')"
+                  rows={3}
+                  className="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2 text-white resize-none"
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">Maximales Budget (USD)</label>
                 <input 

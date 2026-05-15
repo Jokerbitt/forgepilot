@@ -93,17 +93,28 @@ export default function DelegationsPage() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-950 border-b border-gray-800 text-xs uppercase text-gray-500">
+                    <th className="p-4 font-medium w-16">Prio</th>
                     <th className="p-4 font-medium">Ticket / Goal</th>
                     <th className="p-4 font-medium">Agent & LLM</th>
                     <th className="p-4 font-medium">Status</th>
-                    <th className="p-4 font-medium">Startzeit</th>
-                    <th className="p-4 font-medium">Kosten (Est.)</th>
+                    <th className="p-4 font-medium">ETA</th>
                     <th className="p-4 font-medium text-right">Aktionen</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-800">
-                  {delegations.map(del => (
+                  {delegations.map(del => {
+                    const estimatedEnd = del.status === 'running' 
+                      ? new Date(new Date(del.createdAt).getTime() + (del.costEstimateUsd || 1) * 30 * 60000) 
+                      : null;
+                    
+                    return (
                     <tr key={del.id} className="hover:bg-gray-800/50 transition-colors group">
+                      <td className="p-4 text-center">
+                        <div className="flex flex-col items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button className="text-gray-500 hover:text-white" title="Prio Up">▲</button>
+                          <button className="text-gray-500 hover:text-white" title="Prio Down">▼</button>
+                        </div>
+                      </td>
                       <td className="p-4">
                         <button 
                           onClick={() => setSelectedTaskDelegation(del)}
@@ -125,13 +136,15 @@ export default function DelegationsPage() {
                           {del.status}
                         </span>
                       </td>
-                      <td className="p-4 text-sm text-gray-400">
-                        {new Date(del.createdAt).toLocaleString('de-DE', { 
-                          day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' 
-                        })}
-                      </td>
-                      <td className="p-4 text-sm text-gray-400">
-                        ${del.costEstimateUsd?.toFixed(2) || '0.00'}
+                      <td className="p-4">
+                        <div className="text-sm text-gray-400">
+                          {new Date(del.createdAt).toLocaleString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                        {estimatedEnd && (
+                          <div className="text-xs text-blue-400 mt-1 font-mono">
+                            ETA: {estimatedEnd.toLocaleString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        )}
                       </td>
                       <td className="p-4 text-right flex justify-end items-center gap-2">
                         {del.status === 'completed' && del.summaryReport && (
@@ -174,7 +187,7 @@ export default function DelegationsPage() {
                         )}
                       </td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>

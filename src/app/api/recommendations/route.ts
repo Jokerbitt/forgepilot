@@ -20,6 +20,19 @@ export async function GET(request: NextRequest) {
 
     const items: WorkItem[] = []
     const errors: string[] = []
+    
+    // Load local items
+    try {
+      const fs = require('fs')
+      const path = require('path')
+      const localItemsPath = path.join(process.cwd(), 'config', 'local-items.json')
+      if (fs.existsSync(localItemsPath)) {
+        const localItems = JSON.parse(fs.readFileSync(localItemsPath, 'utf8'))
+        items.push(...localItems)
+      }
+    } catch (e) {
+      console.error('Failed to load local items', e)
+    }
 
     for (const result of results) {
       if (result.status === 'fulfilled') {

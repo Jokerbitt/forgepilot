@@ -49,11 +49,23 @@
       "privacyMode": "local",
       "createdAt": "2026-05-15T22:52:52.150Z"
     },
-    "status": "running",
+    "status": "completed",
     "executionRoute": "direct-chat",
     "costEstimateUsd": 0.1,
     "createdAt": "2026-05-15T22:52:52.170Z",
-    "updatedAt": "2026-05-15T22:52:52.170Z"
+    "updatedAt": "2026-05-15T23:23:59.451Z",
+    "summaryReport": {
+      "keyPoints": [
+        "Code refactored to use standard models",
+        "Unit tests pass 100%",
+        "No linting errors found"
+      ],
+      "changes": [
+        "[MOD] src/app/page.tsx",
+        "[NEW] src/components/NewFeature.tsx"
+      ],
+      "timeTakenMinutes": 15
+    }
   },
   {
     "id": "del-1778885916720",
@@ -83,5 +95,56 @@
     "costEstimateUsd": 0.1,
     "createdAt": "2026-05-15T22:58:36.744Z",
     "updatedAt": "2026-05-15T23:01:53.970Z"
+  },
+  {
+    "id": "del-1778887714661",
+    "contract": {
+      "id": "tc-1778887714661",
+      "workItemId": "e57e3e3a-1a2d-4032-8aba-23b39699129a",
+      "goal": "Erledige Aufgabe: JOK-31: M2: NBA Engine - Scoring + /api/recommendations",
+      "context": "gfdfgdgfdf",
+      "definitionOfDone": [
+        "Code kompiliert",
+        "Tests grün",
+        "Keine Linter-Fehler"
+      ],
+      "riskClass": "B",
+      "maxBudgetUsd": 1,
+      "allowedTools": [
+        "all"
+      ],
+      "branchStrategy": "feature",
+      "requiresApproval": true,
+      "privacyMode": "local",
+      "llmModel": "claude-3-7-sonnet",
+      "createdAt": "2026-05-15T23:28:34.661Z"
+    },
+    "status": "running",
+    "executionRoute": "local-agent",
+    "costEstimateUsd": 0.1,
+    "logs": [
+      {
+        "timestamp": "2026-05-15T23:28:34.661Z",
+        "type": "info",
+        "message": "Delegation Request empfangen."
+      },
+      {
+        "timestamp": "2026-05-15T23:28:35.661Z",
+        "type": "thought",
+        "message": "Analysiere Task Contract und Ticket-Kontext..."
+      },
+      {
+        "timestamp": "2026-05-15T23:28:37.161Z",
+        "type": "command",
+        "message": "git checkout -b feature/M3-test"
+      },
+      {
+        "timestamp": "2026-05-15T23:28:38.661Z",
+        "type": "thought",
+        "message": "Lade benötigte Dateien in den Kontext."
+      }
+    ],
+    "createdAt": "2026-05-15T23:28:34.684Z",
+    "updatedAt": "2026-05-15T23:28:34.684Z"
   }
 ]
