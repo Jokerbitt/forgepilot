@@ -1,5 +1,6 @@
 import type { NBARecommendation } from '@/lib/models/nba'
 import { useState } from 'react'
+import { DelegationModal } from '../delegation/DelegationModal'
 
 const actionTranslations: Record<string, string> = {
   'do-now': 'JETZT MACHEN',
@@ -13,6 +14,7 @@ const actionTranslations: Record<string, string> = {
 export function NBACard({ rec }: { rec: NBARecommendation }) {
   const { workItem, score, suggestedAction, rationale } = rec
   const [isPinning, setIsPinning] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   const handlePin = async () => {
     setIsPinning(true)
@@ -83,10 +85,25 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
             )}
           </div>
         </div>
-        <span className={`text-xs font-bold px-3 py-1.5 rounded ${suggestedAction === 'delegate-ai' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300'}`}>
+        <button 
+          onClick={() => suggestedAction === 'delegate-ai' ? setIsModalOpen(true) : null}
+          className={`text-xs font-bold px-3 py-1.5 rounded transition-transform ${
+            suggestedAction === 'delegate-ai' 
+              ? 'bg-blue-600 text-white hover:bg-blue-500 hover:scale-105 cursor-pointer shadow-lg shadow-blue-500/20' 
+              : 'bg-gray-800 text-gray-300 cursor-default'
+          }`}
+        >
           {actionTranslations[suggestedAction] || suggestedAction.replace('-', ' ').toUpperCase()}
-        </span>
+        </button>
       </div>
+      
+      {isModalOpen && (
+        <DelegationModal 
+          rec={rec} 
+          isOpen={isModalOpen} 
+          onClose={() => setIsModalOpen(false)} 
+        />
+      )}
     </div>
   )
 }

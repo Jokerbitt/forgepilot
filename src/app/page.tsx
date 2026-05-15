@@ -1,5 +1,6 @@
 import { ConnectorHealthBar } from '@/components/command-center/ConnectorHealthBar'
 import { NBAPanel } from '@/components/command-center/NBAPanel'
+import { ActiveAgentsPanel } from '@/components/delegation/ActiveAgentsPanel'
 
 export default function Home() {
   return (
@@ -20,6 +21,7 @@ export default function Home() {
           </a>
         </header>
         
+        <ActiveAgentsPanel />
         <NBAPanel />
       </div>
     </main>

@@ -1,1 +1,14 @@
-{ "ignoreStatuses": ["done", "cancelled", "duplicate", "archived"], "penalizeOldBacklogs": true, "backlogPenaltyAgeDays": 90, "backlogPenaltyScore": 20, "showTriageJoker": true, "maxRecommendations": 5, "pinnedItems": [] }
+{
+  "ignoreStatuses": [
+    "done",
+    "cancelled",
+    "duplicate",
+    "archived"
+  ],
+  "penalizeOldBacklogs": true,
+  "backlogPenaltyAgeDays": 90,
+  "backlogPenaltyScore": 20,
+  "showTriageJoker": true,
+  "maxRecommendations": 5,
+  "pinnedItems": []
+}
