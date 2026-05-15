@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { ManualTicketModal } from './ManualTicketModal'
+import { MagicConfirmModal } from './MagicConfirmModal'
 
 const SUGGESTIONS = [
   "✨ Neues Feature: ",
@@ -14,32 +15,24 @@ export function MagicCreate() {
   const [prompt, setPrompt] = useState('')
   const [loading, setLoading] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
+  
   const [isManualModalOpen, setIsManualModalOpen] = useState(false)
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false)
+  
   const wrapperRef = useRef<HTMLDivElement>(null)
 
   // Config State
   const [availableProjects, setAvailableProjects] = useState<string[]>(['LOCAL_IDEAS'])
   const [availableMilestones, setAvailableMilestones] = useState<string[]>(['Backlog'])
-  
-  const [projectId, setProjectId] = useState('LOCAL_IDEAS')
-  const [milestone, setMilestone] = useState('Backlog')
-  
-  const [isNewProjectMode, setIsNewProjectMode] = useState(false)
-  const [isNewMilestoneMode, setIsNewMilestoneMode] = useState(false)
-  
-  const [newProject, setNewProject] = useState('')
-  const [newMilestone, setNewMilestone] = useState('')
 
   useEffect(() => {
     fetch('/api/settings').then(res => res.json()).then(data => {
       if (data) {
         if (data.projects && data.projects.length > 0) {
           setAvailableProjects(data.projects)
-          if (!data.projects.includes(projectId)) setProjectId(data.projects[0])
         }
         if (data.milestones && data.milestones.length > 0) {
           setAvailableMilestones(data.milestones)
-          if (!data.milestones.includes(milestone)) setMilestone(data.milestones[0])
         }
       }
     }).catch(console.error)
@@ -55,55 +48,29 @@ export function MagicCreate() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  const saveNewConfig = async (key: 'projects' | 'milestones', newValue: string, list: string[]) => {
-    try {
-      const newList = [...list, newValue]
-      await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [key]: newList })
-      })
-      return newList
-    } catch (e) {
-      console.error(e)
-      return list
-    }
-  }
-
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleSubmitInitial = (e: React.FormEvent) => {
     e.preventDefault()
     if (!prompt.trim() || loading) return
+    setIsConfirmModalOpen(true)
+    setShowSuggestions(false)
+  }
 
+  const handleConfirmCreate = async (projectId: string, milestone: string) => {
+    setIsConfirmModalOpen(false)
     setLoading(true)
     try {
-      let finalProjectId = projectId
-      let finalMilestone = milestone
-
-      if (isNewProjectMode && newProject.trim()) {
-        const updated = await saveNewConfig('projects', newProject.trim(), availableProjects)
-        setAvailableProjects(updated)
-        finalProjectId = newProject.trim()
-      }
-
-      if (isNewMilestoneMode && newMilestone.trim()) {
-        const updated = await saveNewConfig('milestones', newMilestone.trim(), availableMilestones)
-        setAvailableMilestones(updated)
-        finalMilestone = newMilestone.trim()
-      }
-
       await fetch('/api/magic-create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           mode: 'magic',
           prompt,
-          projectId: finalProjectId,
-          milestone: finalMilestone
+          projectId,
+          milestone
         })
       })
       
       setPrompt('')
-      setShowSuggestions(false)
       window.location.reload()
     } catch (error) {
       console.error('Failed to create ticket', error)
@@ -118,7 +85,7 @@ export function MagicCreate() {
 
   return (
     <div ref={wrapperRef} className="mb-6 relative">
-      <form onSubmit={handleCreate} className="relative flex items-center">
+      <form onSubmit={handleSubmitInitial} className="relative flex items-center">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
           <span className="text-gray-500">✨</span>
         </div>
@@ -137,7 +104,7 @@ export function MagicCreate() {
           <span className="text-gray-500 hover:text-blue-400 text-lg transition-colors">ℹ️</span>
           <div className="absolute bottom-full right-0 mb-2 w-64 p-3 bg-gray-800 text-xs text-gray-300 rounded shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
             <strong>Wie funktioniert Magic Create?</strong><br/>
-            Tippe eine kurze Idee ein. ForgePilot erstellt daraus lokal ein priorisiertes Ticket im ausgewählten Projekt.
+            Tippe eine kurze Idee ein und wähle anschließend Projekt und Meilenstein. ForgePilot erstellt daraus lokal ein priorisiertes Ticket.
           </div>
         </div>
 
@@ -168,68 +135,8 @@ export function MagicCreate() {
         </div>
       )}
 
-      {/* Metadaten (Project / Milestone) */}
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1">
-          {isNewProjectMode ? (
-            <input
-              type="text"
-              autoFocus
-              value={newProject}
-              onChange={e => setNewProject(e.target.value)}
-              placeholder="Neues Projekt..."
-              className="bg-gray-900 border border-gray-800 text-gray-300 text-xs rounded-md px-3 py-1.5 focus:outline-none focus:border-blue-500 w-36"
-            />
-          ) : (
-            <select
-              value={projectId}
-              onChange={e => setProjectId(e.target.value)}
-              className="bg-gray-900 border border-gray-800 text-gray-300 text-xs rounded-md px-3 py-1.5 focus:outline-none focus:border-blue-500 w-36 cursor-pointer"
-            >
-              {availableProjects.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-          )}
-          <button 
-            type="button"
-            onClick={() => setIsNewProjectMode(!isNewProjectMode)}
-            className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-400 px-2 py-1.5 rounded-md border border-gray-700 transition-colors"
-            title={isNewProjectMode ? "Abbrechen" : "Neues Projekt anlegen"}
-          >
-            {isNewProjectMode ? "✕" : "➕ Neu"}
-          </button>
-        </div>
-
-        <div className="flex items-center gap-1">
-          {isNewMilestoneMode ? (
-            <input
-              type="text"
-              autoFocus
-              value={newMilestone}
-              onChange={e => setNewMilestone(e.target.value)}
-              placeholder="Neuer Meilenstein..."
-              className="bg-gray-900 border border-gray-800 text-gray-300 text-xs rounded-md px-3 py-1.5 focus:outline-none focus:border-blue-500 w-36"
-            />
-          ) : (
-            <select
-              value={milestone}
-              onChange={e => setMilestone(e.target.value)}
-              className="bg-gray-900 border border-gray-800 text-gray-300 text-xs rounded-md px-3 py-1.5 focus:outline-none focus:border-blue-500 w-36 cursor-pointer"
-            >
-              {availableMilestones.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-          )}
-          <button 
-            type="button"
-            onClick={() => setIsNewMilestoneMode(!isNewMilestoneMode)}
-            className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-400 px-2 py-1.5 rounded-md border border-gray-700 transition-colors"
-            title={isNewMilestoneMode ? "Abbrechen" : "Neuen Meilenstein anlegen"}
-          >
-            {isNewMilestoneMode ? "✕" : "➕ Neu"}
-          </button>
-        </div>
-
-        <div className="flex-1" />
-        
+      {/* Manual Button (clean) */}
+      <div className="mt-3 flex justify-end">
         <button
           type="button"
           onClick={() => setIsManualModalOpen(true)}
@@ -239,17 +146,20 @@ export function MagicCreate() {
         </button>
       </div>
 
+      <MagicConfirmModal
+        isOpen={isConfirmModalOpen}
+        prompt={prompt}
+        availableProjects={availableProjects}
+        availableMilestones={availableMilestones}
+        onConfirm={handleConfirmCreate}
+        onCancel={() => setIsConfirmModalOpen(false)}
+      />
+
       <ManualTicketModal 
         isOpen={isManualModalOpen}
         onClose={() => setIsManualModalOpen(false)}
         availableProjects={availableProjects}
         availableMilestones={availableMilestones}
-        onConfigUpdate={async (key, value) => {
-          const list = key === 'projects' ? availableProjects : availableMilestones
-          const updated = await saveNewConfig(key, value, list)
-          if (key === 'projects') setAvailableProjects(updated)
-          else setAvailableMilestones(updated)
-        }}
       />
     </div>
   )

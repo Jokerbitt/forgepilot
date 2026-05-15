@@ -146,5 +146,47 @@
     ],
     "createdAt": "2026-05-15T23:28:34.684Z",
     "updatedAt": "2026-05-15T23:34:22.319Z"
+  },
+  {
+    "id": "del-1778889333940",
+    "contract": {
+      "id": "tc-1778889333940",
+      "workItemId": "dfee328e-e940-4a11-95fe-414c53edeb73",
+      "goal": "Erledige Aufgabe: JOK-26: Standard-Update: ADR-Pflicht f�r Risiko-Klasse C",
+      "context": "# User Story\nAls User möchte ich, dass Aufgabe dfee328e-e940-4a11-95fe-414c53edeb73 gelöst wird.\n\n# Tasks\n- [ ] Code analysieren\n- [ ] Änderungen implementieren\n- [ ] Tests schreiben/anpassen",
+      "definitionOfDone": [
+        "Code kompiliert",
+        "Tests grün",
+        "Keine Linter-Fehler"
+      ],
+      "riskClass": "A",
+      "maxBudgetUsd": 1,
+      "allowedTools": [
+        "read_file",
+        "write_file"
+      ],
+      "branchStrategy": "feature",
+      "requiresApproval": true,
+      "privacyMode": "local",
+      "llmModel": "claude-3-7-sonnet",
+      "createdAt": "2026-05-15T23:55:33.940Z"
+    },
+    "status": "pending",
+    "executionRoute": "local-agent",
+    "costEstimateUsd": 0.1,
+    "logs": [
+      {
+        "timestamp": "2026-05-15T23:55:33.940Z",
+        "type": "info",
+        "message": "Delegation Request empfangen."
+      },
+      {
+        "timestamp": "2026-05-15T23:55:34.940Z",
+        "type": "thought",
+        "message": "Analysiere Task Contract und Ticket-Kontext..."
+      }
+    ],
+    "createdAt": "2026-05-15T23:55:33.966Z",
+    "updatedAt": "2026-05-15T23:55:33.966Z"
   }
 ]
