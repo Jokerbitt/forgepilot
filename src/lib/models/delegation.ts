@@ -10,6 +10,12 @@ export interface AgentLog {
   message: string
 }
 
+export interface DelegationReport {
+  keyPoints: string[]
+  changes: string[]
+  timeTakenMinutes: number
+}
+
 export interface TaskContract {
   id: string
   workItemId: string
@@ -37,6 +43,7 @@ export interface Delegation {
   approvalId?: string
   errorMessage?: string
   logs?: AgentLog[]
+  summaryReport?: DelegationReport
   createdAt: string
   updatedAt: string
 }

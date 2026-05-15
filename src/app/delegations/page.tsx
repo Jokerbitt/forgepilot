@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import type { Delegation } from '@/lib/models/delegation'
 import { DelegationLogsModal } from '@/components/delegation/DelegationLogsModal'
+import { TaskDetailModal } from '@/components/delegation/TaskDetailModal'
+import { ReportModal } from '@/components/delegation/ReportModal'
 
 const STATUS_COLORS: Record<string, string> = {
   'pending': 'bg-yellow-900/50 text-yellow-500 border-yellow-700',
@@ -16,7 +18,9 @@ const STATUS_COLORS: Record<string, string> = {
 export default function DelegationsPage() {
   const [delegations, setDelegations] = useState<Delegation[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedDelegation, setSelectedDelegation] = useState<Delegation | null>(null)
+  const [selectedLogDelegation, setSelectedLogDelegation] = useState<Delegation | null>(null)
+  const [selectedTaskDelegation, setSelectedTaskDelegation] = useState<Delegation | null>(null)
+  const [selectedReportDelegation, setSelectedReportDelegation] = useState<Delegation | null>(null)
 
   const loadDelegations = () => {
     fetch('/api/delegations')
@@ -39,10 +43,25 @@ export default function DelegationsPage() {
     const delegation = delegations.find(d => d.id === id)
     if (!delegation) return
     
+    const updateData = { ...delegation, status: newStatus }
+    
+    // Simulate a report when completed
+    if (newStatus === 'completed' && !delegation.summaryReport) {
+      updateData.summaryReport = {
+        keyPoints: [
+          'Code refactored to use standard models',
+          'Unit tests pass 100%',
+          'No linting errors found'
+        ],
+        changes: ['[MOD] src/app/page.tsx', '[NEW] src/components/NewFeature.tsx'],
+        timeTakenMinutes: Math.floor(Math.random() * 20) + 1
+      }
+    }
+    
     await fetch('/api/delegations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...delegation, status: newStatus })
+      body: JSON.stringify(updateData)
     })
     
     loadDelegations()
@@ -86,7 +105,13 @@ export default function DelegationsPage() {
                   {delegations.map(del => (
                     <tr key={del.id} className="hover:bg-gray-800/50 transition-colors group">
                       <td className="p-4">
-                        <div className="text-xs text-gray-500 font-mono mb-1">{del.contract.workItemId}</div>
+                        <button 
+                          onClick={() => setSelectedTaskDelegation(del)}
+                          className="text-xs text-blue-400 hover:underline font-mono mb-1 cursor-pointer flex items-center gap-1"
+                          title="View Task Details"
+                        >
+                          {del.contract.workItemId} ℹ️
+                        </button>
                         <div className="font-medium text-sm text-gray-200">{del.contract.goal}</div>
                       </td>
                       <td className="p-4">
@@ -108,9 +133,17 @@ export default function DelegationsPage() {
                       <td className="p-4 text-sm text-gray-400">
                         ${del.costEstimateUsd?.toFixed(2) || '0.00'}
                       </td>
-                      <td className="p-4 text-right space-x-2 opacity-0 group-hover:opacity-100 transition-opacity flex justify-end items-center gap-2">
+                      <td className="p-4 text-right flex justify-end items-center gap-2">
+                        {del.status === 'completed' && del.summaryReport && (
+                          <button 
+                            onClick={() => setSelectedReportDelegation(del)}
+                            className="text-xs bg-blue-900/50 text-blue-400 hover:text-blue-300 px-2 py-1 rounded border border-blue-900/50"
+                          >
+                            📝 Report
+                          </button>
+                        )}
                         <button 
-                          onClick={() => setSelectedDelegation(del)}
+                          onClick={() => setSelectedLogDelegation(del)}
                           className="text-xs bg-gray-800 text-gray-300 hover:text-white px-2 py-1 rounded border border-gray-700"
                         >
                           🔍 Logs
@@ -150,9 +183,21 @@ export default function DelegationsPage() {
       </div>
 
       <DelegationLogsModal 
-        delegation={selectedDelegation}
-        isOpen={!!selectedDelegation}
-        onClose={() => setSelectedDelegation(null)}
+        delegation={selectedLogDelegation}
+        isOpen={!!selectedLogDelegation}
+        onClose={() => setSelectedLogDelegation(null)}
+      />
+
+      <TaskDetailModal 
+        delegation={selectedTaskDelegation}
+        isOpen={!!selectedTaskDelegation}
+        onClose={() => setSelectedTaskDelegation(null)}
+      />
+
+      <ReportModal 
+        delegation={selectedReportDelegation}
+        isOpen={!!selectedReportDelegation}
+        onClose={() => setSelectedReportDelegation(null)}
       />
     </main>
   )

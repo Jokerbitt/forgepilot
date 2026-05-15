@@ -78,10 +78,10 @@
       "llmModel": "claude-3-7-sonnet",
       "createdAt": "2026-05-15T22:58:36.720Z"
     },
-    "status": "running",
+    "status": "pending",
     "executionRoute": "local-agent",
     "costEstimateUsd": 0.1,
     "createdAt": "2026-05-15T22:58:36.744Z",
-    "updatedAt": "2026-05-15T22:58:36.744Z"
+    "updatedAt": "2026-05-15T23:01:53.970Z"
   }
 ]
