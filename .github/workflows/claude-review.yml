@@ -17,10 +17,11 @@ jobs:
 
       - name: Claude PR Review
         uses: anthropics/claude-code-action@beta
+        continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           direct_prompt: |
             Reviewe diesen Pull Request auf Deutsch.
-            PrÃ¼fe: Korrektheit, Sicherheit, Performance, Code-Stil.
-            Sei direkt und konkret. Keine langen ErklÃ¤rungen.
+            Pruefe: Korrektheit, Sicherheit, Performance, Code-Stil.
+            Sei direkt und konkret. Keine langen Erklaerungen.
