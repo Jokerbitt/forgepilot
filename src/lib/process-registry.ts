@@ -5,6 +5,7 @@
 
 import fs from 'fs'
 import path from 'path'
+import { execSync } from 'child_process'
 
 const REGISTRY_FILE = path.join(process.cwd(), 'config', 'running-processes.json')
 
@@ -57,7 +58,6 @@ export function killProcess(delegationId: string): { killed: boolean; reason: st
     // On Windows: use taskkill to kill the process tree
     // On Unix: kill the process group
     if (process.platform === 'win32') {
-      const { execSync } = require('child_process') as typeof import('child_process')
       execSync(`taskkill /F /PID ${pid} /T`, { stdio: 'ignore' })
     } else {
       // Kill process group (negative PID) to also kill child processes
