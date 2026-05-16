@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import type { Delegation, TaskContract } from '@/lib/models/delegation'
+import { formatAge, isCreatedToday } from '@/lib/utils/delegation-age'
 import { DelegationDrawer } from '@/components/delegation/DelegationDrawer'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
 import { NewDelegationDialog } from '@/components/delegation/NewDelegationDialog'
@@ -53,18 +54,6 @@ const TASK_TYPE_ICONS: Record<string, string> = {
   research: '🔍',
 }
 
-// ── Age helper (used in Zeit column for waiting delegations) ─────────────
-function formatAge(createdAt: string): { text: string; colorClass: string } {
-  const ageMs = Date.now() - new Date(createdAt).getTime()
-  const ageMin = Math.floor(ageMs / 60000)
-  const ageH   = Math.floor(ageMin / 60)
-  const ageD   = Math.floor(ageH / 24)
-  if (ageD >= 1)   return { text: `${ageD}d alt`,  colorClass: 'text-red-400' }
-  if (ageH >= 4)   return { text: `${ageH}h alt`,  colorClass: 'text-yellow-500' }
-  if (ageMin >= 30) return { text: `${ageMin}m alt`, colorClass: 'text-yellow-600/70' }
-  return { text: `${ageMin}m alt`, colorClass: 'text-gray-600' }
-}
-
 function DelegationsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -96,6 +85,7 @@ function DelegationsContent() {
   const [projectFilter, setProjectFilter] = useState<string>(searchParams.get('project') ?? 'Alle')
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>((searchParams.get('approval') as ApprovalFilter) ?? 'Alle')
   const [searchQuery, setSearchQuery] = useState<string>(searchParams.get('q') ?? '')
+  const [todayOnly, setTodayOnly] = useState(searchParams.get('today') === '1')
 
   // Sync filters → URL (replace, no history entry)
   useEffect(() => {
@@ -104,9 +94,10 @@ function DelegationsContent() {
     if (projectFilter !== 'Alle')  params.set('project',  projectFilter)
     if (approvalFilter !== 'Alle') params.set('approval', approvalFilter)
     if (searchQuery)               params.set('q',        searchQuery)
+    if (todayOnly)                 params.set('today',    '1')
     const qs = params.toString()
     router.replace(qs ? `/delegations?${qs}` : '/delegations', { scroll: false })
-  }, [statusFilter, projectFilter, approvalFilter, searchQuery, router])
+  }, [statusFilter, projectFilter, approvalFilter, searchQuery, todayOnly, router])
 
   // Sort
   type SortKey = 'goal' | 'status' | 'time' | 'cost'
@@ -381,8 +372,9 @@ function DelegationsContent() {
       d.contract.goal.toLowerCase().includes(q) ||
       d.contract.workItemId.toLowerCase().includes(q) ||
       (d.contract.context || '').toLowerCase().includes(q)
+    const matchToday = !todayOnly || isCreatedToday(d.createdAt)
 
-    return matchStatus && matchProject && matchApproval && matchSearch
+    return matchStatus && matchProject && matchApproval && matchSearch && matchToday
   })
 
   const STATUS_SORT_WEIGHT: Record<string, number> = {
@@ -598,6 +590,21 @@ function DelegationsContent() {
                     </button>
                   )
                 })}
+              </div>
+
+              {/* Today filter toggle */}
+              <div className="flex items-center gap-1.5 pl-4 border-l border-gray-800">
+                <button
+                  onClick={() => setTodayOnly(v => !v)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    todayOnly
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700'
+                  }`}
+                  title="Nur Delegationen von heute anzeigen"
+                >
+                  📅 Heute
+                </button>
               </div>
 
               {/* Search input */}
