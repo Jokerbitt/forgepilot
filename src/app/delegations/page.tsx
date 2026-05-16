@@ -56,7 +56,13 @@ export default function DelegationsPage() {
         const sorted = (data || []).sort((a: Delegation, b: Delegation) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         )
-        setDelegations(sorted)
+        // Only update state if data actually changed — prevents re-renders that
+        // interrupt click events (mousedown → re-render → mouseup on different node)
+        setDelegations(prev => {
+          const prevKey = prev.map(d => `${d.id}:${d.status}:${d.updatedAt}`).join(',')
+          const nextKey = sorted.map((d: Delegation) => `${d.id}:${d.status}:${d.updatedAt}`).join(',')
+          return prevKey === nextKey ? prev : sorted
+        })
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -66,11 +72,12 @@ export default function DelegationsPage() {
     loadDelegations()
   }, [loadDelegations])
 
-  // Poll every 3 s when any delegation is running
+  // Poll every 5 s when any delegation is running
+  // Longer interval = fewer re-renders = fewer interrupted click events
   useEffect(() => {
     const hasRunning = delegations.some(d => d.status === 'running')
     if (!hasRunning) return
-    const interval = setInterval(loadDelegations, 3000)
+    const interval = setInterval(loadDelegations, 5000)
     return () => clearInterval(interval)
   }, [delegations, loadDelegations])
 
@@ -283,8 +290,8 @@ export default function DelegationsPage() {
                           className={`hover:bg-gray-800/40 transition-colors group cursor-pointer ${
                             draggedIndex === index ? 'opacity-40 bg-gray-800' : ''
                           }`}
-                          onDragOver={e => handleDragOver(e, index)}
-                          onDragEnd={handleDrop}
+                          onDragOver={draggedIndex !== null ? e => handleDragOver(e, index) : undefined}
+                          onDragEnd={draggedIndex !== null ? handleDrop : undefined}
                           onClick={() => setSelectedDelegation(del)}
                         >
                           {/* Priority / drag handle — draggable only on this cell */}
