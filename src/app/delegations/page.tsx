@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import type { Delegation } from '@/lib/models/delegation'
 import { DelegationDrawer } from '@/components/delegation/DelegationDrawer'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
@@ -51,17 +52,32 @@ const TASK_TYPE_ICONS: Record<string, string> = {
   research: '🔍',
 }
 
-export default function DelegationsPage() {
+function DelegationsContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
   const [delegations, setDelegations] = useState<Delegation[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDelegation, setSelectedDelegation] = useState<Delegation | null>(null)
-  const [showNewDialog, setShowNewDialog] = useState(false)
+  // ?new=1 auto-opens the dialog on mount
+  const [showNewDialog, setShowNewDialog] = useState(searchParams.get('new') === '1')
 
-  // Filters
-  const [statusFilter, setStatusFilter] = useState<string>('Alle')
-  const [projectFilter, setProjectFilter] = useState<string>('Alle')
-  const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>('Alle')
-  const [searchQuery, setSearchQuery] = useState<string>('')
+  // Filters — initialised from URL params
+  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') ?? 'Alle')
+  const [projectFilter, setProjectFilter] = useState<string>(searchParams.get('project') ?? 'Alle')
+  const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>((searchParams.get('approval') as ApprovalFilter) ?? 'Alle')
+  const [searchQuery, setSearchQuery] = useState<string>(searchParams.get('q') ?? '')
+
+  // Sync filters → URL (replace, no history entry)
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (statusFilter !== 'Alle')   params.set('status',   statusFilter)
+    if (projectFilter !== 'Alle')  params.set('project',  projectFilter)
+    if (approvalFilter !== 'Alle') params.set('approval', approvalFilter)
+    if (searchQuery)               params.set('q',        searchQuery)
+    const qs = params.toString()
+    router.replace(qs ? `/delegations?${qs}` : '/delegations', { scroll: false })
+  }, [statusFilter, projectFilter, approvalFilter, searchQuery, router])
 
   // Sort
   type SortKey = 'goal' | 'status' | 'time' | 'cost'
@@ -776,5 +792,21 @@ export default function DelegationsPage() {
         />
       )}
     </main>
+  )
+}
+
+export default function DelegationsPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-gray-950 text-white p-6 md:p-8">
+        <div className="max-w-6xl mx-auto space-y-4">
+          {[1,2,3].map(i => (
+            <div key={i} className="h-14 bg-gray-900 rounded-xl border border-gray-800 animate-pulse" />
+          ))}
+        </div>
+      </main>
+    }>
+      <DelegationsContent />
+    </Suspense>
   )
 }
