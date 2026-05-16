@@ -5,6 +5,7 @@ import type {
   IdeaIntakeInput,
   IdeaIntakeValidationErrors,
   ProjectBrief,
+  ResearchBrief,
   ResearchMode,
   ResearchPrivacyMode,
 } from '@/lib/models/project-brief'
@@ -105,6 +106,45 @@ export function buildProjectBrief(input: IdeaIntakeInput, now = new Date(), id =
   }
 }
 
+export function buildResearchBriefFromProjectBrief(
+  brief: ProjectBrief,
+  now = new Date(),
+  id = `${brief.id}-research-brief`
+): ResearchBrief {
+  return {
+    id,
+    briefId: brief.id,
+    title: brief.researchBriefDraft.title,
+    status: 'ready',
+    createdAt: now.toISOString(),
+    researchQuestions: brief.researchBriefDraft.researchQuestions,
+    searchTerms: brief.researchBriefDraft.searchTerms,
+    preferredSourceTypes: brief.researchBriefDraft.preferredSourceTypes,
+    excludeCriteria: brief.researchBriefDraft.excludeCriteria,
+    mode: brief.researchBriefDraft.mode,
+    privacyMode: brief.researchBriefDraft.privacyMode,
+    maxBudgetUsd: budgetForMode(brief.researchBriefDraft.mode, brief.researchBriefDraft.privacyMode),
+    maxDurationMinutes: durationForMode(brief.researchBriefDraft.mode),
+    preferredExecutor: brief.researchBriefDraft.preferredExecutor,
+    outputSchema: {
+      requiredOutputs: ['findings_summary', 'project_brief', 'requirements'],
+      optionalOutputs: ['use_cases'],
+      evidenceRules: [
+        'Jedes Finding muss mindestens eine Quelle referenzieren.',
+        'Jede Quelle braucht URL oder lokalen Dateipfad und Abrufdatum.',
+        'Unklare oder widerspruechliche Aussagen werden als offene Annahme markiert.',
+        'Local Mode nutzt nur NAS, Obsidian, lokale Dateien und lokale Modelle.',
+      ],
+      qualityGates: [
+        'Research Brief vor Ausfuehrung pruefen.',
+        'Findings vor ProjectBrief-Update reviewen.',
+        'Keine Writebacks ohne Nutzerfreigabe.',
+      ],
+      writebackTargets: ['nas', 'obsidian'],
+    },
+  }
+}
+
 export function readProjectBriefs(filePath = PROJECT_BRIEFS_FILE): ProjectBrief[] {
   try {
     const data = fs.readFileSync(filePath, 'utf-8')
@@ -115,10 +155,31 @@ export function readProjectBriefs(filePath = PROJECT_BRIEFS_FILE): ProjectBrief[
   }
 }
 
+export function findProjectBriefById(id: string, filePath = PROJECT_BRIEFS_FILE): ProjectBrief | undefined {
+  return readProjectBriefs(filePath).find(brief => brief.id === id)
+}
+
 export function writeProjectBriefs(briefs: ProjectBrief[], filePath = PROJECT_BRIEFS_FILE): void {
   const dir = path.dirname(filePath)
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(filePath, JSON.stringify(briefs, null, 2), 'utf-8')
+}
+
+export function readProjectBriefById(id: string, filePath = PROJECT_BRIEFS_FILE): ProjectBrief | null {
+  return readProjectBriefs(filePath).find(b => b.id === id) ?? null
+}
+
+export function updateProjectBrief(
+  id: string,
+  patch: Partial<Omit<ProjectBrief, 'id' | 'createdAt'>>,
+  filePath = PROJECT_BRIEFS_FILE,
+): ProjectBrief | null {
+  const briefs = readProjectBriefs(filePath)
+  const index = briefs.findIndex(b => b.id === id)
+  if (index < 0) return null
+  briefs[index] = { ...briefs[index], ...patch, id, createdAt: briefs[index].createdAt, updatedAt: new Date().toISOString() }
+  writeProjectBriefs(briefs, filePath)
+  return briefs[index]
 }
 
 export function saveProjectBrief(brief: ProjectBrief, filePath = PROJECT_BRIEFS_FILE): ProjectBrief {
@@ -186,4 +247,17 @@ function buildInitialRisks(input: IdeaIntakeInput, briefId: string) {
       findingIds: [],
     },
   ]
+}
+
+function budgetForMode(mode: ResearchMode, privacyMode: ResearchPrivacyMode): number {
+  if (privacyMode === 'local') return 0
+  if (mode === 'quick') return 0.5
+  if (mode === 'standard') return 2
+  return 5
+}
+
+function durationForMode(mode: ResearchMode): number {
+  if (mode === 'quick') return 15
+  if (mode === 'standard') return 45
+  return 120
 }

@@ -3,6 +3,18 @@ export type BriefScope = 'minimal' | 'standard' | 'full'
 export type ResearchMode = 'quick' | 'standard' | 'deep'
 export type ResearchPrivacyMode = 'local' | 'hybrid' | 'cloud'
 export type ExecutorType = 'agent' | 'n8n' | 'local_script' | 'browser' | 'human'
+export type ResearchBriefStatus = 'draft' | 'ready' | 'running' | 'completed' | 'cancelled'
+export type SourceType = 'web' | 'github' | 'arxiv' | 'docs' | 'pdf' | 'obsidian' | 'nas' | 'blog' | 'vendor_docs'
+export type BlueprintOutputType =
+  | 'findings_summary'
+  | 'project_brief'
+  | 'requirements'
+  | 'use_cases'
+  | 'market_analysis'
+  | 'architecture'
+  | 'roadmap'
+  | 'linear_plan'
+  | 'adr_candidate'
 
 export type RequirementType = 'functional' | 'non_functional' | 'constraint' | 'assumption'
 export type RequirementPriority = 'must' | 'should' | 'could' | 'wont'
@@ -53,8 +65,34 @@ export interface ResearchBriefDraft {
   preferredExecutor: ExecutorType
   researchQuestions: string[]
   searchTerms: string[]
-  preferredSourceTypes: Array<'web' | 'github' | 'docs' | 'pdf' | 'obsidian' | 'nas' | 'blog' | 'vendor_docs'>
+  preferredSourceTypes: SourceType[]
   excludeCriteria: string[]
+}
+
+export interface ResearchBriefOutputSchema {
+  requiredOutputs: BlueprintOutputType[]
+  optionalOutputs: BlueprintOutputType[]
+  evidenceRules: string[]
+  qualityGates: string[]
+  writebackTargets: Array<'nas' | 'obsidian' | 'linear'>
+}
+
+export interface ResearchBrief {
+  id: string
+  briefId: string
+  title: string
+  status: ResearchBriefStatus
+  createdAt: string
+  researchQuestions: string[]
+  searchTerms: string[]
+  preferredSourceTypes: SourceType[]
+  excludeCriteria: string[]
+  mode: ResearchMode
+  privacyMode: ResearchPrivacyMode
+  maxBudgetUsd?: number
+  maxDurationMinutes?: number
+  preferredExecutor: ExecutorType
+  outputSchema: ResearchBriefOutputSchema
 }
 
 export interface ProjectBrief {

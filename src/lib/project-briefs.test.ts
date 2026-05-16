@@ -3,7 +3,9 @@ import os from 'os'
 import path from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  buildResearchBriefFromProjectBrief,
   buildProjectBrief,
+  findProjectBriefById,
   readProjectBriefs,
   saveProjectBrief,
   splitConstraintLines,
@@ -71,6 +73,27 @@ describe('buildProjectBrief', () => {
   })
 })
 
+describe('buildResearchBriefFromProjectBrief', () => {
+  it('creates an agent-ready research brief with strict POC outputs', () => {
+    const projectBrief = buildProjectBrief(validInput, new Date('2026-05-16T10:00:00.000Z'), 'brief-4')
+    const researchBrief = buildResearchBriefFromProjectBrief(projectBrief, new Date('2026-05-16T10:05:00.000Z'))
+
+    expect(researchBrief.status).toBe('ready')
+    expect(researchBrief.preferredExecutor).toBe('agent')
+    expect(researchBrief.outputSchema.requiredOutputs).toEqual(['findings_summary', 'project_brief', 'requirements'])
+    expect(researchBrief.outputSchema.optionalOutputs).toEqual(['use_cases'])
+    expect(researchBrief.outputSchema.qualityGates).toContain('Keine Writebacks ohne Nutzerfreigabe.')
+  })
+
+  it('sets zero budget for local research mode', () => {
+    const projectBrief = buildProjectBrief(validInput, new Date('2026-05-16T10:00:00.000Z'), 'brief-5')
+    const researchBrief = buildResearchBriefFromProjectBrief(projectBrief)
+
+    expect(researchBrief.maxBudgetUsd).toBe(0)
+    expect(researchBrief.preferredSourceTypes).toEqual(['obsidian', 'nas', 'docs', 'pdf'])
+  })
+})
+
 describe('project brief persistence helpers', () => {
   it('saves and reads project briefs from a JSON file', () => {
     const file = path.join(os.tmpdir(), `forgepilot-project-briefs-${Date.now()}.json`)
@@ -81,6 +104,7 @@ describe('project brief persistence helpers', () => {
 
     expect(readProjectBriefs(file)).toHaveLength(1)
     expect(readProjectBriefs(file)[0].title).toBe(validInput.title)
+    expect(findProjectBriefById('brief-3', file)?.id).toBe('brief-3')
   })
 })
 

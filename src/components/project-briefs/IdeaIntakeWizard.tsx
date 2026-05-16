@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import type { BriefScope, IdeaIntakeInput, ProjectBrief, ResearchMode, ResearchPrivacyMode } from '@/lib/models/project-brief'
+import type { BriefScope, IdeaIntakeInput, ProjectBrief, ResearchBrief, ResearchMode, ResearchPrivacyMode } from '@/lib/models/project-brief'
 
 type WizardStep = 0 | 1 | 2 | 3
 
@@ -27,6 +27,9 @@ export function IdeaIntakeWizard() {
   const [briefs, setBriefs] = useState<ProjectBrief[]>([])
   const [loading, setLoading] = useState(false)
   const [createdBrief, setCreatedBrief] = useState<ProjectBrief | null>(null)
+  const [selectedBrief, setSelectedBrief] = useState<ProjectBrief | null>(null)
+  const [researchBrief, setResearchBrief] = useState<ResearchBrief | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
 
   useEffect(() => {
     fetch('/api/project-briefs')
@@ -105,12 +108,27 @@ export function IdeaIntakeWizard() {
         return
       }
       setCreatedBrief(data as ProjectBrief)
+      setSelectedBrief(data as ProjectBrief)
+      setResearchBrief(null)
       setBriefs(prev => [data as ProjectBrief, ...prev])
       setInput(initialInput)
       setConstraintsText('')
       setStep(0)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const openResearchBriefPreview = async (brief: ProjectBrief) => {
+    setSelectedBrief(brief)
+    setPreviewLoading(true)
+    setResearchBrief(null)
+    try {
+      const res = await fetch(`/api/project-briefs/${brief.id}/research-brief`)
+      if (!res.ok) return
+      setResearchBrief(await res.json() as ResearchBrief)
+    } finally {
+      setPreviewLoading(false)
     }
   }
 
@@ -314,10 +332,25 @@ export function IdeaIntakeWizard() {
                   <Badge>{brief.scope}</Badge>
                   <Badge>{brief.privacyMode}</Badge>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => openResearchBriefPreview(brief)}
+                  className="mt-3 rounded-md border border-blue-900/70 px-3 py-1.5 text-xs font-semibold text-blue-300 hover:border-blue-600 hover:text-blue-200"
+                >
+                  Research Brief pruefen
+                </button>
               </div>
             ))}
           </div>
         </div>
+
+        {(selectedBrief || previewLoading || researchBrief) && (
+          <ResearchBriefPreview
+            selectedBrief={selectedBrief}
+            researchBrief={researchBrief}
+            loading={previewLoading}
+          />
+        )}
 
         <div className="rounded-xl border border-blue-900/60 bg-blue-950/20 p-4">
           <h2 className="font-semibold text-blue-200">Naechster Schritt</h2>
@@ -400,5 +433,58 @@ function SummaryCard({ title, value }: { title: string; value: string }) {
 function Badge({ children }: { children: React.ReactNode }) {
   return (
     <span className="rounded-full border border-gray-700 bg-gray-900 px-2 py-0.5 text-gray-400">{children}</span>
+  )
+}
+
+function ResearchBriefPreview({
+  selectedBrief,
+  researchBrief,
+  loading,
+}: {
+  selectedBrief: ProjectBrief | null
+  researchBrief: ResearchBrief | null
+  loading: boolean
+}) {
+  return (
+    <div className="rounded-xl border border-purple-900/60 bg-purple-950/20 p-4">
+      <div className="mb-3">
+        <h2 className="font-semibold text-purple-200">Research Brief Preview</h2>
+        <p className="mt-1 text-xs text-gray-500">{selectedBrief?.title ?? 'Kein ProjectBrief ausgewaehlt'}</p>
+      </div>
+
+      {loading && <div className="text-sm text-gray-400">Research Brief wird erstellt...</div>}
+
+      {!loading && researchBrief && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2 text-[11px]">
+            <Badge>{researchBrief.preferredExecutor}</Badge>
+            <Badge>{researchBrief.mode}</Badge>
+            <Badge>{researchBrief.privacyMode}</Badge>
+            <Badge>${researchBrief.maxBudgetUsd?.toFixed(2) ?? '0.00'}</Badge>
+          </div>
+
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">Forschungsfragen</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-400">
+              {researchBrief.researchQuestions.map(question => <li key={question}>{question}</li>)}
+            </ul>
+          </div>
+
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">POC Outputs</div>
+            <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+              {researchBrief.outputSchema.requiredOutputs.map(output => <Badge key={output}>{output}</Badge>)}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">Quality Gates</div>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-400">
+              {researchBrief.outputSchema.qualityGates.map(gate => <li key={gate}>{gate}</li>)}
+            </ul>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
