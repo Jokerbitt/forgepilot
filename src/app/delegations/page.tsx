@@ -161,6 +161,23 @@ export default function DelegationsPage() {
     })
   }
 
+  const handleStartDelegation = async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    const delegation = delegations.find(d => d.id === id)
+    if (!delegation || delegation.status !== 'approved') return
+    // Optimistic update
+    applyUpdate({ ...delegation, status: 'running', updatedAt: new Date().toISOString() })
+    await fetch(`/api/delegations/${id}/execute`, { method: 'POST' })
+  }
+
+  const handleCancelRunning = async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    const delegation = delegations.find(d => d.id === id)
+    if (!delegation) return
+    applyUpdate({ ...delegation, status: 'cancelled', updatedAt: new Date().toISOString() })
+    await fetch(`/api/delegations/${id}/cancel`, { method: 'POST' })
+  }
+
   const handleRowDelete = async (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
     await fetch(`/api/delegations?id=${id}`, { method: 'DELETE' })
@@ -360,6 +377,7 @@ export default function DelegationsPage() {
                       const canCancel = del.status === 'pending' || del.status === 'approved'
                       const canDelete = isDone
                       const canApprove = del.status === 'pending' && del.contract.requiresApproval && del.contract.riskClass !== 'C'
+                      const canStart = del.status === 'approved'
 
                       return (
                         <tr
@@ -482,6 +500,17 @@ export default function DelegationsPage() {
                                     </button>
                                   )}
 
+                                  {/* Start — approved delegations */}
+                                  {canStart && (
+                                    <button
+                                      onClick={e => handleStartDelegation(del.id, e)}
+                                      className="text-xs bg-blue-900/50 text-blue-300 hover:bg-blue-900 px-2 py-1 rounded border border-blue-800/70 transition-colors font-medium"
+                                      title="Agent starten"
+                                    >
+                                      ▶
+                                    </button>
+                                  )}
+
                                   {/* Cancel — for pending/approved */}
                                   {canCancel && (
                                     <button
@@ -493,14 +522,14 @@ export default function DelegationsPage() {
                                     </button>
                                   )}
 
-                                  {/* Stop running */}
+                                  {/* Stop running — calls cancel API */}
                                   {del.status === 'running' && (
                                     <button
-                                      onClick={e => handleStatusChange(del.id, 'failed', e)}
+                                      onClick={e => handleCancelRunning(del.id, e)}
                                       className="text-xs bg-red-900/50 text-red-400 hover:text-red-300 hover:bg-red-900 px-2 py-1 rounded border border-red-900/50 transition-colors"
                                       title="Stoppen"
                                     >
-                                      ⏹
+                                      ⛔
                                     </button>
                                   )}
 
