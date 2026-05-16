@@ -20,6 +20,7 @@ export function MagicCreate() {
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false)
   
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   // Config State
   const [availableProjects, setAvailableProjects] = useState<string[]>(['LOCAL_IDEAS'])
@@ -81,6 +82,9 @@ export function MagicCreate() {
   const selectSuggestion = (suggestion: string) => {
     setPrompt(suggestion)
     setShowSuggestions(false)
+    if (inputRef.current) {
+      inputRef.current.focus()
+    }
   }
 
   return (
@@ -90,6 +94,7 @@ export function MagicCreate() {
           <span className="text-gray-500">✨</span>
         </div>
         <input
+          ref={inputRef}
           type="text"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
