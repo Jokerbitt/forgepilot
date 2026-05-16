@@ -5,6 +5,7 @@ import type { Delegation } from '@/lib/models/delegation'
 import { DelegationDrawer } from '@/components/delegation/DelegationDrawer'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
 import { NewDelegationDialog } from '@/components/delegation/NewDelegationDialog'
+import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 
 const STATUS_COLORS: Record<string, string> = {
   pending:   'bg-yellow-900/50 text-yellow-500 border-yellow-700',
@@ -311,7 +312,14 @@ export default function DelegationsPage() {
 
                           {/* Ticket / Goal */}
                           <td className="p-3">
-                            <div className="text-xs text-gray-600 font-mono mb-0.5">{del.contract.workItemId}</div>
+                            <div className="mb-1 flex flex-wrap items-center gap-2">
+                              <span className="text-xs text-gray-600 font-mono">{del.contract.workItemId}</span>
+                              <ApprovalBadge
+                                requiresApproval={del.contract.requiresApproval}
+                                riskClass={del.contract.riskClass}
+                                compact
+                              />
+                            </div>
                             <div className={`text-sm font-medium ${GOAL_STYLE[del.status] || 'text-gray-200'}`}>
                               {del.contract.goal}
                             </div>
