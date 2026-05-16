@@ -4,16 +4,77 @@ import { useEffect, useState } from 'react'
 import type { NBAConfig } from '@/lib/nba-engine/nba-config'
 import { describeApprovalMode } from '@/lib/nba-engine/approval-policy'
 
+interface ApiKeyField {
+  key: 'GITHUB_TOKEN' | 'LINEAR_API_KEY' | 'ANTHROPIC_API_KEY'
+  label: string
+  placeholder: string
+  hint: string
+}
+
+const API_KEY_FIELDS: ApiKeyField[] = [
+  {
+    key: 'GITHUB_TOKEN',
+    label: 'GitHub Token',
+    placeholder: 'ghp_...',
+    hint: 'Für GitHub Work Items + PR erstellen. Scope: repo',
+  },
+  {
+    key: 'LINEAR_API_KEY',
+    label: 'Linear API Key',
+    placeholder: 'lin_api_...',
+    hint: 'Für Linear Tickets als Work Items. Settings → API → Personal API Keys',
+  },
+  {
+    key: 'ANTHROPIC_API_KEY',
+    label: 'Anthropic API Key',
+    placeholder: 'sk-ant-api03-...',
+    hint: 'Für die NBA Engine und Magic Create. console.anthropic.com',
+  },
+]
+
 export default function SettingsPage() {
   const [config, setConfig] = useState<NBAConfig | null>(null)
   const [saving, setSaving] = useState(false)
   const [newModel, setNewModel] = useState('')
 
+  // API Keys state
+  const [apiKeySet, setApiKeySet] = useState<Record<string, boolean>>({})
+  const [apiKeyDraft, setApiKeyDraft] = useState<Record<string, string>>({
+    GITHUB_TOKEN: '',
+    LINEAR_API_KEY: '',
+    ANTHROPIC_API_KEY: '',
+  })
+  const [apiKeySaving, setApiKeySaving] = useState(false)
+  const [apiKeySaved, setApiKeySaved] = useState(false)
+
   useEffect(() => {
     fetch('/api/settings')
       .then(res => res.json())
       .then(setConfig)
+    fetch('/api/api-keys')
+      .then(res => res.json())
+      .then((data: { _set: Record<string, boolean> }) => setApiKeySet(data._set ?? {}))
   }, [])
+
+  const handleSaveApiKeys = async () => {
+    setApiKeySaving(true)
+    // Only send non-empty drafts
+    const payload: Record<string, string> = {}
+    for (const [k, v] of Object.entries(apiKeyDraft)) {
+      if (v.trim()) payload[k] = v.trim()
+    }
+    const res = await fetch('/api/api-keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    const data = await res.json() as { _set: Record<string, boolean> }
+    setApiKeySet(data._set ?? {})
+    setApiKeyDraft({ GITHUB_TOKEN: '', LINEAR_API_KEY: '', ANTHROPIC_API_KEY: '' })
+    setApiKeySaving(false)
+    setApiKeySaved(true)
+    setTimeout(() => setApiKeySaved(false), 3000)
+  }
 
   const handleSave = async () => {
     if (!config) return
@@ -35,6 +96,50 @@ export default function SettingsPage() {
           <h1 className="text-3xl font-bold">Engine Einstellungen</h1>
           <a href="/" className="text-blue-500 hover:text-blue-400">Zurück zum Dashboard</a>
         </header>
+
+        {/* API Keys Section */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-gray-300">🔑 API Keys &amp; Verbindungen</h2>
+            {apiKeySaved && (
+              <span className="text-green-400 text-sm font-medium animate-pulse">✓ Gespeichert</span>
+            )}
+          </div>
+          <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 space-y-4">
+            <p className="text-sm text-gray-400">
+              Keys werden lokal in <code className="text-xs bg-gray-800 px-1 py-0.5 rounded">config/api-keys.json</code> gespeichert (nicht in Git).
+            </p>
+            {API_KEY_FIELDS.map(({ key, label, placeholder, hint }) => (
+              <div key={key}>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-sm font-medium text-gray-300">{label}</label>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    apiKeySet[key]
+                      ? 'bg-green-900/40 text-green-400'
+                      : 'bg-gray-800 text-gray-500'
+                  }`}>
+                    {apiKeySet[key] ? '✓ Gesetzt' : 'Nicht gesetzt'}
+                  </span>
+                </div>
+                <input
+                  type="password"
+                  value={apiKeyDraft[key] ?? ''}
+                  onChange={e => setApiKeyDraft(prev => ({ ...prev, [key]: e.target.value }))}
+                  placeholder={apiKeySet[key] ? '••••••••••••••••' : placeholder}
+                  className="w-full bg-gray-950 text-white px-3 py-2 rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-mono"
+                />
+                <p className="text-xs text-gray-500 mt-1">{hint}</p>
+              </div>
+            ))}
+            <button
+              onClick={handleSaveApiKeys}
+              disabled={apiKeySaving || Object.values(apiKeyDraft).every(v => !v.trim())}
+              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm"
+            >
+              {apiKeySaving ? 'Speichere...' : 'API Keys speichern'}
+            </button>
+          </div>
+        </section>
 
         <section className="space-y-4">
           <h2 className="text-xl font-bold text-gray-300">Anzeige Limits</h2>
