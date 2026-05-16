@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import type { Delegation, ExecutionRoute, OutputMode, TaskType } from '@/lib/models/delegation'
+import type { Delegation, ExecutionRoute, OutputMode, TaskContract, TaskType } from '@/lib/models/delegation'
 import type { RiskClass } from '@/lib/models/work-item'
 
 interface Props {
@@ -9,6 +9,8 @@ interface Props {
   onCreate: (delegation: Delegation) => void
   prefillWorkItemId?: string
   prefillGoal?: string
+  /** Pre-fill all fields from an existing contract (clone/template mode) */
+  prefillContract?: Partial<TaskContract>
 }
 
 const TEMPLATES = [
@@ -18,20 +20,22 @@ const TEMPLATES = [
   { id: 'refactor', icon: '♻️', label: 'Refactor', riskClass: 'B' as RiskClass, branch: 'chore' as const,   model: 'claude-sonnet', tools: ['read_file', 'write_file', 'search_code', 'run_command'] },
 ]
 
-export function NewDelegationDialog({ onClose, onCreate, prefillWorkItemId = '', prefillGoal = '' }: Props) {
-  const [goal, setGoal] = useState(prefillGoal)
-  const [context, setContext] = useState('')
-  const [workItemId, setWorkItemId] = useState(prefillWorkItemId)
-  const [dodItems, setDodItems] = useState<string[]>([''])
+export function NewDelegationDialog({ onClose, onCreate, prefillWorkItemId = '', prefillGoal = '', prefillContract }: Props) {
+  const pc = prefillContract // shorthand
+
+  const [goal, setGoal] = useState(pc?.goal ?? prefillGoal)
+  const [context, setContext] = useState(pc?.context ?? '')
+  const [workItemId, setWorkItemId] = useState(pc?.workItemId ?? prefillWorkItemId)
+  const [dodItems, setDodItems] = useState<string[]>(pc?.definitionOfDone?.length ? pc.definitionOfDone : [''])
   const [selectedTemplate, setSelectedTemplate] = useState<typeof TEMPLATES[0] | null>(null)
   const [executionRoute, setExecutionRoute] = useState<ExecutionRoute>('local-agent')
-  const [llmModel, setLlmModel] = useState('claude-sonnet')
-  const [maxBudgetUsd, setMaxBudgetUsd] = useState(1.0)
-  const [riskClass, setRiskClass] = useState<RiskClass>('B')
-  const [branchStrategy, setBranchStrategy] = useState<'feature' | 'fix' | 'chore'>('feature')
-  const [privacyMode, setPrivacyMode] = useState<'local' | 'private-cloud' | 'public'>('local')
-  const [outputMode, setOutputMode] = useState<OutputMode>('text')
-  const [showExpert, setShowExpert] = useState(false)
+  const [llmModel, setLlmModel] = useState(pc?.llmModel ?? 'claude-sonnet')
+  const [maxBudgetUsd, setMaxBudgetUsd] = useState(pc?.maxBudgetUsd ?? 1.0)
+  const [riskClass, setRiskClass] = useState<RiskClass>(pc?.riskClass ?? 'B')
+  const [branchStrategy, setBranchStrategy] = useState<'feature' | 'fix' | 'chore'>(pc?.branchStrategy ?? 'feature')
+  const [privacyMode, setPrivacyMode] = useState<'local' | 'private-cloud' | 'public'>(pc?.privacyMode ?? 'local')
+  const [outputMode, setOutputMode] = useState<OutputMode>(pc?.outputMode ?? 'text')
+  const [showExpert, setShowExpert] = useState(!!pc) // auto-expand expert panel when cloning
   const [saving, setSaving] = useState(false)
   const [goalError, setGoalError] = useState(false)
 
@@ -116,7 +120,8 @@ export function NewDelegationDialog({ onClose, onCreate, prefillWorkItemId = '',
           {/* Header */}
           <div className="px-6 py-5 border-b border-gray-800 flex items-center justify-between">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <span>⚡</span> Neue Delegation
+              <span>{pc ? '🔁' : '⚡'}</span>
+              {pc ? 'Delegation klonen' : 'Neue Delegation'}
             </h2>
             <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors text-xl leading-none">×</button>
           </div>
