@@ -1,26 +1,37 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import type { NBARecommendation } from '@/lib/models/nba'
 import { NBACard } from './NBACard'
 
 export function NBAPanel() {
   const [recs, setRecs] = useState<NBARecommendation[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [activeProject, setActiveProject] = useState<string>('Alle')
 
-  useEffect(() => {
-    fetch('/api/recommendations')
-      .then(res => res.json())
-      .then(data => {
-        setRecs(data.recommendations || [])
-        setLoading(false)
-      })
-      .catch(err => {
-        console.error(err)
-        setLoading(false)
-      })
+  const fetchRecs = useCallback(async (isManual = false) => {
+    if (isManual) setRefreshing(true)
+    try {
+      const res = await fetch('/api/recommendations')
+      const data = await res.json() as { recommendations?: NBARecommendation[] }
+      setRecs(data.recommendations || [])
+      setLastRefreshed(new Date())
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }, [])
+
+  useEffect(() => {
+    fetchRecs()
+    // Auto-refresh every 60s to pick up new Linear/GitHub items
+    const interval = setInterval(() => fetchRecs(), 60000)
+    return () => clearInterval(interval)
+  }, [fetchRecs])
 
   if (loading) {
     return (
@@ -44,6 +55,28 @@ export function NBAPanel() {
 
   return (
     <div className="space-y-4">
+      {/* Header with refresh */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wide">
+          Next Best Actions
+        </h2>
+        <div className="flex items-center gap-3">
+          {lastRefreshed && (
+            <span className="text-xs text-gray-600">
+              {lastRefreshed.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          <button
+            onClick={() => fetchRecs(true)}
+            disabled={refreshing}
+            className="p-1.5 text-gray-600 hover:text-gray-400 transition-colors disabled:opacity-50"
+            title="Empfehlungen neu laden"
+          >
+            <span className={refreshing ? 'animate-spin inline-block' : ''}>↻</span>
+          </button>
+        </div>
+      </div>
+
       {uniqueProjects.length > 1 && (
         <div className="flex flex-wrap gap-2 mb-6">
           <button
