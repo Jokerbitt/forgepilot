@@ -46,6 +46,7 @@ export default function SettingsPage() {
   })
   const [apiKeySaving, setApiKeySaving] = useState(false)
   const [apiKeySaved, setApiKeySaved] = useState(false)
+  const [confirmClearKey, setConfirmClearKey] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/settings')
@@ -76,6 +77,21 @@ export default function SettingsPage() {
     setTimeout(() => setApiKeySaved(false), 3000)
   }
 
+  const handleClearApiKey = async (key: string) => {
+    setApiKeySaving(true)
+    setConfirmClearKey(null)
+    const res = await fetch('/api/api-keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [key]: '' }),
+    })
+    const data = await res.json() as { _set: Record<string, boolean> }
+    setApiKeySet(data._set ?? {})
+    setApiKeySaving(false)
+    setApiKeySaved(true)
+    setTimeout(() => setApiKeySaved(false), 3000)
+  }
+
   const handleSave = async () => {
     if (!config) return
     setSaving(true)
@@ -92,9 +108,8 @@ export default function SettingsPage() {
   return (
     <main className="min-h-screen bg-gray-950 text-white p-8">
       <div className="max-w-2xl mx-auto space-y-8">
-        <header className="flex justify-between items-center border-b border-gray-800 pb-4">
-          <h1 className="text-3xl font-bold">Engine Einstellungen</h1>
-          <a href="/" className="text-blue-500 hover:text-blue-400">Zurück zum Dashboard</a>
+        <header className="border-b border-gray-800 pb-4">
+          <h1 className="text-3xl font-bold">⚙️ Engine Einstellungen</h1>
         </header>
 
         {/* API Keys Section */}
@@ -113,13 +128,42 @@ export default function SettingsPage() {
               <div key={key}>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-sm font-medium text-gray-300">{label}</label>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    apiKeySet[key]
-                      ? 'bg-green-900/40 text-green-400'
-                      : 'bg-gray-800 text-gray-500'
-                  }`}>
-                    {apiKeySet[key] ? '✓ Gesetzt' : 'Nicht gesetzt'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      apiKeySet[key]
+                        ? 'bg-green-900/40 text-green-400'
+                        : 'bg-gray-800 text-gray-500'
+                    }`}>
+                      {apiKeySet[key] ? '✓ Gesetzt' : 'Nicht gesetzt'}
+                    </span>
+                    {apiKeySet[key] && (
+                      confirmClearKey === key ? (
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-red-400">Löschen?</span>
+                          <button
+                            onClick={() => handleClearApiKey(key)}
+                            className="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-0.5 rounded font-bold transition-colors"
+                          >
+                            Ja
+                          </button>
+                          <button
+                            onClick={() => setConfirmClearKey(null)}
+                            className="text-xs text-gray-500 hover:text-white px-1 transition-colors"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmClearKey(key)}
+                          className="text-xs text-gray-600 hover:text-red-400 transition-colors"
+                          title="Key löschen"
+                        >
+                          🗑
+                        </button>
+                      )
+                    )}
+                  </div>
                 </div>
                 <input
                   type="password"
