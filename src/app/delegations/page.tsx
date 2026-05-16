@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import type { Delegation } from '@/lib/models/delegation'
 import { DelegationDrawer } from '@/components/delegation/DelegationDrawer'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
@@ -69,6 +69,9 @@ export default function DelegationsPage() {
   // Inline delete confirm in table row
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
+  // Refs for keyboard shortcut targets
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+
   const loadDelegations = useCallback(() => {
     fetch('/api/delegations')
       .then(res => res.json())
@@ -100,6 +103,25 @@ export default function DelegationsPage() {
     const interval = setInterval(loadDelegations, 5000)
     return () => clearInterval(interval)
   }, [delegations, loadDelegations])
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const active = document.activeElement
+      const isInputFocused = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement
+      if (isInputFocused) return
+
+      if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault()
+        setShowNewDialog(true)
+      } else if (e.key === '/') {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   // ── Optimistic helpers ──────────────────────────────────────────────────
   const applyUpdate = useCallback((updated: Delegation) => {
@@ -273,8 +295,10 @@ export default function DelegationsPage() {
             <button
               onClick={() => setShowNewDialog(true)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors"
+              title="Neue Delegation erstellen [N]"
             >
               <span>+</span> Neue Delegation
+              <kbd className="hidden sm:inline text-[10px] bg-blue-800/60 px-1 py-0.5 rounded font-mono leading-none">N</kbd>
             </button>
           </div>
         </header>
@@ -379,11 +403,12 @@ export default function DelegationsPage() {
               {/* Search input */}
               <div className="flex items-center gap-2 pl-4 border-l border-gray-800 ml-auto">
                 <input
+                  ref={searchInputRef}
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Suchen…"
-                  className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 w-40 transition-colors"
+                  placeholder="Suchen… [/]"
+                  className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 w-44 transition-colors"
                 />
                 {searchQuery && (
                   <button
