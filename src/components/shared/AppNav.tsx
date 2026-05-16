@@ -37,7 +37,7 @@ export function AppNav() {
 
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 text-white font-bold text-base hover:text-blue-400 transition-colors">
-            <span className="text-xl">⚙️</span>
+            <span className="text-xl">🤖</span>
             <span className="hidden sm:block">ForgePilot</span>
           </Link>
 
