@@ -268,6 +268,7 @@ ${researchQuestionsText}`
       requirements: [...existingAccepted, ...existingOtherNotDuplicate, ...newReqs],
       risks: [...brief.risks, ...newRisks],
       researchRunIds: [...(brief.researchRunIds ?? []), runId],
+      lastResearchRun: run,
       status: brief.status === 'draft' ? 'in_review' : brief.status,
     })
 

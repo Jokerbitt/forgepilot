@@ -185,6 +185,7 @@ export interface ProjectBrief {
   nonGoals: string[]
   risks: Risk[]
   researchRunIds: string[]
+  lastResearchRun?: ResearchRun
   researchBriefDraft: ResearchBriefDraft
   reviewedAt?: string
   reviewedBy?: string
