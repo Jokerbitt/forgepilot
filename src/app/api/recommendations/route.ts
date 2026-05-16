@@ -4,11 +4,10 @@ import path from 'path'
 import { readConnectorConfigsFromEnv } from '@/lib/connectors/config'
 import { fetchLinearWorkItems } from '@/lib/connectors/linear-items'
 import { fetchGitHubWorkItems } from '@/lib/connectors/github-items'
+import { prioritizeItems } from '@/lib/nba-engine/prioritizer'
 import type { WorkItem } from '@/lib/models/work-item'
 
 export const dynamic = 'force-dynamic'
-
-type Source = 'all' | 'linear' | 'github' | 'local'
 
 const LOCAL_ITEMS_FILE = path.join(process.cwd(), 'config', 'local-items.json')
 
@@ -18,33 +17,27 @@ function readLocalWorkItems(): WorkItem[] {
       return []
     }
 
-    return JSON.parse(fs.readFileSync(LOCAL_ITEMS_FILE, 'utf-8')) as WorkItem[]
+    return JSON.parse(fs.readFileSync(LOCAL_ITEMS_FILE, 'utf8')) as WorkItem[]
   } catch {
     return []
   }
 }
 
 export async function GET(request: NextRequest) {
-  const source = (request.nextUrl.searchParams.get('source') ?? 'all') as Source
   const configs = readConnectorConfigsFromEnv(process.env)
 
   try {
-    const fetchers: Promise<WorkItem[]>[] = []
-
-    if (source === 'all' || source === 'linear') {
-      fetchers.push(fetchLinearWorkItems(configs.linear ?? {}))
-    }
-    if (source === 'all' || source === 'github') {
-      fetchers.push(fetchGitHubWorkItems(configs.github ?? {}))
-    }
-    if (source === 'all' || source === 'local') {
-      fetchers.push(Promise.resolve(readLocalWorkItems()))
-    }
+    const fetchers: Promise<WorkItem[]>[] = [
+      fetchLinearWorkItems(configs.linear ?? {}),
+      fetchGitHubWorkItems(configs.github ?? {})
+    ]
 
     const results = await Promise.allSettled(fetchers)
 
     const items: WorkItem[] = []
     const errors: string[] = []
+    
+    items.push(...readLocalWorkItems())
 
     for (const result of results) {
       if (result.status === 'fulfilled') {
@@ -54,20 +47,18 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    items.sort((a, b) => {
-      if (a.priority !== b.priority) return a.priority - b.priority
-      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    })
+    // Pass all items through the NBA prioritizer
+    const recommendations = prioritizeItems(items)
 
     return NextResponse.json({
-      items,
-      total: items.length,
+      recommendations,
+      total: recommendations.length,
       ...(errors.length > 0 ? { errors } : {}),
     })
   } catch (error) {
     return NextResponse.json(
       {
-        error: 'Failed to fetch work items',
+        error: 'Failed to fetch recommendations',
         message: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 },

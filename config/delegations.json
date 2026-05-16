@@ -1,0 +1,243 @@
+[
+  {
+    "id": "DEL-DEMO-001",
+    "contract": {
+      "id": "TC-DEMO-001",
+      "workItemId": "LOCAL-1001",
+      "goal": "Expert Mode Control Panel als klickbaren Prototyp vorbereiten",
+      "context": "# User Story\nAls Power-User moechte ich Provider, Modell, Route, Budget und Tools bewusst steuern.\n\n# Hinweise\n- Beginner Mode bleibt Standard.\n- Expert Mode wird als aufklappbares Panel umgesetzt.",
+      "taskType": "feature",
+      "definitionOfDone": [
+        "Model Provider Auswahl sichtbar",
+        "Budget und Safety Policy sichtbar",
+        "Keine Secrets in UI oder Logs"
+      ],
+      "riskClass": "B",
+      "maxBudgetUsd": 1,
+      "allowedTools": [
+        "read_file",
+        "write_file",
+        "search_code"
+      ],
+      "branchStrategy": "feature",
+      "requiresApproval": true,
+      "privacyMode": "local",
+      "llmModel": "claude-3-7-sonnet",
+      "createdAt": "2026-05-16T08:35:00.000Z"
+    },
+    "status": "pending",
+    "executionRoute": "local-agent",
+    "costEstimateUsd": 0.6,
+    "actualCostUsd": 0.18,
+    "priority": 1,
+    "logs": [
+      {
+        "timestamp": "2026-05-16T08:35:01.000Z",
+        "type": "info",
+        "message": "Delegation Request empfangen."
+      },
+      {
+        "timestamp": "2026-05-16T08:35:04.000Z",
+        "type": "thought",
+        "message": "Pruefe Task Contract, RiskClass und erlaubte Tools."
+      },
+      {
+        "timestamp": "2026-05-16T08:35:08.000Z",
+        "type": "command",
+        "message": "rg \"Expert Mode\" src/components"
+      }
+    ],
+    "note": {
+      "text": "Demo-Run fuer das neue Expert-Mode-Konzept. Darf lokal getestet werden.",
+      "updatedAt": "2026-05-16T08:36:00.000Z"
+    },
+    "createdAt": "2026-05-16T08:35:00.000Z",
+    "updatedAt": "2026-05-16T01:39:32.591Z"
+  },
+  {
+    "id": "DEL-DEMO-002",
+    "contract": {
+      "id": "TC-DEMO-002",
+      "workItemId": "LOCAL-1002",
+      "goal": "Task Detail Drawer mit Overview, Contract, Logs und Report skizzieren",
+      "context": "Bestehende Modals sollen mittelfristig durch einen Drawer mit Tabs ersetzt werden.",
+      "taskType": "feature",
+      "definitionOfDone": [
+        "Drawer-Struktur definiert",
+        "Tabs festgelegt",
+        "Report und Logs bleiben erreichbar"
+      ],
+      "riskClass": "B",
+      "maxBudgetUsd": 1,
+      "allowedTools": [
+        "read_file",
+        "write_file",
+        "search_code"
+      ],
+      "branchStrategy": "feature",
+      "requiresApproval": true,
+      "privacyMode": "local",
+      "llmModel": "ollama/deepseek-coder-v2",
+      "createdAt": "2026-05-16T08:20:00.000Z"
+    },
+    "status": "pending",
+    "executionRoute": "direct-chat",
+    "costEstimateUsd": 0.35,
+    "priority": 2,
+    "logs": [
+      {
+        "timestamp": "2026-05-16T08:20:01.000Z",
+        "type": "info",
+        "message": "Task wartet auf Freigabe."
+      }
+    ],
+    "createdAt": "2026-05-16T08:20:00.000Z",
+    "updatedAt": "2026-05-16T08:20:00.000Z"
+  },
+  {
+    "id": "DEL-DEMO-003",
+    "contract": {
+      "id": "TC-DEMO-003",
+      "workItemId": "LOCAL-1003",
+      "goal": "SSOT Writeback Checkliste fuer abgeschlossene Tasks entwerfen",
+      "context": "Nach jedem relevanten Task soll ForgePilot pruefen, ob Linear, NAS oder Obsidian aktualisiert werden muss.",
+      "taskType": "docs",
+      "definitionOfDone": [
+        "Writeback-Ziele beschrieben",
+        "Approval-Regel fuer Obsidian Writeback beschrieben",
+        "NAS-SSOT Referenz aufgenommen"
+      ],
+      "riskClass": "A",
+      "maxBudgetUsd": 0.5,
+      "allowedTools": [
+        "read_file",
+        "write_file"
+      ],
+      "branchStrategy": "feature",
+      "requiresApproval": false,
+      "privacyMode": "local",
+      "llmModel": "claude-3-7-sonnet",
+      "createdAt": "2026-05-16T08:05:00.000Z"
+    },
+    "status": "completed",
+    "executionRoute": "direct-chat",
+    "costEstimateUsd": 0.2,
+    "actualCostUsd": 0.08,
+    "priority": 3,
+    "logs": [
+      {
+        "timestamp": "2026-05-16T08:05:01.000Z",
+        "type": "info",
+        "message": "Writeback-Checkliste erstellt."
+      },
+      {
+        "timestamp": "2026-05-16T08:08:20.000Z",
+        "type": "success",
+        "message": "Dokumentation im NAS-SSOT verlinkt."
+      }
+    ],
+    "summaryReport": {
+      "keyPoints": [
+        "Writeback-Ziele fuer Linear, GitHub, NAS und Obsidian getrennt",
+        "Approval fuer Knowledge Writeback empfohlen",
+        "Naechster Schritt: UI-Checkliste im Abschluss-Flow"
+      ],
+      "changes": [
+        "[NEW] docs/ssot-writeback-checklist.md"
+      ],
+      "timeTakenMinutes": 12,
+      "filesAdded": [
+        "docs/ssot-writeback-checklist.md"
+      ],
+      "filesModified": [],
+      "filesDeleted": [],
+      "testsAdded": 0,
+      "testsPassed": 55,
+      "linesAdded": 86,
+      "linesRemoved": 0,
+      "branchName": "feature/ssot-writeback-assistant",
+      "warnings": [
+        "Noch kein automatischer Obsidian-Writeback."
+      ],
+      "nextSuggestions": [
+        "SSOT Writeback Assistant als UI-Komponente anlegen"
+      ]
+    },
+    "createdAt": "2026-05-16T08:05:00.000Z",
+    "updatedAt": "2026-05-16T08:18:00.000Z"
+  },
+  {
+    "id": "DEL-DEMO-004",
+    "contract": {
+      "id": "TC-DEMO-004",
+      "workItemId": "LOCAL-1004",
+      "goal": "Production Secrets Rotation pruefen und Sicherheitsrisiken dokumentieren",
+      "context": "RiskClass C: keine Autonomie. Nur manuelle Analyse und Plan erlaubt.",
+      "taskType": "research",
+      "definitionOfDone": [
+        "Keine Secrets ausgeben",
+        "Nur Plan erstellen",
+        "Manuelle Freigabe erforderlich"
+      ],
+      "riskClass": "C",
+      "maxBudgetUsd": 0.25,
+      "allowedTools": [
+        "read_file",
+        "search_code"
+      ],
+      "branchStrategy": "chore",
+      "requiresApproval": true,
+      "privacyMode": "local",
+      "llmModel": "claude-3-7-sonnet",
+      "createdAt": "2026-05-16T08:45:00.000Z"
+    },
+    "status": "pending",
+    "executionRoute": "manual",
+    "costEstimateUsd": 0.15,
+    "actualCostUsd": 0,
+    "priority": 4,
+    "errorMessage": "RiskClass C darf nicht autonom gestartet werden. Pre-Flight Approval erforderlich.",
+    "logs": [
+      {
+        "timestamp": "2026-05-16T08:45:01.000Z",
+        "type": "info",
+        "message": "Delegation Request empfangen."
+      },
+      {
+        "timestamp": "2026-05-16T08:45:03.000Z",
+        "type": "error",
+        "message": "Safety Gate blockiert Autonomie fuer RiskClass C."
+      }
+    ],
+    "createdAt": "2026-05-16T08:45:00.000Z",
+    "updatedAt": "2026-05-16T01:39:34.155Z"
+  },
+  {
+    "id": "del-1778895605120",
+    "status": "pending",
+    "executionRoute": "direct-chat",
+    "costEstimateUsd": 0.5,
+    "contract": {
+      "id": "con-1778895605120",
+      "workItemId": "LOCAL-1003",
+      "goal": "SSOT Writeback Assistant als UI-Komponente anlegen",
+      "context": "Folge-Delegation aus: SSOT Writeback Checkliste fuer abgeschlossene Tasks entwerfen",
+      "definitionOfDone": [
+        "Task abgeschlossen"
+      ],
+      "riskClass": "A",
+      "maxBudgetUsd": 1,
+      "allowedTools": [
+        "read_file",
+        "write_file"
+      ],
+      "branchStrategy": "feature",
+      "requiresApproval": false,
+      "privacyMode": "local",
+      "llmModel": "claude-3-7-sonnet",
+      "createdAt": "2026-05-16T01:40:05.120Z"
+    },
+    "createdAt": "2026-05-16T01:40:05.154Z",
+    "updatedAt": "2026-05-16T01:40:05.154Z"
+  }
+]

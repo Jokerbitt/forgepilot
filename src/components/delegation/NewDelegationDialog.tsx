@@ -1,0 +1,256 @@
+'use client'
+
+import { useState } from 'react'
+import type { Delegation, ExecutionRoute, TaskType } from '@/lib/models/delegation'
+import type { RiskClass } from '@/lib/models/work-item'
+
+interface Props {
+  onClose: () => void
+  onCreate: (delegation: Delegation) => void
+  prefillWorkItemId?: string
+  prefillGoal?: string
+}
+
+const TEMPLATES = [
+  { id: 'feature',  icon: '✨', label: 'Feature',  riskClass: 'B' as RiskClass, branch: 'feature' as const, model: 'claude-sonnet', tools: ['read_file', 'write_file', 'search_code'] },
+  { id: 'bugfix',   icon: '🐛', label: 'Bug Fix',  riskClass: 'A' as RiskClass, branch: 'fix' as const,     model: 'claude-haiku',  tools: ['read_file', 'write_file', 'search_code'] },
+  { id: 'docs',     icon: '📝', label: 'Docs',     riskClass: 'A' as RiskClass, branch: 'chore' as const,   model: 'claude-haiku',  tools: ['read_file', 'write_file'] },
+  { id: 'refactor', icon: '♻️', label: 'Refactor', riskClass: 'B' as RiskClass, branch: 'chore' as const,   model: 'claude-sonnet', tools: ['read_file', 'write_file', 'search_code', 'run_command'] },
+]
+
+export function NewDelegationDialog({ onClose, onCreate, prefillWorkItemId = '', prefillGoal = '' }: Props) {
+  const [goal, setGoal] = useState(prefillGoal)
+  const [workItemId, setWorkItemId] = useState(prefillWorkItemId)
+  const [selectedTemplate, setSelectedTemplate] = useState<typeof TEMPLATES[0] | null>(null)
+  const [executionRoute, setExecutionRoute] = useState<ExecutionRoute>('local-agent')
+  const [llmModel, setLlmModel] = useState('claude-sonnet')
+  const [maxBudgetUsd, setMaxBudgetUsd] = useState(1.0)
+  const [riskClass, setRiskClass] = useState<RiskClass>('B')
+  const [branchStrategy, setBranchStrategy] = useState<'feature' | 'fix' | 'chore'>('feature')
+  const [showExpert, setShowExpert] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const handleTemplateSelect = (t: typeof TEMPLATES[0]) => {
+    setSelectedTemplate(t)
+    setRiskClass(t.riskClass)
+    setBranchStrategy(t.branch)
+    setLlmModel(t.model)
+  }
+
+  const handleCreate = async () => {
+    if (!goal.trim()) return
+    setSaving(true)
+
+    const now = new Date().toISOString()
+    const id = `del-${Date.now()}`
+    const newDelegation: Delegation = {
+      id,
+      status: 'pending',
+      executionRoute,
+      costEstimateUsd: maxBudgetUsd * 0.5,
+      contract: {
+        id: `con-${Date.now()}`,
+        workItemId: workItemId.trim() || 'MANUAL',
+        goal: goal.trim(),
+        context: '',
+        taskType: (selectedTemplate?.id as TaskType | undefined) ?? undefined,
+        definitionOfDone: ['Task erfolgreich abgeschlossen'],
+        riskClass,
+        maxBudgetUsd,
+        allowedTools: selectedTemplate?.tools ?? ['read_file', 'write_file'],
+        branchStrategy,
+        requiresApproval: riskClass === 'C',
+        privacyMode: 'local',
+        llmModel,
+        createdAt: now,
+      },
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    await fetch('/api/delegations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newDelegation),
+    })
+
+    setSaving(false)
+    onCreate(newDelegation)
+  }
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 bg-black/60 z-40" onClick={onClose} />
+
+      {/* Dialog */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="bg-gray-950 border border-gray-800 rounded-2xl shadow-2xl w-full max-w-lg">
+
+          {/* Header */}
+          <div className="px-6 py-5 border-b border-gray-800 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <span>⚡</span> Neue Delegation
+            </h2>
+            <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors text-xl leading-none">×</button>
+          </div>
+
+          <div className="p-6 space-y-5">
+
+            {/* Goal */}
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">
+                Ziel <span className="text-red-400">*</span>
+              </label>
+              <textarea
+                value={goal}
+                onChange={e => setGoal(e.target.value)}
+                placeholder="Was soll der Agent tun? Kurz und präzise..."
+                className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white text-sm resize-none h-20 focus:border-blue-500 focus:outline-none placeholder-gray-600"
+                autoFocus
+              />
+            </div>
+
+            {/* Ticket (optional) */}
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">
+                Ticket-ID <span className="text-gray-600">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={workItemId}
+                onChange={e => setWorkItemId(e.target.value)}
+                placeholder="z.B. JOK-42"
+                className="w-full bg-gray-900 border border-gray-800 rounded-lg p-2.5 text-white text-sm focus:border-blue-500 focus:outline-none placeholder-gray-600"
+              />
+            </div>
+
+            {/* Template selection */}
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+                Vorlage
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {TEMPLATES.map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => handleTemplateSelect(t)}
+                    className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-xs font-medium transition-colors ${
+                      selectedTemplate?.id === t.id
+                        ? 'bg-blue-900/40 border-blue-500 text-blue-300'
+                        : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-600 hover:text-gray-200'
+                    }`}
+                  >
+                    <span className="text-xl">{t.icon}</span>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              {selectedTemplate && (
+                <p className="text-xs text-gray-600 mt-2">
+                  → RiskClass {selectedTemplate.riskClass} · {selectedTemplate.branch}/ · {selectedTemplate.model}
+                </p>
+              )}
+            </div>
+
+            {/* Expert options toggle */}
+            <button
+              onClick={() => setShowExpert(v => !v)}
+              className="text-xs text-gray-500 hover:text-gray-300 flex items-center gap-1.5 transition-colors"
+            >
+              <span>{showExpert ? '▾' : '▸'}</span>
+              Alle Optionen (Expert)
+            </button>
+
+            {showExpert && (
+              <div className="grid grid-cols-2 gap-3 bg-gray-900 border border-gray-800 rounded-lg p-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Modell</label>
+                  <input
+                    type="text"
+                    value={llmModel}
+                    onChange={e => setLlmModel(e.target.value)}
+                    className="w-full bg-gray-950 border border-gray-800 rounded p-2 text-white text-xs focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Budget ($)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0.5"
+                    value={maxBudgetUsd}
+                    onChange={e => setMaxBudgetUsd(Number(e.target.value))}
+                    className="w-full bg-gray-950 border border-gray-800 rounded p-2 text-white text-xs focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Risk Class</label>
+                  <select
+                    value={riskClass}
+                    onChange={e => setRiskClass(e.target.value as RiskClass)}
+                    className="w-full bg-gray-950 border border-gray-800 rounded p-2 text-white text-xs focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="A">A — Gering</option>
+                    <option value="B">B — Moderat</option>
+                    <option value="C">C — Kritisch</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Branch</label>
+                  <select
+                    value={branchStrategy}
+                    onChange={e => setBranchStrategy(e.target.value as 'feature' | 'fix' | 'chore')}
+                    className="w-full bg-gray-950 border border-gray-800 rounded p-2 text-white text-xs focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="feature">feature/</option>
+                    <option value="fix">fix/</option>
+                    <option value="chore">chore/</option>
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Ausführung</label>
+                  <select
+                    value={executionRoute}
+                    onChange={e => setExecutionRoute(e.target.value as ExecutionRoute)}
+                    className="w-full bg-gray-950 border border-gray-800 rounded p-2 text-white text-xs focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="local-agent">local-agent</option>
+                    <option value="direct-chat">direct-chat</option>
+                    <option value="runner">runner</option>
+                    <option value="n8n">n8n</option>
+                    <option value="manual">manual</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 pb-6 flex items-center justify-end gap-3">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+            >
+              Abbrechen
+            </button>
+            <button
+              onClick={handleCreate}
+              disabled={!goal.trim() || saving}
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-2"
+            >
+              {saving ? (
+                <>
+                  <span className="inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Erstellt...
+                </>
+              ) : (
+                <>⚡ Delegation starten</>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
