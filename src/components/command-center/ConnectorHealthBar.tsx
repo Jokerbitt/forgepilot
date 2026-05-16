@@ -21,13 +21,19 @@ export function ConnectorHealthBar() {
 
   if (!health || !health.connectors) return <div className="h-1 w-full bg-gray-900 animate-pulse" />
 
+  const statusColor = (status: string) => {
+    if (status === 'ok') return 'bg-green-500'
+    if (status === 'unconfigured') return 'bg-yellow-600'
+    return 'bg-red-500'
+  }
+
   return (
     <div className="flex h-1 w-full bg-gray-900 overflow-hidden">
       {health.connectors.map((conn, idx) => (
         <div
           key={idx}
-          title={`${conn.manifest.name}: ${conn.health.status}`}
-          className={`h-full flex-1 ${conn.health.status === 'ok' ? 'bg-green-500' : 'bg-red-500'}`}
+          title={`${conn.manifest.name}: ${conn.health.status}${conn.health.errorMessage ? ` — ${conn.health.errorMessage}` : ''}`}
+          className={`h-full flex-1 ${statusColor(conn.health.status)}`}
         />
       ))}
     </div>
