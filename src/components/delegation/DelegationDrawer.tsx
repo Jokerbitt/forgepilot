@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Link from 'next/link'
 import type { AgentLog, Delegation, DelegationStatus, ExecutionRoute, OutputMode, PrivacyMode, TaskType, DelegationNote } from '@/lib/models/delegation'
 import type { RiskClass } from '@/lib/models/work-item'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
@@ -418,9 +419,21 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
               {delegation.contract.goal}
             </h2>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors flex-shrink-0 mt-1">
-            ✕
-          </button>
+          <div className="flex items-center gap-1 flex-shrink-0 mt-1">
+            <Link
+              href={`/delegations/${delegation.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-600 hover:text-blue-400 transition-colors px-1.5 py-1 rounded hover:bg-blue-950/30"
+              title="In Vollansicht öffnen"
+              onClick={e => e.stopPropagation()}
+            >
+              ⊞
+            </Link>
+            <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors px-1.5 py-1">
+              ✕
+            </button>
+          </div>
         </header>
 
         {/* Tabs */}
