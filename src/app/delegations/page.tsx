@@ -371,7 +371,8 @@ function DelegationsContent() {
     const matchSearch = !q ||
       d.contract.goal.toLowerCase().includes(q) ||
       d.contract.workItemId.toLowerCase().includes(q) ||
-      (d.contract.context || '').toLowerCase().includes(q)
+      (d.contract.context || '').toLowerCase().includes(q) ||
+      (d.briefTitle || '').toLowerCase().includes(q)
     const matchToday = !todayOnly || isCreatedToday(d.createdAt)
 
     return matchStatus && matchProject && matchApproval && matchSearch && matchToday
@@ -746,6 +747,16 @@ function DelegationsContent() {
                           <td className="p-3">
                             <div className="mb-1 flex flex-wrap items-center gap-2">
                               <span className="text-xs text-gray-600 font-mono">{del.contract.workItemId}</span>
+                              {del.briefId && (
+                                <Link
+                                  href={`/project-briefs/${del.briefId}`}
+                                  onClick={e => e.stopPropagation()}
+                                  className="text-xs px-1.5 py-0.5 rounded bg-indigo-950/50 border border-indigo-900/50 text-indigo-400 hover:text-indigo-200 hover:bg-indigo-900/40 transition-colors truncate max-w-[140px]"
+                                  title={del.briefTitle ?? 'Projektbrief'}
+                                >
+                                  ◇ {del.briefTitle ?? 'Brief'}
+                                </Link>
+                              )}
                               {del.contract.branchStrategy && TASK_TYPE_ICONS[del.contract.branchStrategy] && (
                                 <span
                                   className="text-xs px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-400"
