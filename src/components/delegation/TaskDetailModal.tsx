@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import type { Delegation, DelegationStatus, ExecutionRoute, PrivacyMode, TaskType } from '@/lib/models/delegation'
 import type { RiskClass } from '@/lib/models/work-item'
 
@@ -20,6 +21,7 @@ const AVAILABLE_TOOLS = [
 ]
 
 export function TaskDetailModal({ delegation, isOpen, onClose }: TaskDetailModalProps) {
+  const router = useRouter()
   const [goal, setGoal] = useState('')
   const [status, setStatus] = useState<DelegationStatus>('pending')
   const [executionRoute, setExecutionRoute] = useState<ExecutionRoute>('local-agent')
@@ -103,7 +105,7 @@ export function TaskDetailModal({ delegation, isOpen, onClose }: TaskDetailModal
         body: JSON.stringify(updatedDelegation)
       })
       onClose()
-      window.location.reload()
+      router.refresh()
     } catch (err) {
       console.error(err)
       setSaving(false)
@@ -141,7 +143,7 @@ export function TaskDetailModal({ delegation, isOpen, onClose }: TaskDetailModal
         body: JSON.stringify(updatedDelegation)
       })
       onClose()
-      window.location.reload()
+      router.refresh()
     } catch (err) {
       console.error(err)
       setSaving(false)
@@ -253,7 +255,7 @@ export function TaskDetailModal({ delegation, isOpen, onClose }: TaskDetailModal
                 className="w-full bg-gray-900 border border-gray-800 rounded-lg p-2.5 text-sm text-white focus:border-blue-500 focus:outline-none"
               >
                 <option value="A">Class A (sicher)</option>
-                <option value="B">Class B (Medium Risk)</option>
+                <option value="B">Class B (moderat)</option>
                 <option value="C">Class C (kritisch)</option>
               </select>
             </div>

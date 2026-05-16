@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import type { NBARecommendation } from '@/lib/models/nba'
 import type { Delegation, ExecutionRoute, PrivacyMode } from '@/lib/models/delegation'
 import type { NBAConfig } from '@/lib/nba-engine/nba-config'
@@ -31,6 +32,7 @@ interface DelegationModalProps {
 }
 
 export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) {
+  const router = useRouter()
   const [isExpertMode, setIsExpertMode] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   
@@ -117,9 +119,7 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
     
     setIsSubmitting(false)
     onClose()
-    
-    // Force reload to show active agent
-    window.location.reload()
+    router.refresh()
   }
 
   return (

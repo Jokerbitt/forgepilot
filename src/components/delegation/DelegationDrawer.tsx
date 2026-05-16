@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import type { Delegation, DelegationStatus, ExecutionRoute, PrivacyMode, TaskType, DelegationNote } from '@/lib/models/delegation'
 import type { RiskClass } from '@/lib/models/work-item'
+import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 
 type Tab = 'details' | 'logs' | 'report' | 'notes'
 
@@ -210,7 +211,13 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
         {/* Header */}
         <header className="px-6 py-4 border-b border-gray-800 bg-gray-900 flex items-start justify-between gap-3 flex-shrink-0">
           <div className="min-w-0">
-            <div className="text-xs text-gray-500 font-mono mb-1">{delegation.contract.workItemId}</div>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="text-xs text-gray-500 font-mono">{delegation.contract.workItemId}</span>
+              <ApprovalBadge
+                requiresApproval={delegation.contract.requiresApproval}
+                riskClass={delegation.contract.riskClass}
+              />
+            </div>
             <h2 className={`text-lg font-bold leading-tight ${
               isCompleted ? 'line-through text-gray-500 decoration-green-500/60 decoration-2' :
               delegation.status === 'cancelled' ? 'line-through text-gray-600' :
@@ -282,6 +289,22 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
               </div>
 
               <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 rounded-lg border border-gray-800 bg-gray-900 p-3">
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Freigabe</label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ApprovalBadge
+                      requiresApproval={delegation.contract.requiresApproval}
+                      riskClass={riskClass}
+                    />
+                    <span className="text-xs text-gray-500">
+                      {riskClass === 'C'
+                        ? 'Kritische Aufgaben brauchen bewusstes Review.'
+                        : delegation.contract.requiresApproval
+                          ? 'Diese Delegation wartet auf eine Freigabe.'
+                          : 'Diese Delegation darf automatisch weiterlaufen.'}
+                    </span>
+                  </div>
+                </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
                   <select

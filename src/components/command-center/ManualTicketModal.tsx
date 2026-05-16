@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import type { RiskClass } from '@/lib/models/work-item'
 
 interface ManualTicketModalProps {
@@ -11,6 +12,7 @@ interface ManualTicketModalProps {
 }
 
 export function ManualTicketModal({ isOpen, onClose, availableProjects, availableMilestones }: ManualTicketModalProps) {
+  const router = useRouter()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [projectId, setProjectId] = useState(availableProjects[0] || 'LOCAL_IDEAS')
@@ -83,7 +85,7 @@ export function ManualTicketModal({ isOpen, onClose, availableProjects, availabl
         })
       })
       onClose()
-      window.location.reload()
+      router.refresh()
     } catch (err) {
       console.error(err)
       setSaving(false)
