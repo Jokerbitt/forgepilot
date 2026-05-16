@@ -56,6 +56,19 @@ export function AppNav() {
               <span className="hidden sm:block">Dashboard</span>
             </Link>
 
+            {/* Project Briefs */}
+            <Link
+              href="/project-briefs"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                pathname.startsWith('/project-briefs')
+                  ? 'bg-gray-800 text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-900'
+              }`}
+            >
+              <span className="text-base leading-none">◇</span>
+              <span className="hidden sm:block">Ideen</span>
+            </Link>
+
             {/* Delegationen — with live badge */}
             <Link
               href="/delegations"
