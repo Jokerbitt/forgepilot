@@ -65,6 +65,8 @@ export interface Delegation {
   agentRunId?: string
   approvalId?: string
   priority?: number
+  briefId?: string
+  briefTitle?: string
   errorMessage?: string
   failureFeedback?: string
   logs?: AgentLog[]
