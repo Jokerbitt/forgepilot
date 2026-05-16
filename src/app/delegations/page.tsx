@@ -52,6 +52,18 @@ const TASK_TYPE_ICONS: Record<string, string> = {
   research: '🔍',
 }
 
+// ── Age helper (used in Zeit column for waiting delegations) ─────────────
+function formatAge(createdAt: string): { text: string; colorClass: string } {
+  const ageMs = Date.now() - new Date(createdAt).getTime()
+  const ageMin = Math.floor(ageMs / 60000)
+  const ageH   = Math.floor(ageMin / 60)
+  const ageD   = Math.floor(ageH / 24)
+  if (ageD >= 1)   return { text: `${ageD}d alt`,  colorClass: 'text-red-400' }
+  if (ageH >= 4)   return { text: `${ageH}h alt`,  colorClass: 'text-yellow-500' }
+  if (ageMin >= 30) return { text: `${ageMin}m alt`, colorClass: 'text-yellow-600/70' }
+  return { text: `${ageMin}m alt`, colorClass: 'text-gray-600' }
+}
+
 function DelegationsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -141,7 +153,10 @@ function DelegationsContent() {
       const isInputFocused = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement
       if (isInputFocused) return
 
-      if (e.key === 'n' || e.key === 'N') {
+      if (e.key === 'Escape') {
+        if (selectedDelegation) { setSelectedDelegation(null); return }
+        if (showNewDialog) { setShowNewDialog(false); return }
+      } else if (e.key === 'n' || e.key === 'N') {
         e.preventDefault()
         setShowNewDialog(true)
       } else if (e.key === '/') {
@@ -151,7 +166,7 @@ function DelegationsContent() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [selectedDelegation, showNewDialog])
 
   // ── Optimistic helpers ──────────────────────────────────────────────────
   const applyUpdate = useCallback((updated: Delegation) => {
@@ -259,6 +274,32 @@ function DelegationsContent() {
   const terminalCount = delegations.filter(
     d => d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled'
   ).length
+
+  // ── Batch Approve ────────────────────────────────────────────────────────
+  const approvableDelegations = delegations.filter(
+    d => d.status === 'pending' && d.contract.requiresApproval && d.contract.riskClass !== 'C'
+  )
+  const approvableCount = approvableDelegations.length
+
+  const handleBatchApprove = async () => {
+    if (approvableCount === 0) return
+    const now = new Date().toISOString()
+    const updates = approvableDelegations.map(d => ({
+      ...d,
+      status: 'approved' as const,
+      contract: { ...d.contract, requiresApproval: false },
+      logs: [...(d.logs ?? []), { timestamp: now, type: 'success', message: 'Batch-freigegeben.' }],
+      updatedAt: now,
+    }))
+    // Optimistic update
+    updates.forEach(applyUpdate)
+    // Bulk persist
+    await fetch('/api/delegations', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    })
+  }
 
   // ── Drag & Drop ─────────────────────────────────────────────────────────
   const handleDragStart = (index: number) => setDraggedIndex(index)
@@ -414,6 +455,16 @@ function DelegationsContent() {
                   🗑 Aufräumen ({terminalCount})
                 </button>
               )
+            )}
+            {/* Batch Approve — all approvable pending delegations */}
+            {approvableCount > 0 && (
+              <button
+                onClick={handleBatchApprove}
+                className="text-xs text-green-400 hover:text-green-300 border border-green-900/60 hover:border-green-700 hover:bg-green-900/20 px-3 py-2 rounded-lg transition-colors"
+                title={`${approvableCount} Delegation${approvableCount !== 1 ? 'en' : ''} auf einmal freigeben`}
+              >
+                ✔ Alle freigeben ({approvableCount})
+              </button>
             )}
             {delegations.length > 0 && (
               <button
@@ -714,7 +765,19 @@ function DelegationsContent() {
                                   </div>
                                 )}
                               </div>
-                            ) : (
+                            ) : (del.status === 'pending' || del.status === 'approved') ? (() => {
+                              const age = formatAge(del.createdAt)
+                              return (
+                                <div>
+                                  <div className={`text-xs font-mono font-medium ${age.colorClass}`} title="Wartezeit seit Erstellung">
+                                    ⏳ {age.text}
+                                  </div>
+                                  <div className="text-xs text-gray-700 mt-0.5">
+                                    {new Date(del.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                  </div>
+                                </div>
+                              )
+                            })() : (
                               <div className="text-xs text-gray-600">
                                 {new Date(del.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                               </div>
