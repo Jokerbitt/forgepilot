@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import type { Delegation } from '@/lib/models/delegation'
+import type { Delegation, TaskContract } from '@/lib/models/delegation'
 import { DelegationDrawer } from '@/components/delegation/DelegationDrawer'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
 import { NewDelegationDialog } from '@/components/delegation/NewDelegationDialog'
@@ -72,8 +72,24 @@ function DelegationsContent() {
   const [delegations, setDelegations] = useState<Delegation[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDelegation, setSelectedDelegation] = useState<Delegation | null>(null)
-  // ?new=1 auto-opens the dialog on mount
-  const [showNewDialog, setShowNewDialog] = useState(searchParams.get('new') === '1')
+  // ?new=1 or ?template=<id> auto-opens the dialog on mount
+  const [showNewDialog, setShowNewDialog] = useState(
+    searchParams.get('new') === '1' || !!searchParams.get('template')
+  )
+  // Template contract pre-fill — loaded when ?template=<id> is in URL
+  const [templateContract, setTemplateContract] = useState<Partial<TaskContract> | undefined>(undefined)
+
+  // Load template contract once on mount if ?template=<id> present
+  useEffect(() => {
+    const templateId = searchParams.get('template')
+    if (!templateId) return
+    fetch(`/api/delegations/${templateId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((d: Delegation | null) => {
+        if (d?.contract) setTemplateContract(d.contract)
+      })
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filters — initialised from URL params
   const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') ?? 'Alle')
@@ -885,6 +901,19 @@ function DelegationsContent() {
                                     </button>
                                   )}
 
+                                  {/* Clone — open new dialog pre-filled with this contract */}
+                                  <button
+                                    onClick={e => {
+                                      e.stopPropagation()
+                                      setTemplateContract(del.contract)
+                                      setShowNewDialog(true)
+                                    }}
+                                    className="text-xs text-gray-700 hover:text-purple-400 px-2 py-1 rounded hover:bg-purple-950/30 transition-colors"
+                                    title="Klonen — neues Dialog vorausgefüllt mit diesem Contract"
+                                  >
+                                    🔁
+                                  </button>
+
                                   {/* Open drawer — stopPropagation then open */}
                                   <button
                                     onClick={e => { e.stopPropagation(); setSelectedDelegation(del) }}
@@ -938,11 +967,13 @@ function DelegationsContent() {
       {/* ── New Delegation Dialog ─────────────────────────────────────── */}
       {showNewDialog && (
         <NewDelegationDialog
-          onClose={() => setShowNewDialog(false)}
+          onClose={() => { setShowNewDialog(false); setTemplateContract(undefined) }}
           onCreate={newDel => {
             applyAdd(newDel)
             setShowNewDialog(false)
+            setTemplateContract(undefined)
           }}
+          prefillContract={templateContract}
         />
       )}
     </main>
