@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import type { Delegation } from '@/lib/models/delegation'
 import { DelegationDrawer } from '@/components/delegation/DelegationDrawer'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
@@ -892,6 +893,16 @@ function DelegationsContent() {
                                   >
                                     →
                                   </button>
+
+                                  {/* Permalink */}
+                                  <Link
+                                    href={`/delegations/${del.id}`}
+                                    onClick={e => e.stopPropagation()}
+                                    className="text-xs text-gray-700 hover:text-blue-400 px-2 py-1 rounded hover:bg-blue-950/30 transition-colors"
+                                    title="Permalink öffnen"
+                                  >
+                                    ⊞
+                                  </Link>
                                 </>
                               )}
                             </div>
