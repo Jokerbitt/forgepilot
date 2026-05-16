@@ -20,15 +20,19 @@ const TEMPLATES = [
 
 export function NewDelegationDialog({ onClose, onCreate, prefillWorkItemId = '', prefillGoal = '' }: Props) {
   const [goal, setGoal] = useState(prefillGoal)
+  const [context, setContext] = useState('')
   const [workItemId, setWorkItemId] = useState(prefillWorkItemId)
+  const [dodItems, setDodItems] = useState<string[]>([''])
   const [selectedTemplate, setSelectedTemplate] = useState<typeof TEMPLATES[0] | null>(null)
   const [executionRoute, setExecutionRoute] = useState<ExecutionRoute>('local-agent')
   const [llmModel, setLlmModel] = useState('claude-sonnet')
   const [maxBudgetUsd, setMaxBudgetUsd] = useState(1.0)
   const [riskClass, setRiskClass] = useState<RiskClass>('B')
   const [branchStrategy, setBranchStrategy] = useState<'feature' | 'fix' | 'chore'>('feature')
+  const [privacyMode, setPrivacyMode] = useState<'local' | 'private-cloud' | 'public'>('local')
   const [showExpert, setShowExpert] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [goalError, setGoalError] = useState(false)
 
   const handleTemplateSelect = (t: typeof TEMPLATES[0]) => {
     setSelectedTemplate(t)
@@ -37,8 +41,28 @@ export function NewDelegationDialog({ onClose, onCreate, prefillWorkItemId = '',
     setLlmModel(t.model)
   }
 
+  const handleDodChange = (idx: number, value: string) => {
+    setDodItems(prev => prev.map((item, i) => i === idx ? value : item))
+  }
+
+  const handleDodKeyDown = (idx: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      setDodItems(prev => [...prev.slice(0, idx + 1), '', ...prev.slice(idx + 1)])
+    } else if (e.key === 'Backspace' && dodItems[idx] === '' && dodItems.length > 1) {
+      e.preventDefault()
+      setDodItems(prev => prev.filter((_, i) => i !== idx))
+    }
+  }
+
+  const effectiveDod = dodItems.filter(d => d.trim())
+
   const handleCreate = async () => {
-    if (!goal.trim()) return
+    if (!goal.trim()) {
+      setGoalError(true)
+      return
+    }
+    setGoalError(false)
     setSaving(true)
 
     const now = new Date().toISOString()
@@ -52,15 +76,15 @@ export function NewDelegationDialog({ onClose, onCreate, prefillWorkItemId = '',
         id: `con-${Date.now()}`,
         workItemId: workItemId.trim() || 'MANUAL',
         goal: goal.trim(),
-        context: '',
+        context: context.trim(),
         taskType: (selectedTemplate?.id as TaskType | undefined) ?? undefined,
-        definitionOfDone: ['Task erfolgreich abgeschlossen'],
+        definitionOfDone: effectiveDod.length > 0 ? effectiveDod : ['Task erfolgreich abgeschlossen'],
         riskClass,
         maxBudgetUsd,
         allowedTools: selectedTemplate?.tools ?? ['read_file', 'write_file'],
         branchStrategy,
         requiresApproval: riskClass === 'C',
-        privacyMode: 'local',
+        privacyMode,
         llmModel,
         createdAt: now,
       },
@@ -104,11 +128,66 @@ export function NewDelegationDialog({ onClose, onCreate, prefillWorkItemId = '',
               </label>
               <textarea
                 value={goal}
-                onChange={e => setGoal(e.target.value)}
+                onChange={e => { setGoal(e.target.value); if (e.target.value.trim()) setGoalError(false) }}
                 placeholder="Was soll der Agent tun? Kurz und präzise..."
-                className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white text-sm resize-none h-20 focus:border-blue-500 focus:outline-none placeholder-gray-600"
+                className={`w-full bg-gray-900 border rounded-lg p-3 text-white text-sm resize-none h-20 focus:outline-none placeholder-gray-600 ${
+                  goalError ? 'border-red-500 focus:border-red-400' : 'border-gray-800 focus:border-blue-500'
+                }`}
                 autoFocus
               />
+              {goalError && (
+                <p className="text-xs text-red-400 mt-1">Ziel ist Pflichtfeld.</p>
+              )}
+            </div>
+
+            {/* Context */}
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">
+                Kontext <span className="text-gray-600">(optional)</span>
+              </label>
+              <textarea
+                value={context}
+                onChange={e => setContext(e.target.value)}
+                placeholder="Zusätzlicher Kontext für den Agenten: betroffene Dateien, bekannte Probleme, Abhängigkeiten..."
+                className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white text-sm resize-none h-16 focus:border-blue-500 focus:outline-none placeholder-gray-600"
+              />
+            </div>
+
+            {/* Definition of Done */}
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">
+                Definition of Done <span className="text-gray-600">(Enter für neue Zeile)</span>
+              </label>
+              <div className="space-y-1.5">
+                {dodItems.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="text-gray-600 text-xs w-3 flex-shrink-0">◻</span>
+                    <input
+                      type="text"
+                      value={item}
+                      onChange={e => handleDodChange(idx, e.target.value)}
+                      onKeyDown={e => handleDodKeyDown(idx, e)}
+                      placeholder={idx === 0 ? 'Task erfolgreich abgeschlossen' : 'Weiteres Kriterium...'}
+                      className="flex-1 bg-gray-900 border border-gray-800 rounded p-2 text-white text-sm focus:border-blue-500 focus:outline-none placeholder-gray-600"
+                    />
+                    {dodItems.length > 1 && (
+                      <button
+                        onClick={() => setDodItems(prev => prev.filter((_, i) => i !== idx))}
+                        className="text-gray-600 hover:text-red-400 text-sm transition-colors"
+                        title="Entfernen"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  onClick={() => setDodItems(prev => [...prev, ''])}
+                  className="text-xs text-gray-600 hover:text-gray-400 flex items-center gap-1 transition-colors mt-1"
+                >
+                  <span>+</span> Kriterium hinzufügen
+                </button>
+              </div>
             </div>
 
             {/* Ticket (optional) */}
@@ -208,7 +287,7 @@ export function NewDelegationDialog({ onClose, onCreate, prefillWorkItemId = '',
                     <option value="chore">chore/</option>
                   </select>
                 </div>
-                <div className="col-span-2">
+                <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Ausführung</label>
                   <select
                     value={executionRoute}
@@ -220,6 +299,18 @@ export function NewDelegationDialog({ onClose, onCreate, prefillWorkItemId = '',
                     <option value="runner">runner</option>
                     <option value="n8n">n8n</option>
                     <option value="manual">manual</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Privacy</label>
+                  <select
+                    value={privacyMode}
+                    onChange={e => setPrivacyMode(e.target.value as 'local' | 'private-cloud' | 'public')}
+                    className="w-full bg-gray-950 border border-gray-800 rounded p-2 text-white text-xs focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="local">local</option>
+                    <option value="private-cloud">private-cloud</option>
+                    <option value="public">public</option>
                   </select>
                 </div>
               </div>
