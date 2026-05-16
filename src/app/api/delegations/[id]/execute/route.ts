@@ -3,6 +3,7 @@ import { spawn, execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import type { Delegation, AgentLog, DelegationReport } from '@/lib/models/delegation'
+import { registerProcess, unregisterProcess } from '@/lib/process-registry'
 
 const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
 
@@ -94,6 +95,11 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date) {
   })
   proc.unref()
 
+  // Register PID for cancellation
+  if (proc.pid) {
+    registerProcess(id, proc.pid)
+  }
+
   const logBuffer: AgentLog[] = []
   let flushTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -135,6 +141,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date) {
 
   proc.on('close', (code: number | null) => {
     if (flushTimer) clearTimeout(flushTimer)
+    unregisterProcess(id)
 
     const success = code === 0
     const elapsed = Math.round((Date.now() - startTime.getTime()) / 60000)
@@ -150,12 +157,17 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date) {
       ? { keyPoints: ['Ausführung via Claude CLI abgeschlossen'], changes: [], timeTakenMinutes: elapsed }
       : undefined
 
-    appendLogs(
-      id,
-      [...logBuffer, finalLog],
-      success ? 'completed' : 'failed',
-      report,
-    )
+    // Only update if still running (not already cancelled)
+    const delegations = readDelegations()
+    const current = delegations.find(d => d.id === id)
+    if (current && current.status === 'running') {
+      appendLogs(
+        id,
+        [...logBuffer, finalLog],
+        success ? 'completed' : 'failed',
+        report,
+      )
+    }
   })
 }
 
