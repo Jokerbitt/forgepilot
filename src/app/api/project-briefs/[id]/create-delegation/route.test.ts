@@ -43,6 +43,7 @@ vi.mock('@/lib/project-briefs', () => ({
     if (id === 'brief-002') return mockDraftBrief
     return undefined
   }),
+  updateProjectBrief: vi.fn(),
 }))
 
 vi.mock('fs', () => ({
@@ -72,6 +73,23 @@ describe('POST /api/project-briefs/[id]/create-delegation', () => {
     expect(data.contract.definitionOfDone).not.toContain('API rate-limited')
     expect(data.status).toBe('pending')
     expect(data.contract.privacyMode).toBe('local')
+  })
+
+  it('links delegation back to brief via briefId and briefTitle', async () => {
+    const res = await POST(new Request('http://localhost', { method: 'POST' }), makeParams('brief-001'))
+    expect(res.status).toBe(201)
+    const data = await res.json()
+    expect(data.briefId).toBe('brief-001')
+    expect(data.briefTitle).toBe('Neues Feature')
+  })
+
+  it('updates brief delegationIds after delegation creation', async () => {
+    const { updateProjectBrief } = await import('@/lib/project-briefs')
+    await POST(new Request('http://localhost', { method: 'POST' }), makeParams('brief-001'))
+    expect(vi.mocked(updateProjectBrief)).toHaveBeenCalledWith(
+      'brief-001',
+      expect.objectContaining({ delegationIds: expect.arrayContaining([expect.any(String)]) }),
+    )
   })
 
   it('returns 422 when brief is not accepted', async () => {

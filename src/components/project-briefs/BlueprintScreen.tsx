@@ -342,6 +342,28 @@ export function BlueprintScreen({ initialBrief }: Props) {
               </Link>
             </div>
 
+            {/* Delegations */}
+            {brief.delegationIds && brief.delegationIds.length > 0 && (
+              <div className="bg-gray-900 border border-purple-900/40 rounded-xl p-4">
+                <h2 className="text-xs font-semibold text-purple-400 uppercase tracking-wider mb-2">
+                  Delegationen ({brief.delegationIds.length})
+                </h2>
+                <div className="space-y-1.5">
+                  {brief.delegationIds.map((dId, i) => (
+                    <Link
+                      key={dId}
+                      href={`/delegations/${dId}`}
+                      className="flex items-center gap-2 text-xs text-purple-300 hover:text-purple-100 transition-colors group"
+                    >
+                      <span className="text-purple-700 group-hover:text-purple-400">⚡</span>
+                      <span className="font-mono truncate">Delegation {i + 1}</span>
+                      <span className="text-purple-700 group-hover:text-purple-400 ml-auto">→</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Research Findings */}
             {brief.lastResearchRun && (
               <FindingsPanel run={brief.lastResearchRun} />

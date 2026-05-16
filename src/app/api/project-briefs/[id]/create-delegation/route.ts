@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
-import { findProjectBriefById } from '@/lib/project-briefs'
+import { findProjectBriefById, updateProjectBrief } from '@/lib/project-briefs'
 import type { Delegation, PrivacyMode } from '@/lib/models/delegation'
 import type { ResearchPrivacyMode } from '@/lib/models/project-brief'
 import fs from 'fs'
@@ -69,6 +69,8 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
   const delegation: Delegation = {
     id: delegationId,
+    briefId: brief.id,
+    briefTitle: brief.title,
     contract: {
       id: contractId,
       workItemId: `BRIEF-${brief.id.slice(0, 8).toUpperCase()}`,
@@ -99,6 +101,11 @@ export async function POST(_request: Request, { params }: RouteParams) {
   const delegations = readDelegations()
   delegations.push(delegation)
   writeDelegations(delegations)
+
+  // Link delegation back to brief
+  updateProjectBrief(brief.id, {
+    delegationIds: [...(brief.delegationIds ?? []), delegationId],
+  })
 
   return NextResponse.json(delegation, { status: 201 })
 }
