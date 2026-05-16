@@ -103,7 +103,7 @@ export default function DelegationsPage() {
       updateData.summaryReport = {
         keyPoints: ['Code refactored', 'Unit tests pass 100%', 'No linting errors found'],
         changes: ['[MOD] src/app/page.tsx'],
-        timeTakenMinutes: Math.floor(Math.random() * 20) + 1,
+        timeTakenMinutes: Math.max(1, Math.round((Date.now() - new Date(delegation.createdAt).getTime()) / 60000)),
       }
     }
 
@@ -283,16 +283,18 @@ export default function DelegationsPage() {
                           className={`hover:bg-gray-800/40 transition-colors group cursor-pointer ${
                             draggedIndex === index ? 'opacity-40 bg-gray-800' : ''
                           }`}
-                          draggable={!isDone}
-                          onDragStart={() => handleDragStart(index)}
                           onDragOver={e => handleDragOver(e, index)}
                           onDragEnd={handleDrop}
                           onClick={() => setSelectedDelegation(del)}
                         >
-                          {/* Priority / drag handle */}
+                          {/* Priority / drag handle — draggable only on this cell */}
                           <td className="p-3 text-center" onClick={e => e.stopPropagation()}>
                             {!isDone ? (
-                              <span className="text-xs text-gray-600 cursor-grab group-hover:text-gray-400 transition-colors select-none">
+                              <span
+                                draggable
+                                onDragStart={() => handleDragStart(index)}
+                                className="text-xs text-gray-600 cursor-grab group-hover:text-gray-400 transition-colors select-none px-1 py-0.5"
+                              >
                                 ⋮⋮
                               </span>
                             ) : (
@@ -433,9 +435,9 @@ export default function DelegationsPage() {
                                     </button>
                                   )}
 
-                                  {/* Open drawer hint */}
+                                  {/* Open drawer — stopPropagation then open */}
                                   <button
-                                    onClick={() => setSelectedDelegation(del)}
+                                    onClick={e => { e.stopPropagation(); setSelectedDelegation(del) }}
                                     className="text-xs text-gray-600 hover:text-gray-300 px-2 py-1 rounded hover:bg-gray-800 transition-colors"
                                     title="Details öffnen"
                                   >
