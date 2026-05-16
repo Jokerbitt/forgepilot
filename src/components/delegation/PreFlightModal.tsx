@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import type { Delegation } from '@/lib/models/delegation'
 
 const RISK_INFO: Record<string, { color: string; label: string; desc: string }> = {
@@ -27,11 +28,14 @@ const isBudgetExceeded = (delegation: Delegation) =>
   delegation.costEstimateUsd > delegation.contract.maxBudgetUsd
 
 export function PreFlightModal({ delegation, onConfirm, onCancel, isStarting }: Props) {
+  const [budgetOverrunAcknowledged, setBudgetOverrunAcknowledged] = useState(false)
   const c = delegation.contract
   const risk = RISK_INFO[c.riskClass] ?? RISK_INFO['A']
   const route = ROUTE_INFO[delegation.executionRoute] ?? delegation.executionRoute
   const dod = (c.definitionOfDone ?? []).filter(Boolean)
   const tools = (c.allowedTools ?? [])
+  const budgetExceeded = isBudgetExceeded(delegation)
+  const canConfirm = !budgetExceeded || budgetOverrunAcknowledged
 
   const estimatedMinutes =
     c.maxBudgetUsd <= 0.5 ? '~2–5 Min.' :
@@ -96,7 +100,7 @@ export function PreFlightModal({ delegation, onConfirm, onCancel, isStarting }: 
           </div>
 
           {/* Budget — warning if estimate exceeds max */}
-          {isBudgetExceeded(delegation) && (
+          {budgetExceeded && (
             <div className="flex items-start gap-3 p-3 bg-yellow-950/40 border border-yellow-900/50 rounded-lg">
               <span className="text-yellow-400 text-lg mt-0.5">💰</span>
               <p className="text-yellow-300 text-sm">
@@ -105,10 +109,24 @@ export function PreFlightModal({ delegation, onConfirm, onCancel, isStarting }: 
             </div>
           )}
 
-          <div className={`bg-gray-950 rounded-lg p-3 flex items-center justify-between ${isBudgetExceeded(delegation) ? 'border border-yellow-900/40' : 'border border-gray-800'}`}>
+          {budgetExceeded && (
+            <label className="flex items-start gap-2 rounded-lg border border-yellow-900/50 bg-yellow-950/20 p-3 text-xs text-yellow-100 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={budgetOverrunAcknowledged}
+                onChange={event => setBudgetOverrunAcknowledged(event.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-yellow-700 bg-gray-950 text-yellow-500 focus:ring-yellow-500"
+              />
+              <span>
+                Ich bestaetige bewusst, dass diese Delegation die geplante Budgetgrenze ueberschreitet.
+              </span>
+            </label>
+          )}
+
+          <div className={`bg-gray-950 rounded-lg p-3 flex items-center justify-between ${budgetExceeded ? 'border border-yellow-900/40' : 'border border-gray-800'}`}>
             <div>
               <p className="text-xs text-gray-500">Max. Budget</p>
-              <p className={`font-mono font-bold ${isBudgetExceeded(delegation) ? 'text-yellow-400' : 'text-white'}`}>${c.maxBudgetUsd.toFixed(2)}</p>
+              <p className={`font-mono font-bold ${budgetExceeded ? 'text-yellow-400' : 'text-white'}`}>${c.maxBudgetUsd.toFixed(2)}</p>
             </div>
             <div className="text-right">
               <p className="text-xs text-gray-500">Task-Typ</p>
@@ -155,7 +173,8 @@ export function PreFlightModal({ delegation, onConfirm, onCancel, isStarting }: 
           </button>
           <button
             onClick={onConfirm}
-            disabled={isStarting}
+            disabled={isStarting || !canConfirm}
+            title={!canConfirm ? 'Bitte Budget-Ueberschreitung bewusst bestaetigen.' : undefined}
             className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-colors shadow-lg shadow-blue-900/30 flex items-center gap-2"
           >
             {isStarting ? (
