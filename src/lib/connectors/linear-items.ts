@@ -3,7 +3,7 @@ import { mapLinearIssueToWorkItem, type LinearConnectorConfig } from './linear'
 import type { Fetcher } from './shared'
 
 const ISSUES_QUERY = `
-  query FetchTeamIssues($teamId: String!, $first: Int!) {
+  query FetchTeamIssues($teamId: ID!, $first: Int!) {
     issues(filter: { team: { id: { eq: $teamId } } }, first: $first, orderBy: updatedAt) {
       nodes {
         id
@@ -15,7 +15,8 @@ const ISSUES_QUERY = `
         project { id }
         team { id }
         labels { nodes { name } }
-        assignee { id }
+        assignee { id name avatarUrl }
+        estimate
         updatedAt
         createdAt
       }
