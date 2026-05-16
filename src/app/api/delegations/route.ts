@@ -54,14 +54,28 @@ export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
-    if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+    const statuses = searchParams.get('statuses')
 
-    const delegations = readDelegations()
-    const exists = delegations.some(d => d.id === id)
-    if (!exists) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (id) {
+      // Single delete by id
+      const delegations = readDelegations()
+      const exists = delegations.some(d => d.id === id)
+      if (!exists) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+      writeDelegations(delegations.filter(d => d.id !== id))
+      return NextResponse.json({ success: true, deleted: 1 })
+    }
 
-    writeDelegations(delegations.filter(d => d.id !== id))
-    return NextResponse.json({ success: true })
+    if (statuses) {
+      // Bulk delete by status list (comma-separated)
+      const statusList = statuses.split(',').map(s => s.trim())
+      const delegations = readDelegations()
+      const remaining = delegations.filter(d => !statusList.includes(d.status))
+      const deletedCount = delegations.length - remaining.length
+      writeDelegations(remaining)
+      return NextResponse.json({ success: true, deleted: deletedCount })
+    }
+
+    return NextResponse.json({ error: 'Missing id or statuses param' }, { status: 400 })
   } catch (e) {
     return NextResponse.json({ error: 'Failed to delete delegation' }, { status: 500 })
   }
