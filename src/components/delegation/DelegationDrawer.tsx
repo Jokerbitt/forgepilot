@@ -396,6 +396,18 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
           <div className="min-w-0">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <span className="text-xs text-gray-500 font-mono">{delegation.contract.workItemId}</span>
+              {delegation.briefId && (
+                <Link
+                  href={`/project-briefs/${delegation.briefId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  className="text-xs px-1.5 py-0.5 rounded bg-indigo-950/50 border border-indigo-900/50 text-indigo-400 hover:text-indigo-200 transition-colors truncate max-w-[160px]"
+                  title={delegation.briefTitle ?? 'Projektbrief öffnen'}
+                >
+                  ◇ {delegation.briefTitle ?? 'Brief'}
+                </Link>
+              )}
               <ApprovalBadge
                 requiresApproval={delegation.contract.requiresApproval}
                 riskClass={delegation.contract.riskClass}
