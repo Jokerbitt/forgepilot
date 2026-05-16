@@ -57,6 +57,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
 
   // Details fields
   const [goal, setGoal] = useState('')
+  const [context, setContext] = useState('')
   const [status, setStatus] = useState<DelegationStatus>('pending')
   const [executionRoute, setExecutionRoute] = useState<ExecutionRoute>('local-agent')
   const [llmModel, setLlmModel] = useState('')
@@ -85,6 +86,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
     if (delegation) {
       setTab('details')
       setGoal(delegation.contract.goal)
+      setContext(delegation.contract.context || '')
       setStatus(delegation.status)
       setExecutionRoute(delegation.executionRoute)
       setLlmModel(delegation.contract.llmModel || '')
@@ -169,6 +171,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
       contract: {
         ...delegation.contract,
         goal,
+        context: context.trim(),
         llmModel: llmModel || undefined,
         taskType: taskType ? (taskType as TaskType) : undefined,
         riskClass,
@@ -474,6 +477,19 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
                 />
               </div>
 
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                  Kontext <span className="text-gray-600 normal-case font-normal">(für den Agenten)</span>
+                </label>
+                <textarea
+                  value={context}
+                  onChange={e => setContext(e.target.value)}
+                  disabled={isRunning}
+                  placeholder="Betroffene Dateien, bekannte Abhängigkeiten, Hintergrundinfos..."
+                  className="w-full bg-gray-900 border border-gray-800 rounded p-3 text-white text-sm resize-none h-16 focus:border-blue-500 focus:outline-none disabled:opacity-60 placeholder-gray-600"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2 rounded-lg border border-gray-800 bg-gray-900 p-3">
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Freigabe</label>
@@ -584,12 +600,27 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Definition of Done</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                  Definition of Done
+                </label>
+                {delegation.contract.definitionOfDone && delegation.contract.definitionOfDone.filter(Boolean).length > 0 ? (
+                  <ul className="space-y-1 mb-2">
+                    {delegation.contract.definitionOfDone.filter(Boolean).map((item, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
+                        <span className={`mt-0.5 flex-shrink-0 text-xs ${isCompleted ? 'text-green-500' : 'text-gray-600'}`}>
+                          {isCompleted ? '✓' : '◻'}
+                        </span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 <textarea
                   value={definitionOfDone}
                   onChange={e => setDefinitionOfDone(e.target.value)}
-                  placeholder="Eine Zeile pro Kriterium..."
-                  className="w-full bg-gray-900 border border-gray-800 rounded p-3 text-white text-sm resize-none h-24 focus:border-blue-500 focus:outline-none"
+                  disabled={isRunning}
+                  placeholder="Eine Zeile pro Kriterium (editierbar)..."
+                  className="w-full bg-gray-900 border border-gray-800 rounded p-3 text-white text-sm resize-none h-20 focus:border-blue-500 focus:outline-none disabled:opacity-60 placeholder-gray-600"
                 />
               </div>
 
