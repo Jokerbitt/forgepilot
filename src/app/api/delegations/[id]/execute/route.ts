@@ -203,8 +203,15 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date) {
 
 function runSimulation(id: string, delegation: Delegation) {
   const goal = delegation.contract.goal
+  const budget = delegation.contract.maxBudgetUsd
+  const estimatedCost = delegation.costEstimateUsd
+  const budgetWarning = estimatedCost > budget
+    ? `⚠️ Kosten-Schätzung ($${estimatedCost.toFixed(2)}) überschreitet Budget ($${budget.toFixed(2)})`
+    : `💰 Budget: $${budget.toFixed(2)} | Schätzung: $${estimatedCost.toFixed(2)}`
+
   const steps: Array<{ delay: number; type: AgentLog['type']; message: string }> = [
     { delay: 800,  type: 'info',    message: `📋 Task geladen: ${goal.substring(0, 80)}` },
+    { delay: 1200, type: estimatedCost > budget ? 'error' : 'info', message: budgetWarning },
     { delay: 1800, type: 'info',    message: '🔍 Analysiere Projektstruktur...' },
     { delay: 3000, type: 'command', message: `$ git checkout -b ${delegation.contract.branchStrategy}/${delegation.contract.workItemId.replace(/[^a-z0-9-]/gi, '-').toLowerCase()}-task` },
     { delay: 4500, type: 'thought', message: '💭 Verstehe Anforderungen aus Definition of Done...' },
@@ -261,11 +268,22 @@ export async function POST(
     )
   }
 
+  // Block RiskClass C — requires explicit manual override
+  if (delegation.contract.riskClass === 'C' && delegation.contract.requiresApproval) {
+    return NextResponse.json(
+      { error: 'RiskClass C: Manuelle Freigabe erforderlich. Setze requiresApproval=false nach bewusstem Review.' },
+      { status: 403 },
+    )
+  }
+
   // Immediately mark as running
+  const budgetNote = delegation.contract.maxBudgetUsd > 0
+    ? ` | Budget: $${delegation.contract.maxBudgetUsd.toFixed(2)}`
+    : ''
   const startLog: AgentLog = {
     timestamp: new Date().toISOString(),
     type: 'info',
-    message: '🚀 Ausführung gestartet...',
+    message: `🚀 Ausführung gestartet${budgetNote}`,
   }
   appendLogs(id, [startLog], 'running')
 
