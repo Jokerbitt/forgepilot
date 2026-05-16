@@ -1,9 +1,11 @@
 import type { NBARecommendation } from '@/lib/models/nba'
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import type { ExecutionRoute, PrivacyMode, Delegation } from '@/lib/models/delegation'
 import { TaskDetailModal } from '@/components/delegation/TaskDetailModal'
 import type { NBAConfig } from '@/lib/nba-engine/nba-config'
 import { shouldRequireApproval } from '@/lib/nba-engine/approval-policy'
+import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 
 const actionTranslations: Record<string, string> = {
   'do-now': 'JETZT MACHEN',
@@ -16,6 +18,7 @@ const actionTranslations: Record<string, string> = {
 
 export function NBACard({ rec }: { rec: NBARecommendation }) {
   const { workItem, score, suggestedAction, rationale } = rec
+  const router = useRouter()
   const [isPinning, setIsPinning] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   
@@ -87,7 +90,7 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
     })
     
     // Force a reload to get new scores
-    window.location.reload()
+    router.refresh()
   }
 
   const handleMagicRefine = () => {
@@ -119,7 +122,7 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
             existingTicketId: workItem.id
           })
         })
-        window.location.reload()
+        router.refresh()
       } catch (err) {
         console.error(err)
         setCreatingQuickTask(false)
@@ -144,7 +147,7 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
         goal: '',
         context: '',
         definitionOfDone: [],
-        riskClass: 'C',
+        riskClass: 'A',
         maxBudgetUsd: 1.0,
         allowedTools: ['read_file', 'write_file'],
         branchStrategy: 'feature',
@@ -209,7 +212,7 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
-      window.location.reload()
+      router.refresh()
     } catch (err) {
       console.error(err)
       setDelegating(false)
@@ -219,6 +222,13 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
 
   const sortedTasks = [...ticketTasks].sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
+  const previewRequiresApproval = shouldRequireApproval({
+    approvalMode,
+    riskClass: rec.riskClass,
+    scoreTotal: score.total,
+    autopilotMinScore,
+    autopilotMaxRiskClass,
+  })
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggedIndex(index)
@@ -308,6 +318,11 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
                 >
                   <span className="text-sm text-gray-300 truncate mr-2 flex items-center gap-2" title={task.contract?.goal}>
                     <span className="text-xs font-bold text-gray-600">#{index + 1}</span>
+                    <ApprovalBadge
+                      requiresApproval={task.contract.requiresApproval}
+                      riskClass={task.contract.riskClass}
+                      compact
+                    />
                     {task.contract?.taskType && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 capitalize">
                         {task.contract.taskType === 'feature' ? '✨ Feature' :
@@ -372,7 +387,8 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
       <div className="border-t border-gray-800 pt-3 flex justify-between items-center mt-3">
         <div className="flex flex-col gap-1">
           <p className="text-sm text-gray-400">{rationale}</p>
-          <div className="flex items-center space-x-3 text-xs text-gray-500 mt-1">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 mt-1">
+            <ApprovalBadge requiresApproval={previewRequiresApproval} riskClass={rec.riskClass} />
             {workItem.estimate && <span>🎯 {workItem.estimate} pts</span>}
             {workItem.assigneeName && (
               <div className="flex items-center space-x-1">
@@ -404,7 +420,12 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
         <div className="mt-4 border-t border-gray-800 pt-4 animate-in fade-in slide-in-from-top-4 duration-300">
           
           <div className="flex justify-between items-center mb-4">
-            <h4 className="text-sm font-bold text-white">Agenten-Konfiguration</h4>
+            <div>
+              <h4 className="text-sm font-bold text-white">Agenten-Konfiguration</h4>
+              <div className="mt-1">
+                <ApprovalBadge requiresApproval={previewRequiresApproval} riskClass={rec.riskClass} />
+              </div>
+            </div>
             <div className="flex items-center space-x-2">
               <span className="text-xs text-gray-400">Simple Mode</span>
               <button 
