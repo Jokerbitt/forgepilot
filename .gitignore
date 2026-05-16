@@ -3,6 +3,7 @@ node_modules/
 .env.local
 .env*.local
 config/api-keys.json
+config/project-briefs.json
 config/running-processes.json
 dist/
 build/

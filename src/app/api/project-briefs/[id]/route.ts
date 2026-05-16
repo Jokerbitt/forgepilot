@@ -1,0 +1,32 @@
+import { NextResponse } from 'next/server'
+import { findProjectBriefById, updateProjectBrief } from '@/lib/project-briefs'
+import type { ProjectBrief } from '@/lib/models/project-brief'
+
+interface RouteParams {
+  params: { id: string }
+}
+
+export async function GET(_request: Request, { params }: RouteParams) {
+  try {
+    const brief = findProjectBriefById(params.id)
+    if (!brief) {
+      return NextResponse.json({ error: 'Project brief not found' }, { status: 404 })
+    }
+    return NextResponse.json(brief)
+  } catch {
+    return NextResponse.json({ error: 'Failed to read project brief' }, { status: 500 })
+  }
+}
+
+export async function PATCH(request: Request, { params }: RouteParams) {
+  try {
+    const patch = await request.json() as Partial<Omit<ProjectBrief, 'id' | 'createdAt'>>
+    const updated = updateProjectBrief(params.id, patch)
+    if (!updated) {
+      return NextResponse.json({ error: 'Project brief not found' }, { status: 404 })
+    }
+    return NextResponse.json(updated)
+  } catch {
+    return NextResponse.json({ error: 'Failed to update project brief' }, { status: 500 })
+  }
+}
