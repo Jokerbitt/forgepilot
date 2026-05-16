@@ -4,6 +4,11 @@ import fs from 'fs'
 import path from 'path'
 import type { Delegation, AgentLog, DelegationReport } from '@/lib/models/delegation'
 import { registerProcess, unregisterProcess } from '@/lib/process-registry'
+import {
+  buildExecutionStartLog,
+  buildSimulationBudgetLog,
+  getExecutionStartBlocker,
+} from '@/lib/delegation-execution'
 
 const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
 
@@ -203,15 +208,11 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date) {
 
 function runSimulation(id: string, delegation: Delegation) {
   const goal = delegation.contract.goal
-  const budget = delegation.contract.maxBudgetUsd
-  const estimatedCost = delegation.costEstimateUsd
-  const budgetWarning = estimatedCost > budget
-    ? `⚠️ Kosten-Schätzung ($${estimatedCost.toFixed(2)}) überschreitet Budget ($${budget.toFixed(2)})`
-    : `💰 Budget: $${budget.toFixed(2)} | Schätzung: $${estimatedCost.toFixed(2)}`
+  const budgetLog = buildSimulationBudgetLog(delegation)
 
   const steps: Array<{ delay: number; type: AgentLog['type']; message: string }> = [
     { delay: 800,  type: 'info',    message: `📋 Task geladen: ${goal.substring(0, 80)}` },
-    { delay: 1200, type: estimatedCost > budget ? 'error' : 'info', message: budgetWarning },
+    { delay: 1200, type: budgetLog.type, message: budgetLog.message },
     { delay: 1800, type: 'info',    message: '🔍 Analysiere Projektstruktur...' },
     { delay: 3000, type: 'command', message: `$ git checkout -b ${delegation.contract.branchStrategy}/${delegation.contract.workItemId.replace(/[^a-z0-9-]/gi, '-').toLowerCase()}-task` },
     { delay: 4500, type: 'thought', message: '💭 Verstehe Anforderungen aus Definition of Done...' },
@@ -261,30 +262,13 @@ export async function POST(
     return NextResponse.json({ error: 'Delegation nicht gefunden' }, { status: 404 })
   }
 
-  if (delegation.status !== 'approved') {
-    return NextResponse.json(
-      { error: `Delegation kann nicht gestartet werden — Status ist '${delegation.status}', muss 'approved' sein.` },
-      { status: 400 },
-    )
-  }
-
-  // Block RiskClass C — requires explicit manual override
-  if (delegation.contract.riskClass === 'C' && delegation.contract.requiresApproval) {
-    return NextResponse.json(
-      { error: 'RiskClass C: Manuelle Freigabe erforderlich. Setze requiresApproval=false nach bewusstem Review.' },
-      { status: 403 },
-    )
+  const blocker = getExecutionStartBlocker(delegation)
+  if (blocker) {
+    return NextResponse.json({ error: blocker.error }, { status: blocker.status })
   }
 
   // Immediately mark as running
-  const budgetNote = delegation.contract.maxBudgetUsd > 0
-    ? ` | Budget: $${delegation.contract.maxBudgetUsd.toFixed(2)}`
-    : ''
-  const startLog: AgentLog = {
-    timestamp: new Date().toISOString(),
-    type: 'info',
-    message: `🚀 Ausführung gestartet${budgetNote}`,
-  }
+  const startLog = buildExecutionStartLog(delegation)
   appendLogs(id, [startLog], 'running')
 
   const startTime = new Date()
