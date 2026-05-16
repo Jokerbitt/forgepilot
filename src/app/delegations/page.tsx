@@ -246,6 +246,20 @@ function DelegationsContent() {
     setConfirmDeleteId(null)
   }
 
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const handleBulkDeleteCompleted = async () => {
+    const terminalIds = delegations
+      .filter(d => d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled')
+      .map(d => d.id)
+    await fetch('/api/delegations?statuses=completed,failed,cancelled', { method: 'DELETE' })
+    setDelegations(prev => prev.filter(d => !terminalIds.includes(d.id)))
+    setConfirmBulkDelete(false)
+  }
+
+  const terminalCount = delegations.filter(
+    d => d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled'
+  ).length
+
   // ── Drag & Drop ─────────────────────────────────────────────────────────
   const handleDragStart = (index: number) => setDraggedIndex(index)
 
@@ -344,6 +358,34 @@ function DelegationsContent() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {/* Bulk delete confirm */}
+            {terminalCount > 0 && (
+              confirmBulkDelete ? (
+                <div className="flex items-center gap-2 bg-red-950/60 border border-red-900 rounded-lg px-3 py-1.5">
+                  <span className="text-xs text-red-300">{terminalCount} löschen?</span>
+                  <button
+                    onClick={handleBulkDeleteCompleted}
+                    className="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded font-bold transition-colors"
+                  >
+                    Ja
+                  </button>
+                  <button
+                    onClick={() => setConfirmBulkDelete(false)}
+                    className="text-xs text-gray-400 hover:text-white px-1 transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmBulkDelete(true)}
+                  className="text-xs text-gray-500 hover:text-red-400 border border-gray-800 hover:border-red-900/50 px-3 py-2 rounded-lg transition-colors"
+                  title={`${terminalCount} abgeschlossene Delegationen löschen`}
+                >
+                  🗑 Aufräumen ({terminalCount})
+                </button>
+              )
+            )}
             <button
               onClick={() => setShowNewDialog(true)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors"
