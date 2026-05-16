@@ -204,6 +204,19 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
     }
   }
 
+  const handleCancel = async () => {
+    setSaving(true)
+    await fetch(`/api/delegations/${delegation.id}/cancel`, { method: 'POST' })
+    setSaving(false)
+    const updated: Delegation = {
+      ...delegation,
+      status: 'cancelled',
+      errorMessage: 'Manuell abgebrochen',
+      updatedAt: new Date().toISOString(),
+    }
+    onUpdate(updated)
+  }
+
   const handleClone = async () => {
     const now = new Date().toISOString()
     const cloned: Delegation = {
@@ -748,6 +761,18 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
               <button onClick={onClose} className="px-4 py-2 text-gray-400 hover:text-white text-sm transition-colors">
                 Schließen
               </button>
+              {/* Cancel button for running/approved delegations */}
+              {(delegation.status === 'running' || delegation.status === 'approved') && (
+                <button
+                  onClick={handleCancel}
+                  disabled={saving}
+                  className="px-4 py-2 bg-red-900/60 hover:bg-red-800 disabled:opacity-50 text-red-400 hover:text-red-300 text-sm font-medium rounded transition-colors border border-red-900/50"
+                  title="Delegation abbrechen"
+                >
+                  {saving ? '...' : '⛔ Abbrechen'}
+                </button>
+              )}
+
               {/* Context-sensitive action buttons */}
               {tab === 'details' && delegation.status === 'pending' && (
                 <button
