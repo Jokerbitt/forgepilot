@@ -43,6 +43,14 @@ const APPROVAL_FILTER_LABELS: Record<ApprovalFilter, string> = {
   'risk-blocked': 'RiskClass C',
 }
 
+const TASK_TYPE_ICONS: Record<string, string> = {
+  feature:  '✨',
+  bugfix:   '🐛',
+  docs:     '📝',
+  refactor: '♻️',
+  research: '🔍',
+}
+
 export default function DelegationsPage() {
   const [delegations, setDelegations] = useState<Delegation[]>([])
   const [loading, setLoading] = useState(true)
@@ -53,6 +61,7 @@ export default function DelegationsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('Alle')
   const [projectFilter, setProjectFilter] = useState<string>('Alle')
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>('Alle')
+  const [searchQuery, setSearchQuery] = useState<string>('')
 
   // Drag & Drop
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
@@ -214,8 +223,13 @@ export default function DelegationsPage() {
       (approvalFilter === 'approval-required' && d.contract.requiresApproval) ||
       (approvalFilter === 'auto-approved' && !d.contract.requiresApproval) ||
       (approvalFilter === 'risk-blocked' && d.contract.riskClass === 'C')
+    const q = searchQuery.toLowerCase().trim()
+    const matchSearch = !q ||
+      d.contract.goal.toLowerCase().includes(q) ||
+      d.contract.workItemId.toLowerCase().includes(q) ||
+      (d.contract.context || '').toLowerCase().includes(q)
 
-    return matchStatus && matchProject && matchApproval
+    return matchStatus && matchProject && matchApproval && matchSearch
   })
 
   const runningCount = delegations.filter(d => d.status === 'running').length
@@ -248,9 +262,6 @@ export default function DelegationsPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <a href="/" className="text-sm text-gray-500 hover:text-gray-300 transition-colors">
-              ← Dashboard
-            </a>
             <button
               onClick={() => setShowNewDialog(true)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors"
@@ -325,6 +336,26 @@ export default function DelegationsPage() {
                     </button>
                   )
                 })}
+              </div>
+
+              {/* Search input */}
+              <div className="flex items-center gap-2 pl-4 border-l border-gray-800 ml-auto">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Suchen…"
+                  className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 w-40 transition-colors"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                    title="Suche leeren"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
 
               {uniqueProjects.length > 1 && (
@@ -408,6 +439,14 @@ export default function DelegationsPage() {
                           <td className="p-3">
                             <div className="mb-1 flex flex-wrap items-center gap-2">
                               <span className="text-xs text-gray-600 font-mono">{del.contract.workItemId}</span>
+                              {del.contract.branchStrategy && TASK_TYPE_ICONS[del.contract.branchStrategy] && (
+                                <span
+                                  className="text-xs px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-400"
+                                  title={del.contract.branchStrategy}
+                                >
+                                  {TASK_TYPE_ICONS[del.contract.branchStrategy]} {del.contract.branchStrategy}
+                                </span>
+                              )}
                               <ApprovalBadge
                                 requiresApproval={del.contract.requiresApproval}
                                 riskClass={del.contract.riskClass}
