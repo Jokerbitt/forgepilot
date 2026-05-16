@@ -33,6 +33,50 @@ export async function POST(request: NextRequest) {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }
+    } else if (mode === 'delegation') {
+      const { prompt, existingTicketId } = body
+      if (!prompt || !existingTicketId) {
+        return NextResponse.json({ error: 'Prompt and existingTicketId are required' }, { status: 400 })
+      }
+
+      let riskClass: RiskClass = 'C'
+      if (prompt.toLowerCase().includes('urgent') || prompt.toLowerCase().includes('bug')) riskClass = 'A'
+      else if (prompt.toLowerCase().includes('refactor') || prompt.toLowerCase().length > 50) riskClass = 'B'
+
+      const newDelegation = {
+        id: `DEL-${Date.now().toString().slice(-4)}`,
+        status: 'pending',
+        executionRoute: 'local-agent',
+        costEstimateUsd: Math.random() * 0.5 + 0.1,
+        contract: {
+          id: `CON-${Date.now().toString().slice(-4)}`,
+          workItemId: existingTicketId,
+          goal: prompt,
+          context: "Direct delegation from Magic Create",
+          definitionOfDone: ["Task implemented according to prompt"],
+          riskClass,
+          maxBudgetUsd: 1.0,
+          allowedTools: ["read_file", "write_file", "search_code"],
+          branchStrategy: 'feature',
+          requiresApproval: true,
+          privacyMode: 'local',
+          createdAt: new Date().toISOString()
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+
+      const delegationsPath = path.join(process.cwd(), 'config', 'delegations.json')
+      let delegations: any[] = []
+      
+      if (fs.existsSync(delegationsPath)) {
+        delegations = JSON.parse(fs.readFileSync(delegationsPath, 'utf8'))
+      }
+      
+      delegations.push(newDelegation)
+      fs.writeFileSync(delegationsPath, JSON.stringify(delegations, null, 2))
+
+      return NextResponse.json({ success: true, item: newDelegation })
     } else {
       // Magic create
       const { prompt, projectId, milestone } = body

@@ -56,7 +56,7 @@ export function MagicCreate() {
     setShowSuggestions(false)
   }
 
-  const handleConfirmCreate = async (projectId: string, milestone: string) => {
+  const handleConfirmCreate = async (projectId: string, milestone: string, existingTicketId?: string) => {
     setIsConfirmModalOpen(false)
     setLoading(true)
     try {
@@ -64,10 +64,11 @@ export function MagicCreate() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          mode: 'magic',
+          mode: existingTicketId ? 'delegation' : 'magic',
           prompt,
           projectId,
-          milestone
+          milestone,
+          existingTicketId
         })
       })
       
