@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { Delegation, DelegationStatus, ExecutionRoute, PrivacyMode, TaskType, DelegationNote } from '@/lib/models/delegation'
 import type { RiskClass } from '@/lib/models/work-item'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
@@ -79,6 +79,46 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
     }
   }, [delegation])
 
+  // Live-polling while running — refresh delegation from server every 3s
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  useEffect(() => {
+    if (!delegation) return
+
+    const startPolling = () => {
+      pollRef.current = setInterval(async () => {
+        try {
+          const res = await fetch('/api/delegations')
+          const all = await res.json() as Delegation[]
+          const updated = all.find(d => d.id === delegation.id)
+          if (updated && updated.updatedAt !== delegation.updatedAt) {
+            onUpdate(updated)
+            // Stop polling when done
+            if (['completed', 'failed', 'cancelled'].includes(updated.status)) {
+              stopPolling()
+            }
+          }
+        } catch {
+          // ignore poll errors
+        }
+      }, 3000)
+    }
+
+    const stopPolling = () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current)
+        pollRef.current = null
+      }
+    }
+
+    if (delegation.status === 'running') {
+      startPolling()
+    } else {
+      stopPolling()
+    }
+
+    return stopPolling
+  }, [delegation?.id, delegation?.status]) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!delegation) return null
 
   const isOpen = true
@@ -115,6 +155,43 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
     })
     setSaving(false)
     onUpdate(updated)
+  }
+
+  const handleApprove = async () => {
+    setSaving(true)
+    const now = new Date().toISOString()
+    const updated: Delegation = {
+      ...delegation,
+      status: 'approved',
+      contract: { ...delegation.contract, requiresApproval: false },
+      logs: [
+        ...(delegation.logs ?? []),
+        { timestamp: now, type: 'success', message: 'Manuell freigegeben.' },
+      ],
+      updatedAt: now,
+    }
+    await fetch('/api/delegations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    })
+    setSaving(false)
+    onUpdate(updated)
+  }
+
+  const handleStart = async () => {
+    setSaving(true)
+    const res = await fetch(`/api/delegations/${delegation.id}/execute`, { method: 'POST' })
+    const data = await res.json() as { started?: boolean; mode?: string; error?: string }
+    setSaving(false)
+    if (data.started) {
+      // Switch to logs tab and optimistically update status
+      setTab('logs')
+      const updated: Delegation = { ...delegation, status: 'running', updatedAt: new Date().toISOString() }
+      onUpdate(updated)
+    } else {
+      console.error('Execute failed:', data.error)
+    }
   }
 
   const handleRetry = async () => {
@@ -192,7 +269,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
 
   const TABS: { id: Tab; label: string; show: boolean }[] = [
     { id: 'details', label: '✏ Details', show: true },
-    { id: 'logs', label: '📋 Logs', show: !!(delegation.logs && delegation.logs.length > 0) },
+    { id: 'logs', label: '📋 Logs', show: !!(delegation.logs && delegation.logs.length > 0) || isRunning },
     { id: 'report', label: '📄 Report', show: isCompleted && !!report },
     { id: 'notes', label: '📝 Notizen', show: true },
   ]
@@ -417,24 +494,19 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
 
           {/* ── LOGS TAB ── */}
           {tab === 'logs' && (
-            <div className="p-4">
-              {delegation.logs && delegation.logs.length > 0 ? (
-                <div className="space-y-1">
-                  {delegation.logs.map((log, i) => (
-                    <div key={i} className="flex gap-3 text-xs">
-                      <span className="text-gray-600 flex-shrink-0 font-mono">
-                        {new Date(log.timestamp).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                      </span>
-                      <span className={LOG_COLORS[log.type] || 'text-gray-400'}>
-                        {log.type === 'command' ? '› ' : log.type === 'thought' ? '💭 ' : ''}{log.message}
-                      </span>
-                    </div>
-                  ))}
+            <div className="p-4 flex flex-col h-full">
+              {isRunning && (
+                <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-blue-950/40 border border-blue-900/50 rounded text-xs text-blue-400">
+                  <span className="animate-pulse">●</span>
+                  <span>Agent läuft — Logs werden live aktualisiert...</span>
                 </div>
+              )}
+              {delegation.logs && delegation.logs.length > 0 ? (
+                <LogsScroller logs={delegation.logs} isRunning={isRunning} />
               ) : (
                 <div className="text-center py-12 text-gray-600">
                   <div className="text-3xl mb-2">📋</div>
-                  <p className="text-sm">Keine Logs vorhanden</p>
+                  <p className="text-sm">{isRunning ? 'Warte auf erste Logs...' : 'Keine Logs vorhanden'}</p>
                 </div>
               )}
             </div>
@@ -618,7 +690,26 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
               <button onClick={onClose} className="px-4 py-2 text-gray-400 hover:text-white text-sm transition-colors">
                 Schließen
               </button>
-              {tab === 'details' && (
+              {/* Context-sensitive action buttons */}
+              {tab === 'details' && delegation.status === 'pending' && (
+                <button
+                  onClick={handleApprove}
+                  disabled={saving}
+                  className="px-5 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-sm font-bold rounded transition-colors shadow-lg shadow-green-900/30"
+                >
+                  {saving ? '...' : '✓ Freigeben'}
+                </button>
+              )}
+              {tab === 'details' && delegation.status === 'approved' && (
+                <button
+                  onClick={handleStart}
+                  disabled={saving}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-bold rounded transition-colors shadow-lg shadow-blue-900/30"
+                >
+                  {saving ? '⏳ Startet...' : '▶ Starten'}
+                </button>
+              )}
+              {tab === 'details' && !['pending', 'approved'].includes(delegation.status) && (
                 <button
                   onClick={handleSave}
                   disabled={saving || isRunning}
@@ -632,5 +723,34 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
         </footer>
       </div>
     </>
+  )
+}
+
+// ── Auto-scrolling logs viewer ──────────────────────────────────────────────
+import type { AgentLog } from '@/lib/models/delegation'
+
+function LogsScroller({ logs, isRunning }: { logs: AgentLog[]; isRunning: boolean }) {
+  const bottomRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (isRunning && bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [logs.length, isRunning])
+
+  return (
+    <div className="space-y-1 overflow-y-auto flex-1 font-mono text-xs">
+      {logs.map((log, i) => (
+        <div key={i} className="flex gap-3">
+          <span className="text-gray-600 flex-shrink-0">
+            {new Date(log.timestamp).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          </span>
+          <span className={LOG_COLORS[log.type] || 'text-gray-400'}>
+            {log.type === 'command' ? '› ' : log.type === 'thought' ? '💭 ' : ''}{log.message}
+          </span>
+        </div>
+      ))}
+      <div ref={bottomRef} />
+    </div>
   )
 }
