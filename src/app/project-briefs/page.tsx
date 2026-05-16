@@ -94,8 +94,13 @@ function BriefRow({ brief }: { brief: ProjectBrief }) {
         </div>
         <p className="text-xs text-gray-500 truncate">{brief.problemStatement}</p>
       </div>
-      <div className="shrink-0 text-right ml-4">
+      <div className="shrink-0 flex flex-col items-end gap-1 ml-4">
         <p className="text-xs text-gray-500">{total > 0 ? `${accepted}/${total} REQ` : 'Neu'}</p>
+        {brief.delegationIds && brief.delegationIds.length > 0 && (
+          <span className="px-1.5 py-0.5 text-xs rounded bg-purple-950/50 border border-purple-900/40 text-purple-400">
+            ⚡ {brief.delegationIds.length} Del.
+          </span>
+        )}
         <p className="text-xs text-gray-700">{new Date(brief.updatedAt).toLocaleDateString('de-DE')}</p>
       </div>
     </Link>
