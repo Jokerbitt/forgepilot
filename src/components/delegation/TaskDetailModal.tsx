@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { Delegation, DelegationStatus, ExecutionRoute, PrivacyMode } from '@/lib/models/delegation'
+import type { Delegation, DelegationStatus, ExecutionRoute, PrivacyMode, TaskType } from '@/lib/models/delegation'
 import type { RiskClass } from '@/lib/models/work-item'
 
 interface TaskDetailModalProps {
@@ -10,17 +10,27 @@ interface TaskDetailModalProps {
   onClose: () => void
 }
 
+const AVAILABLE_TOOLS = [
+  { id: 'read_file', label: 'Dateien lesen' },
+  { id: 'write_file', label: 'Dateien schreiben' },
+  { id: 'search_code', label: 'Code suchen' },
+  { id: 'run_command', label: 'Terminal-Befehle ausführen' },
+  { id: 'web_search', label: 'Web-Suche' },
+  { id: 'github_api', label: 'GitHub API' }
+]
+
 export function TaskDetailModal({ delegation, isOpen, onClose }: TaskDetailModalProps) {
   const [goal, setGoal] = useState('')
   const [status, setStatus] = useState<DelegationStatus>('pending')
   const [executionRoute, setExecutionRoute] = useState<ExecutionRoute>('local-agent')
   const [llmModel, setLlmModel] = useState('')
+  const [taskType, setTaskType] = useState<TaskType | ''>('')
   const [riskClass, setRiskClass] = useState<RiskClass>('C')
   const [definitionOfDone, setDefinitionOfDone] = useState('')
   const [maxBudgetUsd, setMaxBudgetUsd] = useState(1.0)
   const [branchStrategy, setBranchStrategy] = useState<'feature' | 'fix' | 'chore'>('feature')
   const [privacyMode, setPrivacyMode] = useState<PrivacyMode>('local')
-  const [allowedTools, setAllowedTools] = useState('')
+  const [allowedTools, setAllowedTools] = useState<string[]>(['read_file', 'write_file', 'search_code'])
   
   const [saving, setSaving] = useState(false)
 
@@ -30,23 +40,29 @@ export function TaskDetailModal({ delegation, isOpen, onClose }: TaskDetailModal
       setStatus(delegation.status)
       setExecutionRoute(delegation.executionRoute)
       setLlmModel(delegation.contract.llmModel || '')
+      setTaskType(delegation.contract.taskType || '')
       setRiskClass(delegation.contract.riskClass)
       setDefinitionOfDone(delegation.contract.definitionOfDone.join('\n'))
       setMaxBudgetUsd(delegation.contract.maxBudgetUsd)
       setBranchStrategy(delegation.contract.branchStrategy)
       setPrivacyMode(delegation.contract.privacyMode)
-      setAllowedTools(delegation.contract.allowedTools.join(', '))
+      setAllowedTools(delegation.contract.allowedTools.length > 0 ? delegation.contract.allowedTools : ['read_file', 'write_file', 'search_code'])
     }
   }, [delegation, isOpen])
 
   if (!isOpen || !delegation) return null
+
+  const toggleTool = (toolId: string) => {
+    setAllowedTools(prev => 
+      prev.includes(toolId) ? prev.filter(t => t !== toolId) : [...prev, toolId]
+    )
+  }
 
   const handleSave = async () => {
     if (saving) return
     setSaving(true)
 
     const updatedDod = definitionOfDone.split('\n').map(s => s.trim()).filter(s => s.length > 0)
-    const updatedTools = allowedTools.split(',').map(s => s.trim()).filter(s => s.length > 0)
 
     const updatedDelegation: Delegation = {
       ...delegation,
@@ -56,12 +72,13 @@ export function TaskDetailModal({ delegation, isOpen, onClose }: TaskDetailModal
         ...delegation.contract,
         goal,
         llmModel: llmModel || undefined,
+        taskType: taskType ? (taskType as TaskType) : undefined,
         riskClass,
         definitionOfDone: updatedDod,
         maxBudgetUsd,
         branchStrategy,
         privacyMode,
-        allowedTools: updatedTools
+        allowedTools
       }
     }
 
@@ -119,6 +136,20 @@ export function TaskDetailModal({ delegation, isOpen, onClose }: TaskDetailModal
               </select>
             </div>
             <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Task Typ</label>
+              <select 
+                value={taskType} onChange={e => setTaskType(e.target.value as TaskType | '')}
+                className="w-full bg-gray-900 border border-gray-800 rounded-lg p-2.5 text-sm text-white focus:border-blue-500 focus:outline-none"
+              >
+                <option value="">Kein spezifischer Typ</option>
+                <option value="feature">✨ Feature / Coding</option>
+                <option value="bugfix">🐛 Bug Fix</option>
+                <option value="docs">📝 Documentation</option>
+                <option value="refactor">♻️ Refactoring</option>
+                <option value="research">🔍 Research</option>
+              </select>
+            </div>
+            <div>
               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Agent Route</label>
               <select 
                 value={executionRoute} onChange={e => setExecutionRoute(e.target.value as ExecutionRoute)}
@@ -130,15 +161,6 @@ export function TaskDetailModal({ delegation, isOpen, onClose }: TaskDetailModal
                 <option value="n8n">n8n Automation</option>
                 <option value="manual">Manual</option>
               </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase mb-1">LLM Model</label>
-              <input 
-                type="text" 
-                value={llmModel} onChange={e => setLlmModel(e.target.value)}
-                placeholder="z.B. claude-3-7-sonnet"
-                className="w-full bg-gray-900 border border-gray-800 rounded-lg p-2.5 text-sm text-white focus:border-blue-500 focus:outline-none"
-              />
             </div>
             <div>
               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Risk Class</label>
@@ -198,13 +220,46 @@ export function TaskDetailModal({ delegation, isOpen, onClose }: TaskDetailModal
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">Allowed Tools (kommagetrennt)</label>
+                <label className="block text-xs text-gray-500 mb-1">LLM Model</label>
                 <input 
                   type="text" 
-                  value={allowedTools} onChange={e => setAllowedTools(e.target.value)}
-                  placeholder="read_file, write_file, ..."
+                  value={llmModel} onChange={e => setLlmModel(e.target.value)}
+                  placeholder="z.B. claude-3-7-sonnet"
                   className="w-full bg-gray-900 border border-gray-800 rounded-lg p-2 text-sm text-white focus:border-blue-500 focus:outline-none"
                 />
+              </div>
+            </div>
+            
+            <div className="mt-4">
+              <div className="flex justify-between items-center mb-2">
+                <label className="block text-xs font-bold text-gray-400 uppercase">Allowed Tools</label>
+                <button 
+                  type="button"
+                  onClick={() => setAllowedTools(AVAILABLE_TOOLS.map(t => t.id))}
+                  className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  Alle auswählen
+                </button>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 bg-gray-900 border border-gray-800 rounded-lg p-3">
+                {AVAILABLE_TOOLS.map(tool => (
+                  <label key={tool.id} className="flex items-center space-x-2 cursor-pointer group">
+                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                      allowedTools.includes(tool.id) 
+                        ? 'bg-blue-600 border-blue-600' 
+                        : 'bg-gray-800 border-gray-600 group-hover:border-gray-500'
+                    }`}>
+                      {allowedTools.includes(tool.id) && <span className="text-white text-[10px]">✓</span>}
+                    </div>
+                    <span className="text-xs text-gray-300 group-hover:text-white transition-colors">{tool.label}</span>
+                    <input 
+                      type="checkbox" 
+                      className="sr-only"
+                      checked={allowedTools.includes(tool.id)}
+                      onChange={() => toggleTool(tool.id)}
+                    />
+                  </label>
+                ))}
               </div>
             </div>
           </div>

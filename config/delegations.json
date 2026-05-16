@@ -188,5 +188,33 @@
     ],
     "createdAt": "2026-05-15T23:55:33.966Z",
     "updatedAt": "2026-05-15T23:55:33.966Z"
+  },
+  {
+    "id": "DEL-9000",
+    "status": "pending",
+    "executionRoute": "local-agent",
+    "costEstimateUsd": 0.2772638280507379,
+    "contract": {
+      "id": "CON-9000",
+      "workItemId": "e57e3e3a-1a2d-4032-8aba-23b39699129a",
+      "goal": "Test",
+      "context": "Direct delegation from Magic Create",
+      "definitionOfDone": [
+        "Task implemented according to prompt"
+      ],
+      "riskClass": "C",
+      "maxBudgetUsd": 1,
+      "allowedTools": [
+        "read_file",
+        "write_file",
+        "search_code"
+      ],
+      "branchStrategy": "feature",
+      "requiresApproval": true,
+      "privacyMode": "local",
+      "createdAt": "2026-05-16T00:14:59.000Z"
+    },
+    "createdAt": "2026-05-16T00:14:59.000Z",
+    "updatedAt": "2026-05-16T00:15:21.135Z"
   }
 ]

@@ -16,11 +16,14 @@ export interface DelegationReport {
   timeTakenMinutes: number
 }
 
+export type TaskType = 'feature' | 'bugfix' | 'docs' | 'refactor' | 'research'
+
 export interface TaskContract {
   id: string
   workItemId: string
   goal: string
   context: string
+  taskType?: TaskType
   definitionOfDone: string[]
   riskClass: RiskClass
   maxBudgetUsd: number

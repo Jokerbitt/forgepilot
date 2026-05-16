@@ -40,7 +40,8 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
   const [ticketTasks, setTicketTasks] = useState<any[]>([])
   const [selectedTask, setSelectedTask] = useState<Delegation | null>(null)
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
-  
+  const [isTasksExpanded, setIsTasksExpanded] = useState(true)
+
   // Quick Task State
   const [quickTaskPrompt, setQuickTaskPrompt] = useState('')
   const [creatingQuickTask, setCreatingQuickTask] = useState(false)
@@ -233,33 +234,50 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
       
       {ticketTasks.length > 0 && (
         <div className="mb-4 space-y-2">
-          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Erstellte AI Tasks ({ticketTasks.length})</h4>
-          <div className="space-y-2">
-            {ticketTasks.map((task: any) => (
-              <div key={task.id} className="bg-gray-950 border border-gray-800 rounded p-2 flex items-center justify-between">
-                <span className="text-sm text-gray-300 truncate mr-2" title={task.contract?.goal}>
-                  {task.contract?.goal || 'Ohne Titel'}
-                </span>
-                <div className="flex items-center space-x-2">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
-                    task.status === 'done' ? 'bg-green-900/50 text-green-400' :
-                    task.status === 'running' ? 'bg-blue-900/50 text-blue-400' :
-                    task.status === 'failed' ? 'bg-red-900/50 text-red-400' :
-                    'bg-gray-800 text-gray-400'
-                  }`}>
-                    {task.status}
+          <button 
+            onClick={() => setIsTasksExpanded(!isTasksExpanded)}
+            className="flex items-center text-xs font-bold text-gray-500 uppercase tracking-wider hover:text-white transition-colors"
+          >
+            Erstellte AI Tasks ({ticketTasks.length}) {isTasksExpanded ? '▼' : '▶'}
+          </button>
+          {isTasksExpanded && (
+            <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+              {ticketTasks.map((task: any) => (
+                <div key={task.id} className="bg-gray-950 border border-gray-800 rounded p-2 flex items-center justify-between">
+                  <span className="text-sm text-gray-300 truncate mr-2 flex items-center gap-2" title={task.contract?.goal}>
+                    {task.contract?.taskType && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 capitalize">
+                        {task.contract.taskType === 'feature' ? '✨ Feature' :
+                         task.contract.taskType === 'bugfix' ? '🐛 Bug Fix' :
+                         task.contract.taskType === 'docs' ? '📝 Docs' :
+                         task.contract.taskType === 'refactor' ? '♻️ Refactor' :
+                         task.contract.taskType === 'research' ? '🔍 Research' :
+                         task.contract.taskType}
+                      </span>
+                    )}
+                    {task.contract?.goal || 'Ohne Titel'}
                   </span>
-                  <button 
-                    onClick={() => handleEditTask(task)}
-                    className="text-gray-500 hover:text-white transition-colors"
-                    title="Task bearbeiten"
-                  >
-                    ✏️
-                  </button>
+                  <div className="flex items-center space-x-2 flex-shrink-0">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                      task.status === 'done' ? 'bg-green-900/50 text-green-400' :
+                      task.status === 'running' ? 'bg-blue-900/50 text-blue-400' :
+                      task.status === 'failed' ? 'bg-red-900/50 text-red-400' :
+                      'bg-gray-800 text-gray-400'
+                    }`}>
+                      {task.status}
+                    </span>
+                    <button 
+                      onClick={() => handleEditTask(task)}
+                      className="text-gray-500 hover:text-white transition-colors"
+                      title="Task bearbeiten"
+                    >
+                      ✏️
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
