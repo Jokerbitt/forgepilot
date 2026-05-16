@@ -4,7 +4,10 @@ export type ResearchMode = 'quick' | 'standard' | 'deep'
 export type ResearchPrivacyMode = 'local' | 'hybrid' | 'cloud'
 export type ExecutorType = 'agent' | 'n8n' | 'local_script' | 'browser' | 'human'
 export type ResearchBriefStatus = 'draft' | 'ready' | 'running' | 'completed' | 'cancelled'
+export type ResearchRunStatus = 'queued' | 'running' | 'review_pending' | 'completed' | 'failed' | 'cancelled'
 export type SourceType = 'web' | 'github' | 'arxiv' | 'docs' | 'pdf' | 'obsidian' | 'nas' | 'blog' | 'vendor_docs'
+export type FindingConfidence = 'high' | 'medium' | 'low' | 'uncertain'
+export type ImpactLevel = 'critical' | 'high' | 'medium' | 'low' | 'informational'
 export type BlueprintOutputType =
   | 'findings_summary'
   | 'project_brief'
@@ -93,6 +96,74 @@ export interface ResearchBrief {
   maxDurationMinutes?: number
   preferredExecutor: ExecutorType
   outputSchema: ResearchBriefOutputSchema
+}
+
+export interface SourceRecord {
+  id: string
+  runId: string
+  type: SourceType
+  title: string
+  urlOrPath: string
+  publisher?: string
+  author?: string
+  publishedAt?: string
+  retrievedAt: string
+  language?: string
+  relevanceScore: number
+  trustScore: number
+  notes?: string
+  snippets: string[]
+}
+
+export interface Finding {
+  id: string
+  runId: string
+  claim: string
+  summary: string
+  sourceIds: string[]
+  confidence: FindingConfidence
+  isContradicted: boolean
+  contradictionIds: string[]
+  isOpenAssumption: boolean
+  recommendationImpact: ImpactLevel
+  tags: string[]
+}
+
+export type BlueprintOutputStatus = 'draft' | 'review_pending' | 'accepted' | 'rejected'
+
+export interface BlueprintOutput {
+  id: string
+  runId: string
+  briefId: string
+  type: BlueprintOutputType
+  title: string
+  content: string
+  linkedFindingIds: string[]
+  linkedRequirementIds: string[]
+  status: BlueprintOutputStatus
+  reviewedAt?: string
+  reviewerNotes?: string
+}
+
+export interface ResearchRun {
+  id: string
+  researchBriefId: string
+  briefId: string
+  title: string
+  status: ResearchRunStatus
+  mode: ResearchMode
+  privacyMode: ResearchPrivacyMode
+  executor: ExecutorType
+  startedAt: string
+  completedAt?: string
+  budgetUsd?: number
+  actualCostUsd?: number
+  sources: SourceRecord[]
+  findings: Finding[]
+  outputs: BlueprintOutput[]
+  confidenceScore?: number
+  openUncertainties: string[]
+  errorMessage?: string
 }
 
 export interface ProjectBrief {

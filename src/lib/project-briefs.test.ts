@@ -4,6 +4,7 @@ import path from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   buildResearchBriefFromProjectBrief,
+  buildResearchRunPoc,
   buildProjectBrief,
   findProjectBriefById,
   readProjectBriefs,
@@ -91,6 +92,29 @@ describe('buildResearchBriefFromProjectBrief', () => {
 
     expect(researchBrief.maxBudgetUsd).toBe(0)
     expect(researchBrief.preferredSourceTypes).toEqual(['obsidian', 'nas', 'docs', 'pdf'])
+  })
+})
+
+describe('buildResearchRunPoc', () => {
+  it('creates a review-pending run with sources, findings and POC outputs', () => {
+    const projectBrief = buildProjectBrief(validInput, new Date('2026-05-16T10:00:00.000Z'), 'brief-6')
+    const researchBrief = buildResearchBriefFromProjectBrief(projectBrief, new Date('2026-05-16T10:05:00.000Z'))
+    const run = buildResearchRunPoc(projectBrief, researchBrief, new Date('2026-05-16T10:10:00.000Z'), 'run-1')
+
+    expect(run.status).toBe('review_pending')
+    expect(run.sources).toHaveLength(1)
+    expect(run.findings.length).toBeGreaterThanOrEqual(3)
+    expect(run.outputs.map(output => output.type)).toEqual(['findings_summary', 'project_brief', 'requirements'])
+    expect(run.findings.every(finding => finding.sourceIds.length > 0)).toBe(true)
+    expect(run.actualCostUsd).toBe(0)
+  })
+
+  it('keeps open uncertainties explicit for unvalidated findings', () => {
+    const projectBrief = buildProjectBrief(validInput, new Date('2026-05-16T10:00:00.000Z'), 'brief-7')
+    const run = buildResearchRunPoc(projectBrief)
+
+    expect(run.openUncertainties.length).toBeGreaterThan(0)
+    expect(run.confidenceScore).toBeGreaterThan(0)
   })
 })
 
