@@ -289,7 +289,7 @@ function DelegationsContent() {
       ...d,
       status: 'approved' as const,
       contract: { ...d.contract, requiresApproval: false },
-      logs: [...(d.logs ?? []), { timestamp: now, type: 'success', message: 'Batch-freigegeben.' }],
+      logs: [...(d.logs ?? []), { timestamp: now, type: 'success' as const, message: 'Batch-freigegeben.' }],
       updatedAt: now,
     }))
     // Optimistic update
