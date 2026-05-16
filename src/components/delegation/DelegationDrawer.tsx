@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import type { Delegation, DelegationStatus, ExecutionRoute, PrivacyMode, TaskType, DelegationNote } from '@/lib/models/delegation'
 import type { RiskClass } from '@/lib/models/work-item'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
+import { PreFlightModal } from '@/components/delegation/PreFlightModal'
 
 type Tab = 'details' | 'logs' | 'report' | 'notes'
 
@@ -50,6 +51,9 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
   const [allowedTools, setAllowedTools] = useState<string[]>(['read_file', 'write_file'])
   const [errorMessage, setErrorMessage] = useState('')
   const [failureFeedback, setFailureFeedback] = useState('')
+
+  // Pre-flight modal
+  const [showPreFlight, setShowPreFlight] = useState(false)
 
   // Notes
   const [noteText, setNoteText] = useState('')
@@ -179,11 +183,17 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
     onUpdate(updated)
   }
 
-  const handleStart = async () => {
+  const handleStart = () => {
+    // Show pre-flight check modal before executing
+    setShowPreFlight(true)
+  }
+
+  const handleConfirmStart = async () => {
     setSaving(true)
     const res = await fetch(`/api/delegations/${delegation.id}/execute`, { method: 'POST' })
     const data = await res.json() as { started?: boolean; mode?: string; error?: string }
     setSaving(false)
+    setShowPreFlight(false)
     if (data.started) {
       // Switch to logs tab and optimistically update status
       setTab('logs')
@@ -192,6 +202,37 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
     } else {
       console.error('Execute failed:', data.error)
     }
+  }
+
+  const handleClone = async () => {
+    const now = new Date().toISOString()
+    const cloned: Delegation = {
+      ...delegation,
+      id: `del-${Date.now()}`,
+      status: 'pending',
+      actualCostUsd: undefined,
+      agentRunId: undefined,
+      approvalId: undefined,
+      errorMessage: undefined,
+      failureFeedback: undefined,
+      logs: [],
+      summaryReport: undefined,
+      note: undefined,
+      contract: {
+        ...delegation.contract,
+        id: `con-${Date.now()}`,
+        goal: `${delegation.contract.goal} (Kopie)`,
+        createdAt: now,
+      },
+      createdAt: now,
+      updatedAt: now,
+    }
+    await fetch('/api/delegations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cloned),
+    })
+    onClose()
   }
 
   const handleRetry = async () => {
@@ -276,6 +317,16 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
 
   return (
     <>
+      {/* Pre-Flight Confirmation Modal */}
+      {showPreFlight && (
+        <PreFlightModal
+          delegation={delegation}
+          onConfirm={handleConfirmStart}
+          onCancel={() => setShowPreFlight(false)}
+          isStarting={saving}
+        />
+      )}
+
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/40 z-40 transition-opacity"
@@ -685,6 +736,13 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
                 title="Löschen"
               >
                 🗑
+              </button>
+              <button
+                onClick={handleClone}
+                className="p-2 text-gray-600 hover:text-blue-400 transition-colors"
+                title="Klonen — erstellt eine Kopie als neue pending Delegation"
+              >
+                📋
               </button>
               <div className="flex-1" />
               <button onClick={onClose} className="px-4 py-2 text-gray-400 hover:text-white text-sm transition-colors">
