@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import type { AgentLog, Delegation, DelegationStatus, ExecutionRoute, PrivacyMode, TaskType, DelegationNote } from '@/lib/models/delegation'
+import type { AgentLog, Delegation, DelegationStatus, ExecutionRoute, OutputMode, PrivacyMode, TaskType, DelegationNote } from '@/lib/models/delegation'
 import type { RiskClass } from '@/lib/models/work-item'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 import { PreFlightModal } from '@/components/delegation/PreFlightModal'
@@ -67,6 +67,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
   const [maxBudgetUsd, setMaxBudgetUsd] = useState(1.0)
   const [branchStrategy, setBranchStrategy] = useState<'feature' | 'fix' | 'chore'>('feature')
   const [privacyMode, setPrivacyMode] = useState<PrivacyMode>('local')
+  const [outputMode, setOutputMode] = useState<OutputMode>('text')
   const [allowedTools, setAllowedTools] = useState<string[]>(['read_file', 'write_file'])
   const [errorMessage, setErrorMessage] = useState('')
   const [failureFeedback, setFailureFeedback] = useState('')
@@ -96,6 +97,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
       setMaxBudgetUsd(delegation.contract.maxBudgetUsd)
       setBranchStrategy(delegation.contract.branchStrategy)
       setPrivacyMode(delegation.contract.privacyMode)
+      setOutputMode(delegation.contract.outputMode ?? 'text')
       setAllowedTools((delegation.contract.allowedTools ?? []).length > 0 ? delegation.contract.allowedTools : ['read_file', 'write_file'])
       setErrorMessage(delegation.errorMessage || '')
       setFailureFeedback('')
@@ -179,6 +181,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
         maxBudgetUsd,
         branchStrategy,
         privacyMode,
+        outputMode,
         allowedTools,
       },
     }
@@ -595,6 +598,19 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
                     <option value="feature">feature/</option>
                     <option value="fix">fix/</option>
                     <option value="chore">chore/</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Output-Mode</label>
+                  <select
+                    value={outputMode}
+                    onChange={e => setOutputMode(e.target.value as OutputMode)}
+                    disabled={isRunning}
+                    className="w-full bg-gray-900 border border-gray-800 rounded p-2 text-sm text-white focus:border-blue-500 focus:outline-none disabled:opacity-60"
+                  >
+                    <option value="text">text</option>
+                    <option value="json">json</option>
+                    <option value="stream">stream</option>
                   </select>
                 </div>
               </div>
