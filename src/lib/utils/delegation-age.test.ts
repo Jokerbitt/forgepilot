@@ -5,7 +5,9 @@ import { formatAge, isCreatedToday } from './delegation-age'
 const FIXED_NOW = new Date('2026-05-16T12:00:00Z').getTime()
 
 describe('formatAge', () => {
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
 
   const setup = () => vi.spyOn(Date, 'now').mockReturnValue(FIXED_NOW)
 
@@ -51,7 +53,9 @@ describe('formatAge', () => {
 })
 
 describe('isCreatedToday', () => {
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
 
   it('returns true for today', () => {
     // Use real Date — test runs on the actual current date

@@ -4,6 +4,19 @@ export type { AgentRun, AgentRunStatus, TraceEvent, TraceEventType } from '@/lib
 export type { ApprovalRequest, ApprovalStatus } from '@/lib/models/approval'
 export type { CostEntry, CostBudget, CostSummary, CostPeriod, CostCategory } from '@/lib/models/cost'
 export type { NBARecommendation, NBAScore, SuggestedAction } from '@/lib/models/nba'
+export type {
+  ProjectBrief,
+  ProjectBriefStatus,
+  BriefScope,
+  IdeaIntakeInput,
+  ResearchBriefDraft,
+  ResearchMode,
+  ResearchPrivacyMode,
+  ExecutorType,
+  Requirement,
+  UseCase,
+  Risk,
+} from '@/lib/models/project-brief'
 export type { ConnectorManifest, ConnectorHealth, ConnectorCategory, ConnectorAuthType, ConnectorHealthStatus, ConnectorCapability, ConfigField, ConfigFieldType } from '@/lib/connectors/types'
 export { githubConnectorManifest } from '@/lib/connectors/github'
 export type { GitHubConnectorConfig } from '@/lib/connectors/github'
