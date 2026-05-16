@@ -396,6 +396,7 @@ export function BlueprintScreen({ initialBrief }: Props) {
                           <RequirementCard
                             key={req.id}
                             req={req}
+                            allFindings={brief.lastResearchRun?.findings ?? []}
                             onStatusChange={patchRequirement}
                           />
                         ))}
@@ -586,13 +587,17 @@ function FindingCard({ finding }: { finding: Finding }) {
 
 function RequirementCard({
   req,
+  allFindings,
   onStatusChange,
 }: {
   req: Requirement
+  allFindings: Finding[]
   onStatusChange: (id: string, status: Requirement['status']) => void
 }) {
+  const [evidenceExpanded, setEvidenceExpanded] = useState(false)
   const isAccepted = req.status === 'accepted'
   const isRejected = req.status === 'rejected'
+  const linkedFindings = allFindings.filter(f => req.findingIds?.includes(f.id))
 
   return (
     <div className={`rounded-lg border p-3 transition-opacity ${
@@ -640,6 +645,29 @@ function RequirementCard({
         >
           Rückgängig
         </button>
+      )}
+
+      {linkedFindings.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-gray-800">
+          <button
+            onClick={() => setEvidenceExpanded(e => !e)}
+            className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1"
+          >
+            {evidenceExpanded ? '▲' : '▼'} Belege ({linkedFindings.length})
+          </button>
+          {evidenceExpanded && (
+            <div className="mt-2 space-y-1.5">
+              {linkedFindings.map(f => (
+                <div key={f.id} className="flex items-start gap-1.5 rounded bg-gray-900 p-2">
+                  <span className={`shrink-0 px-1 py-0.5 text-xs rounded ${CONFIDENCE_COLORS[f.confidence]}`}>
+                    {f.confidence}
+                  </span>
+                  <p className="text-xs text-gray-300 leading-snug">{f.claim}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   )
