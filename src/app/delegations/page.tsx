@@ -658,6 +658,28 @@ function DelegationsContent() {
               )}
             </div>
 
+            {/* ── Filter result count ─────────────────────────────────── */}
+            {sortedDelegations.length !== delegations.length && (
+              <div className="flex items-center justify-between px-1 text-xs text-gray-500">
+                <span>
+                  <span className="text-white font-medium">{sortedDelegations.length}</span>
+                  {' '}von {delegations.length} Delegationen
+                </span>
+                <button
+                  onClick={() => {
+                    setStatusFilter('Alle')
+                    setProjectFilter('Alle')
+                    setApprovalFilter('Alle')
+                    setSearchQuery('')
+                    setTodayOnly(false)
+                  }}
+                  className="text-blue-500 hover:text-blue-400 transition-colors"
+                >
+                  Filter zurücksetzen ✕
+                </button>
+              </div>
+            )}
+
             {/* ── Table ───────────────────────────────────────────────── */}
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
               <div className="overflow-x-auto">
