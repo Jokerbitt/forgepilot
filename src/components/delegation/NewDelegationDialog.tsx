@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import type { Delegation, ExecutionRoute, TaskType } from '@/lib/models/delegation'
+import type { Delegation, ExecutionRoute, OutputMode, TaskType } from '@/lib/models/delegation'
 import type { RiskClass } from '@/lib/models/work-item'
 
 interface Props {
@@ -30,6 +30,7 @@ export function NewDelegationDialog({ onClose, onCreate, prefillWorkItemId = '',
   const [riskClass, setRiskClass] = useState<RiskClass>('B')
   const [branchStrategy, setBranchStrategy] = useState<'feature' | 'fix' | 'chore'>('feature')
   const [privacyMode, setPrivacyMode] = useState<'local' | 'private-cloud' | 'public'>('local')
+  const [outputMode, setOutputMode] = useState<OutputMode>('text')
   const [showExpert, setShowExpert] = useState(false)
   const [saving, setSaving] = useState(false)
   const [goalError, setGoalError] = useState(false)
@@ -86,6 +87,7 @@ export function NewDelegationDialog({ onClose, onCreate, prefillWorkItemId = '',
         requiresApproval: riskClass === 'C',
         privacyMode,
         llmModel,
+        outputMode,
         createdAt: now,
       },
       createdAt: now,
@@ -311,6 +313,18 @@ export function NewDelegationDialog({ onClose, onCreate, prefillWorkItemId = '',
                     <option value="local">local</option>
                     <option value="private-cloud">private-cloud</option>
                     <option value="public">public</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Output-Mode</label>
+                  <select
+                    value={outputMode}
+                    onChange={e => setOutputMode(e.target.value as OutputMode)}
+                    className="w-full bg-gray-950 border border-gray-800 rounded p-2 text-white text-xs focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="text">text — lesbare Ausgabe</option>
+                    <option value="json">json — maschinenlesbar</option>
+                    <option value="stream">stream — Live-Ausgabe</option>
                   </select>
                 </div>
               </div>
