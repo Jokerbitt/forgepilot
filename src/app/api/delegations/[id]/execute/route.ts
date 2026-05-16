@@ -77,6 +77,27 @@ ${dod}
 Arbeite sorgfältig und melde Fortschritt.`
 }
 
+/**
+ * Parse actual cost from Claude CLI output.
+ * Claude outputs something like: "Cost: $0.0234" or "Total cost: $0.01"
+ */
+function parseCostFromOutput(output: string): number | undefined {
+  // Pattern: "Cost: $X.XXXX" or "Total cost: $X.XX" or "cost: $X"
+  const patterns = [
+    /total cost[:\s]+\$([0-9]+(?:\.[0-9]+)?)/i,
+    /cost[:\s]+\$([0-9]+(?:\.[0-9]+)?)/i,
+    /\$([0-9]+\.[0-9]{2,4})\s*(?:USD|usd)?(?:\s|$)/,
+  ]
+  for (const pattern of patterns) {
+    const match = pattern.exec(output)
+    if (match) {
+      const val = parseFloat(match[1])
+      if (!isNaN(val) && val > 0 && val < 100) return val
+    }
+  }
+  return undefined
+}
+
 function isClaudeAvailable(): boolean {
   try {
     execSync('claude --version', { stdio: 'ignore', timeout: 3000 })
@@ -101,6 +122,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date) {
   }
 
   const logBuffer: AgentLog[] = []
+  let fullOutput = ''
   let flushTimer: ReturnType<typeof setTimeout> | null = null
 
   const scheduleFlush = () => {
@@ -115,6 +137,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date) {
 
   proc.stdout?.on('data', (chunk: Buffer) => {
     const text = chunk.toString()
+    fullOutput += text
     const lines = text.split('\n').filter(l => l.trim())
     for (const line of lines) {
       logBuffer.push({
@@ -128,6 +151,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date) {
 
   proc.stderr?.on('data', (chunk: Buffer) => {
     const text = chunk.toString()
+    fullOutput += text
     const lines = text.split('\n').filter(l => l.trim())
     for (const line of lines) {
       logBuffer.push({
@@ -145,11 +169,13 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date) {
 
     const success = code === 0
     const elapsed = Math.round((Date.now() - startTime.getTime()) / 60000)
+    const actualCost = parseCostFromOutput(fullOutput)
+
     const finalLog: AgentLog = {
       timestamp: new Date().toISOString(),
       type: success ? 'success' : 'error',
       message: success
-        ? `✅ Ausführung abgeschlossen (Exit-Code: ${code})`
+        ? `✅ Ausführung abgeschlossen (Exit-Code: ${code}${actualCost ? `, Kosten: $${actualCost.toFixed(4)}` : ''})`
         : `❌ Ausführung fehlgeschlagen (Exit-Code: ${code})`,
     }
 
@@ -158,15 +184,19 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date) {
       : undefined
 
     // Only update if still running (not already cancelled)
-    const delegations = readDelegations()
-    const current = delegations.find(d => d.id === id)
+    const allDelegations = readDelegations()
+    const current = allDelegations.find(d => d.id === id)
     if (current && current.status === 'running') {
-      appendLogs(
-        id,
-        [...logBuffer, finalLog],
-        success ? 'completed' : 'failed',
-        report,
-      )
+      const idx = allDelegations.findIndex(d => d.id === id)
+      allDelegations[idx] = {
+        ...current,
+        status: success ? 'completed' : 'failed',
+        ...(actualCost ? { actualCostUsd: actualCost } : {}),
+        ...(report ? { summaryReport: report } : {}),
+        logs: [...(current.logs ?? []), ...logBuffer, finalLog],
+        updatedAt: new Date().toISOString(),
+      }
+      writeDelegationsAtomic(allDelegations)
     }
   })
 }

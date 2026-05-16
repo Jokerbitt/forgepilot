@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import type { Delegation, DelegationStatus, ExecutionRoute, PrivacyMode, TaskType, DelegationNote } from '@/lib/models/delegation'
+import type { AgentLog, Delegation, DelegationStatus, ExecutionRoute, PrivacyMode, TaskType, DelegationNote } from '@/lib/models/delegation'
 import type { RiskClass } from '@/lib/models/work-item'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 import { PreFlightModal } from '@/components/delegation/PreFlightModal'
@@ -23,6 +23,24 @@ const LOG_COLORS: Record<string, string> = {
   error:   'text-red-400',
   command: 'text-blue-400 font-mono',
   thought: 'text-yellow-400 italic',
+}
+
+function getApprovalPolicyReason(requiresApproval: boolean, riskClass: RiskClass, status: DelegationStatus): string {
+  if (riskClass === 'C') {
+    return 'RiskClass C: Kein Autopilot und keine Schnellfreigabe. Details, Tools und Kontext muessen bewusst geprueft werden.'
+  }
+
+  if (!requiresApproval) {
+    return status === 'approved'
+      ? 'Freigegeben: Diese Delegation kann nach dem Pre-Flight-Check gestartet werden.'
+      : 'Auto-freigegeben: Die aktuelle Policy erlaubt diesen Auftrag ohne zusaetzlichen Approval-Schritt.'
+  }
+
+  if (riskClass === 'B') {
+    return 'Balanced Mode: RiskClass B braucht ein kurzes Review, bevor ein Agent loslaeuft.'
+  }
+
+  return 'Manuelle Freigabe erforderlich, weil diese Delegation noch nicht bestaetigt wurde.'
 }
 
 interface Props {
@@ -51,6 +69,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
   const [allowedTools, setAllowedTools] = useState<string[]>(['read_file', 'write_file'])
   const [errorMessage, setErrorMessage] = useState('')
   const [failureFeedback, setFailureFeedback] = useState('')
+  const [approvalComment, setApprovalComment] = useState('')
 
   // Pre-flight modal
   const [showPreFlight, setShowPreFlight] = useState(false)
@@ -78,6 +97,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
       setAllowedTools((delegation.contract.allowedTools ?? []).length > 0 ? delegation.contract.allowedTools : ['read_file', 'write_file'])
       setErrorMessage(delegation.errorMessage || '')
       setFailureFeedback('')
+      setApprovalComment('')
       setNoteText(delegation.note?.text || '')
       setConfirmDelete(false)
     }
@@ -130,6 +150,13 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
   const isFailed = delegation.status === 'failed'
   const isRunning = delegation.status === 'running'
   const report = delegation.summaryReport
+  const approvalPolicyReason = getApprovalPolicyReason(
+    delegation.contract.requiresApproval,
+    riskClass,
+    delegation.status
+  )
+  const canApproveFromDrawer = delegation.status === 'pending' && delegation.contract.requiresApproval && riskClass !== 'C'
+  const isRiskClassCBlocked = delegation.status === 'pending' && delegation.contract.requiresApproval && riskClass === 'C'
 
   const handleSave = async () => {
     setSaving(true)
@@ -162,15 +189,22 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
   }
 
   const handleApprove = async () => {
+    if (!canApproveFromDrawer) return
+
     setSaving(true)
     const now = new Date().toISOString()
+    const trimmedComment = approvalComment.trim()
+    const approvalMessage = trimmedComment
+      ? `Manuell freigegeben. Review: ${trimmedComment}`
+      : 'Manuell freigegeben. Kein Review-Kommentar erfasst.'
     const updated: Delegation = {
       ...delegation,
       status: 'approved',
+      approvalId: delegation.approvalId ?? `approval-${Date.now()}`,
       contract: { ...delegation.contract, requiresApproval: false },
       logs: [
         ...(delegation.logs ?? []),
-        { timestamp: now, type: 'success', message: 'Manuell freigegeben.' },
+        { timestamp: now, type: 'success', message: approvalMessage },
       ],
       updatedAt: now,
     }
@@ -180,6 +214,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
       body: JSON.stringify(updated),
     })
     setSaving(false)
+    setApprovalComment('')
     onUpdate(updated)
   }
 
@@ -358,6 +393,16 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
                 requiresApproval={delegation.contract.requiresApproval}
                 riskClass={delegation.contract.riskClass}
               />
+              {/* Cost indicator */}
+              {delegation.actualCostUsd != null ? (
+                <span className="text-xs text-yellow-500/80 font-mono bg-yellow-900/20 px-1.5 py-0.5 rounded border border-yellow-900/30">
+                  ${delegation.actualCostUsd.toFixed(4)}
+                </span>
+              ) : (
+                <span className="text-xs text-gray-600 font-mono">
+                  ~${delegation.costEstimateUsd.toFixed(2)}
+                </span>
+              )}
             </div>
             <h2 className={`text-lg font-bold leading-tight ${
               isCompleted ? 'line-through text-gray-500 decoration-green-500/60 decoration-2' :
@@ -438,13 +483,28 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
                       riskClass={riskClass}
                     />
                     <span className="text-xs text-gray-500">
-                      {riskClass === 'C'
-                        ? 'Kritische Aufgaben brauchen bewusstes Review.'
-                        : delegation.contract.requiresApproval
-                          ? 'Diese Delegation wartet auf eine Freigabe.'
-                          : 'Diese Delegation darf automatisch weiterlaufen.'}
+                      {approvalPolicyReason}
                     </span>
                   </div>
+                  {canApproveFromDrawer && (
+                    <div className="mt-3 space-y-1">
+                      <label className="block text-xs font-bold text-gray-500 uppercase">Review-Kommentar</label>
+                      <textarea
+                        value={approvalComment}
+                        onChange={e => setApprovalComment(e.target.value)}
+                        placeholder="Kurz festhalten, warum diese Freigabe sicher ist..."
+                        className="w-full bg-gray-950 border border-gray-800 rounded p-2 text-sm text-white resize-none h-16 focus:border-green-500 focus:outline-none"
+                      />
+                      <p className="text-[11px] text-gray-600">
+                        Der Kommentar wird beim Freigeben als Audit-Log gespeichert.
+                      </p>
+                    </div>
+                  )}
+                  {isRiskClassCBlocked && (
+                    <div className="mt-3 rounded border border-red-900/50 bg-red-950/30 p-2 text-xs text-red-300">
+                      RiskClass C ist absichtlich gegen Schnellfreigabe gesperrt. Passe Risiko, Tools oder Kontext bewusst an und speichere die Delegation zuerst.
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
@@ -774,13 +834,22 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
               )}
 
               {/* Context-sensitive action buttons */}
-              {tab === 'details' && delegation.status === 'pending' && (
+              {tab === 'details' && canApproveFromDrawer && (
                 <button
                   onClick={handleApprove}
                   disabled={saving}
                   className="px-5 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-sm font-bold rounded transition-colors shadow-lg shadow-green-900/30"
                 >
                   {saving ? '...' : '✓ Freigeben'}
+                </button>
+              )}
+              {tab === 'details' && isRiskClassCBlocked && (
+                <button
+                  disabled
+                  className="px-5 py-2 bg-red-950/60 text-red-400 text-sm font-bold rounded border border-red-900/50 cursor-not-allowed"
+                  title="RiskClass C benoetigt bewusstes Detailreview"
+                >
+                  Review erforderlich
                 </button>
               )}
               {tab === 'details' && delegation.status === 'approved' && (
@@ -810,8 +879,6 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
 }
 
 // ── Auto-scrolling logs viewer ──────────────────────────────────────────────
-import type { AgentLog } from '@/lib/models/delegation'
-
 function LogsScroller({ logs, isRunning }: { logs: AgentLog[]; isRunning: boolean }) {
   const bottomRef = useRef<HTMLDivElement | null>(null)
 

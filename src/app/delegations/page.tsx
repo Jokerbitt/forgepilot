@@ -455,9 +455,15 @@ export default function DelegationsPage() {
                                 <div className="text-xs text-green-400/70 font-mono">
                                   {formatCompletedDuration(del.createdAt, del.updatedAt)}
                                 </div>
-                                <div className="text-xs text-gray-600 mt-0.5">
-                                  {new Date(del.updatedAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}
-                                </div>
+                                {del.actualCostUsd != null ? (
+                                  <div className="text-xs text-yellow-600/80 font-mono mt-0.5">
+                                    ${del.actualCostUsd.toFixed(4)}
+                                  </div>
+                                ) : (
+                                  <div className="text-xs text-gray-600 mt-0.5">
+                                    {new Date(del.updatedAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <div className="text-xs text-gray-600">
