@@ -234,9 +234,17 @@ export default function DelegationsPage() {
 
   const runningCount = delegations.filter(d => d.status === 'running').length
   const pendingCount = delegations.filter(d => d.status === 'pending').length
+  const completedCount = delegations.filter(d => d.status === 'completed').length
   const approvalRequiredCount = delegations.filter(d => d.contract.requiresApproval).length
   const autoApprovedCount = delegations.filter(d => !d.contract.requiresApproval).length
   const riskBlockedCount = delegations.filter(d => d.contract.riskClass === 'C').length
+
+  // Cost stats
+  const totalEstimated = delegations.reduce((sum, d) => sum + (d.costEstimateUsd || 0), 0)
+  const totalActual = delegations
+    .filter(d => d.actualCostUsd != null)
+    .reduce((sum, d) => sum + (d.actualCostUsd ?? 0), 0)
+  const hasActualCosts = delegations.some(d => d.actualCostUsd != null)
 
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6 md:p-8">
@@ -270,6 +278,36 @@ export default function DelegationsPage() {
             </button>
           </div>
         </header>
+
+        {/* ── Cost / Stats Summary ──────────────────────────────────── */}
+        {!loading && delegations.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+              <div className="text-2xl font-bold text-white">{delegations.length}</div>
+              <div className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Gesamt</div>
+            </div>
+            <div className={`bg-gray-900 border rounded-xl p-4 text-center ${runningCount > 0 ? 'border-green-800/60' : 'border-gray-800'}`}>
+              <div className={`text-2xl font-bold ${runningCount > 0 ? 'text-green-400' : 'text-gray-500'}`}>
+                {runningCount > 0 ? runningCount : completedCount}
+              </div>
+              <div className="text-xs text-gray-500 mt-1 uppercase tracking-wide">
+                {runningCount > 0 ? 'Laufend' : 'Abgeschlossen'}
+              </div>
+            </div>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+              <div className="text-2xl font-bold text-white font-mono">
+                ${totalEstimated.toFixed(2)}
+              </div>
+              <div className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Geschätzt</div>
+            </div>
+            <div className={`bg-gray-900 border rounded-xl p-4 text-center ${hasActualCosts ? 'border-yellow-900/50' : 'border-gray-800'}`}>
+              <div className={`text-2xl font-bold font-mono ${hasActualCosts ? 'text-yellow-400' : 'text-gray-600'}`}>
+                {hasActualCosts ? `$${totalActual.toFixed(4)}` : '–'}
+              </div>
+              <div className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Tatsächlich</div>
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div className="space-y-3">
