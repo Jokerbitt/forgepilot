@@ -39,9 +39,11 @@ export function BlueprintScreen({ initialBrief }: Props) {
   const [brief, setBrief] = useState<ProjectBrief>(initialBrief)
   const [generating, startGenerate] = useTransition()
   const [approving, startApprove] = useTransition()
+  const [delegating, startDelegate] = useTransition()
   const [generationNotes, setGenerationNotes] = useState('')
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
   const [showApproveConfirm, setShowApproveConfirm] = useState(false)
+  const [delegationError, setDelegationError] = useState('')
 
   const acceptedReqs = brief.requirements.filter(r => r.status === 'accepted')
   const proposedReqs = brief.requirements.filter(r => r.status === 'proposed')
@@ -107,6 +109,22 @@ export function BlueprintScreen({ initialBrief }: Props) {
     router.push('/project-briefs')
   }
 
+  function handleDelegate() {
+    setDelegationError('')
+    startDelegate(async () => {
+      const res = await fetch(`/api/project-briefs/${brief.id}/create-delegation`, {
+        method: 'POST',
+      })
+      if (res.ok) {
+        const delegation = await res.json() as { id: string }
+        router.push(`/delegations/${delegation.id}`)
+      } else {
+        const err = await res.json() as { error?: string }
+        setDelegationError(err.error ?? 'Fehler beim Erstellen der Delegation')
+      }
+    })
+  }
+
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -159,6 +177,20 @@ export function BlueprintScreen({ initialBrief }: Props) {
               </button>
             )}
 
+            {brief.status === 'accepted' && (
+              <button
+                onClick={handleDelegate}
+                disabled={delegating}
+                className="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center gap-1.5"
+              >
+                {delegating ? (
+                  <><span className="animate-spin">⟳</span> Erstelle…</>
+                ) : (
+                  <>🚀 Delegation starten</>
+                )}
+              </button>
+            )}
+
             {brief.status !== 'archived' && (
               <button
                 onClick={() => setShowArchiveConfirm(true)}
@@ -175,6 +207,15 @@ export function BlueprintScreen({ initialBrief }: Props) {
           <div className="mb-4 p-3 bg-blue-950/40 border border-blue-800/50 rounded-lg text-sm text-blue-300 flex gap-2">
             <span className="shrink-0">💡</span>
             <span><strong>KI-Annahmen:</strong> {generationNotes}</span>
+          </div>
+        )}
+
+        {/* Delegation Error Banner */}
+        {delegationError && (
+          <div className="mb-4 p-3 bg-red-950/40 border border-red-800/50 rounded-lg text-sm text-red-300 flex items-center gap-2">
+            <span>⚠️</span>
+            <span>{delegationError}</span>
+            <button onClick={() => setDelegationError('')} className="ml-auto text-red-500 hover:text-red-300">✕</button>
           </div>
         )}
 
@@ -322,7 +363,7 @@ export function BlueprintScreen({ initialBrief }: Props) {
                 {brief.risks.some(r => r.isOpenAssumption) && (
                   <p className="text-yellow-500">⚠ {brief.risks.filter(r => r.isOpenAssumption).length} offene Annahmen</p>
                 )}
-                <p className="text-gray-500 mt-2 text-xs">Nach der Freigabe wird dieser Brief als Basis für WorkItems verwendet.</p>
+                <p className="text-gray-500 mt-2 text-xs">Nach der Freigabe kannst du den Brief direkt als Delegation starten.</p>
               </div>
               <div className="flex gap-2">
                 <button
