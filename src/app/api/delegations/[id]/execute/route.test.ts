@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import type { Delegation } from '@/lib/models/delegation'
+import {
+  buildExecutionStartLog,
+  buildSimulationBudgetLog,
+  getExecutionStartBlocker,
+} from '@/lib/delegation-execution'
 
 // Test the prompt builder logic (pure function)
 function buildPromptForTest(delegation: Delegation): string {
@@ -126,5 +131,86 @@ describe('Execute route — prompt builder', () => {
     d.contract.workItemId = 'JOK 99/special'
     const prompt = buildPromptForTest(d)
     expect(prompt).toContain('feature/jok-99-special-task')
+  })
+})
+
+describe('Execute route start guards', () => {
+  it('blocks delegations that are not approved', () => {
+    const d = makeDelegation({ status: 'pending' })
+
+    expect(getExecutionStartBlocker(d)).toEqual({
+      status: 400,
+      error: "Delegation kann nicht gestartet werden — Status ist 'pending', muss 'approved' sein.",
+    })
+  })
+
+  it('blocks RiskClass C when approval is still required', () => {
+    const d = makeDelegation({
+      status: 'approved',
+      contract: {
+        ...makeDelegation().contract,
+        riskClass: 'C',
+        requiresApproval: true,
+      },
+    })
+
+    expect(getExecutionStartBlocker(d)).toEqual({
+      status: 403,
+      error: 'RiskClass C: Manuelle Freigabe erforderlich. Setze requiresApproval=false nach bewusstem Review.',
+    })
+  })
+
+  it('allows RiskClass C after explicit manual override', () => {
+    const d = makeDelegation({
+      status: 'approved',
+      contract: {
+        ...makeDelegation().contract,
+        riskClass: 'C',
+        requiresApproval: false,
+      },
+    })
+
+    expect(getExecutionStartBlocker(d)).toBeUndefined()
+  })
+})
+
+describe('Execute route budget logs', () => {
+  it('adds max budget to the start log', () => {
+    const d = makeDelegation()
+
+    expect(buildExecutionStartLog(d)).toMatchObject({
+      type: 'info',
+      message: 'Ausfuehrung gestartet | Budget: $1.00',
+    })
+  })
+
+  it('marks simulation budget overrun as error', () => {
+    const d = makeDelegation({
+      costEstimateUsd: 1.5,
+      contract: {
+        ...makeDelegation().contract,
+        maxBudgetUsd: 1,
+      },
+    })
+
+    expect(buildSimulationBudgetLog(d)).toEqual({
+      type: 'error',
+      message: 'Kosten-Schaetzung ($1.50) ueberschreitet Budget ($1.00)',
+    })
+  })
+
+  it('marks simulation budget within limit as info', () => {
+    const d = makeDelegation({
+      costEstimateUsd: 0.25,
+      contract: {
+        ...makeDelegation().contract,
+        maxBudgetUsd: 1,
+      },
+    })
+
+    expect(buildSimulationBudgetLog(d)).toEqual({
+      type: 'info',
+      message: 'Budget: $1.00 | Schaetzung: $0.25',
+    })
   })
 })

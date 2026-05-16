@@ -23,6 +23,9 @@ interface Props {
   isStarting: boolean
 }
 
+const isBudgetExceeded = (delegation: Delegation) =>
+  delegation.costEstimateUsd > delegation.contract.maxBudgetUsd
+
 export function PreFlightModal({ delegation, onConfirm, onCancel, isStarting }: Props) {
   const c = delegation.contract
   const risk = RISK_INFO[c.riskClass] ?? RISK_INFO['A']
@@ -92,11 +95,20 @@ export function PreFlightModal({ delegation, onConfirm, onCancel, isStarting }: 
             </div>
           </div>
 
-          {/* Budget */}
-          <div className="bg-gray-950 rounded-lg p-3 border border-gray-800 flex items-center justify-between">
+          {/* Budget — warning if estimate exceeds max */}
+          {isBudgetExceeded(delegation) && (
+            <div className="flex items-start gap-3 p-3 bg-yellow-950/40 border border-yellow-900/50 rounded-lg">
+              <span className="text-yellow-400 text-lg mt-0.5">💰</span>
+              <p className="text-yellow-300 text-sm">
+                <strong>Budget-Warnung:</strong> Die Kostenschätzung (${delegation.costEstimateUsd.toFixed(2)}) überschreitet das Max-Budget (${c.maxBudgetUsd.toFixed(2)}).
+              </p>
+            </div>
+          )}
+
+          <div className={`bg-gray-950 rounded-lg p-3 flex items-center justify-between ${isBudgetExceeded(delegation) ? 'border border-yellow-900/40' : 'border border-gray-800'}`}>
             <div>
               <p className="text-xs text-gray-500">Max. Budget</p>
-              <p className="text-white font-mono font-bold">${c.maxBudgetUsd.toFixed(2)}</p>
+              <p className={`font-mono font-bold ${isBudgetExceeded(delegation) ? 'text-yellow-400' : 'text-white'}`}>${c.maxBudgetUsd.toFixed(2)}</p>
             </div>
             <div className="text-right">
               <p className="text-xs text-gray-500">Task-Typ</p>
