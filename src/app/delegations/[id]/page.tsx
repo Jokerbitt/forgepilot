@@ -153,12 +153,23 @@ export default function DelegationDetailPage() {
       <div className="max-w-4xl mx-auto space-y-6">
 
         {/* ── Breadcrumb ────────────────────────────────────────────────── */}
-        <div className="flex items-center gap-2 text-sm text-gray-500">
+        <div className="flex items-center gap-2 text-sm text-gray-500 flex-wrap">
           <Link href="/delegations" className="hover:text-gray-300 transition-colors">
             ← Delegation Center
           </Link>
           <span>/</span>
           <span className="font-mono text-gray-600 truncate max-w-xs">{d.id}</span>
+          {d.briefId && (
+            <>
+              <span>·</span>
+              <Link
+                href={`/project-briefs/${d.briefId}`}
+                className="text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1"
+              >
+                ◇ {d.briefTitle ?? 'Projektbrief'}
+              </Link>
+            </>
+          )}
         </div>
 
         {/* ── Header ───────────────────────────────────────────────────── */}
