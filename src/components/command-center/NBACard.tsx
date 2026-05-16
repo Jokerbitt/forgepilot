@@ -1,6 +1,7 @@
 import { NBARecommendation } from '@/lib/models/nba'
 import { useState, useEffect } from 'react'
-import type { ExecutionRoute, PrivacyMode } from '@/lib/models/delegation'
+import type { ExecutionRoute, PrivacyMode, Delegation } from '@/lib/models/delegation'
+import { TaskDetailModal } from '@/components/delegation/TaskDetailModal'
 
 const actionTranslations: Record<string, string> = {
   'do-now': 'JETZT MACHEN',
@@ -37,6 +38,12 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
   
   // Delegations State
   const [ticketTasks, setTicketTasks] = useState<any[]>([])
+  const [selectedTask, setSelectedTask] = useState<Delegation | null>(null)
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
+  
+  // Quick Task State
+  const [quickTaskPrompt, setQuickTaskPrompt] = useState('')
+  const [creatingQuickTask, setCreatingQuickTask] = useState(false)
 
   useEffect(() => {
     fetch('/api/settings').then(res => res.json()).then(data => {
@@ -86,6 +93,61 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
       ])
       setRefining(false)
     }, 1500)
+  }
+
+  const handleQuickTaskSubmit = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && quickTaskPrompt.trim()) {
+      setCreatingQuickTask(true)
+      try {
+        await fetch('/api/magic-create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: 'delegation',
+            prompt: quickTaskPrompt,
+            existingTicketId: workItem.id
+          })
+        })
+        window.location.reload()
+      } catch (err) {
+        console.error(err)
+        setCreatingQuickTask(false)
+      }
+    }
+  }
+
+  const handleEditTask = (task: Delegation) => {
+    setSelectedTask(task)
+    setIsTaskModalOpen(true)
+  }
+
+  const handleManualTask = () => {
+    const newDelegation: Delegation = {
+      id: `DEL-${Date.now().toString().slice(-4)}`,
+      status: 'pending',
+      executionRoute: 'local-agent',
+      costEstimateUsd: 0.1,
+      contract: {
+        id: `CON-${Date.now().toString().slice(-4)}`,
+        workItemId: workItem.id,
+        goal: '',
+        context: '',
+        definitionOfDone: [],
+        riskClass: 'C',
+        maxBudgetUsd: 1.0,
+        allowedTools: ['read_file', 'write_file'],
+        branchStrategy: 'feature',
+        requiresApproval: true,
+        privacyMode: 'local',
+        llmModel: 'claude-3-7-sonnet',
+        createdAt: new Date().toISOString()
+      },
+      logs: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+    setSelectedTask(newDelegation)
+    setIsTaskModalOpen(true)
   }
 
   const handleDelegate = async () => {
@@ -178,19 +240,51 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
                 <span className="text-sm text-gray-300 truncate mr-2" title={task.contract?.goal}>
                   {task.contract?.goal || 'Ohne Titel'}
                 </span>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
-                  task.status === 'done' ? 'bg-green-900/50 text-green-400' :
-                  task.status === 'running' ? 'bg-blue-900/50 text-blue-400' :
-                  task.status === 'failed' ? 'bg-red-900/50 text-red-400' :
-                  'bg-gray-800 text-gray-400'
-                }`}>
-                  {task.status}
-                </span>
+                <div className="flex items-center space-x-2">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                    task.status === 'done' ? 'bg-green-900/50 text-green-400' :
+                    task.status === 'running' ? 'bg-blue-900/50 text-blue-400' :
+                    task.status === 'failed' ? 'bg-red-900/50 text-red-400' :
+                    'bg-gray-800 text-gray-400'
+                  }`}>
+                    {task.status}
+                  </span>
+                  <button 
+                    onClick={() => handleEditTask(task)}
+                    className="text-gray-500 hover:text-white transition-colors"
+                    title="Task bearbeiten"
+                  >
+                    ✏️
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         </div>
       )}
+
+      <div className="mb-4">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <input 
+              type="text" 
+              value={quickTaskPrompt}
+              onChange={e => setQuickTaskPrompt(e.target.value)}
+              onKeyDown={handleQuickTaskSubmit}
+              disabled={creatingQuickTask}
+              placeholder="Quick Task eintragen & Enter..."
+              className="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-1.5 text-sm text-gray-300 focus:border-blue-500 focus:outline-none placeholder-gray-600 disabled:opacity-50"
+            />
+          </div>
+          <button 
+            onClick={handleManualTask}
+            className="text-xs font-bold px-3 py-1.5 rounded transition-colors bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700"
+            title="Detaillierten Task anlegen"
+          >
+            📋 Manuell
+          </button>
+        </div>
+      </div>
 
       <div className="border-t border-gray-800 pt-3 flex justify-between items-center mt-3">
         <div className="flex flex-col gap-1">
@@ -335,6 +429,15 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
           </button>
         </div>
       )}
+
+      <TaskDetailModal 
+        delegation={selectedTask}
+        isOpen={isTaskModalOpen}
+        onClose={() => {
+          setIsTaskModalOpen(false)
+          setSelectedTask(null)
+        }}
+      />
     </div>
   )
 }

@@ -19,6 +19,11 @@ export function ManualTicketModal({ isOpen, onClose, availableProjects, availabl
   const [riskClass, setRiskClass] = useState<RiskClass>('C')
   const [estimate, setEstimate] = useState<number>(60)
   const [saving, setSaving] = useState(false)
+  
+  const [isNewProjectMode, setIsNewProjectMode] = useState(false)
+  const [isNewMilestoneMode, setIsNewMilestoneMode] = useState(false)
+  const [newProject, setNewProject] = useState('')
+  const [newMilestone, setNewMilestone] = useState('')
 
   useEffect(() => {
     if (isOpen) {
@@ -29,11 +34,40 @@ export function ManualTicketModal({ isOpen, onClose, availableProjects, availabl
 
   if (!isOpen) return null
 
+  const saveNewConfig = async (key: 'projects' | 'milestones', newValue: string) => {
+    try {
+      const currentList = key === 'projects' ? availableProjects : availableMilestones
+      if (currentList.includes(newValue)) return newValue
+      
+      const newList = [...currentList, newValue]
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [key]: newList })
+      })
+      return newValue
+    } catch (e) {
+      console.error(e)
+      return newValue
+    }
+  }
+
   const handleSave = async () => {
     if (!title.trim() || saving) return
     setSaving(true)
 
     try {
+      let finalProjectId = projectId
+      let finalMilestone = milestone
+
+      if (isNewProjectMode && newProject.trim()) {
+        finalProjectId = await saveNewConfig('projects', newProject.trim())
+      }
+
+      if (isNewMilestoneMode && newMilestone.trim()) {
+        finalMilestone = await saveNewConfig('milestones', newMilestone.trim())
+      }
+
       await fetch('/api/magic-create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -41,8 +75,8 @@ export function ManualTicketModal({ isOpen, onClose, availableProjects, availabl
           mode: 'manual',
           title,
           description,
-          projectId,
-          milestone,
+          projectId: finalProjectId,
+          milestone: finalMilestone,
           riskClass,
           priority,
           estimate
@@ -94,23 +128,65 @@ export function ManualTicketModal({ isOpen, onClose, availableProjects, availabl
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-1">Projekt</label>
-              <select 
-                value={projectId} 
-                onChange={e => setProjectId(e.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2 text-white"
-              >
-                {availableProjects.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
+              <div className="flex items-center gap-2">
+                {isNewProjectMode ? (
+                  <input 
+                    type="text" 
+                    autoFocus
+                    value={newProject} 
+                    onChange={e => setNewProject(e.target.value)}
+                    placeholder="Neues Projekt..."
+                    className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2 text-white"
+                  />
+                ) : (
+                  <select 
+                    value={projectId} 
+                    onChange={e => setProjectId(e.target.value)}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2 text-white"
+                  >
+                    {availableProjects.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                )}
+                <button 
+                  type="button"
+                  onClick={() => setIsNewProjectMode(!isNewProjectMode)}
+                  className="bg-gray-800 hover:bg-gray-700 text-gray-400 px-3 py-2 rounded-md border border-gray-700 transition-colors"
+                  title={isNewProjectMode ? "Abbrechen" : "Neues Projekt anlegen"}
+                >
+                  {isNewProjectMode ? "✕" : "➕ Neu"}
+                </button>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-1">Meilenstein</label>
-              <select 
-                value={milestone} 
-                onChange={e => setMilestone(e.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2 text-white"
-              >
-                {availableMilestones.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
+              <div className="flex items-center gap-2">
+                {isNewMilestoneMode ? (
+                  <input 
+                    type="text" 
+                    autoFocus
+                    value={newMilestone} 
+                    onChange={e => setNewMilestone(e.target.value)}
+                    placeholder="Neuer Meilenstein..."
+                    className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2 text-white"
+                  />
+                ) : (
+                  <select 
+                    value={milestone} 
+                    onChange={e => setMilestone(e.target.value)}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2 text-white"
+                  >
+                    {availableMilestones.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                )}
+                <button 
+                  type="button"
+                  onClick={() => setIsNewMilestoneMode(!isNewMilestoneMode)}
+                  className="bg-gray-800 hover:bg-gray-700 text-gray-400 px-3 py-2 rounded-md border border-gray-700 transition-colors"
+                  title={isNewMilestoneMode ? "Abbrechen" : "Neuen Meilenstein anlegen"}
+                >
+                  {isNewMilestoneMode ? "✕" : "➕ Neu"}
+                </button>
+              </div>
             </div>
           </div>
 
