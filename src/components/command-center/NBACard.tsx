@@ -34,6 +34,9 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
     'Tests schreiben/anpassen'
   ])
   const [refining, setRefining] = useState(false)
+  
+  // Delegations State
+  const [ticketTasks, setTicketTasks] = useState<any[]>([])
 
   useEffect(() => {
     fetch('/api/settings').then(res => res.json()).then(data => {
@@ -41,7 +44,13 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
         setCustomLlmModels(data.customLlmModels)
       }
     }).catch(console.error)
-  }, [])
+
+    fetch('/api/delegations').then(res => res.json()).then((data: any[]) => {
+      if (data && Array.isArray(data)) {
+        setTicketTasks(data.filter(d => d.contract?.workItemId === workItem.id))
+      }
+    }).catch(console.error)
+  }, [workItem.id])
 
   const handlePin = async () => {
     setIsPinning(true)
@@ -160,6 +169,29 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
         ))}
       </div>
       
+      {ticketTasks.length > 0 && (
+        <div className="mb-4 space-y-2">
+          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Erstellte AI Tasks ({ticketTasks.length})</h4>
+          <div className="space-y-2">
+            {ticketTasks.map((task: any) => (
+              <div key={task.id} className="bg-gray-950 border border-gray-800 rounded p-2 flex items-center justify-between">
+                <span className="text-sm text-gray-300 truncate mr-2" title={task.contract?.goal}>
+                  {task.contract?.goal || 'Ohne Titel'}
+                </span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                  task.status === 'done' ? 'bg-green-900/50 text-green-400' :
+                  task.status === 'running' ? 'bg-blue-900/50 text-blue-400' :
+                  task.status === 'failed' ? 'bg-red-900/50 text-red-400' :
+                  'bg-gray-800 text-gray-400'
+                }`}>
+                  {task.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="border-t border-gray-800 pt-3 flex justify-between items-center mt-3">
         <div className="flex flex-col gap-1">
           <p className="text-sm text-gray-400">{rationale}</p>

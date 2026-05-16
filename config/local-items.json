@@ -18,5 +18,26 @@
     ],
     "createdAt": "2026-05-15T23:35:16.268Z",
     "updatedAt": "2026-05-15T23:35:16.268Z"
+  },
+  {
+    "id": "LOCAL-5215",
+    "source": "local",
+    "type": "ticket",
+    "title": "✨ Neues Feature: test",
+    "url": "#",
+    "projectId": "LOCAL_IDEAS",
+    "milestone": "Backlog",
+    "status": "todo",
+    "priority": 2,
+    "blocked": false,
+    "risk": "C",
+    "aiDelegable": true,
+    "estimatedMinutes": 99,
+    "labels": [
+      "magic-create",
+      "local"
+    ],
+    "createdAt": "2026-05-16T00:04:05.215Z",
+    "updatedAt": "2026-05-16T00:04:05.215Z"
   }
 ]
