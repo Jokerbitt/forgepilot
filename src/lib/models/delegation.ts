@@ -2,6 +2,7 @@ import type { RiskClass } from './work-item'
 
 export type ExecutionRoute = 'direct-chat' | 'local-agent' | 'runner' | 'n8n' | 'manual'
 export type PrivacyMode = 'local' | 'private-cloud' | 'public'
+export type OutputMode = 'text' | 'json' | 'stream'
 export type DelegationStatus = 'pending' | 'approved' | 'running' | 'completed' | 'failed' | 'cancelled'
 
 export interface AgentLog {
@@ -50,6 +51,7 @@ export interface TaskContract {
   requiresApproval: boolean
   privacyMode: PrivacyMode
   llmModel?: string
+  outputMode?: OutputMode
   createdAt: string
 }
 
