@@ -2,6 +2,8 @@ node_modules/
 .env
 .env.local
 .env*.local
+config/api-keys.json
+config/running-processes.json
 dist/
 build/
 .next/
