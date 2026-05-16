@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import type { BriefScope, IdeaIntakeInput, ProjectBrief, ResearchBrief, ResearchMode, ResearchPrivacyMode } from '@/lib/models/project-brief'
+import { useRouter } from 'next/navigation'
+import type { BriefScope, IdeaIntakeInput, ProjectBrief, ResearchBrief, ResearchMode, ResearchPrivacyMode, ResearchRun } from '@/lib/models/project-brief'
 
 type WizardStep = 0 | 1 | 2 | 3
 
@@ -20,6 +21,7 @@ const initialInput: IdeaIntakeInput = {
 }
 
 export function IdeaIntakeWizard() {
+  const router = useRouter()
   const [step, setStep] = useState<WizardStep>(0)
   const [input, setInput] = useState<IdeaIntakeInput>(initialInput)
   const [constraintsText, setConstraintsText] = useState('')
@@ -29,7 +31,9 @@ export function IdeaIntakeWizard() {
   const [createdBrief, setCreatedBrief] = useState<ProjectBrief | null>(null)
   const [selectedBrief, setSelectedBrief] = useState<ProjectBrief | null>(null)
   const [researchBrief, setResearchBrief] = useState<ResearchBrief | null>(null)
+  const [researchRun, setResearchRun] = useState<ResearchRun | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [runLoading, setRunLoading] = useState(false)
 
   useEffect(() => {
     fetch('/api/project-briefs')
@@ -108,12 +112,7 @@ export function IdeaIntakeWizard() {
         return
       }
       setCreatedBrief(data as ProjectBrief)
-      setSelectedBrief(data as ProjectBrief)
-      setResearchBrief(null)
-      setBriefs(prev => [data as ProjectBrief, ...prev])
-      setInput(initialInput)
-      setConstraintsText('')
-      setStep(0)
+      router.push(`/project-briefs/${(data as ProjectBrief).id}`)
     } finally {
       setLoading(false)
     }
@@ -123,12 +122,26 @@ export function IdeaIntakeWizard() {
     setSelectedBrief(brief)
     setPreviewLoading(true)
     setResearchBrief(null)
+    setResearchRun(null)
     try {
       const res = await fetch(`/api/project-briefs/${brief.id}/research-brief`)
       if (!res.ok) return
       setResearchBrief(await res.json() as ResearchBrief)
     } finally {
       setPreviewLoading(false)
+    }
+  }
+
+  const openResearchRunPreview = async (brief: ProjectBrief) => {
+    setSelectedBrief(brief)
+    setRunLoading(true)
+    setResearchRun(null)
+    try {
+      const res = await fetch(`/api/project-briefs/${brief.id}/research-run`)
+      if (!res.ok) return
+      setResearchRun(await res.json() as ResearchRun)
+    } finally {
+      setRunLoading(false)
     }
   }
 
@@ -348,7 +361,10 @@ export function IdeaIntakeWizard() {
           <ResearchBriefPreview
             selectedBrief={selectedBrief}
             researchBrief={researchBrief}
+            researchRun={researchRun}
             loading={previewLoading}
+            runLoading={runLoading}
+            onGenerateRun={selectedBrief ? () => openResearchRunPreview(selectedBrief) : undefined}
           />
         )}
 
@@ -439,11 +455,17 @@ function Badge({ children }: { children: React.ReactNode }) {
 function ResearchBriefPreview({
   selectedBrief,
   researchBrief,
+  researchRun,
   loading,
+  runLoading,
+  onGenerateRun,
 }: {
   selectedBrief: ProjectBrief | null
   researchBrief: ResearchBrief | null
+  researchRun: ResearchRun | null
   loading: boolean
+  runLoading: boolean
+  onGenerateRun?: () => void
 }) {
   return (
     <div className="rounded-xl border border-purple-900/60 bg-purple-950/20 p-4">
@@ -482,6 +504,49 @@ function ResearchBriefPreview({
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-400">
               {researchBrief.outputSchema.qualityGates.map(gate => <li key={gate}>{gate}</li>)}
             </ul>
+          </div>
+
+          <button
+            type="button"
+            onClick={onGenerateRun}
+            disabled={!onGenerateRun || runLoading}
+            className="w-full rounded-lg border border-purple-700 bg-purple-900/30 px-3 py-2 text-sm font-semibold text-purple-200 hover:border-purple-500 disabled:cursor-wait disabled:opacity-60"
+          >
+            {runLoading ? 'Findings werden erzeugt...' : 'Findings POC erzeugen'}
+          </button>
+        </div>
+      )}
+
+      {!loading && researchRun && (
+        <div className="mt-5 space-y-4 border-t border-purple-900/50 pt-4">
+          <div className="flex flex-wrap gap-2 text-[11px]">
+            <Badge>{researchRun.status}</Badge>
+            <Badge>{researchRun.sources.length} Quelle</Badge>
+            <Badge>{researchRun.findings.length} Findings</Badge>
+            <Badge>{researchRun.confidenceScore ?? 0}% Confidence</Badge>
+          </div>
+
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">Findings mit Quellenbezug</div>
+            <div className="mt-2 space-y-2">
+              {researchRun.findings.map(finding => (
+                <div key={finding.id} className="rounded-lg border border-gray-800 bg-gray-950 p-3">
+                  <div className="text-sm font-semibold text-gray-200">{finding.claim}</div>
+                  <p className="mt-1 text-xs text-gray-500">{finding.summary}</p>
+                  <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                    <Badge>{finding.confidence}</Badge>
+                    <Badge>{finding.recommendationImpact}</Badge>
+                    {finding.isOpenAssumption && <Badge>offene Annahme</Badge>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-gray-800 bg-gray-950 p-3">
+            <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">Evidence Source</div>
+            <div className="mt-2 text-sm text-gray-300">{researchRun.sources[0]?.title}</div>
+            <div className="mt-1 text-xs text-gray-500">{researchRun.sources[0]?.urlOrPath}</div>
           </div>
         </div>
       )}

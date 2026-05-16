@@ -4,10 +4,13 @@ import type {
   BriefScope,
   IdeaIntakeInput,
   IdeaIntakeValidationErrors,
+  Finding,
   ProjectBrief,
+  ResearchRun,
   ResearchBrief,
   ResearchMode,
   ResearchPrivacyMode,
+  SourceRecord,
 } from '@/lib/models/project-brief'
 
 const PROJECT_BRIEFS_FILE = path.join(process.cwd(), 'config', 'project-briefs.json')
@@ -145,6 +148,94 @@ export function buildResearchBriefFromProjectBrief(
   }
 }
 
+export function buildResearchRunPoc(
+  brief: ProjectBrief,
+  researchBrief = buildResearchBriefFromProjectBrief(brief),
+  now = new Date(),
+  id = `${brief.id}-research-run-poc`
+): ResearchRun {
+  const startedAt = now.toISOString()
+  const source: SourceRecord = {
+    id: `${id}-source-brief`,
+    runId: id,
+    type: 'nas',
+    title: `ProjectBrief: ${brief.title}`,
+    urlOrPath: `project-brief://${brief.id}`,
+    publisher: 'ForgePilot',
+    retrievedAt: startedAt,
+    language: 'de',
+    relevanceScore: 100,
+    trustScore: 75,
+    notes: 'POC-Quelle: Der gespeicherte ProjectBrief wird als interne Quelle genutzt.',
+    snippets: [
+      brief.rawIdea,
+      brief.problemStatement,
+      brief.targetAudience,
+      brief.desiredOutcome,
+      ...brief.constraints,
+    ].filter(Boolean),
+  }
+
+  const findings = buildPocFindings(brief, id, source.id)
+  const outputs = [
+    {
+      id: `${id}-output-findings`,
+      runId: id,
+      briefId: brief.id,
+      type: 'findings_summary' as const,
+      title: 'Findings Summary',
+      content: renderFindingsSummary(findings),
+      linkedFindingIds: findings.map(finding => finding.id),
+      linkedRequirementIds: [],
+      status: 'review_pending' as const,
+    },
+    {
+      id: `${id}-output-project-brief`,
+      runId: id,
+      briefId: brief.id,
+      type: 'project_brief' as const,
+      title: 'Projektsteckbrief Entwurf',
+      content: renderProjectBriefDraft(brief, findings),
+      linkedFindingIds: findings.map(finding => finding.id),
+      linkedRequirementIds: brief.requirements.map(requirement => requirement.id),
+      status: 'review_pending' as const,
+    },
+    {
+      id: `${id}-output-requirements`,
+      runId: id,
+      briefId: brief.id,
+      type: 'requirements' as const,
+      title: 'Requirements Entwurf',
+      content: renderRequirementsDraft(brief),
+      linkedFindingIds: findings.map(finding => finding.id),
+      linkedRequirementIds: brief.requirements.map(requirement => requirement.id),
+      status: 'review_pending' as const,
+    },
+  ]
+
+  return {
+    id,
+    researchBriefId: researchBrief.id,
+    briefId: brief.id,
+    title: `ResearchRun POC: ${brief.title}`,
+    status: 'review_pending',
+    mode: researchBrief.mode,
+    privacyMode: researchBrief.privacyMode,
+    executor: researchBrief.preferredExecutor,
+    startedAt,
+    completedAt: startedAt,
+    budgetUsd: researchBrief.maxBudgetUsd,
+    actualCostUsd: 0,
+    sources: [source],
+    findings,
+    outputs,
+    confidenceScore: calculateConfidenceScore(findings),
+    openUncertainties: findings
+      .filter(finding => finding.isOpenAssumption)
+      .map(finding => finding.claim),
+  }
+}
+
 export function readProjectBriefs(filePath = PROJECT_BRIEFS_FILE): ProjectBrief[] {
   try {
     const data = fs.readFileSync(filePath, 'utf-8')
@@ -247,6 +338,110 @@ function buildInitialRisks(input: IdeaIntakeInput, briefId: string) {
       findingIds: [],
     },
   ]
+}
+
+function buildPocFindings(brief: ProjectBrief, runId: string, sourceId: string): Finding[] {
+  const base = [
+    {
+      id: `${runId}-finding-problem`,
+      runId,
+      claim: `Das Kernproblem ist: ${brief.problemStatement}`,
+      summary: `Der ProjectBrief beschreibt als Ausgangspunkt ein konkretes Problem fuer ${brief.targetAudience}. Dieses Finding ist direkt aus dem Nutzerkontext abgeleitet und muss spaeter mit externen oder internen Quellen validiert werden.`,
+      sourceIds: [sourceId],
+      confidence: 'medium' as const,
+      isContradicted: false,
+      contradictionIds: [],
+      isOpenAssumption: true,
+      recommendationImpact: 'high' as const,
+      tags: ['problem', 'scope'],
+    },
+    {
+      id: `${runId}-finding-outcome`,
+      runId,
+      claim: `Der gewuenschte Zielzustand ist: ${brief.desiredOutcome}`,
+      summary: 'Der Zielzustand kann als Grundlage fuer Must-have-Requirements genutzt werden.',
+      sourceIds: [sourceId],
+      confidence: 'medium' as const,
+      isContradicted: false,
+      contradictionIds: [],
+      isOpenAssumption: false,
+      recommendationImpact: 'high' as const,
+      tags: ['outcome', 'requirements'],
+    },
+    {
+      id: `${runId}-finding-audience`,
+      runId,
+      claim: `Die primaere Zielgruppe ist: ${brief.targetAudience}`,
+      summary: 'Die Zielgruppe sollte in den naechsten Research-Schritten mit konkreten Jobs-to-be-done und Nutzenszenarien geschaerft werden.',
+      sourceIds: [sourceId],
+      confidence: 'medium' as const,
+      isContradicted: false,
+      contradictionIds: [],
+      isOpenAssumption: true,
+      recommendationImpact: 'medium' as const,
+      tags: ['audience', 'validation'],
+    },
+  ]
+
+  if (brief.constraints.length === 0) return base
+
+  return [
+    ...base,
+    {
+      id: `${runId}-finding-constraints`,
+      runId,
+      claim: `Die wichtigsten Constraints sind: ${brief.constraints.join(', ')}`,
+      summary: 'Constraints beeinflussen Recherchemodus, Datenschutz, Ausfuehrungsweg und spaetere Architekturentscheidungen.',
+      sourceIds: [sourceId],
+      confidence: 'high' as const,
+      isContradicted: false,
+      contradictionIds: [],
+      isOpenAssumption: false,
+      recommendationImpact: 'critical' as const,
+      tags: ['constraints', 'governance'],
+    },
+  ]
+}
+
+function renderFindingsSummary(findings: Finding[]): string {
+  return findings
+    .map(finding => `- ${finding.claim} (${finding.confidence}, impact: ${finding.recommendationImpact})`)
+    .join('\n')
+}
+
+function renderProjectBriefDraft(brief: ProjectBrief, findings: Finding[]): string {
+  return [
+    `# ${brief.title}`,
+    '',
+    `## Problem`,
+    brief.problemStatement,
+    '',
+    `## Zielgruppe`,
+    brief.targetAudience,
+    '',
+    `## Zielzustand`,
+    brief.desiredOutcome,
+    '',
+    `## Evidence`,
+    renderFindingsSummary(findings),
+  ].join('\n')
+}
+
+function renderRequirementsDraft(brief: ProjectBrief): string {
+  return brief.requirements
+    .map(requirement => `- [${requirement.priority}] ${requirement.title}: ${requirement.description}`)
+    .join('\n')
+}
+
+function calculateConfidenceScore(findings: Finding[]): number {
+  if (findings.length === 0) return 0
+  const scores = findings.map(finding => {
+    if (finding.confidence === 'high') return 90
+    if (finding.confidence === 'medium') return 65
+    if (finding.confidence === 'low') return 40
+    return 20
+  })
+  return Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length)
 }
 
 function budgetForMode(mode: ResearchMode, privacyMode: ResearchPrivacyMode): number {
