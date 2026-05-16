@@ -3,6 +3,26 @@
 import { useState, useEffect } from 'react'
 import type { NBARecommendation } from '@/lib/models/nba'
 import type { Delegation, ExecutionRoute, PrivacyMode } from '@/lib/models/delegation'
+import type { NBAConfig } from '@/lib/nba-engine/nba-config'
+import { shouldRequireApproval } from '@/lib/nba-engine/approval-policy'
+
+type BranchStrategy = 'feature' | 'fix' | 'chore'
+
+const BRANCH_STRATEGIES: BranchStrategy[] = ['feature', 'fix', 'chore']
+const PRIVACY_MODES: PrivacyMode[] = ['local', 'private-cloud', 'public']
+const EXECUTION_ROUTES: ExecutionRoute[] = ['local-agent', 'direct-chat', 'runner']
+
+function toBranchStrategy(value: string): BranchStrategy {
+  return BRANCH_STRATEGIES.includes(value as BranchStrategy) ? value as BranchStrategy : 'feature'
+}
+
+function toPrivacyMode(value: string): PrivacyMode {
+  return PRIVACY_MODES.includes(value as PrivacyMode) ? value as PrivacyMode : 'local'
+}
+
+function toExecutionRoute(value: string): ExecutionRoute {
+  return EXECUTION_ROUTES.includes(value as ExecutionRoute) ? value as ExecutionRoute : 'local-agent'
+}
 
 interface DelegationModalProps {
   rec: NBARecommendation | null
@@ -16,11 +36,14 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
   
   // Expert mode states
   const [maxBudgetUsd, setMaxBudgetUsd] = useState(1.0)
-  const [branchStrategy, setBranchStrategy] = useState<'feature' | 'fix' | 'chore'>('feature')
+  const [branchStrategy, setBranchStrategy] = useState<BranchStrategy>('feature')
   const [privacyMode, setPrivacyMode] = useState<PrivacyMode>('local')
   const [executionRoute, setExecutionRoute] = useState<ExecutionRoute>('local-agent')
   const [llmModel, setLlmModel] = useState<string>('claude-3-7-sonnet')
   const [customLlmModels, setCustomLlmModels] = useState<string[]>([])
+  const [approvalMode, setApprovalMode] = useState<NBAConfig['approvalMode']>('balanced')
+  const [autopilotMinScore, setAutopilotMinScore] = useState(85)
+  const [autopilotMaxRiskClass, setAutopilotMaxRiskClass] = useState<NBAConfig['autopilotMaxRiskClass']>('A')
   const [customContext, setCustomContext] = useState<string>('')
   
   // Fetch custom models
@@ -28,6 +51,11 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
     fetch('/api/settings').then(res => res.json()).then(data => {
       if (data && data.customLlmModels) {
         setCustomLlmModels(data.customLlmModels)
+      }
+      if (data && data.approvalMode) {
+        setApprovalMode(data.approvalMode)
+        setAutopilotMinScore(data.autopilotMinScore ?? 85)
+        setAutopilotMaxRiskClass(data.autopilotMaxRiskClass ?? 'A')
       }
     }).catch(console.error)
   }, [])
@@ -39,6 +67,13 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
     
     // Create the delegation object
     const delegationId = `del-${Date.now()}`
+    const requiresApproval = shouldRequireApproval({
+      approvalMode,
+      riskClass: rec.riskClass,
+      scoreTotal: rec.score.total,
+      autopilotMinScore,
+      autopilotMaxRiskClass,
+    })
     const delegation: Delegation = {
       id: delegationId,
       contract: {
@@ -51,16 +86,17 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
         maxBudgetUsd: isExpertMode ? maxBudgetUsd : 1.0,
         allowedTools: ['all'],
         branchStrategy: isExpertMode ? branchStrategy : 'feature',
-        requiresApproval: true,
+        requiresApproval,
         privacyMode: isExpertMode ? privacyMode : 'local',
         llmModel: isExpertMode ? llmModel : 'claude-3-7-sonnet',
         createdAt: new Date().toISOString()
       },
-      status: 'pending', // Execution router will pick this up
+      status: requiresApproval ? 'pending' : 'approved',
       executionRoute: isExpertMode ? executionRoute : rec.executionRoute,
       costEstimateUsd: rec.estimatedCostUsd || 0.1,
       logs: [
         { timestamp: new Date().toISOString(), type: 'info', message: 'Delegation Request empfangen.' },
+        ...(requiresApproval ? [] : [{ timestamp: new Date().toISOString(), type: 'success' as const, message: `Auto-Freigabe durch ${approvalMode}-Modus.` }]),
         { timestamp: new Date(Date.now() + 1000).toISOString(), type: 'thought', message: 'Analysiere Task Contract und Ticket-Kontext...' },
         { timestamp: new Date(Date.now() + 2500).toISOString(), type: 'command', message: 'git checkout -b feature/M3-test' },
         { timestamp: new Date(Date.now() + 4000).toISOString(), type: 'thought', message: 'Lade benötigte Dateien in den Kontext.' }
@@ -69,8 +105,9 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
       updatedAt: new Date().toISOString()
     }
     
-    // Wir tun so als ob der Execution Router es sofort aufnimmt
-    delegation.status = 'running'
+    if (!requiresApproval) {
+      delegation.status = 'running'
+    }
     
     await fetch('/api/delegations', {
       method: 'POST',
@@ -151,7 +188,7 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">Branch-Strategie</label>
                 <select 
-                  value={branchStrategy} onChange={e => setBranchStrategy(e.target.value as any)}
+                  value={branchStrategy} onChange={e => setBranchStrategy(toBranchStrategy(e.target.value))}
                   className="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2 text-white"
                 >
                   <option value="feature">Feature Branch (z.B. feature/JOK-1)</option>
@@ -162,7 +199,7 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">Privacy Mode</label>
                 <select 
-                  value={privacyMode} onChange={e => setPrivacyMode(e.target.value as any)}
+                  value={privacyMode} onChange={e => setPrivacyMode(toPrivacyMode(e.target.value))}
                   className="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2 text-white"
                 >
                   <option value="local">Lokal (Local LLM / Runner)</option>
@@ -173,7 +210,7 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-1">Bevorzugter Agent (Route)</label>
                 <select 
-                  value={executionRoute} onChange={e => setExecutionRoute(e.target.value as any)}
+                  value={executionRoute} onChange={e => setExecutionRoute(toExecutionRoute(e.target.value))}
                   className="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2 text-white mb-2"
                 >
                   <option value="local-agent">Antigravity (Local Agent)</option>

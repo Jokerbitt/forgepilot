@@ -1,7 +1,9 @@
-import { NBARecommendation } from '@/lib/models/nba'
+import type { NBARecommendation } from '@/lib/models/nba'
 import { useState, useEffect } from 'react'
 import type { ExecutionRoute, PrivacyMode, Delegation } from '@/lib/models/delegation'
 import { TaskDetailModal } from '@/components/delegation/TaskDetailModal'
+import type { NBAConfig } from '@/lib/nba-engine/nba-config'
+import { shouldRequireApproval } from '@/lib/nba-engine/approval-policy'
 
 const actionTranslations: Record<string, string> = {
   'do-now': 'JETZT MACHEN',
@@ -25,6 +27,9 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
   const [executionRoute, setExecutionRoute] = useState<ExecutionRoute>('local-agent')
   const [llmModel, setLlmModel] = useState<string>('claude-3-7-sonnet')
   const [customLlmModels, setCustomLlmModels] = useState<string[]>([])
+  const [approvalMode, setApprovalMode] = useState<NBAConfig['approvalMode']>('balanced')
+  const [autopilotMinScore, setAutopilotMinScore] = useState(85)
+  const [autopilotMaxRiskClass, setAutopilotMaxRiskClass] = useState<NBAConfig['autopilotMaxRiskClass']>('A')
   const [delegating, setDelegating] = useState(false)
 
   // Context State (User Story)
@@ -37,7 +42,7 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
   const [refining, setRefining] = useState(false)
   
   // Delegations State
-  const [ticketTasks, setTicketTasks] = useState<any[]>([])
+  const [ticketTasks, setTicketTasks] = useState<Delegation[]>([])
   const [selectedTask, setSelectedTask] = useState<Delegation | null>(null)
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
   const [isTasksExpanded, setIsTasksExpanded] = useState(true)
@@ -51,9 +56,14 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
       if (data && data.customLlmModels) {
         setCustomLlmModels(data.customLlmModels)
       }
+      if (data && data.approvalMode) {
+        setApprovalMode(data.approvalMode)
+        setAutopilotMinScore(data.autopilotMinScore ?? 85)
+        setAutopilotMaxRiskClass(data.autopilotMaxRiskClass ?? 'A')
+      }
     }).catch(console.error)
 
-    fetch('/api/delegations').then(res => res.json()).then((data: any[]) => {
+    fetch('/api/delegations').then(res => res.json()).then((data: Delegation[]) => {
       if (data && Array.isArray(data)) {
         setTicketTasks(data.filter(d => d.contract?.workItemId === workItem.id))
       }
@@ -156,6 +166,13 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
     const delegationId = `del-${Date.now()}`
     
     const contextStr = `# User Story\n${storyDescription}\n\n# Tasks\n${storyTasks.map(t => '- [ ] ' + t).join('\n')}`
+    const requiresApproval = shouldRequireApproval({
+      approvalMode,
+      riskClass: rec.riskClass,
+      scoreTotal: score.total,
+      autopilotMinScore,
+      autopilotMaxRiskClass,
+    })
 
     const payload = {
       id: delegationId,
@@ -169,16 +186,17 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
         maxBudgetUsd: isExpertMode ? maxBudgetUsd : 1.0,
         allowedTools: isExpertMode ? ['read_file', 'write_file', 'run_command', 'search'] : ['read_file', 'write_file'],
         branchStrategy: isExpertMode ? branchStrategy : 'feature',
-        requiresApproval: true,
+        requiresApproval,
         privacyMode: isExpertMode ? privacyMode : 'local',
         llmModel: isExpertMode ? llmModel : 'claude-3-7-sonnet',
         createdAt: new Date().toISOString()
       },
-      status: 'pending',
+      status: requiresApproval ? 'pending' : 'approved',
       executionRoute: isExpertMode ? executionRoute : rec.executionRoute,
       costEstimateUsd: rec.estimatedCostUsd || 0.1,
       logs: [
         { timestamp: new Date().toISOString(), type: 'info', message: 'Delegation Request empfangen.' },
+        ...(requiresApproval ? [] : [{ timestamp: new Date().toISOString(), type: 'success' as const, message: `Auto-Freigabe durch ${approvalMode}-Modus.` }]),
         { timestamp: new Date(Date.now() + 1000).toISOString(), type: 'thought', message: 'Analysiere Task Contract und Ticket-Kontext...' }
       ],
       createdAt: new Date().toISOString(),
@@ -198,6 +216,43 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
     }
   }
   
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+
+  const sortedTasks = [...ticketTasks].sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+
+  const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault()
+    if (draggedIndex === null || draggedIndex === dropIndex) return
+    
+    const newTasks = [...sortedTasks]
+    const [draggedItem] = newTasks.splice(draggedIndex, 1)
+    newTasks.splice(dropIndex, 0, draggedItem)
+    
+    const updatedTasks = newTasks.map((t, idx) => ({ ...t, priority: idx + 1 }))
+    setTicketTasks(updatedTasks)
+    setDraggedIndex(null)
+    
+    try {
+      await fetch('/api/delegations', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedTasks)
+      })
+    } catch (err) {
+      console.error('Failed to update order', err)
+    }
+  }
+
   return (
     <div className="bg-gray-900 rounded-xl border border-gray-800 p-4 hover:border-gray-700 transition-colors">
       <div className="flex justify-between items-start mb-3">
@@ -232,19 +287,27 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
         ))}
       </div>
       
-      {ticketTasks.length > 0 && (
+      {sortedTasks.length > 0 && (
         <div className="mb-4 space-y-2">
           <button 
             onClick={() => setIsTasksExpanded(!isTasksExpanded)}
             className="flex items-center text-xs font-bold text-gray-500 uppercase tracking-wider hover:text-white transition-colors"
           >
-            Erstellte AI Tasks ({ticketTasks.length}) {isTasksExpanded ? '▼' : '▶'}
+            Erstellte AI Tasks ({sortedTasks.length}) {isTasksExpanded ? '▼' : '▶'}
           </button>
           {isTasksExpanded && (
             <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
-              {ticketTasks.map((task: any) => (
-                <div key={task.id} className="bg-gray-950 border border-gray-800 rounded p-2 flex items-center justify-between">
+              {sortedTasks.map((task, index) => (
+                <div 
+                  key={task.id} 
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, index)}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, index)}
+                  className={`bg-gray-950 border border-gray-800 rounded p-2 flex items-center justify-between cursor-grab active:cursor-grabbing hover:border-gray-600 transition-colors ${draggedIndex === index ? 'opacity-50' : ''}`}
+                >
                   <span className="text-sm text-gray-300 truncate mr-2 flex items-center gap-2" title={task.contract?.goal}>
+                    <span className="text-xs font-bold text-gray-600">#{index + 1}</span>
                     {task.contract?.taskType && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 capitalize">
                         {task.contract.taskType === 'feature' ? '✨ Feature' :
@@ -255,13 +318,15 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
                          task.contract.taskType}
                       </span>
                     )}
-                    {task.contract?.goal || 'Ohne Titel'}
+                    <span className={task.status === 'failed' ? 'text-red-400' : ''}>
+                      {task.contract?.goal || 'Ohne Titel'}
+                    </span>
                   </span>
                   <div className="flex items-center space-x-2 flex-shrink-0">
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
-                      task.status === 'done' ? 'bg-green-900/50 text-green-400' :
+                      task.status === 'completed' ? 'bg-green-900/50 text-green-400' :
                       task.status === 'running' ? 'bg-blue-900/50 text-blue-400' :
-                      task.status === 'failed' ? 'bg-red-900/50 text-red-400' :
+                      task.status === 'failed' ? 'bg-red-900/50 text-red-400 border border-red-500/30' :
                       'bg-gray-800 text-gray-400'
                     }`}>
                       {task.status}
@@ -312,7 +377,9 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
             {workItem.assigneeName && (
               <div className="flex items-center space-x-1">
                 {workItem.assigneeAvatarUrl && (
-                  <img src={workItem.assigneeAvatarUrl} alt="Avatar" className="w-4 h-4 rounded-full" />
+                  <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-gray-700 text-[9px] text-gray-300">
+                    {workItem.assigneeName?.slice(0, 1).toUpperCase() ?? '?'}
+                  </span>
                 )}
                 <span>{workItem.assigneeName}</span>
               </div>
@@ -396,7 +463,7 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
                   <div>
                     <label className="block text-xs text-gray-500 mb-1">Bevorzugter Agent</label>
                     <select 
-                      value={executionRoute} onChange={e => setExecutionRoute(e.target.value as any)}
+                      value={executionRoute} onChange={e => setExecutionRoute(e.target.value as ExecutionRoute)}
                       className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-sm text-white"
                     >
                       <option value="local-agent">Antigravity (Local Agent)</option>

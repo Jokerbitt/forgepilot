@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import type { WorkItem } from '@/lib/models/work-item'
 
 interface MagicConfirmModalProps {
   isOpen: boolean
@@ -21,7 +22,7 @@ export function MagicConfirmModal({
 }: MagicConfirmModalProps) {
   const [projectId, setProjectId] = useState(availableProjects[0] || 'LOCAL_IDEAS')
   const [milestone, setMilestone] = useState(availableMilestones[0] || 'Backlog')
-  const [existingTickets, setExistingTickets] = useState<any[]>([])
+  const [existingTickets, setExistingTickets] = useState<WorkItem[]>([])
   const [selectedTicketId, setSelectedTicketId] = useState<string>('')
   const [loadingTickets, setLoadingTickets] = useState(false)
 
@@ -36,7 +37,7 @@ export function MagicConfirmModal({
         .then(res => res.json())
         .then(data => {
           if (data && data.items) {
-            setExistingTickets(data.items.filter((i: any) => i.source === 'local'))
+            setExistingTickets((data.items as WorkItem[]).filter((item) => item.source === 'local'))
           }
         })
         .catch(console.error)
@@ -44,7 +45,7 @@ export function MagicConfirmModal({
     } else {
       setSelectedTicketId('') // Reset when closed
     }
-  }, [isOpen, availableProjects, availableMilestones])
+  }, [isOpen, availableProjects, availableMilestones, projectId, milestone])
 
   if (!isOpen) return null
 

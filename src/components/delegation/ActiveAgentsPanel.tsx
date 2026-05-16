@@ -47,7 +47,7 @@ export function ActiveAgentsPanel() {
                 <div className="text-xs font-bold truncate">{agent.name}</div>
                 <div className="text-xs opacity-80 truncate">{del.contract.goal}</div>
                 <div className="w-full bg-gray-800/50 h-1.5 rounded-full mt-2 overflow-hidden">
-                  <div className="bg-current h-full animate-[progress_2s_ease-in-out_infinite]" style={{ width: '60%' }}></div>
+                  <div className="bg-current h-full w-3/5 animate-[progress_2s_ease-in-out_infinite]"></div>
                 </div>
               </div>
               

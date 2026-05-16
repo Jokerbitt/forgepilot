@@ -32,6 +32,10 @@ export function TaskDetailModal({ delegation, isOpen, onClose }: TaskDetailModal
   const [privacyMode, setPrivacyMode] = useState<PrivacyMode>('local')
   const [allowedTools, setAllowedTools] = useState<string[]>(['read_file', 'write_file', 'search_code'])
   
+  // Failure Handling State
+  const [errorMessage, setErrorMessage] = useState('')
+  const [failureFeedback, setFailureFeedback] = useState('')
+
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -47,6 +51,8 @@ export function TaskDetailModal({ delegation, isOpen, onClose }: TaskDetailModal
       setBranchStrategy(delegation.contract.branchStrategy)
       setPrivacyMode(delegation.contract.privacyMode)
       setAllowedTools(delegation.contract.allowedTools.length > 0 ? delegation.contract.allowedTools : ['read_file', 'write_file', 'search_code'])
+      setErrorMessage(delegation.errorMessage || '')
+      setFailureFeedback('')
     }
   }, [delegation, isOpen])
 
@@ -56,6 +62,52 @@ export function TaskDetailModal({ delegation, isOpen, onClose }: TaskDetailModal
     setAllowedTools(prev => 
       prev.includes(toolId) ? prev.filter(t => t !== toolId) : [...prev, toolId]
     )
+  }
+
+  const handleRestart = async () => {
+    if (saving) return
+    setSaving(true)
+
+    const updatedDod = definitionOfDone.split('\n').map(s => s.trim()).filter(s => s.length > 0)
+    
+    // Append feedback as a note to context if it exists
+    const appendedContext = failureFeedback.trim() 
+      ? `${delegation.contract.context}\n\n### KORREKTUR-ANWEISUNG NACH FEHLSCHLAG:\n${failureFeedback}`
+      : delegation.contract.context
+
+    const updatedDelegation: Delegation = {
+      ...delegation,
+      status: 'pending',
+      errorMessage: undefined,
+      failureFeedback: failureFeedback.trim() || undefined,
+      executionRoute,
+      contract: {
+        ...delegation.contract,
+        goal,
+        context: appendedContext,
+        llmModel: llmModel || undefined,
+        taskType: taskType ? (taskType as TaskType) : undefined,
+        riskClass,
+        definitionOfDone: updatedDod,
+        maxBudgetUsd,
+        branchStrategy,
+        privacyMode,
+        allowedTools
+      }
+    }
+
+    try {
+      await fetch('/api/delegations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedDelegation)
+      })
+      onClose()
+      window.location.reload()
+    } catch (err) {
+      console.error(err)
+      setSaving(false)
+    }
   }
 
   const handleSave = async () => {
@@ -112,6 +164,38 @@ export function TaskDetailModal({ delegation, isOpen, onClose }: TaskDetailModal
         
         <div className="p-6 overflow-y-auto space-y-6">
           
+          {status === 'failed' && (
+            <div className="bg-red-950/50 border border-red-900 rounded-lg p-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <span className="text-xl">⚠️</span>
+                <div>
+                  <h3 className="text-red-400 font-bold text-sm">Letzter Fehler / Logs</h3>
+                  <p className="text-xs text-red-300/80 mt-1 font-mono break-all">
+                    {errorMessage || 'Unbekannter Fehler während der Ausführung. Der Agent wurde unerwartet beendet.'}
+                  </p>
+                </div>
+              </div>
+              <div className="pt-2 border-t border-red-900/50">
+                <label className="block text-xs font-bold text-red-400 uppercase tracking-wider mb-2">Korrektur-Anweisung</label>
+                <textarea
+                  value={failureFeedback}
+                  onChange={e => setFailureFeedback(e.target.value)}
+                  placeholder="Was hat der Agent falsch gemacht? Was soll er anders machen?"
+                  className="w-full bg-red-950/30 border border-red-900/50 rounded-lg p-3 text-red-200 text-sm focus:border-red-500 focus:outline-none resize-none h-20"
+                />
+              </div>
+              <div className="flex justify-end pt-1">
+                <button 
+                  onClick={handleRestart}
+                  disabled={saving}
+                  className="text-xs bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded transition-colors shadow-lg shadow-red-900/20 flex items-center gap-2 disabled:opacity-50"
+                >
+                  <span>🔄</span> Task neu starten
+                </button>
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Goal / Task</label>
             <textarea
@@ -168,9 +252,9 @@ export function TaskDetailModal({ delegation, isOpen, onClose }: TaskDetailModal
                 value={riskClass} onChange={e => setRiskClass(e.target.value as RiskClass)}
                 className="w-full bg-gray-900 border border-gray-800 rounded-lg p-2.5 text-sm text-white focus:border-blue-500 focus:outline-none"
               >
-                <option value="A">Class A (High Risk)</option>
+                <option value="A">Class A (sicher)</option>
                 <option value="B">Class B (Medium Risk)</option>
-                <option value="C">Class C (Low Risk)</option>
+                <option value="C">Class C (kritisch)</option>
               </select>
             </div>
           </div>
@@ -200,7 +284,7 @@ export function TaskDetailModal({ delegation, isOpen, onClose }: TaskDetailModal
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Branch Strategy</label>
                 <select 
-                  value={branchStrategy} onChange={e => setBranchStrategy(e.target.value as any)}
+                  value={branchStrategy} onChange={e => setBranchStrategy(e.target.value as 'feature' | 'fix' | 'chore')}
                   className="w-full bg-gray-900 border border-gray-800 rounded-lg p-2 text-sm text-white focus:border-blue-500 focus:outline-none"
                 >
                   <option value="feature">Feature Branch</option>

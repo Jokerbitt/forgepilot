@@ -30,7 +30,7 @@ export function ManualTicketModal({ isOpen, onClose, availableProjects, availabl
       if (!availableProjects.includes(projectId) && availableProjects.length > 0) setProjectId(availableProjects[0])
       if (!availableMilestones.includes(milestone) && availableMilestones.length > 0) setMilestone(availableMilestones[0])
     }
-  }, [isOpen, availableProjects, availableMilestones])
+  }, [isOpen, availableProjects, availableMilestones, projectId, milestone])
 
   if (!isOpen) return null
 
@@ -211,9 +211,9 @@ export function ManualTicketModal({ isOpen, onClose, availableProjects, availabl
                 onChange={e => setRiskClass(e.target.value as RiskClass)}
                 className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2 text-white"
               >
-                <option value="A">Class A (Kritisch)</option>
+                <option value="A">Class A (sicher)</option>
                 <option value="B">Class B (Moderat)</option>
-                <option value="C">Class C (Gering)</option>
+                <option value="C">Class C (kritisch)</option>
               </select>
             </div>
             <div>

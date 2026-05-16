@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { NBAConfig } from '@/lib/nba-engine/nba-config'
+import { describeApprovalMode } from '@/lib/nba-engine/approval-policy'
 
 export default function SettingsPage() {
   const [config, setConfig] = useState<NBAConfig | null>(null)
@@ -98,6 +99,57 @@ export default function SettingsPage() {
                 <span className="text-xs text-gray-500">Mischt gelegentlich ein uraltes Ticket ins Dashboard, um es aufzuräumen.</span>
               </div>
             </label>
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold text-gray-300">Freigabe & Autopilot</h2>
+          <div className="bg-gray-900 p-4 rounded-lg space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Approval-Modus</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {(['manual', 'balanced', 'autopilot'] as const).map(mode => (
+                  <button
+                    key={mode}
+                    onClick={() => setConfig({ ...config, approvalMode: mode })}
+                    className={`px-3 py-2 rounded-lg border text-sm font-semibold transition-colors ${
+                      config.approvalMode === mode
+                        ? 'bg-blue-600 border-blue-500 text-white'
+                        : 'bg-gray-950 border-gray-800 text-gray-400 hover:text-white hover:border-gray-700'
+                    }`}
+                  >
+                    {mode === 'manual' ? 'Manuell' : mode === 'balanced' ? 'Ausgewogen' : 'Autopilot'}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 mt-2">{describeApprovalMode(config.approvalMode)}</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className={config.approvalMode === 'autopilot' ? '' : 'opacity-50'}>
+                <label className="block text-xs text-gray-500 mb-1">Autopilot Mindestscore</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={config.autopilotMinScore}
+                  onChange={e => setConfig({ ...config, autopilotMinScore: parseInt(e.target.value) })}
+                  className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700"
+                />
+              </div>
+              <div className={config.approvalMode === 'autopilot' ? '' : 'opacity-50'}>
+                <label className="block text-xs text-gray-500 mb-1">Maximale RiskClass fuer Autopilot</label>
+                <select
+                  value={config.autopilotMaxRiskClass}
+                  onChange={e => setConfig({ ...config, autopilotMaxRiskClass: e.target.value as NBAConfig['autopilotMaxRiskClass'] })}
+                  className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700"
+                >
+                  <option value="A">Class A</option>
+                  <option value="B">Class B</option>
+                  <option value="C">Class C</option>
+                </select>
+              </div>
+            </div>
           </div>
         </section>
 

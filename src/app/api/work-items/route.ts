@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import fs from 'fs'
+import path from 'path'
 import { readConnectorConfigsFromEnv } from '@/lib/connectors/config'
 import { fetchLinearWorkItems } from '@/lib/connectors/linear-items'
 import { fetchGitHubWorkItems } from '@/lib/connectors/github-items'
@@ -6,7 +8,21 @@ import type { WorkItem } from '@/lib/models/work-item'
 
 export const dynamic = 'force-dynamic'
 
-type Source = 'all' | 'linear' | 'github'
+type Source = 'all' | 'linear' | 'github' | 'local'
+
+const LOCAL_ITEMS_FILE = path.join(process.cwd(), 'config', 'local-items.json')
+
+function readLocalWorkItems(): WorkItem[] {
+  try {
+    if (!fs.existsSync(LOCAL_ITEMS_FILE)) {
+      return []
+    }
+
+    return JSON.parse(fs.readFileSync(LOCAL_ITEMS_FILE, 'utf-8')) as WorkItem[]
+  } catch {
+    return []
+  }
+}
 
 export async function GET(request: NextRequest) {
   const source = (request.nextUrl.searchParams.get('source') ?? 'all') as Source
@@ -20,6 +36,9 @@ export async function GET(request: NextRequest) {
     }
     if (source === 'all' || source === 'github') {
       fetchers.push(fetchGitHubWorkItems(configs.github ?? {}))
+    }
+    if (source === 'all' || source === 'local') {
+      fetchers.push(Promise.resolve(readLocalWorkItems()))
     }
 
     const results = await Promise.allSettled(fetchers)

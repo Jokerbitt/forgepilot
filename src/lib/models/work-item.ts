@@ -1,4 +1,4 @@
-export type WorkItemSource = 'linear' | 'github'
+export type WorkItemSource = 'linear' | 'github' | 'local'
 export type WorkItemType = 'ticket' | 'pr' | 'issue' | 'ci-alert'
 export type WorkItemStatus = 'backlog' | 'todo' | 'in-progress' | 'in-review' | 'done' | 'cancelled'
 export type RiskClass = 'A' | 'B' | 'C'

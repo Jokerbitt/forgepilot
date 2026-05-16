@@ -9,6 +9,28 @@
   "backlogPenaltyAgeDays": 90,
   "backlogPenaltyScore": 20,
   "showTriageJoker": true,
-  "maxRecommendations": 5,
-  "pinnedItems": []
+  "maxRecommendations": 8,
+  "pinnedItems": [
+    "LOCAL-1001"
+  ],
+  "customLlmModels": [
+    "ollama/deepseek-coder-v2",
+    "ollama/llama-3.1-8b",
+    "openrouter/qwen-2.5-coder"
+  ],
+  "projects": [
+    "FORGEPILOT",
+    "LOCAL_IDEAS",
+    "CLIENT_DEMO"
+  ],
+  "milestones": [
+    "M4 UX Polish",
+    "M5 Execution Bridge",
+    "M6 Knowledge",
+    "Security",
+    "Backlog"
+  ],
+  "approvalMode": "balanced",
+  "autopilotMinScore": 85,
+  "autopilotMaxRiskClass": "A"
 }

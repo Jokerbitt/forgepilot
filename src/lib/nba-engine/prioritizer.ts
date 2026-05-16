@@ -71,9 +71,11 @@ export function prioritizeItems(items: WorkItem[]): NBARecommendation[] {
     })
     
     if (oldItems.length > 0) {
-      // Wähle ein zufälliges altes Ticket
-      const randomIndex = Math.floor(Math.random() * oldItems.length)
-      const joker = oldItems[randomIndex]
+      const joker = oldItems.sort((a, b) => {
+        const aUpdatedAt = a.workItem.updatedAt ? new Date(a.workItem.updatedAt).getTime() : 0
+        const bUpdatedAt = b.workItem.updatedAt ? new Date(b.workItem.updatedAt).getTime() : 0
+        return aUpdatedAt - bUpdatedAt
+      })[0]
       
       // Passe es für Triage an
       joker.suggestedAction = 'research'

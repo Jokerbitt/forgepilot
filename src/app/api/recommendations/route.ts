@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import fs from 'fs'
+import path from 'path'
 import { readConnectorConfigsFromEnv } from '@/lib/connectors/config'
 import { fetchLinearWorkItems } from '@/lib/connectors/linear-items'
 import { fetchGitHubWorkItems } from '@/lib/connectors/github-items'
@@ -6,6 +8,20 @@ import { prioritizeItems } from '@/lib/nba-engine/prioritizer'
 import type { WorkItem } from '@/lib/models/work-item'
 
 export const dynamic = 'force-dynamic'
+
+const LOCAL_ITEMS_FILE = path.join(process.cwd(), 'config', 'local-items.json')
+
+function readLocalWorkItems(): WorkItem[] {
+  try {
+    if (!fs.existsSync(LOCAL_ITEMS_FILE)) {
+      return []
+    }
+
+    return JSON.parse(fs.readFileSync(LOCAL_ITEMS_FILE, 'utf8')) as WorkItem[]
+  } catch {
+    return []
+  }
+}
 
 export async function GET(request: NextRequest) {
   const configs = readConnectorConfigsFromEnv(process.env)
@@ -21,18 +37,7 @@ export async function GET(request: NextRequest) {
     const items: WorkItem[] = []
     const errors: string[] = []
     
-    // Load local items
-    try {
-      const fs = require('fs')
-      const path = require('path')
-      const localItemsPath = path.join(process.cwd(), 'config', 'local-items.json')
-      if (fs.existsSync(localItemsPath)) {
-        const localItems = JSON.parse(fs.readFileSync(localItemsPath, 'utf8'))
-        items.push(...localItems)
-      }
-    } catch (e) {
-      console.error('Failed to load local items', e)
-    }
+    items.push(...readLocalWorkItems())
 
     for (const result of results) {
       if (result.status === 'fulfilled') {
