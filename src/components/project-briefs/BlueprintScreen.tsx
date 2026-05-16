@@ -40,7 +40,10 @@ export function BlueprintScreen({ initialBrief }: Props) {
   const [generating, startGenerate] = useTransition()
   const [approving, startApprove] = useTransition()
   const [delegating, startDelegate] = useTransition()
+  const [researching, startResearch] = useTransition()
   const [generationNotes, setGenerationNotes] = useState('')
+  const [researchNotes, setResearchNotes] = useState('')
+  const [researchError, setResearchError] = useState('')
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
   const [showApproveConfirm, setShowApproveConfirm] = useState(false)
   const [delegationError, setDelegationError] = useState('')
@@ -109,6 +112,32 @@ export function BlueprintScreen({ initialBrief }: Props) {
     router.push('/project-briefs')
   }
 
+  function handleResearch() {
+    setResearchError('')
+    setResearchNotes('')
+    startResearch(async () => {
+      const res = await fetch(`/api/project-briefs/${brief.id}/research-run`, {
+        method: 'POST',
+      })
+      if (res.ok) {
+        const data = await res.json() as {
+          generationNotes: string
+          newRequirementsCount: number
+          newRisksCount: number
+        }
+        setResearchNotes(
+          `Research abgeschlossen: +${data.newRequirementsCount} Requirements, +${data.newRisksCount} Risiken. ${data.generationNotes}`
+        )
+        // Reload brief to get enriched requirements/risks
+        const briefRes = await fetch(`/api/project-briefs/${brief.id}`)
+        if (briefRes.ok) setBrief(await briefRes.json() as ProjectBrief)
+      } else {
+        const err = await res.json() as { error?: string }
+        setResearchError(err.error ?? 'Research fehlgeschlagen')
+      }
+    })
+  }
+
   function handleDelegate() {
     setDelegationError('')
     startDelegate(async () => {
@@ -155,17 +184,30 @@ export function BlueprintScreen({ initialBrief }: Props) {
           {/* Action buttons */}
           <div className="flex flex-wrap gap-2">
             {brief.status !== 'accepted' && brief.status !== 'archived' && (
-              <button
-                onClick={handleGenerate}
-                disabled={generating}
-                className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center gap-1.5"
-              >
-                {generating ? (
-                  <><span className="animate-spin">⟳</span> Generiere…</>
-                ) : (
-                  <>✨ Requirements generieren</>
-                )}
-              </button>
+              <>
+                <button
+                  onClick={handleResearch}
+                  disabled={researching || generating}
+                  className="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center gap-1.5"
+                >
+                  {researching ? (
+                    <><span className="animate-spin">⟳</span> Recherchiert…</>
+                  ) : (
+                    <>🔍 Research starten</>
+                  )}
+                </button>
+                <button
+                  onClick={handleGenerate}
+                  disabled={generating || researching}
+                  className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center gap-1.5"
+                >
+                  {generating ? (
+                    <><span className="animate-spin">⟳</span> Generiere…</>
+                  ) : (
+                    <>✨ Requirements generieren</>
+                  )}
+                </button>
+              </>
             )}
 
             {canApprove && (
@@ -207,6 +249,24 @@ export function BlueprintScreen({ initialBrief }: Props) {
           <div className="mb-4 p-3 bg-blue-950/40 border border-blue-800/50 rounded-lg text-sm text-blue-300 flex gap-2">
             <span className="shrink-0">💡</span>
             <span><strong>KI-Annahmen:</strong> {generationNotes}</span>
+          </div>
+        )}
+
+        {/* Research Success Banner */}
+        {researchNotes && (
+          <div className="mb-4 p-3 bg-indigo-950/40 border border-indigo-800/50 rounded-lg text-sm text-indigo-300 flex items-center gap-2">
+            <span className="shrink-0">🔍</span>
+            <span>{researchNotes}</span>
+            <button onClick={() => setResearchNotes('')} className="ml-auto text-indigo-500 hover:text-indigo-300">✕</button>
+          </div>
+        )}
+
+        {/* Research Error Banner */}
+        {researchError && (
+          <div className="mb-4 p-3 bg-red-950/40 border border-red-800/50 rounded-lg text-sm text-red-300 flex items-center gap-2">
+            <span>⚠️</span>
+            <span>{researchError}</span>
+            <button onClick={() => setResearchError('')} className="ml-auto text-red-500 hover:text-red-300">✕</button>
           </div>
         )}
 
