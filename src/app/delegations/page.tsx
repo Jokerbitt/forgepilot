@@ -276,6 +276,35 @@ function DelegationsContent() {
 
   const handleDrop = () => setDraggedIndex(null)
 
+  // ── CSV Export ──────────────────────────────────────────────────────────
+  const handleExportCsv = () => {
+    const rows = sortedDelegations
+    const header = ['ID', 'Ticket', 'Ziel', 'Status', 'RiskClass', 'Route', 'Budget ($)', 'Tatsächlich ($)', 'Erstellt', 'Aktualisiert']
+    const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`
+    const lines = [
+      header.map(escape).join(','),
+      ...rows.map(d => [
+        d.id,
+        d.contract.workItemId,
+        d.contract.goal,
+        d.status,
+        d.contract.riskClass,
+        d.executionRoute,
+        d.contract.maxBudgetUsd.toFixed(2),
+        d.actualCostUsd != null ? d.actualCostUsd.toFixed(4) : '',
+        new Date(d.createdAt).toLocaleString('de-DE'),
+        new Date(d.updatedAt).toLocaleString('de-DE'),
+      ].map(escape).join(',')),
+    ]
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `forgepilot-delegations-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   // ── Filters ─────────────────────────────────────────────────────────────
   const uniqueProjects = Array.from(
     new Set(delegations.map(d => d.contract.workItemId.split('-')[0] || 'Unknown'))
@@ -385,6 +414,15 @@ function DelegationsContent() {
                   🗑 Aufräumen ({terminalCount})
                 </button>
               )
+            )}
+            {delegations.length > 0 && (
+              <button
+                onClick={handleExportCsv}
+                className="text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-700 px-3 py-2 rounded-lg transition-colors"
+                title="Aktuelle Ansicht als CSV exportieren"
+              >
+                ↓ CSV
+              </button>
             )}
             <button
               onClick={() => setShowNewDialog(true)}
