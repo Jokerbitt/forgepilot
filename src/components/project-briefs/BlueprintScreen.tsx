@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import type { ProjectBrief, Requirement, UseCase, Risk } from '@/lib/models/project-brief'
+import type { ProjectBrief, Requirement, UseCase, Risk, Finding, FindingConfidence } from '@/lib/models/project-brief'
 
 interface Props {
   initialBrief: ProjectBrief
@@ -341,6 +341,11 @@ export function BlueprintScreen({ initialBrief }: Props) {
                 Research Brief ansehen →
               </Link>
             </div>
+
+            {/* Research Findings */}
+            {brief.lastResearchRun && (
+              <FindingsPanel run={brief.lastResearchRun} />
+            )}
           </div>
 
           {/* MIDDLE — Requirements */}
@@ -468,6 +473,95 @@ export function BlueprintScreen({ initialBrief }: Props) {
 
 // ── Sub-components ──────────────────────────────────────────────
 
+const CONFIDENCE_COLORS: Record<FindingConfidence, string> = {
+  high:      'bg-green-900/40 text-green-400',
+  medium:    'bg-yellow-900/40 text-yellow-400',
+  low:       'bg-red-900/40 text-red-400',
+  uncertain: 'bg-gray-800 text-gray-500',
+}
+
+function FindingsPanel({ run }: { run: import('@/lib/models/project-brief').ResearchRun }) {
+  const [expanded, setExpanded] = useState(false)
+  const summaryOutput = run.outputs.find(o => o.type === 'findings_summary')
+
+  return (
+    <div className="bg-gray-900 border border-indigo-900/40 rounded-xl p-4">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-xs font-semibold text-indigo-400 uppercase tracking-wider">Research Findings</h2>
+        <div className="flex items-center gap-2">
+          {run.confidenceScore !== undefined && (
+            <span className="text-xs text-gray-500">
+              Konfidenz: <span className="text-white">{run.confidenceScore}%</span>
+            </span>
+          )}
+          {run.actualCostUsd !== undefined && run.actualCostUsd > 0 && (
+            <span className="text-xs text-gray-600">${run.actualCostUsd.toFixed(4)}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Summary */}
+      {summaryOutput && (
+        <p className="text-xs text-gray-400 mb-3 line-clamp-3">{summaryOutput.content}</p>
+      )}
+
+      {/* Findings list */}
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors mb-2 flex items-center gap-1"
+      >
+        {expanded ? '▲' : '▼'} {run.findings.length} Findings
+      </button>
+
+      {expanded && (
+        <div className="space-y-2">
+          {run.findings.map(f => (
+            <FindingCard key={f.id} finding={f} />
+          ))}
+        </div>
+      )}
+
+      {/* Open uncertainties */}
+      {run.openUncertainties.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-gray-800">
+          <p className="text-xs text-yellow-500 mb-1.5">⚠ Offene Annahmen ({run.openUncertainties.length})</p>
+          <ul className="space-y-1">
+            {run.openUncertainties.map((u, i) => (
+              <li key={i} className="text-xs text-gray-500 line-clamp-2">· {u}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FindingCard({ finding }: { finding: Finding }) {
+  return (
+    <div className="rounded-lg border border-gray-800 bg-gray-800/30 p-2.5">
+      <div className="flex items-start gap-2">
+        <span className={`shrink-0 px-1.5 py-0.5 text-xs rounded font-medium ${CONFIDENCE_COLORS[finding.confidence]}`}>
+          {finding.confidence}
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs text-white leading-snug">{finding.claim}</p>
+          {finding.summary && (
+            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{finding.summary}</p>
+          )}
+          <div className="flex flex-wrap gap-1 mt-1">
+            {finding.isOpenAssumption && (
+              <span className="px-1 py-0.5 text-xs bg-yellow-950/40 text-yellow-600 rounded">Annahme</span>
+            )}
+            {finding.tags.slice(0, 2).map(tag => (
+              <span key={tag} className="px-1 py-0.5 text-xs bg-gray-900 text-gray-600 rounded">{tag}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function RequirementCard({
   req,
   onStatusChange,
@@ -490,6 +584,9 @@ function RequirementCard({
             </span>
             {req.source === 'ai_proposed' && !isAccepted && (
               <span className="px-1.5 py-0.5 text-xs rounded bg-blue-950/50 text-blue-400">KI</span>
+            )}
+            {req.source === 'research' && !isAccepted && (
+              <span className="px-1.5 py-0.5 text-xs rounded bg-indigo-950/50 text-indigo-400">🔍 Research</span>
             )}
             {isAccepted && <span className="text-xs text-green-400">✓</span>}
           </div>
