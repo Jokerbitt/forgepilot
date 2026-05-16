@@ -63,6 +63,20 @@ export default function DelegationsPage() {
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>('Alle')
   const [searchQuery, setSearchQuery] = useState<string>('')
 
+  // Sort
+  type SortKey = 'goal' | 'status' | 'time' | 'cost'
+  const [sortKey, setSortKey] = useState<SortKey | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
   // Drag & Drop
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
 
@@ -253,6 +267,28 @@ export default function DelegationsPage() {
 
     return matchStatus && matchProject && matchApproval && matchSearch
   })
+
+  const STATUS_SORT_WEIGHT: Record<string, number> = {
+    running: 0, approved: 1, pending: 2, completed: 3, failed: 4, cancelled: 5,
+  }
+
+  const sortedDelegations = sortKey
+    ? [...filteredDelegations].sort((a, b) => {
+        let cmp = 0
+        if (sortKey === 'goal') {
+          cmp = a.contract.goal.localeCompare(b.contract.goal, 'de')
+        } else if (sortKey === 'status') {
+          cmp = (STATUS_SORT_WEIGHT[a.status] ?? 9) - (STATUS_SORT_WEIGHT[b.status] ?? 9)
+        } else if (sortKey === 'time') {
+          cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        } else if (sortKey === 'cost') {
+          const ca = a.actualCostUsd ?? a.costEstimateUsd ?? 0
+          const cb = b.actualCostUsd ?? b.costEstimateUsd ?? 0
+          cmp = ca - cb
+        }
+        return sortDir === 'asc' ? cmp : -cmp
+      })
+    : filteredDelegations
 
   const runningCount = delegations.filter(d => d.status === 'running').length
   const pendingCount = delegations.filter(d => d.status === 'pending').length
@@ -458,15 +494,30 @@ export default function DelegationsPage() {
                   <thead>
                     <tr className="bg-gray-950 border-b border-gray-800 text-xs uppercase text-gray-500">
                       <th className="p-3 font-medium w-10 text-center">#</th>
-                      <th className="p-3 font-medium">Ticket / Ziel</th>
+                      <th
+                        className="p-3 font-medium cursor-pointer hover:text-gray-300 select-none"
+                        onClick={() => handleSort('goal')}
+                      >
+                        Ticket / Ziel {sortKey === 'goal' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="opacity-30">⇅</span>}
+                      </th>
                       <th className="p-3 font-medium hidden md:table-cell">Agent</th>
-                      <th className="p-3 font-medium">Status</th>
-                      <th className="p-3 font-medium hidden sm:table-cell">Zeit</th>
+                      <th
+                        className="p-3 font-medium cursor-pointer hover:text-gray-300 select-none"
+                        onClick={() => handleSort('status')}
+                      >
+                        Status {sortKey === 'status' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="opacity-30">⇅</span>}
+                      </th>
+                      <th
+                        className="p-3 font-medium hidden sm:table-cell cursor-pointer hover:text-gray-300 select-none"
+                        onClick={() => handleSort('time')}
+                      >
+                        Zeit {sortKey === 'time' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="opacity-30">⇅</span>}
+                      </th>
                       <th className="p-3 font-medium text-right">Aktionen</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-800/70">
-                    {filteredDelegations.map((del, index) => {
+                    {sortedDelegations.map((del, index) => {
                       const isDone = del.status === 'completed' || del.status === 'failed' || del.status === 'cancelled'
                       const canCancel = del.status === 'pending' || del.status === 'approved'
                       const canDelete = isDone
@@ -693,7 +744,7 @@ export default function DelegationsPage() {
                 </table>
               </div>
 
-              {filteredDelegations.length === 0 && (
+              {sortedDelegations.length === 0 && (
                 <div className="text-center py-12 text-gray-600">
                   <div className="text-3xl mb-2">🔍</div>
                   <p className="text-sm">Keine Delegationen für diesen Filter</p>
