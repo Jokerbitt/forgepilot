@@ -7,6 +7,8 @@ import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/Elaps
 import { NewDelegationDialog } from '@/components/delegation/NewDelegationDialog'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 
+type ApprovalFilter = 'Alle' | 'approval-required' | 'auto-approved' | 'risk-blocked'
+
 const STATUS_COLORS: Record<string, string> = {
   pending:   'bg-yellow-900/50 text-yellow-500 border-yellow-700',
   approved:  'bg-blue-900/50 text-blue-400 border-blue-700',
@@ -34,6 +36,13 @@ const GOAL_STYLE: Record<string, string> = {
   cancelled: 'line-through text-gray-600',
 }
 
+const APPROVAL_FILTER_LABELS: Record<ApprovalFilter, string> = {
+  Alle: 'Alle',
+  'approval-required': 'Freigabe noetig',
+  'auto-approved': 'Auto-freigegeben',
+  'risk-blocked': 'RiskClass C',
+}
+
 export default function DelegationsPage() {
   const [delegations, setDelegations] = useState<Delegation[]>([])
   const [loading, setLoading] = useState(true)
@@ -43,6 +52,7 @@ export default function DelegationsPage() {
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('Alle')
   const [projectFilter, setProjectFilter] = useState<string>('Alle')
+  const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>('Alle')
 
   // Drag & Drop
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
@@ -123,6 +133,34 @@ export default function DelegationsPage() {
     })
   }
 
+  const handleApproveDelegation = async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    const delegation = delegations.find(d => d.id === id)
+    if (!delegation || delegation.contract.riskClass === 'C') return
+
+    const now = new Date().toISOString()
+    const updateData: Delegation = {
+      ...delegation,
+      status: 'approved',
+      contract: {
+        ...delegation.contract,
+        requiresApproval: false,
+      },
+      logs: [
+        ...(delegation.logs ?? []),
+        { timestamp: now, type: 'success', message: 'Manuell freigegeben.' },
+      ],
+      updatedAt: now,
+    }
+
+    applyUpdate(updateData)
+    await fetch('/api/delegations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updateData),
+    })
+  }
+
   const handleRowDelete = async (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
     await fetch(`/api/delegations?id=${id}`, { method: 'DELETE' })
@@ -154,11 +192,20 @@ export default function DelegationsPage() {
   const filteredDelegations = delegations.filter(d => {
     const matchStatus  = statusFilter === 'Alle' || d.status === statusFilter
     const matchProject = projectFilter === 'Alle' || d.contract.workItemId.startsWith(projectFilter)
-    return matchStatus && matchProject
+    const matchApproval =
+      approvalFilter === 'Alle' ||
+      (approvalFilter === 'approval-required' && d.contract.requiresApproval) ||
+      (approvalFilter === 'auto-approved' && !d.contract.requiresApproval) ||
+      (approvalFilter === 'risk-blocked' && d.contract.riskClass === 'C')
+
+    return matchStatus && matchProject && matchApproval
   })
 
   const runningCount = delegations.filter(d => d.status === 'running').length
   const pendingCount = delegations.filter(d => d.status === 'pending').length
+  const approvalRequiredCount = delegations.filter(d => d.contract.requiresApproval).length
+  const autoApprovedCount = delegations.filter(d => !d.contract.requiresApproval).length
+  const riskBlockedCount = delegations.filter(d => d.contract.riskClass === 'C').length
 
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6 md:p-8">
@@ -176,6 +223,9 @@ export default function DelegationsPage() {
               )}
               {pendingCount > 0 && (
                 <span className="text-yellow-400 font-medium">{pendingCount} ausstehend • </span>
+              )}
+              {approvalRequiredCount > 0 && (
+                <span className="text-yellow-400 font-medium">{approvalRequiredCount} Freigabe noetig • </span>
               )}
               {delegations.length} Delegation{delegations.length !== 1 ? 'en' : ''} gesamt
             </p>
@@ -235,6 +285,31 @@ export default function DelegationsPage() {
                 ))}
               </div>
 
+              <div className="flex flex-wrap items-center gap-1.5 pl-4 border-l border-gray-800">
+                <span className="text-xs text-gray-500 mr-1 uppercase tracking-wide">Freigabe</span>
+                {(['Alle', 'approval-required', 'auto-approved', 'risk-blocked'] as ApprovalFilter[]).map(filter => {
+                  const count =
+                    filter === 'approval-required' ? approvalRequiredCount :
+                    filter === 'auto-approved' ? autoApprovedCount :
+                    filter === 'risk-blocked' ? riskBlockedCount :
+                    delegations.length
+
+                  return (
+                    <button
+                      key={filter}
+                      onClick={() => setApprovalFilter(filter)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        approvalFilter === filter
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700'
+                      }`}
+                    >
+                      {APPROVAL_FILTER_LABELS[filter]} ({count})
+                    </button>
+                  )
+                })}
+              </div>
+
               {uniqueProjects.length > 1 && (
                 <div className="flex flex-wrap items-center gap-1.5 pl-4 border-l border-gray-800">
                   <span className="text-xs text-gray-500 mr-1 uppercase tracking-wide">Projekt</span>
@@ -284,6 +359,7 @@ export default function DelegationsPage() {
                       const isDone = del.status === 'completed' || del.status === 'failed' || del.status === 'cancelled'
                       const canCancel = del.status === 'pending' || del.status === 'approved'
                       const canDelete = isDone
+                      const canApprove = del.status === 'pending' && del.contract.requiresApproval && del.contract.riskClass !== 'C'
 
                       return (
                         <tr
@@ -395,6 +471,17 @@ export default function DelegationsPage() {
                                 </div>
                               ) : (
                                 <>
+                                  {/* Approve waiting Class A/B delegations */}
+                                  {canApprove && (
+                                    <button
+                                      onClick={e => handleApproveDelegation(del.id, e)}
+                                      className="text-xs bg-green-900/50 text-green-300 hover:bg-green-900 px-2 py-1 rounded border border-green-800/70 transition-colors"
+                                      title="Freigeben"
+                                    >
+                                      Freigeben
+                                    </button>
+                                  )}
+
                                   {/* Cancel — for pending/approved */}
                                   {canCancel && (
                                     <button
