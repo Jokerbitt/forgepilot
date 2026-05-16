@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { ManualTicketModal } from './ManualTicketModal'
 import { MagicConfirmModal } from './MagicConfirmModal'
 
@@ -12,6 +13,7 @@ const SUGGESTIONS = [
 ]
 
 export function MagicCreate() {
+  const router = useRouter()
   const [prompt, setPrompt] = useState('')
   const [loading, setLoading] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -73,7 +75,7 @@ export function MagicCreate() {
       })
       
       setPrompt('')
-      window.location.reload()
+      router.refresh()
     } catch (error) {
       console.error('Failed to create ticket', error)
       setLoading(false)

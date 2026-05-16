@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-
+import { useRouter } from 'next/navigation'
 import type { Delegation } from '@/lib/models/delegation'
 
 interface ReportModalProps {
@@ -10,6 +10,7 @@ interface ReportModalProps {
 }
 
 export function ReportModal({ delegation, isOpen, onClose }: ReportModalProps) {
+  const router = useRouter()
   const [feedback, setFeedback] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -94,7 +95,7 @@ export function ReportModal({ delegation, isOpen, onClose }: ReportModalProps) {
                 setSubmitting(false)
                 setFeedback('')
                 onClose()
-                window.location.reload()
+                router.refresh()
               }}
               className="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 disabled:hover:bg-yellow-600 text-white rounded font-bold text-sm transition-colors flex items-center gap-2"
             >

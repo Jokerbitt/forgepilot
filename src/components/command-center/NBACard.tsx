@@ -1,5 +1,6 @@
 import type { NBARecommendation } from '@/lib/models/nba'
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import type { ExecutionRoute, PrivacyMode, Delegation } from '@/lib/models/delegation'
 import { TaskDetailModal } from '@/components/delegation/TaskDetailModal'
 import type { NBAConfig } from '@/lib/nba-engine/nba-config'
@@ -16,6 +17,7 @@ const actionTranslations: Record<string, string> = {
 
 export function NBACard({ rec }: { rec: NBARecommendation }) {
   const { workItem, score, suggestedAction, rationale } = rec
+  const router = useRouter()
   const [isPinning, setIsPinning] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   
@@ -87,7 +89,7 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
     })
     
     // Force a reload to get new scores
-    window.location.reload()
+    router.refresh()
   }
 
   const handleMagicRefine = () => {
@@ -119,7 +121,7 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
             existingTicketId: workItem.id
           })
         })
-        window.location.reload()
+        router.refresh()
       } catch (err) {
         console.error(err)
         setCreatingQuickTask(false)
@@ -144,7 +146,7 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
         goal: '',
         context: '',
         definitionOfDone: [],
-        riskClass: 'C',
+        riskClass: 'A',
         maxBudgetUsd: 1.0,
         allowedTools: ['read_file', 'write_file'],
         branchStrategy: 'feature',
@@ -209,7 +211,7 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
-      window.location.reload()
+      router.refresh()
     } catch (err) {
       console.error(err)
       setDelegating(false)
