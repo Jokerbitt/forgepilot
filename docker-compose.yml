@@ -2,13 +2,12 @@ version: '3.8'
 
 services:
   forgepilot:
-    image: forgepilot:latest
+    image: ghcr.io/jokerbitt/forgepilot:latest
     container_name: forgepilot
     restart: unless-stopped
     ports:
       - "3001:3000"
     environment:
-      # API Keys — set via .env on NAS or via ForgePilot Settings UI
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - LINEAR_API_KEY=${LINEAR_API_KEY:-}
       - LINEAR_TEAM_ID=${LINEAR_TEAM_ID:-}
@@ -17,7 +16,6 @@ services:
       - GITHUB_REPOSITORIES=${GITHUB_REPOSITORIES:-forgepilot}
       - NODE_ENV=production
     volumes:
-      # Persistent data: api-keys, project-briefs, running-processes
       - forgepilot-config:/app/config
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
@@ -26,6 +24,30 @@ services:
       retries: 3
       start_period: 15s
 
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: forgepilot-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://192.168.0.136:5678
+      # Interne URL damit n8n ForgePilot erreicht (Docker-Netzwerk)
+      - FORGEPILOT_URL=http://forgepilot:3000
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-forgepilot}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-change-me-in-production}
+    volumes:
+      - n8n-data:/home/node/.n8n
+    depends_on:
+      - forgepilot
+
 volumes:
   forgepilot-config:
+    driver: local
+  n8n-data:
     driver: local
