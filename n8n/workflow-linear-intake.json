@@ -1,6 +1,6 @@
 {
   "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "name": "Linear → ForgePilot Intake v2",
+  "name": "Linear → ForgePilot Intake v3 (Research)",
   "nodes": [
     {
       "parameters": {
@@ -40,7 +40,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json.body;\nconst issue = body.data || body;\n\nconst title = (issue.title || issue.data?.title || 'Neues Linear-Ticket').trim();\nconst description = issue.description || issue.data?.description || '';\nconst priority = issue.priority ?? issue.data?.priority ?? 0;\nconst labels = (issue.labels || issue.data?.labels || []).map(l => (l.name || '').toLowerCase());\nconst issueId = issue.id || issue.data?.id || '';\nconst identifier = issue.identifier || issue.data?.identifier || '';\nconst titleLower = title.toLowerCase();\n\n// Smarter Scope: Labels > Priority > Title-Keywords\nlet scope = 'standard';\n\nif (labels.some(l => ['bug', 'hotfix', 'quick-fix', 'fix'].includes(l))) {\n  scope = 'quick';\n} else if (labels.some(l => ['epic', 'research', 'architecture', 'spike', 'deep'].includes(l))) {\n  scope = 'deep';\n} else if (priority <= 1) {\n  scope = 'deep';\n} else if (priority >= 3) {\n  scope = 'quick';\n}\n\n// Title-Keyword Override (z.B. [deep] Research: Architektur)\nif (titleLower.includes('[deep]') || titleLower.includes('spike') || titleLower.includes('architektur')) scope = 'deep';\nif (titleLower.includes('[quick]') || titleLower.includes('[fix]')) scope = 'quick';\n\nreturn [{\n  json: {\n    title,\n    rawIdea: description || title,\n    problemStatement: description,\n    targetAudience: 'ForgePilot-Nutzer',\n    desiredOutcome: `Issue '${title}' vollständig umsetzen`,\n    scope,\n    privacyMode: 'local',\n    source: 'linear-webhook',\n    linearIssueId: issueId,\n    linearIdentifier: identifier,\n    _issueId: issueId\n  }\n}];"
+        "jsCode": "const body = $input.first().json.body;\nconst issue = body.data || body;\n\nconst title = (issue.title || issue.data?.title || 'Neues Linear-Ticket').trim();\nconst description = issue.description || issue.data?.description || '';\nconst priority = issue.priority ?? issue.data?.priority ?? 0;\nconst labels = (issue.labels || issue.data?.labels || []).map(l => (l.name || '').toLowerCase());\nconst issueId = issue.id || issue.data?.id || '';\nconst identifier = issue.identifier || issue.data?.identifier || '';\nconst titleLower = title.toLowerCase();\n\nlet scope = 'standard';\nif (labels.some(l => ['bug', 'hotfix', 'quick-fix', 'fix'].includes(l))) {\n  scope = 'quick';\n} else if (labels.some(l => ['epic', 'research', 'architecture', 'spike', 'deep'].includes(l))) {\n  scope = 'deep';\n} else if (priority <= 1) {\n  scope = 'deep';\n} else if (priority >= 3) {\n  scope = 'quick';\n}\nif (titleLower.includes('[deep]') || titleLower.includes('spike') || titleLower.includes('architektur')) scope = 'deep';\nif (titleLower.includes('[quick]') || titleLower.includes('[fix]')) scope = 'quick';\n\nreturn [{\n  json: {\n    title,\n    rawIdea: description || title,\n    problemStatement: description,\n    targetAudience: 'ForgePilot-Nutzer',\n    desiredOutcome: `Issue '${title}' vollständig umsetzen`,\n    scope,\n    privacyMode: 'local',\n    source: 'linear-webhook',\n    linearIssueId: issueId,\n    linearIdentifier: identifier,\n    _issueId: issueId\n  }\n}];"
       },
       "id": "map-payload",
       "name": "Linear → Intake Format",
@@ -59,9 +59,7 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json) }}",
-        "options": {
-          "response": { "response": { "neverError": true } }
-        }
+        "options": { "response": { "response": { "neverError": true } } }
       },
       "id": "post-intake",
       "name": "POST /api/intake",
@@ -93,23 +91,23 @@
     },
     {
       "parameters": {
-        "jsCode": "const issueId = $('Linear → Intake Format').first().json._issueId;\nconst briefId = $('POST /api/intake').first().json.id || '';\nconst title = $('Linear → Intake Format').first().json.title;\nconst scope = $('Linear → Intake Format').first().json.scope;\nconst scopeEmoji = scope === 'deep' ? '🔬' : scope === 'quick' ? '⚡' : '📋';\n\nconst body = `✅ **In ForgePilot verarbeitet**\\n\\n${scopeEmoji} Scope: **${scope}**\\n\\n→ http://192.168.0.136:3002/project-briefs/${briefId}`;\n\nconst query = `mutation { commentCreate(input: { issueId: \"${issueId}\", body: \"${body.replace(/\"/g, '\\\\\"').replace(/\\n/g, '\\\\n')}\" }) { success } }`;\n\nreturn [{ json: { query, issueId } }];"
+        "jsCode": "const issueId = $('Linear → Intake Format').first().json._issueId;\nconst briefId = $('POST /api/intake').first().json.id || '';\nconst scope = $('Linear → Intake Format').first().json.scope;\nconst scopeEmoji = scope === 'deep' ? '🔬' : scope === 'quick' ? '⚡' : '📋';\nconst body = `✅ **In ForgePilot verarbeitet** — KI-Research läuft...\\n\\n${scopeEmoji} Scope: **${scope}**\\n\\n→ http://100.94.55.15:3002/project-briefs/${briefId}`;\nconst query = `mutation { commentCreate(input: { issueId: \"${issueId}\", body: \"${body.replace(/\"/g, '\\\\\"').replace(/\\n/g, '\\\\n')}\" }) { success } }`;\nreturn [{ json: { query, issueId, briefId } }];"
       },
       "id": "prepare-success-comment",
       "name": "Kommentar (Erfolg)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1340, 180]
+      "position": [1340, 120]
     },
     {
       "parameters": {
-        "jsCode": "const issueId = $('Linear → Intake Format').first().json._issueId;\nconst response = $('POST /api/intake').first().json;\nconst errorMsg = response.error || response.message || JSON.stringify(response).slice(0, 200);\n\nconst body = `⚠️ **ForgePilot-Fehler**\\n\\nDas Ticket konnte nicht als Brief angelegt werden:\\n\\`${errorMsg}\\`\\n\\n→ Manuell anlegen: http://192.168.0.136:3002/project-briefs/new`;\n\nconst query = `mutation { commentCreate(input: { issueId: \"${issueId}\", body: \"${body.replace(/\"/g, '\\\\\"').replace(/\\n/g, '\\\\n')}\" }) { success } }`;\n\nreturn [{ json: { query, issueId } }];"
+        "jsCode": "const issueId = $('Linear → Intake Format').first().json._issueId;\nconst response = $('POST /api/intake').first().json;\nconst errorMsg = response.error || response.message || JSON.stringify(response).slice(0, 200);\nconst body = `⚠️ **ForgePilot-Fehler**\\n\\nDas Ticket konnte nicht als Brief angelegt werden:\\n\\`${errorMsg}\\`\\n\\n→ Manuell anlegen: http://100.94.55.15:3002/project-briefs/new`;\nconst query = `mutation { commentCreate(input: { issueId: \"${issueId}\", body: \"${body.replace(/\"/g, '\\\\\"').replace(/\\n/g, '\\\\n')}\" }) { success } }`;\nreturn [{ json: { query, issueId } }];"
       },
       "id": "prepare-error-comment",
       "name": "Kommentar (Fehler)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1340, 420]
+      "position": [1340, 480]
     },
     {
       "parameters": {
@@ -131,7 +129,7 @@
       "name": "Linear: Erfolg-Kommentar",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1560, 180]
+      "position": [1560, 120]
     },
     {
       "parameters": {
@@ -153,7 +151,76 @@
       "name": "Linear: Fehler-Kommentar",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1560, 420]
+      "position": [1560, 480]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://forgepilot:3000/api/project-briefs/{{ $('Kommentar (Erfolg)').first().json.briefId }}/research-run",
+        "options": {
+          "timeout": 120000,
+          "response": { "response": { "neverError": true } }
+        }
+      },
+      "id": "research-run",
+      "name": "Research starten",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "const issueId = $('Linear → Intake Format').first().json._issueId;\nconst briefId = $('Kommentar (Erfolg)').first().json.briefId;\nconst research = $input.first().json;\n\nif (!research || research.error) {\n  return [{ json: { skip: true } }];\n}\n\nconst score = research.confidenceScore ?? research.lastResearchRun?.confidenceScore ?? 0;\nconst summary = research.summary || research.lastResearchRun?.summary || 'Research abgeschlossen.';\nconst findings = (research.findings || research.lastResearchRun?.findings || []).slice(0, 3);\nconst uncertainties = (research.openUncertainties || research.lastResearchRun?.openUncertainties || []).slice(0, 2);\nconst newReqs = (research.requirements || []).filter(r => r.source === 'research').length;\nconst cost = research.actualCostUsd || research.lastResearchRun?.actualCostUsd || 0;\n\nconst confEmoji = c => c === 'high' ? '🟢' : c === 'medium' ? '🟡' : '🔴';\n\nconst findingsText = findings.length > 0\n  ? findings.map(f => `• ${confEmoji(f.confidence)} ${f.claim.slice(0, 100)}`).join('\\n')\n  : '• Keine spezifischen Findings';\n\nconst uncertaintiesText = uncertainties.length > 0\n  ? uncertainties.map(u => `• ⚠️ ${u.slice(0, 80)}`).join('\\n')\n  : '';\n\nlet body = `🔬 **KI-Research abgeschlossen**\\n\\n📊 Konfidenz: **${score}%** | 💰 Kosten: $${cost.toFixed(4)}\\n\\n${summary.slice(0, 200)}\\n\\n**Top Findings:**\\n${findingsText}`;\nif (uncertaintiesText) body += `\\n\\n**Offene Annahmen:**\\n${uncertaintiesText}`;\nif (newReqs > 0) body += `\\n\\n✅ **${newReqs} neue Requirements** in ForgePilot eingetragen`;\nbody += `\\n\\n→ http://100.94.55.15:3002/project-briefs/${briefId}`;\n\nconst query = `mutation { commentCreate(input: { issueId: \"${issueId}\", body: \"${body.replace(/\"/g, '\\\\\"').replace(/\\n/g, '\\\\n')}\" }) { success } }`;\nreturn [{ json: { query, skip: false } }];"
+      },
+      "id": "prepare-findings-comment",
+      "name": "Findings aufbereiten",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 120]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "check-skip",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "research-ok",
+      "name": "Research OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [2220, 120]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linear.app/graphql",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.LINEAR_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ query: $json.query }) }}",
+        "options": {}
+      },
+      "id": "linear-findings-comment",
+      "name": "Linear: Findings-Kommentar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2440, 60]
     }
   ],
   "connections": {
@@ -180,6 +247,21 @@
     },
     "Kommentar (Fehler)": {
       "main": [[{ "node": "Linear: Fehler-Kommentar", "type": "main", "index": 0 }]]
+    },
+    "Linear: Erfolg-Kommentar": {
+      "main": [[{ "node": "Research starten", "type": "main", "index": 0 }]]
+    },
+    "Research starten": {
+      "main": [[{ "node": "Findings aufbereiten", "type": "main", "index": 0 }]]
+    },
+    "Findings aufbereiten": {
+      "main": [[{ "node": "Research OK?", "type": "main", "index": 0 }]]
+    },
+    "Research OK?": {
+      "main": [
+        [{ "node": "Linear: Findings-Kommentar", "type": "main", "index": 0 }],
+        []
+      ]
     }
   },
   "active": true,
