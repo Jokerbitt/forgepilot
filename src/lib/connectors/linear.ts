@@ -189,6 +189,72 @@ function inferLinearRisk(title: string, labels: string[], priority: WorkItem['pr
   return 'A'
 }
 
+export interface LinearCreateIssueInput {
+  teamId: string
+  title: string
+  description?: string
+  priority?: number
+}
+
+export interface LinearCreatedIssue {
+  id: string
+  identifier: string
+  url: string
+}
+
+export async function createLinearIssue(
+  config: LinearConnectorConfig,
+  input: LinearCreateIssueInput,
+  fetcher: Fetcher = fetch,
+): Promise<LinearCreatedIssue> {
+  const apiKey = config.apiKey
+  if (!apiKey) throw new Error('LINEAR_API_KEY not configured')
+
+  const mutation = `
+    mutation CreateIssue($teamId: String!, $title: String!, $description: String, $priority: Int) {
+      issueCreate(input: { teamId: $teamId, title: $title, description: $description, priority: $priority }) {
+        success
+        issue { id identifier url }
+      }
+    }
+  `
+
+  const response = await fetcher(config.apiUrl ?? 'https://api.linear.app/graphql', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: apiKey,
+    },
+    body: JSON.stringify({
+      query: mutation,
+      variables: {
+        teamId: input.teamId,
+        title: input.title,
+        description: input.description,
+        priority: input.priority,
+      },
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Linear API error: HTTP ${response.status}`)
+  }
+
+  const payload = await response.json() as {
+    data?: { issueCreate?: { success: boolean; issue?: LinearCreatedIssue } }
+    errors?: unknown[]
+  }
+
+  if (payload.errors?.length) {
+    throw new Error(`Linear GraphQL error: ${JSON.stringify(payload.errors)}`)
+  }
+
+  const issue = payload.data?.issueCreate?.issue
+  if (!issue) throw new Error('Linear did not return a created issue')
+
+  return issue
+}
+
 function hasGraphQlErrors(payload: unknown): boolean {
   return typeof payload === 'object' && payload !== null && 'errors' in payload
 }

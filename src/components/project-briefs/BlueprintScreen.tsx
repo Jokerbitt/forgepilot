@@ -41,9 +41,12 @@ export function BlueprintScreen({ initialBrief }: Props) {
   const [approving, startApprove] = useTransition()
   const [delegating, startDelegate] = useTransition()
   const [researching, startResearch] = useTransition()
+  const [ticketing, startTicket] = useTransition()
   const [generationNotes, setGenerationNotes] = useState('')
   const [researchNotes, setResearchNotes] = useState('')
   const [researchError, setResearchError] = useState('')
+  const [linearTicketUrl, setLinearTicketUrl] = useState('')
+  const [linearTicketError, setLinearTicketError] = useState('')
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
   const [showApproveConfirm, setShowApproveConfirm] = useState(false)
   const [delegationError, setDelegationError] = useState('')
@@ -134,6 +137,23 @@ export function BlueprintScreen({ initialBrief }: Props) {
       } else {
         const err = await res.json() as { error?: string }
         setResearchError(err.error ?? 'Research fehlgeschlagen')
+      }
+    })
+  }
+
+  function handleCreateLinearTicket() {
+    setLinearTicketError('')
+    setLinearTicketUrl('')
+    startTicket(async () => {
+      const res = await fetch(`/api/project-briefs/${brief.id}/create-linear-ticket`, {
+        method: 'POST',
+      })
+      if (res.ok) {
+        const data = await res.json() as { url: string; identifier: string }
+        setLinearTicketUrl(data.url)
+      } else {
+        const err = await res.json() as { error?: string }
+        setLinearTicketError(err.error ?? 'Linear-Ticket konnte nicht erstellt werden')
       }
     })
   }
@@ -233,6 +253,18 @@ export function BlueprintScreen({ initialBrief }: Props) {
               </button>
             )}
 
+            <button
+              onClick={handleCreateLinearTicket}
+              disabled={ticketing}
+              className="px-3 py-1.5 text-sm bg-violet-700 hover:bg-violet-800 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center gap-1.5"
+            >
+              {ticketing ? (
+                <><span className="animate-spin">⟳</span> Erstelle…</>
+              ) : (
+                <>◈ Linear Ticket</>
+              )}
+            </button>
+
             {brief.status !== 'archived' && (
               <button
                 onClick={() => setShowArchiveConfirm(true)}
@@ -267,6 +299,27 @@ export function BlueprintScreen({ initialBrief }: Props) {
             <span>⚠️</span>
             <span>{researchError}</span>
             <button onClick={() => setResearchError('')} className="ml-auto text-red-500 hover:text-red-300">✕</button>
+          </div>
+        )}
+
+        {/* Linear Ticket Success Banner */}
+        {linearTicketUrl && (
+          <div className="mb-4 p-3 bg-violet-950/40 border border-violet-800/50 rounded-lg text-sm text-violet-300 flex items-center gap-2">
+            <span className="shrink-0">◈</span>
+            <span>Linear Ticket erstellt! </span>
+            <a href={linearTicketUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-violet-100">
+              Ticket ansehen →
+            </a>
+            <button onClick={() => setLinearTicketUrl('')} className="ml-auto text-violet-500 hover:text-violet-300">✕</button>
+          </div>
+        )}
+
+        {/* Linear Ticket Error Banner */}
+        {linearTicketError && (
+          <div className="mb-4 p-3 bg-red-950/40 border border-red-800/50 rounded-lg text-sm text-red-300 flex items-center gap-2">
+            <span>⚠️</span>
+            <span>{linearTicketError}</span>
+            <button onClick={() => setLinearTicketError('')} className="ml-auto text-red-500 hover:text-red-300">✕</button>
           </div>
         )}
 
