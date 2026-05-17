@@ -31,6 +31,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # Config dir must be writable (mounted as volume on NAS)
 RUN mkdir -p /app/config && chown nextjs:nodejs /app/config
+RUN apk add --no-cache wget
 
 USER nextjs
 
