@@ -5,7 +5,7 @@
 ForgePilot ist ein NAS-first KI-Betriebssystem: "From Idea to Execution".
 Vollständiger Loop: Idee → Wizard → Blueprint → Research (Claude) → Requirements → Freigabe → Delegation → Autopilot-Execute.
 
-**Status:** Produktionsreif, 144 Tests grün, deployt auf http://192.168.0.136:3001
+**Status:** Produktionsreif, 144 Tests grün, deployt auf http://192.168.0.136:3002
 
 ## Tech Stack
 
@@ -97,7 +97,7 @@ Linear Ticket erstellt
 
 ## NAS-Zugriff
 
-- ForgePilot: http://192.168.0.136:3001
+- ForgePilot: http://192.168.0.136:3002
 - n8n: http://192.168.0.136:5678 (admin / forgepilot)
 - SSH: admin@192.168.0.136
 - Docker: /share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker
