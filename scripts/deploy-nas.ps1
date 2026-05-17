@@ -1,63 +1,78 @@
-# ForgePilot — NAS Deploy Script
+# ForgePilot — NAS Deploy via GHCR Pull
+# Kein lokales Docker nötig — GitHub Actions baut, NAS pullt.
 # Usage: .\scripts\deploy-nas.ps1
-# Requires: Docker Desktop, SSH access to NAS (192.168.0.136)
+# Voraussetzung: GITHUB_TOKEN in .env.local oder als Parameter
 
 param(
   [string]$NasHost = "192.168.0.136",
   [string]$NasUser = "admin",
   [string]$NasPort = "22",
-  [string]$ImageTag = "latest"
+  [string]$GhcrToken = $env:GITHUB_TOKEN
 )
 
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path $PSScriptRoot -Parent
+$Docker = "/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker"
 
-Write-Host "==> ForgePilot NAS Deploy" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "==> ForgePilot NAS Deploy (GHCR Pull)" -ForegroundColor Cyan
 Write-Host "    NAS: $NasUser@$NasHost"
-Write-Host "    Image: forgepilot:$ImageTag"
+Write-Host "    Image: ghcr.io/jokerbitt/forgepilot:latest"
+Write-Host ""
 
-# 1. Build Docker image locally
-Write-Host "`n[1/4] Building Docker image..." -ForegroundColor Yellow
-Set-Location $ProjectRoot
-docker build -t "forgepilot:$ImageTag" .
-if ($LASTEXITCODE -ne 0) { Write-Error "Docker build failed"; exit 1 }
+# 1. SSH prüfen
+Write-Host "[1/4] SSH prüfen..." -ForegroundColor Yellow
+$test = ssh -o ConnectTimeout=5 -o BatchMode=yes "${NasUser}@${NasHost}" "echo OK" 2>&1
+if ($test -notmatch "OK") { Write-Error "SSH fehlgeschlagen"; exit 1 }
+Write-Host "      ✅ SSH OK" -ForegroundColor Green
 
-# 2. Export image as tarball
-Write-Host "`n[2/4] Exporting image..." -ForegroundColor Yellow
-$TarPath = "$env:TEMP\forgepilot-$ImageTag.tar"
-docker save "forgepilot:$ImageTag" -o $TarPath
-Write-Host "    Saved to: $TarPath"
+# 2. NAS-Verzeichnis + docker-compose kopieren
+Write-Host "[2/4] NAS einrichten..." -ForegroundColor Yellow
+ssh "${NasUser}@${NasHost}" "mkdir -p /share/forgepilot"
+scp -q -P $NasPort "$ProjectRoot\docker-compose.yml" "${NasUser}@${NasHost}:/share/forgepilot/docker-compose.yml"
+Write-Host "      ✅ docker-compose.yml kopiert" -ForegroundColor Green
 
-# 3. Copy to NAS via SCP
-Write-Host "`n[3/4] Uploading to NAS..." -ForegroundColor Yellow
-scp -P $NasPort $TarPath "${NasUser}@${NasHost}:/tmp/forgepilot-$ImageTag.tar"
-if ($LASTEXITCODE -ne 0) { Write-Error "SCP upload failed"; exit 1 }
+# 3. GHCR Login + Image pullen
+Write-Host "[3/4] Image von GHCR pullen..." -ForegroundColor Yellow
+if (-not $GhcrToken) {
+  # Aus .env.local lesen falls vorhanden
+  $envFile = Join-Path $ProjectRoot ".env.local"
+  if (Test-Path $envFile) {
+    $GhcrToken = (Select-String "GITHUB_TOKEN=(.+)" $envFile).Matches.Groups[1].Value
+  }
+}
 
-# Copy docker-compose.yml
-scp -P $NasPort "$ProjectRoot\docker-compose.yml" "${NasUser}@${NasHost}:/share/forgepilot/docker-compose.yml"
+if ($GhcrToken) {
+  ssh "${NasUser}@${NasHost}" "echo '$GhcrToken' | $Docker login ghcr.io -u jokerbitt --password-stdin 2>&1"
+} else {
+  Write-Host "      ⚠  Kein GITHUB_TOKEN — versuche anonymen Pull (nur für public images)" -ForegroundColor Yellow
+}
 
-# 4. SSH: load image + restart container
-Write-Host "`n[4/4] Deploying on NAS..." -ForegroundColor Yellow
-$RemoteCommands = @"
+ssh "${NasUser}@${NasHost}" "$Docker pull ghcr.io/jokerbitt/forgepilot:latest"
+Write-Host "      ✅ Image gepullt" -ForegroundColor Green
+
+# 4. Container neu starten
+Write-Host "[4/4] Container starten..." -ForegroundColor Yellow
+$startScript = @"
 set -e
-echo '>> Loading Docker image...'
-docker load -i /tmp/forgepilot-$ImageTag.tar
-echo '>> Restarting container...'
-mkdir -p /share/forgepilot
 cd /share/forgepilot
-docker compose down --remove-orphans
-docker compose up -d
-echo '>> Cleaning up...'
-rm -f /tmp/forgepilot-$ImageTag.tar
-echo '>> Done! ForgePilot running at http://$NasHost:3001'
+$Docker compose down --remove-orphans 2>/dev/null || true
+$Docker compose up -d
+echo STARTED
 "@
+$result = ssh "${NasUser}@${NasHost}" $startScript
+if ($result -notmatch "STARTED") {
+  Write-Error "Container-Start fehlgeschlagen"
+  exit 1
+}
+Write-Host "      ✅ Container laufen" -ForegroundColor Green
 
-ssh -p $NasPort "${NasUser}@${NasHost}" $RemoteCommands
-if ($LASTEXITCODE -ne 0) { Write-Error "Remote deploy failed"; exit 1 }
+# Status
+Write-Host ""
+ssh "${NasUser}@${NasHost}" "$Docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' 2>/dev/null | grep -E 'NAMES|forgepilot|n8n'"
 
-# Cleanup local tar
-Remove-Item $TarPath -ErrorAction SilentlyContinue
-
-Write-Host "`n✅ Deploy complete!" -ForegroundColor Green
+Write-Host ""
+Write-Host "✅ Deploy complete!" -ForegroundColor Green
 Write-Host "   ForgePilot: http://$NasHost:3001" -ForegroundColor Cyan
-Write-Host "   Next: Set API keys at http://$NasHost:3001/settings"
+Write-Host "   n8n:        http://$NasHost:5678  (admin / forgepilot)" -ForegroundColor Cyan
+Write-Host "   Settings:   http://$NasHost:3001/settings"

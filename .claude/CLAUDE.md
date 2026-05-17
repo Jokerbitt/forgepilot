@@ -2,115 +2,108 @@
 
 ## Projekt-Übersicht
 
-ForgePilot ist ein NAS-first KI-Betriebssystem das Ideen in validierte Projektpläne verwandelt
-und die Umsetzung kontrolliert an KI-Agenten delegiert.
+ForgePilot ist ein NAS-first KI-Betriebssystem: "From Idea to Execution".
+Vollständiger Loop: Idee → Wizard → Blueprint → Research (Claude) → Requirements → Freigabe → Delegation → Autopilot-Execute.
 
-**Tagline:** From Idea to Execution
+**Status:** Produktionsreif, 144 Tests grün, deployt auf http://192.168.0.136:3001
 
 ## Tech Stack
 
-- Next.js 14 (App Router)
-- TypeScript strict (kein `any`!)
-- Tailwind CSS + Dark Mode first
-- Vitest (Tests)
-- Docker auf QNAP NAS → http://192.168.0.136:3001
+- Next.js 14 App Router, TypeScript strict (kein `any`!), Tailwind CSS dark-first
+- Vitest, file-based JSON persistence (`config/*.json`)
+- Docker auf QNAP NAS (192.168.0.136) — Port 3001 (App) + 5678 (n8n)
 
 ## Architektur
 
 ```
 src/
 ├── app/
-│   ├── (dashboard)/page.tsx     ← Command Center
-│   ├── agents/page.tsx          ← Agent Control Plane
-│   └── api/                     ← API Routes
+│   ├── page.tsx                    ← Command Center Dashboard
+│   ├── delegations/page.tsx        ← Delegation Queue
+│   ├── project-briefs/             ← Blueprint Studio
+│   └── api/
+│       ├── delegations/            ← CRUD + execute/retry/stats
+│       ├── project-briefs/         ← CRUD + research-run + create-delegation
+│       ├── autopilot/tick/         ← Autopilot Loop (polled alle 12s)
+│       ├── intake/                 ← n8n Webhook (POST)
+│       ├── settings/               ← NBA Config
+│       ├── api-keys/               ← Connector Keys
+│       └── health/                 ← Docker Healthcheck
 ├── components/
-│   ├── command-center/
-│   ├── delegation/
-│   ├── agents/
-│   └── shared/
-├── lib/
-│   ├── connectors/              ← ConnectorManifest, ConnectorHealth + Implementierungen
-│   ├── models/                  ← TypeScript Interfaces (SSOT)
-│   └── nba-engine/              ← Scoring (pure functions, testbar)
-└── types/index.ts               ← Re-exports aller zentralen Types
+│   ├── command-center/             ← NBAPanel, AutopilotRunner, DailyCostWidget
+│   ├── delegation/                 ← DelegationTable, Drawer, FailedWidget
+│   └── project-briefs/             ← BlueprintScreen, IdeaIntakeWizard
+└── lib/
+    ├── connectors/                 ← Linear, GitHub, config merge
+    ├── models/                     ← TypeScript Interfaces (SSOT)
+    └── nba-engine/                 ← Scoring (pure functions)
 ```
 
-## Datenmodelle (SSOT — nie umgehen!)
+## Persistenz
 
-Alle Interfaces sind in `src/lib/models/` definiert. Re-exports via `src/types/index.ts`.
+Alle Daten liegen in `config/*.json` (gitignored, Docker-Volume gemountet):
+- `config/api-keys.json` — API Keys (über /settings gespeichert)
+- `config/project-briefs.json` — Projekte + Research Findings
+- `config/running-processes.json` — PID-Registry für laufende Agenten
+
+## Datenmodelle (SSOT)
 
 | Modell | Datei |
 |---|---|
-| WorkItem | `src/lib/models/work-item.ts` |
-| TaskContract, Delegation | `src/lib/models/delegation.ts` |
-| AgentRun, TraceEvent | `src/lib/models/agent-run.ts` |
-| ApprovalRequest | `src/lib/models/approval.ts` |
-| CostEntry, CostSummary | `src/lib/models/cost.ts` |
-| NBARecommendation, NBAScore | `src/lib/models/nba.ts` |
+| Delegation, TaskContract | `src/lib/models/delegation.ts` |
+| ProjectBrief, ResearchRun, Finding | `src/lib/models/project-brief.ts` |
+| NBAConfig, NBARecommendation | `src/lib/nba-engine/nba-config.ts` |
 | ConnectorManifest, ConnectorHealth | `src/lib/connectors/types.ts` |
 
-## Absolute Verbote
+## Regeln (absolut)
 
 - Kein `any` in TypeScript
 - Kein `style={{}}` — ausschließlich Tailwind
-- Kein direktes API-Hardcoding (immer Connector-Abstraktionsschicht)
-- Kein UI ohne verdrahteten Logger dahinter (Logger-first!)
-- Kein Runner-Start ohne TaskContract
-- Keine Inline-Logik in API-Routes (Logik gehört in `lib/`)
+- Jede Funktion in `lib/` hat einen Test
+- RiskClass C → IMMER erst User fragen
+- Neue Features auf Feature-Branch, nie direkt auf main
+- Max. 1 PR pro Session
 
-## Pflichten
-
-- Neue Connector-Implementierung → `ConnectorManifest` in `src/lib/connectors/types.ts` zuerst
-- Neue NBA-Regel → zuerst als Test formulieren (Test-first)
-- RiskClass C → IMMER erst den User fragen
-- Jede Funktion in `lib/` hat einen Test in `*.test.ts`
-
-## Single Source of Truth
-
-- ForgePilot SSOT: `Z:\NAS\Codex\KI Betriebssystem`
-- Projektregeln: `Z:\NAS\Codex\KI Betriebssystem\AGENTS.md`
-- Zusammenarbeit Claude Code/Codex: `Z:\NAS\Codex\KI Betriebssystem\CLAUDE-CODE-CODEX-ZUSAMMENARBEIT-LEITFADEN.md`
-- Second Brain / Obsidian: `Z:\NAS\SecondBrain`
-
-Vor strategischen Entscheidungen oder groesseren Tasks erst den NAS-SSOT lesen.
-
-## Aktueller Sprint
-
-M0: Foundation — läuft
-- Branch: feature/M0-foundation
-- Status: TypeScript-Modelle ✅, Tests ✅, Next.js Setup ✅
-
-## Wichtige Befehle
+## Befehle
 
 ```powershell
-# Entwicklung
-npm run dev           # Lokaler Dev-Server
-npm run test:run      # Tests (alle einmalig)
+npm run dev           # Lokaler Dev-Server :3000
 npm run type-check    # TypeScript strict
 npm run lint          # ESLint
-npm run build         # Production Build
+npm test -- --run     # Alle Tests einmalig
 
-# NAS Deploy
-.\scripts\deploy-prod.ps1
+# Deploy auf NAS (Windows)
+.\scripts\deploy-nas.ps1
 
-# Git-Workflow
-git checkout -b feature/JOK-XX-was-gebaut-wird
-git add src/...
-git commit -m "feat: was wurde gebaut"
-git push -u origin feature/JOK-XX-was-gebaut-wird
+# Deploy auf NAS (Mac/Linux)
+bash scripts/deploy-nas.sh
 ```
 
-## Risiko-Klassen
+## Autonomer Loop (Stufe 2)
 
-| Klasse | Beschreibung | Vorgehen |
-|---|---|---|
-| A | Neue Dateien, additive Änderungen, reine Types | Direkt ausführen |
-| B | Bestehende Dateien ändern, API-Integration | Kurz ankündigen |
-| C | Löschen, Architektur-Änderung, externe Services, Runner | IMMER erst fragen |
+```
+Linear Ticket erstellt
+  → n8n Webhook empfängt (http://192.168.0.136:5678)
+  → POST http://forgepilot:3000/api/intake
+  → ProjectBrief wird angelegt
+  → Research Run (Claude Haiku/Sonnet)
+  → Requirements generiert
+  → Delegation erstellt
+  → Autopilot-Tick erkennt approved Delegation
+  → POST /api/delegations/[id]/execute
+  → Claude CLI läuft autonom
+  → PR erstellt
+```
 
-## Wissen on-demand
+## NAS-Zugriff
 
-- Codex/SSOT: `Z:\NAS\Codex\KI Betriebssystem\`
-- AGENTS.md: `Z:\NAS\Codex\KI Betriebssystem\AGENTS.md`
-- ADRs: `Z:\NAS\Codex\KI Betriebssystem\03_ADRs\`
-- GUI-Standard: `Z:\NAS\Codex\KI Betriebssystem\02_Standards\GUI-UX-Standard.md`
+- ForgePilot: http://192.168.0.136:3001
+- n8n: http://192.168.0.136:5678 (admin / forgepilot)
+- SSH: admin@192.168.0.136
+- Docker: /share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker
+
+## SSOT auf NAS
+
+- ForgePilot Codex: `Z:\NAS\Codex\KI Betriebssystem\`
+- Setup Guide: `Z:\NAS\SecondBrain\01_Projects\forgepilot\SETUP-GUIDE.md`
+- Aktives Gedächtnis: `Z:\NAS\Claude\Memory\aktiv.md`
