@@ -14,19 +14,19 @@ Use these systems in this order:
 
 | Topic | Source |
 |---|---|
-| Product vision, roadmap, standards, agent coordination | `Z:\NAS\Codex\KI Betriebssystem` |
+| Product vision, roadmap, standards, agent coordination | `/Volumes/Sven/NAS/Codex/KI Betriebssystem` |
 | Code, branches, pull requests, CI, releases | GitHub `https://github.com/Jokerbitt/forgepilot` |
-| Fast local implementation workspace | `C:\Users\svenb\dev\forgepilot` |
-| NAS code mirror / shared workspace | `Z:\NAS\Projects\forgepilot` |
+| Fast local implementation workspace | `~/dev/forgepilot` |
+| NAS code mirror / shared workspace | `/Volumes/Sven/NAS/Projects/forgepilot` |
 | Tasks, status, priorities, blockers | Linear |
-| Long-term knowledge and learnings | `Z:\NAS\SecondBrain` |
+| Long-term knowledge and learnings | `/Volumes/Sven/NAS/SecondBrain` |
 
-Before strategic or cross-agent work, read:
+Before strategic or cross-agent work, read in this order:
 
-1. `Z:\NAS\Codex\KI Betriebssystem\AGENTS.md`
-2. `Z:\NAS\Codex\KI Betriebssystem\FORGEPILOT-SSOT.md`
-3. `Z:\NAS\Codex\KI Betriebssystem\README.md`
-4. `Z:\NAS\Codex\KI Betriebssystem\CLAUDE-CODE-CODEX-ZUSAMMENARBEIT-LEITFADEN.md`
+1. `/Volumes/Sven/NAS/Codex/KI Betriebssystem/00_START_HERE_AGENT_BRIEFING.md`
+2. `/Volumes/Sven/NAS/Codex/KI Betriebssystem/00a_CURRENT_BASELINE.md` — what's already built + write scope
+3. `/Volumes/Sven/NAS/Codex/KI Betriebssystem/02_ROADMAP_MEILENSTEINE_ARBEITSPAKETE.md`
+4. Task-specific: `03_ARCHITEKTUR_BLUEPRINT.md`, `04_REQUIREMENTS_BACKLOG.md`, `05_DATENMODELLE.md`, etc.
 
 If repo docs and NAS docs disagree, the NAS version wins for project knowledge.
 

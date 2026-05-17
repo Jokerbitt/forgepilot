@@ -8,12 +8,12 @@ Goal: turn ideas and Linear tickets into researched project briefs, requirements
 
 ## Required Context
 
-Before meaningful work, read the repo root `AGENTS.md` and the NAS SSOT:
+Before meaningful work, read the repo root `AGENTS.md` and the NAS SSOT in this order:
 
-1. `Z:\NAS\Codex\KI Betriebssystem\AGENTS.md`
-2. `Z:\NAS\Codex\KI Betriebssystem\FORGEPILOT-SSOT.md`
-3. `Z:\NAS\Codex\KI Betriebssystem\README.md`
-4. `Z:\NAS\Codex\KI Betriebssystem\CLAUDE-CODE-CODEX-ZUSAMMENARBEIT-LEITFADEN.md`
+1. `/Volumes/Sven/NAS/Codex/KI Betriebssystem/00_START_HERE_AGENT_BRIEFING.md`
+2. `/Volumes/Sven/NAS/Codex/KI Betriebssystem/00a_CURRENT_BASELINE.md` — what's already built + write scope
+3. `/Volumes/Sven/NAS/Codex/KI Betriebssystem/02_ROADMAP_MEILENSTEINE_ARBEITSPAKETE.md`
+4. Task-specific files from `03_ARCHITEKTUR_BLUEPRINT.md` onwards as needed.
 
 Do not rely on chat memory as the source of truth.
 
@@ -21,9 +21,9 @@ Do not rely on chat memory as the source of truth.
 
 | Purpose | Path |
 |---|---|
-| Fast local development | `C:\Users\svenb\dev\forgepilot` |
-| NAS code mirror / shared workspace | `Z:\NAS\Projects\forgepilot` |
-| ForgePilot project memory | `Z:\NAS\Codex\KI Betriebssystem` |
+| Fast local development | `~/dev/forgepilot` |
+| NAS code mirror / shared workspace | `/Volumes/Sven/NAS/Projects/forgepilot` |
+| ForgePilot project memory | `/Volumes/Sven/NAS/Codex/KI Betriebssystem` |
 | GitHub code truth | `https://github.com/Jokerbitt/forgepilot` |
 
 The NAS mirror can be used for shared inspection and coordination. Local development is still acceptable for speed, as long as GitHub and the NAS SSOT are updated.
@@ -68,7 +68,7 @@ The NAS mirror can be used for shared inspection and coordination. Local develop
 
 Use these before PR-ready work:
 
-```powershell
+```bash
 npm run test:run
 npm run lint
 npm run type-check
@@ -79,8 +79,9 @@ Do not run `npm run build` and `npm run type-check` in parallel because `.next/t
 
 ## Current Baseline
 
-As of 2026-05-17:
+Full baseline is in `/Volumes/Sven/NAS/Codex/KI Betriebssystem/00a_CURRENT_BASELINE.md`.
 
-- GitHub `main` includes the n8n workflows, Ollama provider bridge, approve/start delegation endpoints, and Mac setup guide.
-- Full local verification passed recently with 149 Vitest tests, lint, type-check, and production build.
-- NAS SSOT contains the latest autonomy/local-AI milestone notes.
+Summary as of 2026-05-17:
+- GitHub `main` at `353f3f7` includes connectors, NBA engine, delegation queue, approval system, research brief, Ollama settings, operator readiness cockpit.
+- 149+ Vitest tests passing. TypeScript 0 errors.
+- Next milestones: Knowledge & Memory Layer (M2), Context Package Builder (M3).
