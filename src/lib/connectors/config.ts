@@ -11,6 +11,7 @@ interface StoredApiKeys {
   LINEAR_API_KEY?: string
   LINEAR_TEAM_ID?: string
   ANTHROPIC_API_KEY?: string
+  OLLAMA_BASE_URL?: string
 }
 
 /**
