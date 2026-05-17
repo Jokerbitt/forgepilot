@@ -1,0 +1,101 @@
+name: PR merged → Linear Done
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  update-linear:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Extract Linear Issue ID & update status
+        uses: actions/github-script@v7
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        with:
+          script: |
+            const branch = context.payload.pull_request.head.ref;
+            const prTitle = context.payload.pull_request.title;
+            const prUrl = context.payload.pull_request.html_url;
+            const prBody = context.payload.pull_request.body || '';
+
+            // Extract Linear issue ID (e.g. JOK-123) from branch, PR title, or body
+            const match = (branch + ' ' + prTitle + ' ' + prBody).match(/([A-Z]+-\d+)/);
+            if (!match) {
+              console.log('ℹ️ No Linear issue ID found — skipping');
+              return;
+            }
+            const issueIdentifier = match[1];
+            console.log(`Found Linear issue: ${issueIdentifier}`);
+
+            const apiKey = process.env.LINEAR_API_KEY;
+            if (!apiKey) {
+              console.log('⚠️ LINEAR_API_KEY secret not set — skipping');
+              return;
+            }
+
+            async function gql(query) {
+              const res = await fetch('https://api.linear.app/graphql', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${apiKey}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ query })
+              });
+              const json = await res.json();
+              if (json.errors) console.warn('Linear API errors:', JSON.stringify(json.errors));
+              return json;
+            }
+
+            // Find the issue by identifier
+            const issueData = await gql(`{
+              issues(filter: { identifier: { eq: "${issueIdentifier}" } }) {
+                nodes { id title team { id key } }
+              }
+            }`);
+
+            const issue = issueData?.data?.issues?.nodes?.[0];
+            if (!issue) {
+              console.log(`⚠️ Issue ${issueIdentifier} not found in Linear`);
+              return;
+            }
+            console.log(`Found issue: ${issue.title} (${issue.id})`);
+
+            // Find the "Done" / completed state for this team
+            const stateData = await gql(`{
+              workflowStates(filter: {
+                team: { id: { eq: "${issue.team.id}" } }
+                type: { eq: "completed" }
+              }) {
+                nodes { id name }
+              }
+            }`);
+
+            const doneState = stateData?.data?.workflowStates?.nodes?.[0];
+            if (!doneState) {
+              console.log('⚠️ No completed state found for team');
+              return;
+            }
+            console.log(`Setting state to: ${doneState.name} (${doneState.id})`);
+
+            // Update issue state to Done
+            await gql(`mutation {
+              issueUpdate(id: "${issue.id}", input: { stateId: "${doneState.id}" }) {
+                success
+              }
+            }`);
+
+            // Add comment with PR link
+            const comment = `🤖 **PR automatisch gemergt — Issue auf Done gesetzt**\\n\\n[${prTitle.replace(/"/g, '\\"')}](${prUrl})`;
+            await gql(`mutation {
+              commentCreate(input: {
+                issueId: "${issue.id}",
+                body: "${comment}"
+              }) { success }
+            }`);
+
+            console.log(`✅ Linear issue ${issueIdentifier} set to Done`);
