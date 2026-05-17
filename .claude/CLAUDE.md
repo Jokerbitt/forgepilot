@@ -23,10 +23,25 @@ Do not rely on chat memory as the source of truth.
 |---|---|
 | Fast local development | `~/dev/forgepilot` |
 | NAS code mirror / shared workspace | `/Volumes/Sven/NAS/Projects/forgepilot` |
-| ForgePilot project memory | `/Volumes/Sven/NAS/Codex/KI Betriebssystem` |
+| ForgePilot project memory (SSOT) | `/Volumes/Sven/NAS/Codex/KI Betriebssystem` |
+| **API Keys & Credentials** | `/Volumes/Sven/NAS/Codex/KI Betriebssystem/FORGEPILOT-SETTINGS-CREDENTIALS.md` |
 | GitHub code truth | `https://github.com/Jokerbitt/forgepilot` |
 
 The NAS mirror can be used for shared inspection and coordination. Local development is still acceptable for speed, as long as GitHub and the NAS SSOT are updated.
+
+## Settings & Credentials
+
+Keys and credentials live in one place — read there before asking or searching:
+
+```
+/Volumes/Sven/NAS/Codex/KI Betriebssystem/FORGEPILOT-SETTINGS-CREDENTIALS.md
+```
+
+Two-level system (env wins over UI):
+- **Settings UI** → `config/api-keys.json` — Anthropic, Linear, GitHub, Ollama
+- **Env** → `.env.local` (local dev) / `.env` on NAS — all of the above + Telegram (n8n only)
+
+Local AI needs no key: Ollama `localhost:11434`, LM Studio `localhost:1234`
 
 ## Stack
 

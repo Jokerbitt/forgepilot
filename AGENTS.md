@@ -15,6 +15,7 @@ Use these systems in this order:
 | Topic | Source |
 |---|---|
 | Product vision, roadmap, standards, agent coordination | `/Volumes/Sven/NAS/Codex/KI Betriebssystem` |
+| **API Keys, credentials, service URLs** | `/Volumes/Sven/NAS/Codex/KI Betriebssystem/FORGEPILOT-SETTINGS-CREDENTIALS.md` |
 | Code, branches, pull requests, CI, releases | GitHub `https://github.com/Jokerbitt/forgepilot` |
 | Fast local implementation workspace | `~/dev/forgepilot` |
 | NAS code mirror / shared workspace | `/Volumes/Sven/NAS/Projects/forgepilot` |
@@ -37,6 +38,27 @@ If repo docs and NAS docs disagree, the NAS version wins for project knowledge.
 - Keep GitHub as the code truth.
 - Keep the NAS SSOT updated after meaningful product, architecture, connector, local-AI, n8n, or autonomy decisions.
 - The NAS code mirror exists so agents can inspect and coordinate from NAS, but local development may remain on `~/dev/forgepilot` for speed.
+
+## Settings & Credentials
+
+All API keys and service credentials are documented centrally:
+
+```
+/Volumes/Sven/NAS/Codex/KI Betriebssystem/FORGEPILOT-SETTINGS-CREDENTIALS.md
+```
+
+**Two-level system — env vars win over UI-stored keys:**
+
+| Level | File | Used by |
+|---|---|---|
+| 1 — Settings UI | `config/api-keys.json` | App connectors, research, AI routes |
+| 2 — Environment | `.env.local` (local) / `.env` on NAS | docker-compose, n8n, env fallback |
+
+Keys managed here: `ANTHROPIC_API_KEY`, `LINEAR_API_KEY`, `LINEAR_TEAM_ID`, `GITHUB_TOKEN`, `OLLAMA_BASE_URL`
+
+Only in env (not in UI): `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `GITHUB_OWNER`, `GITHUB_REPOSITORIES`
+
+Local AI (no key needed): Ollama on `localhost:11434`, LM Studio on `localhost:1234`
 
 ## Engineering Rules
 
