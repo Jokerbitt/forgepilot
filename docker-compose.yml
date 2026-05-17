@@ -33,9 +33,12 @@ services:
     environment:
       - N8N_HOST=0.0.0.0
       - N8N_PORT=5678
+      - LINEAR_API_KEY=${LINEAR_API_KEY:-}
       - N8N_PROTOCOL=http
       - WEBHOOK_URL=http://192.168.0.136:5678
       - N8N_EDITOR_BASE_URL=http://192.168.0.136:5678
+      # Cookie auf unsecure setzen damit Login über HTTP funktioniert (kein HTTPS im LAN)
+      - N8N_SECURE_COOKIE=false
       # Interne URL damit n8n ForgePilot erreicht (Docker-Netzwerk)
       - FORGEPILOT_INTERNAL_URL=http://forgepilot:3000
       # Telemetrie deaktivieren
