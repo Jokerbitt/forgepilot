@@ -14,19 +14,19 @@ Use these systems in this order:
 
 | Topic | Source |
 |---|---|
-| Product vision, roadmap, standards, agent coordination | `Z:\NAS\Codex\KI Betriebssystem` |
+| Product vision, roadmap, standards, agent coordination | `/Volumes/Sven/NAS/Codex/KI Betriebssystem` |
 | Code, branches, pull requests, CI, releases | GitHub `https://github.com/Jokerbitt/forgepilot` |
-| Fast local implementation workspace | `C:\Users\svenb\dev\forgepilot` |
-| NAS code mirror / shared workspace | `Z:\NAS\Projects\forgepilot` |
+| Fast local implementation workspace | `~/dev/forgepilot` |
+| NAS code mirror / shared workspace | `/Volumes/Sven/NAS/Projects/forgepilot` |
 | Tasks, status, priorities, blockers | Linear |
-| Long-term knowledge and learnings | `Z:\NAS\SecondBrain` |
+| Long-term knowledge and learnings | `/Volumes/Sven/NAS/SecondBrain` |
 
 Before strategic or cross-agent work, read:
 
-1. `Z:\NAS\Codex\KI Betriebssystem\AGENTS.md`
-2. `Z:\NAS\Codex\KI Betriebssystem\FORGEPILOT-SSOT.md`
-3. `Z:\NAS\Codex\KI Betriebssystem\README.md`
-4. `Z:\NAS\Codex\KI Betriebssystem\CLAUDE-CODE-CODEX-ZUSAMMENARBEIT-LEITFADEN.md`
+1. `/Volumes/Sven/NAS/Codex/KI Betriebssystem/AGENTS.md`
+2. `/Volumes/Sven/NAS/Codex/KI Betriebssystem/FORGEPILOT-SSOT.md`
+3. `/Volumes/Sven/NAS/Codex/KI Betriebssystem/README.md`
+4. `/Volumes/Sven/NAS/Codex/KI Betriebssystem/CLAUDE-CODE-CODEX-ZUSAMMENARBEIT-LEITFADEN.md`
 
 If repo docs and NAS docs disagree, the NAS version wins for project knowledge.
 
@@ -36,7 +36,7 @@ If repo docs and NAS docs disagree, the NAS version wins for project knowledge.
 - Do not commit directly to `main`.
 - Keep GitHub as the code truth.
 - Keep the NAS SSOT updated after meaningful product, architecture, connector, local-AI, n8n, or autonomy decisions.
-- The NAS code mirror exists so agents can inspect and coordinate from NAS, but local development may remain on `C:\Users\svenb\dev\forgepilot` for speed.
+- The NAS code mirror exists so agents can inspect and coordinate from NAS, but local development may remain on `~/dev/forgepilot` for speed.
 
 ## Engineering Rules
 
@@ -52,7 +52,7 @@ If repo docs and NAS docs disagree, the NAS version wins for project knowledge.
 
 Run the relevant subset first, then full checks before PR-ready work:
 
-```powershell
+```bash
 npm run test:run
 npm run lint
 npm run type-check
