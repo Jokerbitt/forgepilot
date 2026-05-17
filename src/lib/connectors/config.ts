@@ -42,6 +42,7 @@ function mergedEnv(env: EnvMap): EnvMap {
     GITHUB_REPOSITORIES: env['GITHUB_REPOSITORIES'],
     GITHUB_REPO: env['GITHUB_REPO'],
     ANTHROPIC_API_KEY: env['ANTHROPIC_API_KEY'] ?? stored.ANTHROPIC_API_KEY,
+    OLLAMA_BASE_URL: env['OLLAMA_BASE_URL'] ?? stored.OLLAMA_BASE_URL,
   }
 }
 

@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
-import Anthropic from '@anthropic-ai/sdk'
 import {
   findProjectBriefById,
   updateProjectBrief,
 } from '@/lib/project-briefs'
 import type { Requirement, Risk, ResearchRun, SourceRecord, Finding, BlueprintOutput } from '@/lib/models/project-brief'
+import { AIProviderConfigurationError, generateText, stripJsonCodeFence } from '@/lib/ai/text-generation'
 
 type RouteParams = { params: { id: string } }
 
@@ -62,14 +62,6 @@ export async function GET(_request: Request, { params }: RouteParams) {
 export async function POST(_request: Request, { params }: RouteParams) {
   const brief = findProjectBriefById(params.id)
   if (!brief) return NextResponse.json({ error: 'Brief nicht gefunden' }, { status: 404 })
-
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: 'ANTHROPIC_API_KEY nicht gesetzt. Bitte in den Einstellungen hinterlegen.' },
-      { status: 503 },
-    )
-  }
 
   const runId = randomUUID()
   const now = new Date().toISOString()
@@ -143,20 +135,19 @@ Forschungsfragen:
 ${researchQuestionsText}`
 
   try {
-    const client = new Anthropic({ apiKey })
-    const message = await client.messages.create({
-      model,
-      max_tokens: brief.researchMode === 'deep' ? 2048 : 1024,
+    const generated = await generateText({
+      anthropicModel: model,
+      maxTokens: brief.researchMode === 'deep' ? 2048 : 1024,
       system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
+      prompt: userPrompt,
+      purpose: brief.researchMode === 'quick' ? 'fast' : 'coding',
     })
 
-    const rawText = message.content[0].type === 'text' ? message.content[0].text : ''
+    const rawText = generated.text
 
     let result: ClaudeResearchResult
     try {
-      // Claude sometimes wraps in ```json blocks despite instructions
-      const cleaned = rawText.replace(/^```json\s*/i, '').replace(/\s*```$/, '').trim()
+      const cleaned = stripJsonCodeFence(rawText)
       result = JSON.parse(cleaned) as ClaudeResearchResult
     } catch {
       return NextResponse.json(
@@ -173,12 +164,12 @@ ${researchQuestionsText}`
       type: 'nas',
       title: `KI-Analyse: ${brief.title}`,
       urlOrPath: `project-brief://${brief.id}`,
-      publisher: `Claude ${model}`,
+      publisher: `${generated.provider} ${generated.model}`,
       retrievedAt: now,
       language: 'de',
       relevanceScore: 95,
       trustScore: 70,
-      notes: `Generiert von ${model}. ${result.generationNotes}`,
+      notes: `Generiert von ${generated.provider}/${generated.model}. ${result.generationNotes}`,
       snippets: [brief.rawIdea, brief.problemStatement].filter(Boolean),
     }
 
@@ -208,7 +199,7 @@ ${researchQuestionsText}`
       status: 'draft',
     }
 
-    const tokensUsed = message.usage.input_tokens + message.usage.output_tokens
+    const tokensUsed = (generated.inputTokens ?? 0) + (generated.outputTokens ?? 0)
 
     const run: ResearchRun = {
       id: runId,
@@ -281,6 +272,9 @@ ${researchQuestionsText}`
 
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unbekannter Fehler'
+    if (err instanceof AIProviderConfigurationError) {
+      return NextResponse.json({ error: message }, { status: 503 })
+    }
     return NextResponse.json({ error: `Research Run fehlgeschlagen: ${message}` }, { status: 500 })
   }
 }

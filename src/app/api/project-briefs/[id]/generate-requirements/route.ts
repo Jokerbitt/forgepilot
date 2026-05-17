@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
 import { findProjectBriefById, updateProjectBrief } from '@/lib/project-briefs'
 import type { Requirement, UseCase, Risk } from '@/lib/models/project-brief'
+import { AIProviderConfigurationError, generateText, stripJsonCodeFence } from '@/lib/ai/text-generation'
 
 interface RouteParams {
   params: { id: string }
@@ -24,11 +24,6 @@ export async function POST(_request: Request, { params }: RouteParams) {
     const brief = findProjectBriefById(params.id)
     if (!brief) {
       return NextResponse.json({ error: 'Project brief not found' }, { status: 404 })
-    }
-
-    const apiKey = process.env.ANTHROPIC_API_KEY
-    if (!apiKey) {
-      return NextResponse.json({ error: 'ANTHROPIC_API_KEY not configured' }, { status: 503 })
     }
 
     const model = brief.scope === 'full' ? 'claude-sonnet-4-5' : 'claude-haiku-4-5'
@@ -83,16 +78,15 @@ Antwort-Format:
   "generationNotes": "Was hast du angenommen? (1-2 Saetze)"
 }`
 
-    const client = new Anthropic({ apiKey })
-    const message = await client.messages.create({
-      model,
-      max_tokens: 2048,
+    const result = await generateText({
+      anthropicModel: model,
+      maxTokens: 2048,
       system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userPrompt }],
+      prompt: userPrompt,
+      purpose: brief.scope === 'minimal' ? 'fast' : 'coding',
     })
 
-    const text = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
-    const cleaned = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
+    const cleaned = stripJsonCodeFence(result.text)
     const parsed = JSON.parse(cleaned) as {
       requirements: Array<{ title: string; description: string; type: string; priority: string }>
       useCases: Array<{ title: string; actor: string; trigger: string; mainFlow: string[] }>
@@ -162,6 +156,9 @@ Antwort-Format:
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
+    if (err instanceof AIProviderConfigurationError) {
+      return NextResponse.json({ error: message }, { status: 503 })
+    }
     return NextResponse.json({ error: `Generation failed: ${message}` }, { status: 500 })
   }
 }
