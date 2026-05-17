@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
 import type { BriefScope } from '@/lib/models/project-brief'
+import { AIProviderConfigurationError, generateText, stripJsonCodeFence } from '@/lib/ai/text-generation'
 
 interface AISuggestRequest {
   rawIdea: string
@@ -34,13 +34,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'rawIdea is required (min 10 chars)' }, { status: 400 })
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY
-    if (!apiKey) {
-      return NextResponse.json({ error: 'ANTHROPIC_API_KEY not configured' }, { status: 503 })
-    }
-
-    const client = new Anthropic({ apiKey })
-
     const scopeHint = body.scope === 'minimal'
       ? 'Halte die Antworten sehr kurz und fokussiert.'
       : body.scope === 'full'
@@ -64,17 +57,15 @@ Antworte mit folgendem JSON-Objekt:
   "confidence": "high" | "medium" | "low"
 }`
 
-    const message = await client.messages.create({
-      model: 'claude-haiku-4-5',
-      max_tokens: 512,
+    const result = await generateText({
+      anthropicModel: 'claude-haiku-4-5',
+      maxTokens: 512,
       system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userPrompt }],
+      prompt: userPrompt,
+      purpose: 'fast',
     })
 
-    const text = message.content[0].type === 'text' ? message.content[0].text.trim() : ''
-
-    // Strip optional markdown code fences
-    const cleaned = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
+    const cleaned = stripJsonCodeFence(result.text)
     const parsed = JSON.parse(cleaned) as AISuggestResponse
 
     // Validate required fields
@@ -85,6 +76,9 @@ Antworte mit folgendem JSON-Objekt:
     return NextResponse.json(parsed)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
+    if (err instanceof AIProviderConfigurationError) {
+      return NextResponse.json({ error: message }, { status: 503 })
+    }
     return NextResponse.json({ error: `AI suggest failed: ${message}` }, { status: 500 })
   }
 }
