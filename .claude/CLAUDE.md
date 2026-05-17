@@ -77,6 +77,47 @@ npm run build
 
 Do not run `npm run build` and `npm run type-check` in parallel because `.next/types` can race.
 
+## Infrastructure & Credentials
+
+### Deployed Services (NAS — QNAP 192.168.0.136 / Tailscale 100.94.55.15)
+
+| Service | URL | Status |
+|---|---|---|
+| ForgePilot | http://100.94.55.15:3002 | ✅ live |
+| n8n | http://100.94.55.15:5678 | ✅ live |
+| Ollama (Mac) | http://[mac-tailscale-ip]:11434 | ⏳ Mac-Setup ausstehend |
+
+### Environment Files
+
+- NAS (live): `/share/forgepilot/.env`
+- Local reference: `C:\Users\svenb\dev\forgepilot\.env.local`
+- **Never commit either file to git.**
+- When adding a new key: update both the NAS `.env` and local `.env.local`.
+
+| Variable | Status | Purpose |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | ✅ set | Claude AI — Research, Requirements |
+| `LINEAR_API_KEY` | ✅ set | Read + comment Linear tickets |
+| `LINEAR_TEAM_ID` | ✅ set | Target team for new tickets |
+| `GITHUB_TOKEN` | ✅ set | GitHub PRs + Work Items |
+| `TELEGRAM_BOT_TOKEN` | ✅ set | Bot: @sven_briefing_bot |
+| `TELEGRAM_CHAT_ID` | ⏳ open | Send /start to @sven_briefing_bot, then enter the returned ID |
+| `OLLAMA_BASE_URL` | ⏳ open | Set up Mac first: `tailscale ip -4` → `http://[ip]:11434` |
+
+### n8n Workflows
+
+| Workflow | Status | Purpose |
+|---|---|---|
+| Linear → ForgePilot Intake v3 | ⏳ activate in UI | Linear ticket → Brief → Research → comment |
+| ForgePilot Autopilot v2 | ⏳ deactivated | Class A/B auto-approve + start |
+| Telegram Delegation Alerts | ⏳ needs TELEGRAM_CHAT_ID | Pending delegations to phone |
+
+### Linear Webhook (one-time setup)
+
+linear.app → Settings → API → Webhooks → New webhook:
+- URL: `http://100.94.55.15:5678/webhook/linear-intake`
+- Event: Issues → Create
+
 ## Current Baseline
 
 As of 2026-05-17:
