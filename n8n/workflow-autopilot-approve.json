@@ -1,0 +1,63 @@
+{
+  "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "name": "ForgePilot Autopilot — Pending genehmigen",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 2 }] }
+      },
+      "id": "schedule-trigger",
+      "name": "Alle 2 Min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://forgepilot:3000/api/delegations",
+        "options": {}
+      },
+      "id": "get-delegations",
+      "name": "Pending Delegationen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const all = $input.first().json;\nconst pending = (Array.isArray(all) ? all : all.delegations || []).filter(d =>\n  d.status === 'pending' &&\n  (d.contract?.riskClass === 'A' || d.contract?.riskClass === 'B') &&\n  d.contract?.riskClass !== 'C'\n);\nreturn pending.map(d => ({ json: d }));"
+      },
+      "id": "filter-pending",
+      "name": "Class A/B filtern",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://forgepilot:3000/api/delegations/{{ $json.id }}/approve",
+        "options": {}
+      },
+      "id": "approve",
+      "name": "Genehmigen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Alle 2 Min": {
+      "main": [[{ "node": "Pending Delegationen", "type": "main", "index": 0 }]]
+    },
+    "Pending Delegationen": {
+      "main": [[{ "node": "Class A/B filtern", "type": "main", "index": 0 }]]
+    },
+    "Class A/B filtern": {
+      "main": [[{ "node": "Genehmigen", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": []
+}

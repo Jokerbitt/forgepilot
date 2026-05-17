@@ -35,12 +35,17 @@ services:
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
       - WEBHOOK_URL=http://192.168.0.136:5678
+      - N8N_EDITOR_BASE_URL=http://192.168.0.136:5678
       # Interne URL damit n8n ForgePilot erreicht (Docker-Netzwerk)
-      - FORGEPILOT_URL=http://forgepilot:3000
+      - FORGEPILOT_INTERNAL_URL=http://forgepilot:3000
+      # Auth: Owner-Setup überspringen, direkt nutzbar
+      - N8N_USER_MANAGEMENT_DISABLED=true
       - N8N_BASIC_AUTH_ACTIVE=true
       - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
       - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-forgepilot}
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-change-me-in-production}
+      # Telemetrie deaktivieren
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_VERSION_NOTIFICATIONS_ENABLED=false
     volumes:
       - n8n-data:/home/node/.n8n
     depends_on:
