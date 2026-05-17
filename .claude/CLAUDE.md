@@ -1,109 +1,86 @@
-# CLAUDE.md — ForgePilot AI Workflow OS
+# CLAUDE.md - ForgePilot AI Workflow OS
 
-## Projekt-Übersicht
+## Project
 
-ForgePilot ist ein NAS-first KI-Betriebssystem: "From Idea to Execution".
-Vollständiger Loop: Idee → Wizard → Blueprint → Research (Claude) → Requirements → Freigabe → Delegation → Autopilot-Execute.
+ForgePilot is Sven's local-first, NAS-first AI Workflow OS.
 
-**Status:** Produktionsreif, 144 Tests grün, deployt auf http://192.168.0.136:3002
+Goal: turn ideas and Linear tickets into researched project briefs, requirements, controlled delegations, agent execution, pull requests, and knowledge writeback.
 
-## Tech Stack
+## Required Context
 
-- Next.js 14 App Router, TypeScript strict (kein `any`!), Tailwind CSS dark-first
-- Vitest, file-based JSON persistence (`config/*.json`)
-- Docker auf QNAP NAS (192.168.0.136) — Port 3001 (App) + 5678 (n8n)
+Before meaningful work, read the repo root `AGENTS.md` and the NAS SSOT:
 
-## Architektur
+1. `Z:\NAS\Codex\KI Betriebssystem\AGENTS.md`
+2. `Z:\NAS\Codex\KI Betriebssystem\FORGEPILOT-SSOT.md`
+3. `Z:\NAS\Codex\KI Betriebssystem\README.md`
+4. `Z:\NAS\Codex\KI Betriebssystem\CLAUDE-CODE-CODEX-ZUSAMMENARBEIT-LEITFADEN.md`
 
-```
-src/
-├── app/
-│   ├── page.tsx                    ← Command Center Dashboard
-│   ├── delegations/page.tsx        ← Delegation Queue
-│   ├── project-briefs/             ← Blueprint Studio
-│   └── api/
-│       ├── delegations/            ← CRUD + execute/retry/stats
-│       ├── project-briefs/         ← CRUD + research-run + create-delegation
-│       ├── autopilot/tick/         ← Autopilot Loop (polled alle 12s)
-│       ├── intake/                 ← n8n Webhook (POST)
-│       ├── settings/               ← NBA Config
-│       ├── api-keys/               ← Connector Keys
-│       └── health/                 ← Docker Healthcheck
-├── components/
-│   ├── command-center/             ← NBAPanel, AutopilotRunner, DailyCostWidget
-│   ├── delegation/                 ← DelegationTable, Drawer, FailedWidget
-│   └── project-briefs/             ← BlueprintScreen, IdeaIntakeWizard
-└── lib/
-    ├── connectors/                 ← Linear, GitHub, config merge
-    ├── models/                     ← TypeScript Interfaces (SSOT)
-    └── nba-engine/                 ← Scoring (pure functions)
-```
+Do not rely on chat memory as the source of truth.
 
-## Persistenz
+## Workspaces
 
-Alle Daten liegen in `config/*.json` (gitignored, Docker-Volume gemountet):
-- `config/api-keys.json` — API Keys (über /settings gespeichert)
-- `config/project-briefs.json` — Projekte + Research Findings
-- `config/running-processes.json` — PID-Registry für laufende Agenten
-
-## Datenmodelle (SSOT)
-
-| Modell | Datei |
+| Purpose | Path |
 |---|---|
-| Delegation, TaskContract | `src/lib/models/delegation.ts` |
-| ProjectBrief, ResearchRun, Finding | `src/lib/models/project-brief.ts` |
-| NBAConfig, NBARecommendation | `src/lib/nba-engine/nba-config.ts` |
-| ConnectorManifest, ConnectorHealth | `src/lib/connectors/types.ts` |
+| Fast local development | `C:\Users\svenb\dev\forgepilot` |
+| NAS code mirror / shared workspace | `Z:\NAS\Projects\forgepilot` |
+| ForgePilot project memory | `Z:\NAS\Codex\KI Betriebssystem` |
+| GitHub code truth | `https://github.com/Jokerbitt/forgepilot` |
 
-## Regeln (absolut)
+The NAS mirror can be used for shared inspection and coordination. Local development is still acceptable for speed, as long as GitHub and the NAS SSOT are updated.
 
-- Kein `any` in TypeScript
-- Kein `style={{}}` — ausschließlich Tailwind
-- Jede Funktion in `lib/` hat einen Test
-- RiskClass C → IMMER erst User fragen
-- Neue Features auf Feature-Branch, nie direkt auf main
-- Max. 1 PR pro Session
+## Stack
 
-## Befehle
+- Next.js 14 App Router
+- TypeScript strict
+- Tailwind CSS
+- Vitest
+- File-based JSON persistence under `config/*.json`
+- Docker deployment on QNAP NAS
+- n8n automation
+- Optional local AI via Ollama
+
+## Important Routes
+
+- `/` - Command Center
+- `/project-briefs` - project briefs / blueprint flow
+- `/delegations` - delegation queue
+- `/settings` - API keys, AI provider, NBA/autopilot config
+- `/api/intake` - n8n Linear intake target
+- `/api/project-briefs/[id]/research-run` - AI research run
+- `/api/project-briefs/[id]/generate-requirements` - requirements generation
+- `/api/delegations/[id]/approve` - automation-compatible approval
+- `/api/delegations/[id]/start` - alias for execution start
+- `/api/delegations/[id]/execute` - execution route
+
+## Rules
+
+- Communicate with Sven in German.
+- Code, identifiers, and comments in English.
+- No `any` types.
+- Use feature branches; do not commit directly to `main`.
+- Add or update tests for behavior changes.
+- Do not commit secrets.
+- Treat `config/*.json` as runtime state unless the task is explicitly about fixtures/defaults.
+- RiskClass C always needs human approval.
+- Keep meaningful decisions and handoffs in the NAS SSOT.
+
+## Verification
+
+Use these before PR-ready work:
 
 ```powershell
-npm run dev           # Lokaler Dev-Server :3000
-npm run type-check    # TypeScript strict
-npm run lint          # ESLint
-npm test -- --run     # Alle Tests einmalig
-
-# Deploy auf NAS (Windows)
-.\scripts\deploy-nas.ps1
-
-# Deploy auf NAS (Mac/Linux)
-bash scripts/deploy-nas.sh
+npm run test:run
+npm run lint
+npm run type-check
+npm run build
 ```
 
-## Autonomer Loop (Stufe 2)
+Do not run `npm run build` and `npm run type-check` in parallel because `.next/types` can race.
 
-```
-Linear Ticket erstellt
-  → n8n Webhook empfängt (http://192.168.0.136:5678)
-  → POST http://forgepilot:3000/api/intake
-  → ProjectBrief wird angelegt
-  → Research Run (Claude Haiku/Sonnet)
-  → Requirements generiert
-  → Delegation erstellt
-  → Autopilot-Tick erkennt approved Delegation
-  → POST /api/delegations/[id]/execute
-  → Claude CLI läuft autonom
-  → PR erstellt
-```
+## Current Baseline
 
-## NAS-Zugriff
+As of 2026-05-17:
 
-- ForgePilot: http://192.168.0.136:3002
-- n8n: http://192.168.0.136:5678 (admin / forgepilot)
-- SSH: admin@192.168.0.136
-- Docker: /share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker
-
-## SSOT auf NAS
-
-- ForgePilot Codex: `Z:\NAS\Codex\KI Betriebssystem\`
-- Setup Guide: `Z:\NAS\SecondBrain\01_Projects\forgepilot\SETUP-GUIDE.md`
-- Aktives Gedächtnis: `Z:\NAS\Claude\Memory\aktiv.md`
+- GitHub `main` includes the n8n workflows, Ollama provider bridge, approve/start delegation endpoints, and Mac setup guide.
+- Full local verification passed recently with 149 Vitest tests, lint, type-check, and production build.
+- NAS SSOT contains the latest autonomy/local-AI milestone notes.

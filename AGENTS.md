@@ -1,0 +1,72 @@
+# AGENTS.md - ForgePilot AI Workflow OS
+
+## Identity
+
+- Product: ForgePilot AI Workflow OS
+- Claim: From Idea to Execution
+- Owner: Sven Bittl / GitHub `Jokerbitt`
+- Communication with Sven: German
+- Code, identifiers, comments: English
+
+## Source Of Truth
+
+Use these systems in this order:
+
+| Topic | Source |
+|---|---|
+| Product vision, roadmap, standards, agent coordination | `Z:\NAS\Codex\KI Betriebssystem` |
+| Code, branches, pull requests, CI, releases | GitHub `https://github.com/Jokerbitt/forgepilot` |
+| Fast local implementation workspace | `C:\Users\svenb\dev\forgepilot` |
+| NAS code mirror / shared workspace | `Z:\NAS\Projects\forgepilot` |
+| Tasks, status, priorities, blockers | Linear |
+| Long-term knowledge and learnings | `Z:\NAS\SecondBrain` |
+
+Before strategic or cross-agent work, read:
+
+1. `Z:\NAS\Codex\KI Betriebssystem\AGENTS.md`
+2. `Z:\NAS\Codex\KI Betriebssystem\FORGEPILOT-SSOT.md`
+3. `Z:\NAS\Codex\KI Betriebssystem\README.md`
+4. `Z:\NAS\Codex\KI Betriebssystem\CLAUDE-CODE-CODEX-ZUSAMMENARBEIT-LEITFADEN.md`
+
+If repo docs and NAS docs disagree, the NAS version wins for project knowledge.
+
+## Current Workflow
+
+- Use feature branches for implementation: `feature/...`, `fix/...`, `chore/...`.
+- Do not commit directly to `main`.
+- Keep GitHub as the code truth.
+- Keep the NAS SSOT updated after meaningful product, architecture, connector, local-AI, n8n, or autonomy decisions.
+- The NAS code mirror exists so agents can inspect and coordinate from NAS, but local development may remain on `C:\Users\svenb\dev\forgepilot` for speed.
+
+## Engineering Rules
+
+- TypeScript strict, no `any`.
+- Tests for changed behavior, especially `lib/*` and API routes.
+- Prefer existing patterns over new abstractions.
+- Do not commit secrets or local runtime data.
+- Avoid direct edits to generated artifacts.
+- Never delete files, repos, branches, or data without explicit approval.
+- Do not push publicly unless Sven has allowed it for the task. As of 2026-05-17, GitHub work is allowed again, but still use PRs for changes.
+
+## Verification
+
+Run the relevant subset first, then full checks before PR-ready work:
+
+```powershell
+npm run test:run
+npm run lint
+npm run type-check
+npm run build
+```
+
+Known note: do not run `npm run build` and `npm run type-check` in parallel because both touch/read `.next/types`.
+
+## Product Guardrails
+
+- ForgePilot is a local-first, NAS-first AI workflow operating system.
+- Linear remains the task SSOT.
+- GitHub remains the code/PR/CI SSOT.
+- Obsidian/SecondBrain remains long-term knowledge.
+- ForgePilot orchestrates idea intake, research, requirements, delegation, risk, cost, approval, agent execution, PR feedback, and knowledge writeback.
+- Critical actions require human approval.
+- Runner/n8n/agents need a task contract, budget/risk classification, privacy mode, and trace.
