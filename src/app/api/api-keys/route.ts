@@ -9,6 +9,7 @@ export interface ApiKeysConfig {
   LINEAR_API_KEY?: string
   LINEAR_TEAM_ID?: string
   ANTHROPIC_API_KEY?: string
+  OLLAMA_BASE_URL?: string
 }
 
 function readApiKeys(): ApiKeysConfig {
@@ -41,11 +42,13 @@ export async function GET() {
     LINEAR_API_KEY: keys.LINEAR_API_KEY ? maskKey(keys.LINEAR_API_KEY) : '',
     LINEAR_TEAM_ID: keys.LINEAR_TEAM_ID ?? '',
     ANTHROPIC_API_KEY: keys.ANTHROPIC_API_KEY ? maskKey(keys.ANTHROPIC_API_KEY) : '',
+    OLLAMA_BASE_URL: keys.OLLAMA_BASE_URL ?? '',
     _set: {
       GITHUB_TOKEN: !!keys.GITHUB_TOKEN,
       LINEAR_API_KEY: !!keys.LINEAR_API_KEY,
       LINEAR_TEAM_ID: !!keys.LINEAR_TEAM_ID,
       ANTHROPIC_API_KEY: !!keys.ANTHROPIC_API_KEY,
+      OLLAMA_BASE_URL: !!keys.OLLAMA_BASE_URL,
     },
   })
 }
@@ -77,6 +80,7 @@ export async function POST(request: Request) {
       LINEAR_API_KEY: !!merged.LINEAR_API_KEY,
       LINEAR_TEAM_ID: !!merged.LINEAR_TEAM_ID,
       ANTHROPIC_API_KEY: !!merged.ANTHROPIC_API_KEY,
+      OLLAMA_BASE_URL: !!merged.OLLAMA_BASE_URL,
     },
   })
 }

@@ -52,6 +52,7 @@ export default function SettingsPage() {
     LINEAR_API_KEY: '',
     LINEAR_TEAM_ID: '',
     ANTHROPIC_API_KEY: '',
+    OLLAMA_BASE_URL: '',
   })
   const [apiKeySaving, setApiKeySaving] = useState(false)
   const [apiKeySaved, setApiKeySaved] = useState(false)
@@ -80,7 +81,7 @@ export default function SettingsPage() {
     })
     const data = await res.json() as { _set: Record<string, boolean> }
     setApiKeySet(data._set ?? {})
-    setApiKeyDraft({ GITHUB_TOKEN: '', LINEAR_API_KEY: '', LINEAR_TEAM_ID: '', ANTHROPIC_API_KEY: '' })
+    setApiKeyDraft({ GITHUB_TOKEN: '', LINEAR_API_KEY: '', LINEAR_TEAM_ID: '', ANTHROPIC_API_KEY: '', OLLAMA_BASE_URL: '' })
     setApiKeySaving(false)
     setApiKeySaved(true)
     setTimeout(() => setApiKeySaved(false), 3000)
@@ -191,6 +192,109 @@ export default function SettingsPage() {
             >
               {apiKeySaving ? 'Speichere...' : 'API Keys speichern'}
             </button>
+          </div>
+        </section>
+
+        {/* Ollama / Local AI Section */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-gray-300">🦙 Lokale KI (Ollama)</h2>
+            <span className="text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-500">Optional</span>
+          </div>
+          <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 space-y-3">
+            <p className="text-sm text-gray-400">
+              Verbinde einen lokalen Ollama-Server (z.B. auf dem Mac mit M5 Pro) als kostenlose Alternative zu Anthropic.
+              <span className="block mt-1 text-xs text-gray-600">Ollama läuft auf <code className="bg-gray-800 px-1 rounded">localhost:11434</code> — von außen per LAN oder Tailscale erreichbar.</span>
+            </p>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm font-medium text-gray-300">Ollama Base URL</label>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                  apiKeySet['OLLAMA_BASE_URL']
+                    ? 'bg-green-900/40 text-green-400'
+                    : 'bg-gray-800 text-gray-500'
+                }`}>
+                  {apiKeySet['OLLAMA_BASE_URL'] ? '✓ Gesetzt' : 'Nicht gesetzt'}
+                </span>
+              </div>
+              <input
+                type="text"
+                value={apiKeyDraft['OLLAMA_BASE_URL'] ?? ''}
+                onChange={e => setApiKeyDraft(prev => ({ ...prev, OLLAMA_BASE_URL: e.target.value }))}
+                placeholder={apiKeySet['OLLAMA_BASE_URL'] ? 'URL gesetzt — neu eingeben zum Ändern' : 'http://localhost:11434'}
+                className="w-full bg-gray-950 text-white px-3 py-2 rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-mono"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Wird für zukünftige lokale Inferenz genutzt. Noch nicht aktiv — Vorbereitung für Mac-Setup.
+              </p>
+            </div>
+            <button
+              onClick={handleSaveApiKeys}
+              disabled={apiKeySaving || !apiKeyDraft['OLLAMA_BASE_URL']?.trim()}
+              className="w-full bg-gray-700 hover:bg-gray-600 disabled:opacity-40 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm"
+            >
+              {apiKeySaving ? 'Speichere...' : 'Ollama URL speichern'}
+            </button>
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-gray-300">AI Provider</h2>
+            <span className="text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-500">
+              {config.aiProvider === 'ollama' ? 'Lokal aktiv' : 'Anthropic aktiv'}
+            </span>
+          </div>
+          <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {(['anthropic', 'ollama'] as const).map(provider => (
+                <button
+                  key={provider}
+                  onClick={() => setConfig({ ...config, aiProvider: provider })}
+                  className={`px-3 py-3 rounded-lg border text-left transition-colors ${
+                    config.aiProvider === provider
+                      ? 'bg-blue-600 border-blue-500 text-white'
+                      : 'bg-gray-950 border-gray-800 text-gray-400 hover:text-white hover:border-gray-700'
+                  }`}
+                >
+                  <span className="block text-sm font-bold">
+                    {provider === 'anthropic' ? 'Anthropic' : 'Lokal / Ollama'}
+                  </span>
+                  <span className="block text-xs opacity-80 mt-1">
+                    {provider === 'anthropic'
+                      ? 'Cloud-Provider fuer Claude-nahe KI-Features'
+                      : 'Lokale Modelle, bevorzugt auf dem MacBook Pro'}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <p className="text-sm text-gray-400">
+              Research Run, Requirements-Generierung und AI Suggest nutzen diese Auswahl.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Coding-/Research-Modell</label>
+                <input
+                  type="text"
+                  value={config.localCodingModel}
+                  onChange={e => setConfig({ ...config, localCodingModel: e.target.value })}
+                  placeholder="qwen2.5-coder:14b"
+                  className="w-full bg-gray-950 text-white px-3 py-2 rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Schnelles Modell</label>
+                <input
+                  type="text"
+                  value={config.localFastModel}
+                  onChange={e => setConfig({ ...config, localFastModel: e.target.value })}
+                  placeholder="llama3.2:3b"
+                  className="w-full bg-gray-950 text-white px-3 py-2 rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-mono"
+                />
+              </div>
+            </div>
           </div>
         </section>
 
