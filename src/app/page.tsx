@@ -6,6 +6,7 @@ import { DelegationQueueSummary } from '@/components/delegation/DelegationQueueS
 import { FailedDelegationsWidget } from '@/components/delegation/FailedDelegationsWidget'
 import { DailyCostWidget } from '@/components/command-center/DailyCostWidget'
 import { MagicCreate } from '@/components/command-center/MagicCreate'
+import { OperatorReadinessPanel } from '@/components/command-center/OperatorReadinessPanel'
 import { ApiKeysBanner } from '@/components/shared/ApiKeysBanner'
 import { ProjectBriefsSummary } from '@/components/project-briefs/ProjectBriefsSummary'
 
@@ -40,6 +41,7 @@ export default function Home() {
         </header>
 
         <MagicCreate />
+        <OperatorReadinessPanel />
         <ProjectBriefsSummary />
         <ActiveAgentsPanel />
         <DelegationQueueSummary />
