@@ -85,7 +85,7 @@ All secrets live in this file only — never in code or git. When adding a new k
 | `LINEAR_TEAM_ID` | ✅ gesetzt | Ziel-Team für neue Tickets |
 | `GITHUB_TOKEN` | ✅ gesetzt | GitHub PRs + Work Items |
 | `TELEGRAM_BOT_TOKEN` | ✅ gesetzt | Bot: @sven_briefing_bot |
-| `TELEGRAM_CHAT_ID` | ⏳ offen | /start an @sven_briefing_bot senden, dann eintragen |
+| `TELEGRAM_CHAT_ID` | ✅ gesetzt | Chat-ID: 8938045299 (Sven Bittl) |
 | `OLLAMA_BASE_URL` | ⏳ offen | Erst Mac einrichten: `tailscale ip -4` → `http://[ip]:11434` |
 
 ### n8n Workflows

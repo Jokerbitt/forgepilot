@@ -101,7 +101,7 @@ Do not run `npm run build` and `npm run type-check` in parallel because `.next/t
 | `LINEAR_TEAM_ID` | ✅ set | Target team for new tickets |
 | `GITHUB_TOKEN` | ✅ set | GitHub PRs + Work Items |
 | `TELEGRAM_BOT_TOKEN` | ✅ set | Bot: @sven_briefing_bot |
-| `TELEGRAM_CHAT_ID` | ⏳ open | Send /start to @sven_briefing_bot, then enter the returned ID |
+| `TELEGRAM_CHAT_ID` | ✅ set | Chat ID: 8938045299 (Sven Bittl) |
 | `OLLAMA_BASE_URL` | ⏳ open | Set up Mac first: `tailscale ip -4` → `http://[ip]:11434` |
 
 ### n8n Workflows
