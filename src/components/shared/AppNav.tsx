@@ -106,20 +106,20 @@ export function AppNav() {
       </aside>
 
       <nav className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950/95 backdrop-blur lg:hidden">
-        <div className="flex min-h-16 items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="grid h-8 w-8 place-items-center rounded-md border border-sky-500/30 bg-sky-500/10 text-xs font-bold text-sky-300">
+        <div className="flex min-h-14 items-center gap-2 px-3">
+          <Link href="/" className="flex shrink-0 items-center gap-2 pr-1">
+            <span className="grid h-7 w-7 place-items-center rounded-md border border-sky-500/30 bg-sky-500/10 text-xs font-bold text-sky-300">
               FP
             </span>
-            <span className="text-sm font-semibold text-white">ForgePilot</span>
+            <span className="hidden text-sm font-semibold text-white sm:block">ForgePilot</span>
           </Link>
-          <div className="flex items-center gap-1 overflow-x-auto">
+          <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {navItems.map(item => (
               <Link
                 key={item.href}
                 href={item.href}
                 className={cx(
-                  'rounded-md px-2.5 py-2 text-xs font-semibold transition-colors',
+                  'shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors',
                   (item.href === '/' ? pathname === '/' : pathname.startsWith(item.href))
                     ? 'bg-slate-800 text-white'
                     : 'text-slate-400 hover:bg-slate-900 hover:text-white'
@@ -129,6 +129,11 @@ export function AppNav() {
               </Link>
             ))}
           </div>
+          {totalActive > 0 && (
+            <span className="shrink-0 rounded-full bg-sky-500/20 px-2 py-0.5 text-xs font-medium text-sky-300">
+              {totalActive}
+            </span>
+          )}
         </div>
       </nav>
     </>
