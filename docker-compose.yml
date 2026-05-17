@@ -6,7 +6,7 @@ services:
     container_name: forgepilot
     restart: unless-stopped
     ports:
-      - "3001:3000"
+      - "3002:3000"
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - LINEAR_API_KEY=${LINEAR_API_KEY:-}
