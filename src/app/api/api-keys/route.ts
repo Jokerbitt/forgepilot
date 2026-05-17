@@ -7,6 +7,7 @@ const API_KEYS_FILE = path.join(process.cwd(), 'config', 'api-keys.json')
 export interface ApiKeysConfig {
   GITHUB_TOKEN?: string
   LINEAR_API_KEY?: string
+  LINEAR_TEAM_ID?: string
   ANTHROPIC_API_KEY?: string
 }
 
@@ -38,11 +39,12 @@ export async function GET() {
   return NextResponse.json({
     GITHUB_TOKEN: keys.GITHUB_TOKEN ? maskKey(keys.GITHUB_TOKEN) : '',
     LINEAR_API_KEY: keys.LINEAR_API_KEY ? maskKey(keys.LINEAR_API_KEY) : '',
+    LINEAR_TEAM_ID: keys.LINEAR_TEAM_ID ?? '',
     ANTHROPIC_API_KEY: keys.ANTHROPIC_API_KEY ? maskKey(keys.ANTHROPIC_API_KEY) : '',
-    // Flags for UI to know if key is actually set (unmasked)
     _set: {
       GITHUB_TOKEN: !!keys.GITHUB_TOKEN,
       LINEAR_API_KEY: !!keys.LINEAR_API_KEY,
+      LINEAR_TEAM_ID: !!keys.LINEAR_TEAM_ID,
       ANTHROPIC_API_KEY: !!keys.ANTHROPIC_API_KEY,
     },
   })
@@ -73,6 +75,7 @@ export async function POST(request: Request) {
     _set: {
       GITHUB_TOKEN: !!merged.GITHUB_TOKEN,
       LINEAR_API_KEY: !!merged.LINEAR_API_KEY,
+      LINEAR_TEAM_ID: !!merged.LINEAR_TEAM_ID,
       ANTHROPIC_API_KEY: !!merged.ANTHROPIC_API_KEY,
     },
   })

@@ -9,6 +9,7 @@ type EnvMap = Record<string, string | undefined>
 interface StoredApiKeys {
   GITHUB_TOKEN?: string
   LINEAR_API_KEY?: string
+  LINEAR_TEAM_ID?: string
   ANTHROPIC_API_KEY?: string
 }
 
@@ -33,7 +34,7 @@ function mergedEnv(env: EnvMap): EnvMap {
   const stored = readStoredApiKeys()
   return {
     LINEAR_API_KEY: env['LINEAR_API_KEY'] ?? stored.LINEAR_API_KEY,
-    LINEAR_TEAM_ID: env['LINEAR_TEAM_ID'],
+    LINEAR_TEAM_ID: env['LINEAR_TEAM_ID'] ?? stored.LINEAR_TEAM_ID,
     GITHUB_TOKEN: env['GITHUB_TOKEN'] ?? stored.GITHUB_TOKEN,
     GITHUB_OWNER: env['GITHUB_OWNER'],
     GITHUB_REPOSITORY_OWNER: env['GITHUB_REPOSITORY_OWNER'],
