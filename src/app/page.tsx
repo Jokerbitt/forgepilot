@@ -2,6 +2,7 @@ import { ConnectorHealthBar } from '@/components/command-center/ConnectorHealthB
 import { NBAPanel } from '@/components/command-center/NBAPanel'
 import { ActiveAgentsPanel } from '@/components/delegation/ActiveAgentsPanel'
 import { DelegationQueueSummary } from '@/components/delegation/DelegationQueueSummary'
+import { FailedDelegationsWidget } from '@/components/delegation/FailedDelegationsWidget'
 import { DailyCostWidget } from '@/components/command-center/DailyCostWidget'
 import { MagicCreate } from '@/components/command-center/MagicCreate'
 import { ApiKeysBanner } from '@/components/shared/ApiKeysBanner'
@@ -40,6 +41,7 @@ export default function Home() {
         <ProjectBriefsSummary />
         <ActiveAgentsPanel />
         <DelegationQueueSummary />
+        <FailedDelegationsWidget />
         <DailyCostWidget />
         <NBAPanel />
       </div>
