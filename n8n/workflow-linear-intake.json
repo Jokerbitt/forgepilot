@@ -1,0 +1,100 @@
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "name": "Linear → ForgePilot Intake",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "linear-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Linear Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "linear-intake-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "check-action",
+              "leftValue": "={{ $json.body.action }}",
+              "rightValue": "create",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-create",
+      "name": "Nur neue Issues",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const issue = $input.first().json.body.data || $input.first().json.body;\nconst title = issue.title || issue.data?.title || 'Neues Linear-Ticket';\nconst description = issue.description || issue.data?.description || '';\nconst priority = issue.priority || issue.data?.priority || 0;\n\n// Priorität → Scope mappen\nconst scope = priority <= 1 ? 'deep' : priority <= 2 ? 'standard' : 'quick';\n\nreturn [{\n  json: {\n    title,\n    rawIdea: description || title,\n    problemStatement: description,\n    targetAudience: 'ForgePilot-Nutzer',\n    desiredOutcome: `Issue '${title}' vollständig umsetzen`,\n    scope,\n    privacyMode: 'local',\n    source: 'linear-webhook',\n    linearIssueId: issue.id || issue.data?.id,\n    linearIdentifier: issue.identifier || issue.data?.identifier\n  }\n}];"
+      },
+      "id": "map-payload",
+      "name": "Linear → Intake Format",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://forgepilot:3000/api/intake",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "post-intake",
+      "name": "POST /api/intake",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ received: true, briefId: $json.id, title: $('Linear → Intake Format').first().json.title }) }}",
+        "options": {}
+      },
+      "id": "respond",
+      "name": "Antwort",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Linear Webhook": {
+      "main": [[{ "node": "Nur neue Issues", "type": "main", "index": 0 }]]
+    },
+    "Nur neue Issues": {
+      "main": [[{ "node": "Linear → Intake Format", "type": "main", "index": 0 }]]
+    },
+    "Linear → Intake Format": {
+      "main": [[{ "node": "POST /api/intake", "type": "main", "index": 0 }]]
+    },
+    "POST /api/intake": {
+      "main": [[{ "node": "Antwort", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": true,
+  "settings": { "executionOrder": "v1" },
+  "tags": []
+}
