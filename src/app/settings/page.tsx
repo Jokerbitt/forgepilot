@@ -5,10 +5,11 @@ import type { NBAConfig } from '@/lib/nba-engine/nba-config'
 import { describeApprovalMode } from '@/lib/nba-engine/approval-policy'
 
 interface ApiKeyField {
-  key: 'GITHUB_TOKEN' | 'LINEAR_API_KEY' | 'ANTHROPIC_API_KEY'
+  key: 'GITHUB_TOKEN' | 'LINEAR_API_KEY' | 'LINEAR_TEAM_ID' | 'ANTHROPIC_API_KEY'
   label: string
   placeholder: string
   hint: string
+  inputType?: 'password' | 'text'
 }
 
 const API_KEY_FIELDS: ApiKeyField[] = [
@@ -23,6 +24,13 @@ const API_KEY_FIELDS: ApiKeyField[] = [
     label: 'Linear API Key',
     placeholder: 'lin_api_...',
     hint: 'Für Linear Tickets als Work Items. Settings → API → Personal API Keys',
+  },
+  {
+    key: 'LINEAR_TEAM_ID',
+    label: 'Linear Team ID',
+    placeholder: 'team-xxxxxxxx',
+    hint: 'Team-ID aus Linear (URL: linear.app/[team]/settings). Wird für Ticket-Erstellung benötigt.',
+    inputType: 'text',
   },
   {
     key: 'ANTHROPIC_API_KEY',
@@ -42,6 +50,7 @@ export default function SettingsPage() {
   const [apiKeyDraft, setApiKeyDraft] = useState<Record<string, string>>({
     GITHUB_TOKEN: '',
     LINEAR_API_KEY: '',
+    LINEAR_TEAM_ID: '',
     ANTHROPIC_API_KEY: '',
   })
   const [apiKeySaving, setApiKeySaving] = useState(false)
@@ -71,7 +80,7 @@ export default function SettingsPage() {
     })
     const data = await res.json() as { _set: Record<string, boolean> }
     setApiKeySet(data._set ?? {})
-    setApiKeyDraft({ GITHUB_TOKEN: '', LINEAR_API_KEY: '', ANTHROPIC_API_KEY: '' })
+    setApiKeyDraft({ GITHUB_TOKEN: '', LINEAR_API_KEY: '', LINEAR_TEAM_ID: '', ANTHROPIC_API_KEY: '' })
     setApiKeySaving(false)
     setApiKeySaved(true)
     setTimeout(() => setApiKeySaved(false), 3000)
@@ -124,7 +133,7 @@ export default function SettingsPage() {
             <p className="text-sm text-gray-400">
               Keys werden lokal in <code className="text-xs bg-gray-800 px-1 py-0.5 rounded">config/api-keys.json</code> gespeichert (nicht in Git).
             </p>
-            {API_KEY_FIELDS.map(({ key, label, placeholder, hint }) => (
+            {API_KEY_FIELDS.map(({ key, label, placeholder, hint, inputType }) => (
               <div key={key}>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-sm font-medium text-gray-300">{label}</label>
@@ -166,10 +175,10 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <input
-                  type="password"
+                  type={inputType ?? 'password'}
                   value={apiKeyDraft[key] ?? ''}
                   onChange={e => setApiKeyDraft(prev => ({ ...prev, [key]: e.target.value }))}
-                  placeholder={apiKeySet[key] ? '••••••••••••••••' : placeholder}
+                  placeholder={apiKeySet[key] && inputType !== 'text' ? '••••••••••••••••' : placeholder}
                   className="w-full bg-gray-950 text-white px-3 py-2 rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-mono"
                 />
                 <p className="text-xs text-gray-500 mt-1">{hint}</p>
