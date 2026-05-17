@@ -71,22 +71,53 @@ Known note: do not run `npm run build` and `npm run type-check` in parallel beca
 | n8n | http://100.94.55.15:5678 | ✅ live |
 | Ollama (Mac) | http://[mac-tailscale-ip]:11434 | ⏳ Mac-Setup ausstehend |
 
-### Environment File on NAS
+### API Keys — Wo liegen sie?
 
-Location: `/share/forgepilot/.env`
-Local reference: `C:\Users\svenb\dev\forgepilot\.env.local`
+Es gibt **zwei unabhängige Stellen** — beide müssen befüllt sein:
 
-All secrets live in this file only — never in code or git. When adding a new key, update both the NAS `.env` and the local `.env.local`.
+#### 1. ForgePilot Settings UI → `config/api-keys.json`
+
+Genutzt von: ForgePilot-App (Connectors, Research, Requirements, Linear-Ticket-Erstellung)
+
+Öffnen: **http://100.94.55.15:3002/settings** → Abschnitt "API Keys"
+
+Dort werden folgende Keys eingetragen (Eingabe im Browser, Speicherung in `config/api-keys.json` auf dem NAS):
+
+| Key | Zweck |
+|---|---|
+| `ANTHROPIC_API_KEY` | Claude KI — Research + Requirements |
+| `LINEAR_API_KEY` | Linear Tickets lesen + kommentieren |
+| `LINEAR_TEAM_ID` | Ziel-Team für neue Tickets |
+| `GITHUB_TOKEN` | GitHub PRs + Work Items |
+| `OLLAMA_BASE_URL` | Lokale KI (Ollama auf Mac, optional) |
+
+#### 2. Umgebungsvariablen → `.env` auf NAS / `.env.local` lokal
+
+Genutzt von: n8n-Workflows (Telegram-Benachrichtigungen, Linear-Webhook-Verarbeitung), Docker Compose
+
+Dateien:
+- NAS (live): `/share/forgepilot/.env`
+- Lokal (Entwicklung): `C:\Users\svenb\dev\forgepilot\.env.local`
+
+**Niemals in Git einchecken.** Beide Dateien sind gitignored.
 
 | Variable | Status | Zweck |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | ✅ gesetzt | Claude KI — Research, Requirements |
-| `LINEAR_API_KEY` | ✅ gesetzt | Linear Tickets lesen + kommentieren |
-| `LINEAR_TEAM_ID` | ✅ gesetzt | Ziel-Team für neue Tickets |
-| `GITHUB_TOKEN` | ✅ gesetzt | GitHub PRs + Work Items |
+| `ANTHROPIC_API_KEY` | ✅ gesetzt | Claude KI (auch als env-Fallback für App) |
+| `LINEAR_API_KEY` | ✅ gesetzt | n8n: Linear Ticket kommentieren |
+| `LINEAR_TEAM_ID` | ✅ gesetzt | n8n: Ziel-Team |
+| `GITHUB_TOKEN` | ✅ gesetzt | n8n: GitHub PRs |
 | `TELEGRAM_BOT_TOKEN` | ✅ gesetzt | Bot: @sven_briefing_bot |
 | `TELEGRAM_CHAT_ID` | ✅ gesetzt | Chat-ID: 8938045299 (Sven Bittl) |
-| `OLLAMA_BASE_URL` | ⏳ offen | Erst Mac einrichten: `tailscale ip -4` → `http://[ip]:11434` |
+| `OLLAMA_BASE_URL` | ⏳ offen | Mac-Setup nötig: `tailscale ip -4` → `http://[ip]:11434` |
+
+#### Priorität bei doppelter Konfiguration
+
+ForgePilot liest Keys in dieser Reihenfolge:
+1. `config/api-keys.json` (Settings UI) — hat Vorrang
+2. Umgebungsvariablen (`.env`) — Fallback wenn Settings leer
+
+→ Am einfachsten: Settings UI befüllen. Die `.env` auf dem NAS wird dann nur noch von n8n gebraucht.
 
 ### n8n Workflows
 

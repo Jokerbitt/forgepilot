@@ -87,22 +87,36 @@ Do not run `npm run build` and `npm run type-check` in parallel because `.next/t
 | n8n | http://100.94.55.15:5678 | ✅ live |
 | Ollama (Mac) | http://[mac-tailscale-ip]:11434 | ⏳ Mac-Setup ausstehend |
 
-### Environment Files
+### API Keys — Two separate locations
 
+**1. ForgePilot Settings UI** → stored in `config/api-keys.json`
+Used by: ForgePilot app (connectors, research, requirements, Linear ticket creation)
+Enter at: **http://100.94.55.15:3002/settings**
+
+| Key | Purpose |
+|---|---|
+| `ANTHROPIC_API_KEY` | Claude AI — research + requirements |
+| `LINEAR_API_KEY` | Read + comment Linear tickets |
+| `LINEAR_TEAM_ID` | Target team for new tickets |
+| `GITHUB_TOKEN` | GitHub PRs + work items |
+| `OLLAMA_BASE_URL` | Local AI (Ollama on Mac, optional) |
+
+**2. Environment files** → used by n8n workflows + Docker
 - NAS (live): `/share/forgepilot/.env`
-- Local reference: `C:\Users\svenb\dev\forgepilot\.env.local`
-- **Never commit either file to git.**
-- When adding a new key: update both the NAS `.env` and local `.env.local`.
+- Local: `C:\Users\svenb\dev\forgepilot\.env.local`
+- **Never commit to git.** Both files are gitignored.
 
 | Variable | Status | Purpose |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | ✅ set | Claude AI — Research, Requirements |
-| `LINEAR_API_KEY` | ✅ set | Read + comment Linear tickets |
-| `LINEAR_TEAM_ID` | ✅ set | Target team for new tickets |
-| `GITHUB_TOKEN` | ✅ set | GitHub PRs + Work Items |
+| `ANTHROPIC_API_KEY` | ✅ set | Also env fallback for app |
+| `LINEAR_API_KEY` | ✅ set | n8n: comment on Linear tickets |
+| `LINEAR_TEAM_ID` | ✅ set | n8n: target team |
+| `GITHUB_TOKEN` | ✅ set | n8n: GitHub PRs |
 | `TELEGRAM_BOT_TOKEN` | ✅ set | Bot: @sven_briefing_bot |
-| `TELEGRAM_CHAT_ID` | ✅ set | Chat ID: 8938045299 (Sven Bittl) |
-| `OLLAMA_BASE_URL` | ⏳ open | Set up Mac first: `tailscale ip -4` → `http://[ip]:11434` |
+| `TELEGRAM_CHAT_ID` | ✅ set | 8938045299 (Sven Bittl) |
+| `OLLAMA_BASE_URL` | ⏳ open | Mac setup needed: `tailscale ip -4` → `http://[ip]:11434` |
+
+ForgePilot reads keys in order: Settings UI (`config/api-keys.json`) → env fallback.
 
 ### n8n Workflows
 
