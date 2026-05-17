@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+config
+.env*
+*.log
+scripts
+docs
+vitest.config.ts
+*.test.ts
+*.test.tsx
+tsconfig.tsbuildinfo
+README.md
+tmp-next-*
