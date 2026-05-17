@@ -22,12 +22,12 @@ Use these systems in this order:
 | Tasks, status, priorities, blockers | Linear |
 | Long-term knowledge and learnings | `/Volumes/Sven/NAS/SecondBrain` |
 
-Before strategic or cross-agent work, read:
+Before strategic or cross-agent work, read in this order:
 
 1. `/Volumes/Sven/NAS/Codex/KI Betriebssystem/AGENTS.md`
 2. `/Volumes/Sven/NAS/Codex/KI Betriebssystem/FORGEPILOT-SSOT.md`
-3. `/Volumes/Sven/NAS/Codex/KI Betriebssystem/README.md`
-4. `/Volumes/Sven/NAS/Codex/KI Betriebssystem/CLAUDE-CODE-CODEX-ZUSAMMENARBEIT-LEITFADEN.md`
+3. `/Volumes/Sven/NAS/Codex/KI Betriebssystem/04_Roadmap/FORGEPILOT-ROADMAP-KONSOLIDIERT-2026-05-17.md`
+4. `/Volumes/Sven/NAS/Codex/KI Betriebssystem/FORGEPILOT-SETTINGS-CREDENTIALS.md`
 
 If repo docs and NAS docs disagree, the NAS version wins for project knowledge.
 
