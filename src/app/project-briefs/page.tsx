@@ -1,107 +1,167 @@
 import Link from 'next/link'
 import { readProjectBriefs } from '@/lib/project-briefs'
 import type { ProjectBrief } from '@/lib/models/project-brief'
+import { buildProjectBriefsWorkspaceViewModel, type WorkspaceBrief } from '@/lib/project-briefs-workspace'
+import {
+  Badge,
+  DecisionCallout,
+  EmptyState,
+  Metric,
+  Panel,
+  RiskIndicator,
+  Toolbar,
+  buttonClassName,
+  cx,
+} from '@/components/ui/primitives'
 
-const STATUS_LABELS: Record<ProjectBrief['status'], string> = {
-  draft: 'Entwurf',
-  in_review: 'In Review',
-  accepted: 'Freigegeben',
-  archived: 'Archiviert',
+export const dynamic = 'force-dynamic'
+
+const STATUS_TONES: Record<ProjectBrief['status'], 'neutral' | 'warning' | 'success'> = {
+  draft: 'neutral',
+  in_review: 'warning',
+  accepted: 'success',
+  archived: 'neutral',
 }
 
-const STATUS_COLORS: Record<ProjectBrief['status'], string> = {
-  draft: 'bg-gray-800 text-gray-400',
-  in_review: 'bg-yellow-900/40 text-yellow-400',
-  accepted: 'bg-green-900/40 text-green-400',
-  archived: 'bg-gray-900 text-gray-600',
+const RISK_LABELS: Record<WorkspaceBrief['riskLevel'], string> = {
+  low: 'niedrig',
+  medium: 'mittel',
+  high: 'hoch',
+  critical: 'kritisch',
 }
 
 export default function ProjectBriefsPage() {
   const briefs = readProjectBriefs()
-  const active = briefs.filter(b => b.status !== 'archived')
-  const archived = briefs.filter(b => b.status === 'archived')
+  const viewModel = buildProjectBriefsWorkspaceViewModel(briefs)
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
-
-        <div className="flex items-center justify-between mb-6">
+    <main className="min-h-screen bg-slate-950 text-white">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <header className="mb-6 flex flex-col gap-4 border-b border-slate-800 pb-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Projekte</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              {active.length} aktive Projekte
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Project Blueprint</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">Project Briefs Workspace</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+              Ideen werden hier zu pruefbaren Projektbriefs, Requirements, Risiken und delegierbaren Arbeitspaketen verdichtet.
             </p>
           </div>
-          <Link
-            href="/project-briefs/new"
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
-          >
-            ✦ Neue Idee
+          <Link href="/project-briefs/new" className={buttonClassName('primary', 'w-full sm:w-auto')}>
+            Neue Idee erfassen
           </Link>
-        </div>
+        </header>
 
-        {briefs.length === 0 ? (
-          <div className="text-center py-16">
-            <span className="text-4xl block mb-3">💡</span>
-            <p className="text-gray-400 mb-2">Noch keine Projekte.</p>
-            <p className="text-gray-600 text-sm mb-6">Fange mit einer Idee an — ForgePilot hilft dir, sie zu strukturieren.</p>
-            <Link
-              href="/project-briefs/new"
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              Erste Idee erfassen
-            </Link>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {active.map(brief => (
-              <BriefRow key={brief.id} brief={brief} />
-            ))}
+        <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <Metric label="Aktive Briefs" value={viewModel.metrics.active} detail="nicht archiviert" tone="info" />
+          <Metric label="In Review" value={viewModel.metrics.reviewCount} detail="brauchen Entscheidung" tone={viewModel.metrics.reviewCount > 0 ? 'warning' : 'neutral'} />
+          <Metric label="Freigegeben" value={viewModel.metrics.acceptedCount} detail="bereit fuer Umsetzung" tone="success" />
+          <Metric label="Delegiert" value={viewModel.metrics.delegatedCount} detail="mit Agentenbezug" tone="privacy" />
+          <Metric label="Risikosignale" value={viewModel.metrics.openRiskCount} detail="offen oder hoch" tone={viewModel.metrics.openRiskCount > 0 ? 'danger' : 'neutral'} />
+        </section>
 
-            {archived.length > 0 && (
-              <>
-                <div className="pt-4 pb-2">
-                  <p className="text-xs text-gray-600 uppercase tracking-wider">Archiviert ({archived.length})</p>
-                </div>
-                {archived.map(brief => (
-                  <BriefRow key={brief.id} brief={brief} />
-                ))}
-              </>
-            )}
+        {viewModel.nextAction && (
+          <div className="mb-6">
+            <DecisionCallout
+              label="Next Best Action"
+              title={viewModel.nextAction.title}
+              description={viewModel.nextAction.description}
+              tone="info"
+              action={(
+                <Link href={viewModel.nextAction.href} className={buttonClassName('secondary')}>
+                  Brief oeffnen
+                </Link>
+              )}
+            />
           </div>
         )}
+
+        {briefs.length === 0 ? (
+          <EmptyState
+            title="Noch keine Projektbriefs"
+            description="Starte mit einer Idee. ForgePilot fuehrt sie danach in Requirements, Risiken, Research und konkrete Arbeitspakete."
+            action={(
+              <Link href="/project-briefs/new" className={buttonClassName('primary')}>
+                Erste Idee erfassen
+              </Link>
+            )}
+          />
+        ) : (
+          <Panel>
+            <Toolbar>
+              <div>
+                <h2 className="text-sm font-semibold text-white">Aktive Projektbriefs</h2>
+                <p className="mt-1 text-xs text-slate-500">Sortiert nach Aktualitaet, mit Readiness, Risiko und naechster Aktion.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge tone="info">{viewModel.metrics.active} aktiv</Badge>
+                {viewModel.metrics.reviewCount > 0 && <Badge tone="warning">{viewModel.metrics.reviewCount} in Review</Badge>}
+                {viewModel.metrics.openRiskCount > 0 && <Badge tone="danger">{viewModel.metrics.openRiskCount} Risiko</Badge>}
+              </div>
+            </Toolbar>
+
+            <div className="divide-y divide-slate-800">
+              {viewModel.active.map(brief => (
+                <BriefRow key={brief.id} brief={brief} />
+              ))}
+            </div>
+
+            {viewModel.archived.length > 0 && (
+              <div className="border-t border-slate-800">
+                <div className="px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Archiviert ({viewModel.archived.length})</p>
+                </div>
+                <div className="divide-y divide-slate-800">
+                  {viewModel.archived.map(brief => (
+                    <BriefRow key={brief.id} brief={brief} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </Panel>
+        )}
       </div>
-    </div>
+    </main>
   )
 }
 
-function BriefRow({ brief }: { brief: ProjectBrief }) {
-  const accepted = brief.requirements.filter(r => r.status === 'accepted').length
-  const total = brief.requirements.length
+function BriefRow({ brief }: { brief: WorkspaceBrief }) {
   return (
     <Link
       href={`/project-briefs/${brief.id}`}
-      className="flex items-center justify-between p-4 bg-gray-900 border border-gray-800 rounded-xl hover:border-gray-600 transition-colors group"
+      className="grid gap-4 px-4 py-4 transition-colors hover:bg-slate-900/70 lg:grid-cols-[minmax(0,1.5fr)_140px_150px_180px] lg:items-center"
     >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <p className="text-sm font-medium text-white truncate group-hover:text-blue-300 transition-colors">
-            {brief.title}
-          </p>
-          <span className={`shrink-0 px-1.5 py-0.5 text-xs rounded-full font-medium ${STATUS_COLORS[brief.status]}`}>
-            {STATUS_LABELS[brief.status]}
-          </span>
+      <div className="min-w-0">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <Badge tone={STATUS_TONES[brief.status]}>{brief.statusLabel}</Badge>
+          <RiskIndicator level={brief.riskLevel} label={`Risiko ${RISK_LABELS[brief.riskLevel]}`} />
+          {brief.delegationCount > 0 && <Badge tone="privacy">{brief.delegationCount} Delegationen</Badge>}
         </div>
-        <p className="text-xs text-gray-500 truncate">{brief.problemStatement}</p>
+        <p className="truncate text-sm font-semibold text-white">{brief.title}</p>
+        <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-400">{brief.problemStatement}</p>
       </div>
-      <div className="shrink-0 flex flex-col items-end gap-1 ml-4">
-        <p className="text-xs text-gray-500">{total > 0 ? `${accepted}/${total} REQ` : 'Neu'}</p>
-        {brief.delegationIds && brief.delegationIds.length > 0 && (
-          <span className="px-1.5 py-0.5 text-xs rounded bg-purple-950/50 border border-purple-900/40 text-purple-400">
-            ⚡ {brief.delegationIds.length} Del.
-          </span>
-        )}
-        <p className="text-xs text-gray-700">{new Date(brief.updatedAt).toLocaleDateString('de-DE')}</p>
+
+      <div>
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-600">Readiness</p>
+        <div className="mt-2 h-2 rounded-full bg-slate-800">
+          <div
+            className={cx('h-2 rounded-full', brief.readiness >= 75 ? 'bg-emerald-400' : brief.readiness >= 45 ? 'bg-amber-400' : 'bg-sky-400')}
+            style={{ width: `${brief.readiness}%` }}
+          />
+        </div>
+        <p className="mt-1 text-xs text-slate-500">{brief.readiness}% bereit</p>
+      </div>
+
+      <div>
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-600">Requirements</p>
+        <p className="mt-2 text-sm font-semibold text-white">
+          {brief.totalRequirements > 0 ? `${brief.acceptedRequirements}/${brief.totalRequirements}` : 'Noch offen'}
+        </p>
+        <p className="mt-1 text-xs text-slate-500">akzeptiert</p>
+      </div>
+
+      <div className="lg:text-right">
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-600">Naechste Aktion</p>
+        <p className="mt-2 text-sm font-medium text-slate-200">{brief.nextAction}</p>
+        <p className="mt-1 text-xs text-slate-500">{brief.updatedAtLabel}</p>
       </div>
     </Link>
   )

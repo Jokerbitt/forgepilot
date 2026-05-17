@@ -9,33 +9,33 @@ import { MagicCreate } from '@/components/command-center/MagicCreate'
 import { OperatorReadinessPanel } from '@/components/command-center/OperatorReadinessPanel'
 import { ApiKeysBanner } from '@/components/shared/ApiKeysBanner'
 import { ProjectBriefsSummary } from '@/components/project-briefs/ProjectBriefsSummary'
+import { buttonClassName } from '@/components/ui/primitives'
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-gray-950 text-white">
+    <main className="min-h-screen bg-slate-950 text-white">
       <ConnectorHealthBar />
       <AutopilotRunner />
       <ApiKeysBanner />
-      <div className="mx-auto max-w-4xl p-6">
-        <header className="mb-8 mt-2 flex items-start justify-between gap-4">
+      <div className="mx-auto max-w-5xl p-6">
+        <header className="mb-8 mt-2 flex flex-col gap-4 border-b border-slate-800 pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Command Center</h1>
-            <p className="mt-1 text-sm text-gray-400">AI Workflow OS - Next Best Actions</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Operations</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight">Command Center</h1>
+            <p className="mt-2 text-sm text-gray-400">Next Best Actions, Agentenstatus, Kosten und Systemsignale in einer Arbeitsansicht.</p>
           </div>
-          <div className="flex flex-shrink-0 gap-2">
+          <div className="flex flex-shrink-0 flex-col gap-2 sm:flex-row">
             <a
               href="/project-briefs"
-              className="mt-1 flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-500"
+              className={buttonClassName('secondary')}
             >
-              <span>◇</span>
-              <span className="hidden sm:block">Neue Idee</span>
+              Neue Idee
             </a>
             <a
               href="/delegations?new=1"
-              className="mt-1 flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
+              className={buttonClassName('primary')}
             >
-              <span>⚡</span>
-              <span className="hidden sm:block">Neue Delegation</span>
+              Neue Delegation
             </a>
           </div>
         </header>

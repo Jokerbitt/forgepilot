@@ -52,6 +52,22 @@ The NAS mirror can be used for shared inspection and coordination. Local develop
 - `/api/delegations/[id]/start` - alias for execution start
 - `/api/delegations/[id]/execute` - execution route
 
+## Autonomer Modus — Trigger: "autonom"
+
+Wenn Sven das Wort **autonom** schreibt (mit oder ohne /), aktiviere sofort den autonomen Arbeitsmodus:
+
+1. Lese `00a_CURRENT_BASELINE.md` + `11_NEXT_STEPS_AGENT_TASKS.md`
+2. Wähle höchstpriorisierten Task mit freiem Write Scope
+3. Reserviere Write Scope in `00a_CURRENT_BASELINE.md`
+4. Implementiere ohne Rückfragen (außer Risk High/Critical → Option A/B/C anbieten)
+5. Nach jedem Schritt: eine kurze Statuszeile
+6. Abschluss: Write Scope freigeben, Log-Eintrag, PR erstellen
+
+Ausnahmen — immer stoppen und fragen:
+- `git push --force`, `rm -rf`, Secrets-Zugriff
+- Produktive Systeme ändern
+- Risk Class High oder Critical
+
 ## Rules
 
 - Communicate with Sven in German.
