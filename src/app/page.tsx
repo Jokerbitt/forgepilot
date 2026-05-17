@@ -1,4 +1,5 @@
 import { ConnectorHealthBar } from '@/components/command-center/ConnectorHealthBar'
+import { AutopilotRunner } from '@/components/command-center/AutopilotRunner'
 import { NBAPanel } from '@/components/command-center/NBAPanel'
 import { ActiveAgentsPanel } from '@/components/delegation/ActiveAgentsPanel'
 import { DelegationQueueSummary } from '@/components/delegation/DelegationQueueSummary'
@@ -12,6 +13,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-gray-950 text-white">
       <ConnectorHealthBar />
+      <AutopilotRunner />
       <ApiKeysBanner />
       <div className="mx-auto max-w-4xl p-6">
         <header className="mb-8 mt-2 flex items-start justify-between gap-4">
