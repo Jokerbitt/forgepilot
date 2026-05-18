@@ -1,0 +1,232 @@
+import { readFileSync, readdirSync, existsSync, statSync } from 'fs'
+import { join, basename } from 'path'
+import { createHash } from 'crypto'
+import { randomUUID } from 'crypto'
+import { upsertSource, upsertItem, upsertCard, getSources, getItems } from './store'
+import type { KnowledgeSource, KnowledgeItem, MemoryCard, MemoryCardType, PrivacyClass } from './types'
+
+export interface IndexResult {
+  sourcesIndexed: number
+  itemsIndexed: number
+  cardsCreated: number
+  skipped: number
+  errors: string[]
+}
+
+const NAS_ROOT = '/Volumes/Sven/NAS/Codex/KI Betriebssystem'
+
+const NAS_SUBDIRS = ['Standards', 'ADRs', 'Agent_Skills', 'Screen_Specs']
+
+// Classify the memory card type from section heading and content
+function inferCardType(heading: string, body: string): MemoryCardType {
+  const h = heading.toLowerCase()
+  const b = body.toLowerCase()
+  if (h.includes('entscheidung') || h.includes('adr') || h.includes('decision') || b.includes('wir entscheiden')) return 'decision'
+  if (h.includes('risiko') || h.includes('risk') || b.includes('risiko')) return 'risk'
+  if (h.includes('anforderung') || h.includes('requirement') || h.includes('akzeptanzkriterien')) return 'requirement'
+  if (h.includes('muster') || h.includes('pattern') || h.includes('standard')) return 'pattern'
+  if (h.includes('lern') || h.includes('ergebnis') || h.includes('lesson') || h.includes('result')) return 'learning'
+  return 'context'
+}
+
+function privacyFromPath(filePath: string): PrivacyClass {
+  const name = basename(filePath).toLowerCase()
+  if (name.includes('credentials') || name.includes('secret') || name.includes('settings')) return 'sensitive'
+  return 'internal'
+}
+
+function contentHash(content: string): string {
+  return createHash('sha256').update(content).digest('hex').slice(0, 16)
+}
+
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4)
+}
+
+// Extract H2 sections from markdown content
+function extractSections(content: string): Array<{ heading: string; body: string }> {
+  const lines = content.split('\n')
+  const sections: Array<{ heading: string; body: string }> = []
+  let currentHeading = ''
+  let currentLines: string[] = []
+
+  for (const line of lines) {
+    if (line.startsWith('## ')) {
+      if (currentHeading) {
+        sections.push({ heading: currentHeading, body: currentLines.join('\n').trim() })
+      }
+      currentHeading = line.replace(/^##\s+/, '').trim()
+      currentLines = []
+    } else {
+      currentLines.push(line)
+    }
+  }
+  if (currentHeading) {
+    sections.push({ heading: currentHeading, body: currentLines.join('\n').trim() })
+  }
+  return sections
+}
+
+function collectMarkdownFiles(dir: string): string[] {
+  if (!existsSync(dir)) return []
+  const files: string[] = []
+  try {
+    const entries = readdirSync(dir)
+    for (const entry of entries) {
+      if (entry.startsWith('.')) continue
+      const fullPath = join(dir, entry)
+      const stat = statSync(fullPath)
+      if (stat.isFile() && entry.endsWith('.md')) {
+        files.push(fullPath)
+      }
+    }
+  } catch {
+    // ignore unreadable dirs
+  }
+  return files
+}
+
+export async function indexNasFiles(): Promise<IndexResult> {
+  const result: IndexResult = { sourcesIndexed: 0, itemsIndexed: 0, cardsCreated: 0, skipped: 0, errors: [] }
+
+  if (!existsSync(NAS_ROOT)) {
+    result.errors.push(`NAS nicht erreichbar: ${NAS_ROOT}`)
+    return result
+  }
+
+  // Collect all .md files from root + subdirs
+  const files: string[] = collectMarkdownFiles(NAS_ROOT)
+  for (const sub of NAS_SUBDIRS) {
+    files.push(...collectMarkdownFiles(join(NAS_ROOT, sub)))
+  }
+
+  const existingSources = getSources()
+  const sourceByPath = new Map(existingSources.map(s => [s.path, s]))
+
+  const now = new Date().toISOString()
+
+  for (const filePath of files) {
+    let content: string
+    try {
+      content = readFileSync(filePath, 'utf-8')
+    } catch (e) {
+      result.errors.push(`Lesen fehlgeschlagen: ${filePath}`)
+      continue
+    }
+
+    const hash = contentHash(content)
+    const existing = sourceByPath.get(filePath)
+
+    // Skip if unchanged
+    if (existing && existing.hash === hash) {
+      result.skipped++
+      continue
+    }
+
+    const sourceId = existing?.id ?? randomUUID()
+    const fileName = basename(filePath, '.md')
+    const privacyClass = privacyFromPath(filePath)
+
+    const source: KnowledgeSource = {
+      id: sourceId,
+      type: 'nas',
+      name: fileName,
+      path: filePath,
+      hash,
+      privacyClass,
+      lastFetched: now,
+      freshnessTtlHours: 168, // 1 week
+      isStale: false,
+      metadata: { indexedFrom: 'nas-indexer' },
+    }
+    upsertSource(source)
+    result.sourcesIndexed++
+
+    // Remove old items for this source before re-inserting
+    const oldItems = getItems(sourceId)
+    const oldItemIds = new Set(oldItems.map(i => i.id))
+
+    // Create one KnowledgeItem for the whole file
+    const title = fileName.replace(/^\d+_/, '').replace(/-/g, ' ')
+    const itemId = `item-${sourceId}`
+    const item: KnowledgeItem = {
+      id: itemId,
+      sourceId,
+      title,
+      content: content.slice(0, 2000), // store a preview
+      summary: content.split('\n').find(l => l.trim().length > 20 && !l.startsWith('#')) ?? title,
+      tags: inferTags(fileName, content),
+      privacyClass,
+      confidence: 'high',
+      tokenEstimate: estimateTokens(content),
+      createdAt: now,
+      updatedAt: now,
+    }
+    upsertItem(item)
+    result.itemsIndexed++
+
+    // Create MemoryCards for H2 sections (max 5 per file to keep store lean)
+    const sections = extractSections(content).slice(0, 5)
+    for (const section of sections) {
+      if (section.body.length < 30) continue
+      const cardId = `card-${sourceId}-${contentHash(section.heading)}`
+      const card: MemoryCard = {
+        id: cardId,
+        type: inferCardType(section.heading, section.body),
+        title: `${title}: ${section.heading}`,
+        body: section.body.slice(0, 500),
+        sourceIds: [itemId],
+        tags: inferTags(fileName, section.body),
+        privacyClass,
+        confidence: 'high',
+        createdAt: now,
+        updatedAt: now,
+      }
+      upsertCard(card)
+      result.cardsCreated++
+    }
+
+    // If file has no H2 sections, create one card from the file intro
+    if (sections.length === 0) {
+      const intro = content.replace(/^#[^\n]*\n/, '').trim().slice(0, 400)
+      if (intro.length > 30) {
+        const cardId = `card-${sourceId}-intro`
+        const card: MemoryCard = {
+          id: cardId,
+          type: 'context',
+          title,
+          body: intro,
+          sourceIds: [itemId],
+          tags: inferTags(fileName, content),
+          privacyClass,
+          confidence: 'high',
+          createdAt: now,
+          updatedAt: now,
+        }
+        upsertCard(card)
+        result.cardsCreated++
+      }
+    }
+  }
+
+  return result
+}
+
+function inferTags(fileName: string, content: string): string[] {
+  const tags: string[] = ['nas']
+  const name = fileName.toLowerCase()
+  if (name.includes('adr')) tags.push('adr', 'decision')
+  if (name.includes('skill')) tags.push('skill', 'agent')
+  if (name.includes('roadmap') || name.includes('milestone')) tags.push('roadmap')
+  if (name.includes('architektur') || name.includes('blueprint')) tags.push('architecture')
+  if (name.includes('requirements') || name.includes('backlog')) tags.push('requirements')
+  if (name.includes('knowledge') || name.includes('memory')) tags.push('knowledge')
+  if (name.includes('collaboration') || name.includes('protocol')) tags.push('protocol', 'agent')
+  if (name.includes('escalation')) tags.push('escalation', 'agent')
+  if (name.includes('model') || name.includes('routing')) tags.push('model-routing', 'ai')
+  if (name.includes('standard')) tags.push('standard')
+  const c = content.toLowerCase()
+  if (c.includes('ollama') || c.includes('local ai') || c.includes('lokal')) tags.push('local-ai')
+  if (c.includes('privacy') || c.includes('datenschutz')) tags.push('privacy')
+  return Array.from(new Set(tags))
+}
