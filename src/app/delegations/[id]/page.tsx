@@ -309,6 +309,7 @@ export default function DelegationDetailPage() {
               }
               riskClass={d.contract.riskClass}
               maxBudgetUsd={d.contract.maxBudgetUsd}
+              delegationId={id}
             />
 
             {/* Definition of Done */}
