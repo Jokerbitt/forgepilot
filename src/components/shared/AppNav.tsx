@@ -23,6 +23,7 @@ import {
   ChevronRight,
   Zap,
   BarChart3,
+  Search,
 } from 'lucide-react'
 import type { Delegation } from '@/lib/models/delegation'
 import type { AttentionItem } from '@/lib/models/attention'
@@ -47,6 +48,7 @@ const navItems: NavItem[] = [
   { href: '/agent-runs', label: 'Agent Runs', shortLabel: 'Runs', icon: History, section: 'Execute' },
   { href: '/agents', label: 'Agent Control', shortLabel: 'Agents', icon: Bot, section: 'Execute' },
   { href: '/knowledge', label: 'Knowledge Center', shortLabel: 'Knowledge', icon: BookOpen, section: 'Knowledge' },
+  { href: '/knowledge/research', label: 'Research Platform', shortLabel: 'Research', icon: Search, section: 'Knowledge' },
   { href: '/context-packages', label: 'Context Packages', shortLabel: 'Context', icon: Package, section: 'Knowledge' },
   { href: '/model-router', label: 'Model Router', shortLabel: 'Router', icon: GitBranch, section: 'System' },
   { href: '/governance', label: 'Governance Hub', shortLabel: 'Gov', icon: Shield, section: 'System' },
