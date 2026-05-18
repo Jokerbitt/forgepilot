@@ -14,6 +14,8 @@ import {
 } from '@/lib/delegation-execution'
 import { OllamaAgentRunner, isOllamaReachable } from '@/lib/agent-runner/ollama-runner'
 import { budgetToMaxTurns } from '@/lib/budget-utils'
+import { scoreWork } from '@/lib/agents/work-quality'
+import { recordOutcome } from '@/lib/agents/skill-evolver'
 
 const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
 
@@ -316,6 +318,43 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       writeDelegationsAtomic(allDelegations)
 
       const finishedDelegation = allDelegations[idx]
+
+      // Record quality outcome in skill-history (feeds Performance tab)
+      try {
+        const skillCategory = (finishedDelegation.contract.skillCategory ?? 'refactor') as SkillCategory
+        const warnings = finishedDelegation.summaryReport?.warnings ?? []
+        const typeErrors = warnings.filter(w => w.toLowerCase().includes('type error') || w.toLowerCase().includes('typescript')).length
+        const lintErrors = warnings.filter(w => w.toLowerCase().includes('lint')).length
+        const filesChanged = (finishedDelegation.summaryReport?.filesModified?.length ?? 0)
+          + (finishedDelegation.summaryReport?.filesAdded?.length ?? 0)
+        const durationMinutes = finishedDelegation.summaryReport?.timeTakenMinutes ?? elapsed
+        const testsPassed = (finishedDelegation.summaryReport?.testsPassed ?? 1) > 0
+
+        const result = scoreWork({
+          task: {
+            id: finishedDelegation.id,
+            title: finishedDelegation.title ?? finishedDelegation.contract.goal.slice(0, 60),
+            description: finishedDelegation.contract.goal,
+            acceptanceCriteria: finishedDelegation.contract.definitionOfDone ?? [],
+            skillCategory,
+            assignedAgentType: 'claude-code',
+            filePatterns: finishedDelegation.contract.allowedFilePatterns ?? [],
+            effort: 'M',
+            dependsOn: [],
+            order: 0,
+          },
+          // Use process exit success as primary quality signal
+          testsPassed: success && testsPassed,
+          typeErrorCount: typeErrors,
+          lintErrorCount: lintErrors,
+          filesChanged,
+          retryCount: 0,
+          durationMinutes,
+        })
+        recordOutcome('claude-code', skillCategory, result)
+      } catch {
+        // Non-critical — never break execution due to telemetry
+      }
 
       // Linear writeback — fire-and-forget
       if (success && report) {
