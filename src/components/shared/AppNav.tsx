@@ -9,6 +9,7 @@ import { Badge, StatusDot, cx } from '@/components/ui/primitives'
 const navItems = [
   { href: '/', label: 'Command Center', shortLabel: 'Command', section: 'Operate' },
   { href: '/project-briefs', label: 'Project Briefs', shortLabel: 'Briefs', section: 'Plan' },
+  { href: '/work-items', label: 'Work Items', shortLabel: 'Items', section: 'Execute' },
   { href: '/delegations', label: 'Delegation Queue', shortLabel: 'Queue', section: 'Execute' },
   { href: '/agent-runs', label: 'Agent Runs', shortLabel: 'Runs', section: 'Execute' },
   { href: '/knowledge', label: 'Knowledge Center', shortLabel: 'Knowledge', section: 'Knowledge' },
@@ -19,9 +20,7 @@ const navItems = [
 ]
 
 const plannedItems = [
-  'Knowledge Center',
   'Governance Hub',
-  'Model Router',
   'Agent Control Plane',
 ]
 
