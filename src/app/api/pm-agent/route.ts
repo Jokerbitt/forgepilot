@@ -6,6 +6,7 @@ import { readProjectBriefs } from '@/lib/project-briefs'
 import { readMilestones, readWorkPackages } from '@/lib/knowledge/milestone-store'
 import { readStoredApiKeys } from '@/lib/connectors/config'
 import { runPMAgent, type PMAgentResult } from '@/lib/agent-runner/pm-agent'
+import { appendPMHistory } from '@/lib/agent-runner/pm-history-store'
 import { saveNotification } from '@/lib/notifications/notification-store'
 import type { Delegation } from '@/lib/models/delegation'
 import type { NotificationSeverity } from '@/lib/models/notification'
@@ -49,6 +50,7 @@ export async function POST() {
   try {
     const result = await runPMAgent(briefs, milestones, workPackages, delegations, { apiKey })
     writePMPlan(result)
+    appendPMHistory(result)
 
     if (result.overallHealth === 'red' || result.overallHealth === 'yellow') {
       const severity: NotificationSeverity = result.overallHealth === 'red' ? 'critical' : 'warning'
