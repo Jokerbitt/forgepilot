@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import {
@@ -380,7 +380,7 @@ function ApprovedCard({ d, onStart, starting }: {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function ActiveRunsPage() {
+function ActiveRunsContent() {
   const searchParams = useSearchParams()
   const focusId = searchParams.get('focus')
   const focusRef = useRef<HTMLDivElement>(null)
@@ -873,5 +873,13 @@ export default function ActiveRunsPage() {
 
       </div>
     </main>
+  )
+}
+
+export default function ActiveRunsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ActiveRunsContent />
+    </Suspense>
   )
 }

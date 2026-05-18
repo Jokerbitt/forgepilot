@@ -239,5 +239,157 @@
     },
     "createdAt": "2026-05-16T01:40:05.154Z",
     "updatedAt": "2026-05-16T01:40:05.154Z"
+  },
+  {
+    "id": "73891453-8b77-4c19-a603-9a2c0d9a82f1",
+    "title": "Build auth module",
+    "contract": {
+      "id": "5ce86e6f-a5de-41de-8f8c-c6947afbfbd8",
+      "workItemId": "wp-test-001",
+      "goal": "Implement JWT-based authentication",
+      "context": "",
+      "taskType": "feature",
+      "definitionOfDone": [
+        "Tests pass",
+        "PR reviewed"
+      ],
+      "riskClass": "B",
+      "maxBudgetUsd": 4,
+      "allowedTools": [
+        "bash",
+        "read_file",
+        "write_file"
+      ],
+      "branchStrategy": "feature",
+      "requiresApproval": false,
+      "privacyMode": "local",
+      "createdAt": "2026-05-18T21:49:55.108Z"
+    },
+    "status": "pending",
+    "executionRoute": "ollama-agent",
+    "costEstimateUsd": 0,
+    "logs": [
+      {
+        "timestamp": "2026-05-18T21:49:55.108Z",
+        "type": "info",
+        "message": "Delegation aus Work Package \"Build auth module\" erstellt (Risk B, 8h geschätzt)"
+      }
+    ],
+    "createdAt": "2026-05-18T21:49:55.108Z",
+    "updatedAt": "2026-05-18T21:49:55.108Z"
+  },
+  {
+    "id": "a4184c1e-a1c0-4025-8c31-f6ba8af0c151",
+    "title": "Build auth module",
+    "contract": {
+      "id": "9140bd12-4005-4ae1-93de-f822ed3881c1",
+      "workItemId": "wp-risky",
+      "goal": "Implement JWT-based authentication",
+      "context": "",
+      "taskType": "feature",
+      "definitionOfDone": [
+        "Tests pass",
+        "PR reviewed"
+      ],
+      "riskClass": "C",
+      "maxBudgetUsd": 4,
+      "allowedTools": [
+        "bash",
+        "read_file",
+        "write_file"
+      ],
+      "branchStrategy": "fix",
+      "requiresApproval": true,
+      "privacyMode": "local",
+      "createdAt": "2026-05-18T21:49:55.112Z"
+    },
+    "status": "pending",
+    "executionRoute": "ollama-agent",
+    "costEstimateUsd": 0,
+    "logs": [
+      {
+        "timestamp": "2026-05-18T21:49:55.112Z",
+        "type": "info",
+        "message": "Delegation aus Work Package \"Build auth module\" erstellt (Risk C, 8h geschätzt)"
+      }
+    ],
+    "createdAt": "2026-05-18T21:49:55.112Z",
+    "updatedAt": "2026-05-18T21:49:55.112Z"
+  },
+  {
+    "id": "e8519a7c-9798-4940-88dc-3a0e29c656aa",
+    "title": "Build auth module",
+    "contract": {
+      "id": "e26f9747-615b-4a80-aa8a-0bccc5abe698",
+      "workItemId": "wp-test-tagged",
+      "goal": "Implement JWT-based authentication",
+      "context": "",
+      "taskType": "bugfix",
+      "definitionOfDone": [
+        "Tests pass",
+        "PR reviewed"
+      ],
+      "riskClass": "B",
+      "maxBudgetUsd": 4,
+      "allowedTools": [
+        "bash",
+        "read_file",
+        "write_file"
+      ],
+      "branchStrategy": "feature",
+      "requiresApproval": false,
+      "privacyMode": "local",
+      "createdAt": "2026-05-18T21:49:55.113Z"
+    },
+    "status": "pending",
+    "executionRoute": "ollama-agent",
+    "costEstimateUsd": 0,
+    "logs": [
+      {
+        "timestamp": "2026-05-18T21:49:55.113Z",
+        "type": "info",
+        "message": "Delegation aus Work Package \"Build auth module\" erstellt (Risk B, 8h geschätzt)"
+      }
+    ],
+    "createdAt": "2026-05-18T21:49:55.113Z",
+    "updatedAt": "2026-05-18T21:49:55.113Z"
+  },
+  {
+    "id": "4e203347-5187-4c4b-b6e3-2d71e18cfd39",
+    "title": "Build auth module",
+    "contract": {
+      "id": "53dd2bb9-0295-4a79-86bd-064ec9119aa4",
+      "workItemId": "wp-tiny",
+      "goal": "Implement JWT-based authentication",
+      "context": "",
+      "taskType": "feature",
+      "definitionOfDone": [
+        "Tests pass",
+        "PR reviewed"
+      ],
+      "riskClass": "B",
+      "maxBudgetUsd": 1,
+      "allowedTools": [
+        "bash",
+        "read_file",
+        "write_file"
+      ],
+      "branchStrategy": "feature",
+      "requiresApproval": false,
+      "privacyMode": "local",
+      "createdAt": "2026-05-18T21:49:55.116Z"
+    },
+    "status": "pending",
+    "executionRoute": "ollama-agent",
+    "costEstimateUsd": 0,
+    "logs": [
+      {
+        "timestamp": "2026-05-18T21:49:55.116Z",
+        "type": "info",
+        "message": "Delegation aus Work Package \"Build auth module\" erstellt (Risk B, 0h geschätzt)"
+      }
+    ],
+    "createdAt": "2026-05-18T21:49:55.116Z",
+    "updatedAt": "2026-05-18T21:49:55.116Z"
   }
 ]

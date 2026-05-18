@@ -10,8 +10,8 @@ import {
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { ResearchDocument, ResearchCitation, SourceCredibility } from '@/lib/models/research'
-import type { ResearchQuality } from '@/app/api/knowledge/research/[id]/quality/route'
-import type { SearchResult } from '@/app/api/knowledge/research/search/route'
+import type { ResearchQuality, SearchResult } from '@/lib/knowledge/research-types'
+
 import { cx } from '@/components/ui/primitives'
 import { FullCycleModal } from '@/components/shared/FullCycleModal'
 

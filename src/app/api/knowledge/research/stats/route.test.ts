@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { computeResearchStats } from './route'
+import { computeResearchStats } from '@/lib/knowledge/research-stats'
 
 const mockRead = vi.fn()
 

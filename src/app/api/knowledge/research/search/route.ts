@@ -1,17 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { readResearchDocuments } from '@/lib/knowledge/research-store'
 import type { ResearchDocument } from '@/lib/models/research'
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-export interface SearchResult {
-  id: string
-  title: string
-  score: number
-  highlights: string[]
-  status: ResearchDocument['status']
-  completedAt?: string
-}
+import type { SearchResult } from '@/lib/knowledge/research-types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
