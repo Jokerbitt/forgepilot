@@ -42,20 +42,28 @@ export async function POST(request: Request) {
       title: delegation.title || delegation.contract.goal.slice(0, 80),
     }
 
+    // Auto-approve Risk-A delegations that don't require human approval
+    const autoApproved: Delegation =
+      withTitle.contract.riskClass === 'A' &&
+      !withTitle.contract.requiresApproval &&
+      withTitle.status === 'pending'
+        ? { ...withTitle, status: 'approved', updatedAt: new Date().toISOString() }
+        : withTitle
+
     // Add or update
-    const index = delegations.findIndex(d => d.id === withTitle.id)
+    const index = delegations.findIndex(d => d.id === autoApproved.id)
     if (index >= 0) {
-      delegations[index] = { ...delegations[index], ...withTitle, updatedAt: new Date().toISOString() }
+      delegations[index] = { ...delegations[index], ...autoApproved, updatedAt: new Date().toISOString() }
     } else {
       delegations.push({
-        ...withTitle,
+        ...autoApproved,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       })
     }
 
     writeDelegations(delegations)
-    return NextResponse.json(withTitle)
+    return NextResponse.json(autoApproved)
   } catch (e) {
     return NextResponse.json({ error: 'Failed to save delegation' }, { status: 500 })
   }

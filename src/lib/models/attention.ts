@@ -1,6 +1,7 @@
 export type AttentionSeverity = 'critical' | 'warning' | 'info'
 
 export type AttentionType =
+  | 'delegation_completed'
   | 'delegation_failed'
   | 'delegation_stalled'
   | 'budget_exceeded'
