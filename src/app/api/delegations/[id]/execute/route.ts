@@ -47,42 +47,54 @@ function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation
 
 function buildPrompt(delegation: Delegation): string {
   const c = delegation.contract
+  const slug = c.workItemId.replace(/[^a-z0-9-]/gi, '-').toLowerCase()
+  const branch = `${c.branchStrategy}/${slug}-task`
+  const commitPrefix = c.taskType || 'feat'
+
   const dod = (c.definitionOfDone ?? [])
     .filter(Boolean)
-    .map(d => `- ${d}`)
-    .join('\n') || '- Task erfolgreich abgeschlossen'
+    .map((d, i) => `${i + 1}. ${d}`)
+    .join('\n') || '1. Task erfolgreich abgeschlossen'
 
-  const tools = (c.allowedTools ?? []).join(', ') || 'read_file, write_file, run_command'
+  const context = c.context?.trim()
+    ? `\n## Context\n${c.context.trim()}\n`
+    : ''
 
-  return `Du bist ein Software-Engineering-Agent für das ForgePilot AI Workflow OS Projekt (Next.js 14, TypeScript strict, Tailwind CSS).
+  return `You are an autonomous software engineering agent working on **ForgePilot** — a local-first AI Workflow OS built with Next.js 14, TypeScript strict, Tailwind CSS, and Vitest.
 
-## Aufgabe
+## Task
 ${c.goal}
-
-## Kontext
-${c.context || 'Kein zusätzlicher Kontext angegeben.'}
-
+${context}
 ## Definition of Done
 ${dod}
 
-## Konfiguration
-- Task-Typ: ${c.taskType || 'feature'}
-- Risiko-Klasse: ${c.riskClass} (A=sicher/additiv, B=moderat/ändert Bestehendes, C=kritisch/benötigt Review)
-- Branch-Strategie: ${c.branchStrategy}
-- Max Budget: $${c.maxBudgetUsd}
-- Erlaubte Tools: ${tools}
+## Constraints
+- Risk class: **${c.riskClass}** (A = safe/additive, B = modifies existing, C = needs human review)
+- Branch: \`${branch}\`
+- Max budget: $${c.maxBudgetUsd} (~${budgetToMaxTurns(c.maxBudgetUsd)} turns)
+- Work item: ${c.workItemId}
 
-## Vorgehensweise
-1. Lies CLAUDE.md und verstehe die Projektstruktur
-2. Erstelle einen Git-Branch: ${c.branchStrategy}/${c.workItemId.replace(/[^a-z0-9-]/gi, '-').toLowerCase()}-task
-3. Implementiere die Aufgabe gemäß Definition of Done
-4. Führe Tests aus: npm test -- --run
-5. Führe Lint aus: npm run lint
-6. Committe Änderungen: git commit -m "${c.taskType || 'feat'}: ${c.goal.substring(0, 60).replace(/"/g, "'")}"
-7. Erstelle einen PR: gh pr create --title "..." --body "..."
-8. Fasse am Ende zusammen, was du getan hast
+## Execution protocol (follow exactly)
+\`\`\`
+1. Read CLAUDE.md  →  understand conventions and project structure
+2. git checkout -b ${branch}
+3. Explore: read relevant source files before writing any code
+4. Implement: small, focused changes — one concern per commit
+5. Verify: npm run test:run && npm run lint && npm run type-check
+   (run type-check BEFORE build — never in parallel)
+6. Commit: git commit -m "${commitPrefix}: <description>"
+7. PR: gh pr create --title "${commitPrefix}: ${c.goal.substring(0, 60).replace(/"/g, "'")}" --body "## Summary\\n- <bullets>\\n\\n## Test plan\\n- [ ] tests pass"
+8. Final output: print a one-paragraph summary of what changed and why
+\`\`\`
 
-Arbeite sorgfältig und melde Fortschritt.`
+## Quality rules
+- No \`any\` types. No unused imports. No comments stating the obvious.
+- Tests must cover the new behavior — not just type-check.
+- Never commit directly to main. Never force-push.
+- If a step fails, diagnose root cause before retrying.
+- If you are uncertain about scope or risk, stop and print "ESCALATION: <reason>" — do not guess.
+
+Start now.`
 }
 
 /**
@@ -152,10 +164,17 @@ function isClaudeAvailable(): boolean {
 }
 
 function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd: number) {
-  // Merge stored API keys so the setting-UI key reaches the claude process
   const storedKeys = readStoredApiKeys()
-  const anthropicKey = (process.env.ANTHROPIC_API_KEY || storedKeys.ANTHROPIC_API_KEY)?.trim()
+  const anthropicKey = storedKeys.ANTHROPIC_API_KEY?.trim() || undefined
   const maxTurns = budgetToMaxTurns(budgetUsd)
+
+  // Strip ANTHROPIC_API_KEY from inherited env so Claude CLI uses its own
+  // session auth (Max subscription). Only re-inject if a key is explicitly
+  // configured via the Settings UI — that key takes precedence.
+  const { ANTHROPIC_API_KEY: _stripped, ...baseEnv } = process.env
+  const childEnv = anthropicKey
+    ? { ...baseEnv, ANTHROPIC_API_KEY: anthropicKey }
+    : baseEnv
 
   const proc = spawn(
     'claude',
@@ -164,10 +183,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       cwd: process.cwd(),
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
-        ...(anthropicKey ? { ANTHROPIC_API_KEY: anthropicKey } : {}),
-      },
+      env: childEnv,
     },
   )
   proc.unref()
