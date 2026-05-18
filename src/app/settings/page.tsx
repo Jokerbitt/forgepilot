@@ -40,6 +40,12 @@ const API_KEY_FIELDS: ApiKeyField[] = [
   },
 ]
 
+interface AutoPmStatus {
+  lastRunAt: string | null
+  autoPmAgent: boolean
+  isStale: boolean
+}
+
 export default function SettingsPage() {
   const [config, setConfig] = useState<NBAConfig | null>(null)
   const [saving, setSaving] = useState(false)
@@ -47,6 +53,8 @@ export default function SettingsPage() {
   const [execStatus, setExecStatus] = useState<{ executeMode: string; executeModeHint: string; anthropic: { status: string }; claudeCode: { status: string } } | null>(null)
   const [authStatus, setAuthStatus] = useState<{ loggedIn: boolean; authMethod: string; subscriptionType: string; email?: string } | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
+  const [autoPmStatus, setAutoPmStatus] = useState<AutoPmStatus | null>(null)
+  const [autoPmSaving, setAutoPmSaving] = useState(false)
 
   // API Keys state
   const [apiKeySet, setApiKeySet] = useState<Record<string, boolean>>({})
@@ -79,7 +87,25 @@ export default function SettingsPage() {
       })
       .catch(() => setAuthStatus({ loggedIn: false, authMethod: 'none', subscriptionType: 'none' }))
       .finally(() => setAuthLoading(false))
+    fetch('/api/pm-agent/auto')
+      .then(res => res.json())
+      .then((data: AutoPmStatus) => setAutoPmStatus(data))
+      .catch(() => null)
   }, [])
+
+  const handleAutoPmToggle = async (enabled: boolean) => {
+    setAutoPmSaving(true)
+    try {
+      await fetch('/api/pm-agent/auto', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ autoPmAgent: enabled }),
+      })
+      setAutoPmStatus(prev => prev ? { ...prev, autoPmAgent: enabled } : null)
+    } finally {
+      setAutoPmSaving(false)
+    }
+  }
 
   const isMaxActive = authStatus?.loggedIn === true && authStatus.subscriptionType === 'max'
 
@@ -518,6 +544,52 @@ export default function SettingsPage() {
                 ))
               )}
             </div>
+          </div>
+        </section>
+
+        {/* PM Agent Auto-Run Section */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-gray-300">PM Agent Auto-Run</h2>
+            <span className="text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-500">Täglich</span>
+          </div>
+          <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 space-y-4">
+            <p className="text-sm text-gray-400">
+              Der PM Agent analysiert automatisch dein Projektportfolio — einmal pro 24 Stunden wenn aktiviert.
+            </p>
+            <label className="flex items-center space-x-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoPmStatus?.autoPmAgent ?? true}
+                disabled={autoPmSaving}
+                onChange={e => handleAutoPmToggle(e.target.checked)}
+                className="form-checkbox h-5 w-5 text-blue-600 rounded bg-gray-800 border-gray-700"
+              />
+              <div>
+                <span className="block text-sm font-medium text-gray-300">Täglich automatisch ausführen</span>
+                <span className="text-xs text-gray-500">
+                  Läuft nur wenn letzter Run älter als 24h ist
+                </span>
+              </div>
+            </label>
+            {autoPmStatus?.lastRunAt ? (
+              <div className="text-xs text-gray-500 space-y-1">
+                <p>
+                  Letzter Run:{' '}
+                  <span className="text-gray-300 font-mono">
+                    {new Date(autoPmStatus.lastRunAt).toLocaleString('de-DE', {
+                      day: '2-digit', month: '2-digit', year: '2-digit',
+                      hour: '2-digit', minute: '2-digit',
+                    })}
+                  </span>
+                </p>
+                {autoPmStatus.isStale && (
+                  <p className="text-amber-400">Plan ist veraltet — nächster Auto-Run wird ausgeführt.</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-600 italic">Noch kein PM Agent Run gefunden.</p>
+            )}
           </div>
         </section>
 

@@ -24,6 +24,7 @@ export interface NBAConfig {
   localFastModel: string
   maxConcurrentAgents: number
   autoStartApproved: boolean
+  autoPmAgent?: boolean
 }
 
 const CONFIG_PATH = path.join(process.cwd(), 'config', 'nba-settings.json')
