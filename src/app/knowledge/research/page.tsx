@@ -10,6 +10,7 @@ import {
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { ResearchDocument, ResearchCitation, SourceCredibility } from '@/lib/models/research'
+import type { ResearchQuality } from '@/app/api/knowledge/research/[id]/quality/route'
 import { cx } from '@/components/ui/primitives'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -66,6 +67,41 @@ function StatusBadge({ status }: { status: ResearchDocument['status'] }) {
   }
 }
 
+// ─── Quality Badge ────────────────────────────────────────────────────────────
+
+const GRADE_COLORS: Record<ResearchQuality['grade'], string> = {
+  A: 'text-violet-400 border-violet-500/30 bg-violet-500/10',
+  B: 'text-sky-400 border-sky-500/30 bg-sky-500/10',
+  C: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
+  D: 'text-rose-400 border-rose-500/30 bg-rose-500/10',
+}
+
+function QualityBadge({ docId }: { docId: string }) {
+  const [quality, setQuality] = useState<ResearchQuality | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/knowledge/research/${docId}/quality`)
+      .then(r => r.ok ? r.json() as Promise<ResearchQuality> : Promise.reject())
+      .then(setQuality)
+      .catch(() => { /* non-critical */ })
+  }, [docId])
+
+  if (!quality) return null
+
+  return (
+    <span
+      className={cx(
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-bold',
+        GRADE_COLORS[quality.grade],
+      )}
+      title={`Quality Score: ${quality.score}/100`}
+    >
+      Grade {quality.grade}
+      <span className="font-normal opacity-70">{quality.score}/100</span>
+    </span>
+  )
+}
+
 // ─── Document Viewer ──────────────────────────────────────────────────────────
 
 function ResearchDocViewer({ doc }: { doc: ResearchDocument }) {
@@ -73,6 +109,11 @@ function ResearchDocViewer({ doc }: { doc: ResearchDocument }) {
 
   return (
     <div className="space-y-6">
+      {/* Quality Badge */}
+      <div className="flex items-center gap-2">
+        <QualityBadge docId={doc.id} />
+      </div>
+
       {/* Abstract */}
       {doc.abstract && (
         <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-5">
@@ -189,6 +230,15 @@ function ResearchCard({ doc, onSelect, selected }: {
 }) {
   const academicCount = doc.citations.filter(c => c.credibility === 'academic').length
   const govCount = doc.citations.filter(c => c.credibility === 'government').length
+  const [grade, setGrade] = useState<ResearchQuality['grade'] | null>(null)
+
+  useEffect(() => {
+    if (doc.status !== 'completed') return
+    fetch(`/api/knowledge/research/${doc.id}/quality`)
+      .then(r => r.ok ? r.json() as Promise<ResearchQuality> : Promise.reject())
+      .then(q => setGrade(q.grade))
+      .catch(() => { /* non-critical */ })
+  }, [doc.id, doc.status])
 
   return (
     <button
@@ -229,6 +279,14 @@ function ResearchCard({ doc, onSelect, selected }: {
         )}
         {doc.citations.length > 0 && academicCount === 0 && govCount === 0 && (
           <span className="text-[10px] text-slate-600">{doc.citations.length} Quellen</span>
+        )}
+        {grade && (
+          <span className={cx(
+            'inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-bold',
+            GRADE_COLORS[grade],
+          )}>
+            {grade}
+          </span>
         )}
         <span className="ml-auto text-[10px] text-slate-600">
           {new Date(doc.createdAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })}
