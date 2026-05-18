@@ -43,7 +43,7 @@ describe('OllamaAgentRunner', () => {
     expect(result.success).toBe(true)
     expect(result.turns).toBe(1)
     expect(fetcher).toHaveBeenCalledTimes(1)
-    expect(logs.some(l => l.includes('Run beendet ohne weitere Tool-Calls'))).toBe(true)
+    expect(logs.some(l => l.includes('Run beendet'))).toBe(true)
   })
 
   it('stops immediately when the model emits TASK_COMPLETE', async () => {

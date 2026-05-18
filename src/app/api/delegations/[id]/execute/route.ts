@@ -365,6 +365,7 @@ async function runWithOllamaAgent(
           keyPoints: [`Ollama-Run abgeschlossen mit ${model}`, result.summary.slice(0, 200)],
           changes: [],
           timeTakenMinutes: elapsed,
+          costSavings: result.costSavings,
         }
       : undefined
 
@@ -373,13 +374,19 @@ async function runWithOllamaAgent(
     const finished = readDelegations().find(d => d.id === id)
     if (finished) {
       const label = finished.title || finished.contract.goal.slice(0, 60)
+      const savedStr = result.costSavings.savedUsd > 0
+        ? ` · 💰 $${result.costSavings.savedUsd.toFixed(4)} gespart`
+        : ''
+      const tokensStr = result.tokenUsage.totalTokens > 0
+        ? ` · ${result.tokenUsage.totalTokens.toLocaleString()} Tokens`
+        : ''
       upsertAttentionItem({
         id: `completion:${id}`,
         type: result.success ? 'delegation_completed' : 'delegation_failed',
         severity: result.success ? 'info' : 'critical',
         title: result.success ? `✅ Abgeschlossen: ${label}` : `❌ Fehlgeschlagen: ${label}`,
         body: result.success
-          ? `Ollama-Run abgeschlossen · ${result.turns} Turns · ${model}`
+          ? `Ollama-Run abgeschlossen · ${result.turns} Turns · ${model}${tokensStr}${savedStr}`
           : `Run nach ${result.turns} Turns abgebrochen`,
         delegationId: id,
         actionUrl: `/delegations/${id}`,

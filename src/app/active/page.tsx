@@ -7,7 +7,7 @@ import {
   ChevronRight, Cpu, Cloud, AlertTriangle, CheckCircle2,
   Circle, TrendingUp, Play,
 } from 'lucide-react'
-import type { Delegation, AgentLog } from '@/lib/models/delegation'
+import type { Delegation, AgentLog, CostSavings } from '@/lib/models/delegation'
 import type { OllamaStatus } from '@/app/api/ollama/route'
 import type { DriftAnalysis } from '@/lib/drift-detector'
 import { ElapsedTimer } from '@/components/shared/ElapsedTimer'
@@ -44,6 +44,17 @@ function driftColor(score: number): string {
   if (score >= 50) return 'text-rose-400'
   if (score >= 25) return 'text-amber-400'
   return 'text-emerald-400'
+}
+
+/** Extract latest token info from Ollama progress log lines ("📊 Turn X/Y · Z Tokens · …") */
+function extractTokensFromLogs(logs: AgentLog[]): { tokens: number; savedUsd: number } | null {
+  for (let i = logs.length - 1; i >= 0; i--) {
+    const m = logs[i].message.match(/(\d[\d,]+)\s+Tokens.*Ersparnis:\s*\$([0-9.]+)/)
+    if (m) {
+      return { tokens: parseInt(m[1].replace(/,/g, ''), 10), savedUsd: parseFloat(m[2]) }
+    }
+  }
+  return null
 }
 
 // ─── System Status Bar ────────────────────────────────────────────────────────
@@ -151,6 +162,12 @@ function AgentLivePanel({ state, onStop, stopping }: {
   const isTerminal = ['completed', 'failed', 'cancelled'].includes(state.status)
   const drift = state.drift
 
+  // Token savings: prefer completed summaryReport, fallback to live log parsing
+  const reportSavings: CostSavings | undefined = d.summaryReport?.costSavings
+  const liveTokens = reportSavings ? null : extractTokensFromLogs(state.logs)
+  const tokensTotal = reportSavings?.tokensUsed.totalTokens ?? liveTokens?.tokens
+  const savedUsd = reportSavings?.savedUsd ?? liveTokens?.savedUsd
+
   return (
     <div className={cx(
       'flex flex-col rounded-xl border transition-colors',
@@ -233,6 +250,29 @@ function AgentLivePanel({ state, onStop, stopping }: {
         )}
 
         <div className="h-3 w-px bg-white/[0.06]" />
+
+        {/* Token count */}
+        {tokensTotal != null && tokensTotal > 0 && (
+          <>
+            <div className="h-3 w-px bg-white/[0.06]" />
+            <div className="flex items-center gap-1.5">
+              <Cpu className="h-3 w-3 text-slate-600" />
+              <span className="text-xs font-mono text-slate-300">{tokensTotal.toLocaleString('de')}</span>
+              <span className="text-[10px] text-slate-600">tok</span>
+            </div>
+          </>
+        )}
+
+        {/* Savings badge */}
+        {savedUsd != null && savedUsd > 0 && (
+          <>
+            <div className="h-3 w-px bg-white/[0.06]" />
+            <div className="flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5">
+              <DollarSign className="h-2.5 w-2.5 text-emerald-400" />
+              <span className="text-[10px] font-bold text-emerald-400">{savedUsd.toFixed(4)} gespart</span>
+            </div>
+          </>
+        )}
 
         {/* Drift score */}
         {drift && (
@@ -529,6 +569,12 @@ export default function ActiveRunsPage() {
     .filter(d => d.actualCostUsd != null)
     .reduce((sum, d) => sum + (d.actualCostUsd ?? 0), 0)
 
+  const totalSavedUsd = delegations
+    .reduce((sum, d) => sum + (d.summaryReport?.costSavings?.savedUsd ?? 0), 0)
+
+  const totalTokensUsed = delegations
+    .reduce((sum, d) => sum + (d.summaryReport?.costSavings?.tokensUsed.totalTokens ?? 0), 0)
+
   if (loading) {
     return (
       <main className="min-h-screen p-6 text-white">
@@ -555,8 +601,22 @@ export default function ActiveRunsPage() {
             <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">
               <DollarSign className="h-3.5 w-3.5 text-slate-500" />
               <span className="text-xs font-mono font-bold text-white">${totalActualCost.toFixed(3)}</span>
-              <span className="text-[10px] text-slate-500">total</span>
+              <span className="text-[10px] text-slate-500">Kosten</span>
             </div>
+            {totalSavedUsd > 0 && (
+              <div className="flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5">
+                <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
+                <span className="text-xs font-mono font-bold text-emerald-400">${totalSavedUsd.toFixed(3)}</span>
+                <span className="text-[10px] text-emerald-600">gespart</span>
+              </div>
+            )}
+            {totalTokensUsed > 0 && (
+              <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">
+                <Cpu className="h-3.5 w-3.5 text-slate-500" />
+                <span className="text-xs font-mono font-bold text-white">{totalTokensUsed.toLocaleString('de')}</span>
+                <span className="text-[10px] text-slate-500">Tokens</span>
+              </div>
+            )}
             {approved.length > 0 && (
               <button
                 onClick={handleStartAll}
