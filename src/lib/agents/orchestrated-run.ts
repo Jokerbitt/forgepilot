@@ -44,6 +44,8 @@ export interface OrchestratedRun {
   tasks: OrchestratedTaskEntry[]
   currentTaskIndex: number
   overallQualityScore?: number
+  /** Max automatic retries per task (default 2) */
+  maxRetries: number
   createdAt: string
   updatedAt: string
   completedAt?: string
@@ -96,6 +98,7 @@ export function createRun(
       retryCount: 0,
     })),
     currentTaskIndex: 0,
+    maxRetries: 2,
     createdAt: now,
     updatedAt: now,
   }
@@ -168,4 +171,35 @@ export function updateRunStatus(runId: string, status: RunStatus): void {
   run.status = status
   run.updatedAt = new Date().toISOString()
   write(store)
+}
+
+/** Returns true if the task can be retried (failed + retryCount < maxRetries) */
+export function canRetry(runId: string, taskId: string): boolean {
+  const run = getRun(runId)
+  if (!run) return false
+  const entry = run.tasks.find(t => t.task.id === taskId)
+  if (!entry) return false
+  return entry.status === 'failed' && entry.retryCount < run.maxRetries
+}
+
+/** Reset a failed task to pending and increment retryCount */
+export function retryTask(runId: string, taskId: string): OrchestratedRun | undefined {
+  const store = read()
+  const run = store.runs.find(r => r.id === runId)
+  if (!run) return undefined
+  const entry = run.tasks.find(t => t.task.id === taskId)
+  if (!entry || entry.status !== 'failed') return undefined
+  if (entry.retryCount >= run.maxRetries) return undefined
+
+  entry.status = 'pending'
+  entry.retryCount += 1
+  entry.result = undefined
+  entry.startedAt = undefined
+
+  // Reset run status to running if it was failed
+  if (run.status === 'failed') run.status = 'running'
+
+  run.updatedAt = new Date().toISOString()
+  write(store)
+  return run
 }

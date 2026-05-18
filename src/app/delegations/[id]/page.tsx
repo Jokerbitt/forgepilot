@@ -425,11 +425,26 @@ export default function DelegationDetailPage() {
                         </div>
                       )}
                     </div>
-                    <div className="shrink-0 text-right">
+                    <div className="shrink-0 text-right flex flex-col items-end gap-1">
                       <span className="block text-xs text-violet-400 font-medium">{entry.agentType}</span>
-                      <span className="block text-xs text-slate-600 mt-0.5">
+                      <span className="block text-xs text-slate-600">
                         {entry.task.effort === 'S' ? '~15min' : entry.task.effort === 'M' ? '~45min' : '~2h'}
                       </span>
+                      {entry.retryCount > 0 && (
+                        <span className="text-xs text-amber-500">↺ {entry.retryCount}x</span>
+                      )}
+                      {isFailed && orchestratedRun.maxRetries > entry.retryCount && (
+                        <button
+                          onClick={async () => {
+                            await fetch(`/api/agents/orchestrate/${orchestratedRun.id}/tasks/${entry.task.id}/retry`, { method: 'POST' })
+                            const res = await fetch(`/api/agents/orchestrate/${orchestratedRun.id}`)
+                            setOrchestratedRun(await res.json() as OrchestratedRun)
+                          }}
+                          className="text-xs text-amber-400 hover:text-amber-300 border border-amber-800/40 rounded px-1.5 py-0.5 hover:bg-amber-950/30 transition-colors"
+                        >
+                          ↺ Retry
+                        </button>
+                      )}
                     </div>
                   </div>
                 )

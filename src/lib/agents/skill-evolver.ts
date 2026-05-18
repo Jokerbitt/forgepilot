@@ -149,3 +149,41 @@ export function getDriftWarnings(): { agentType: AgentType; skillCategory: Skill
       message: `${s.agentType} is declining in ${s.skillCategory}: avg score ${s.averageScore} (was ${s.recommendedConfidence})`,
     }))
 }
+
+/**
+ * Seed realistic demo outcomes so the Performance tab shows useful data
+ * on a fresh install. Only seeds when the history is empty.
+ */
+export function seedDemoOutcomes(): void {
+  const store = read()
+  if (store.outcomes.length > 0) return
+
+  const baseDate = new Date('2026-05-18T10:00:00Z')
+  const demos: Array<{ agent: AgentType; skill: SkillCategory; scores: number[] }> = [
+    { agent: 'claude-code', skill: 'api-route', scores: [88, 92, 85, 90, 94, 91, 88, 95] },
+    { agent: 'claude-code', skill: 'test', scores: [95, 97, 93, 96, 98, 94, 97, 99] },
+    { agent: 'claude-code', skill: 'refactor', scores: [80, 82, 78, 85, 83, 86, 84, 87] },
+    { agent: 'codex', skill: 'data-model', scores: [90, 88, 92, 89, 91, 87, 93, 88] },
+    { agent: 'codex', skill: 'infrastructure', scores: [75, 72, 78, 74, 70, 68, 71, 69] }, // declining
+    { agent: 'general', skill: 'documentation', scores: [72, 75, 74, 78, 80, 82, 83, 85] }, // improving
+    { agent: 'antigravity', skill: 'ui-component', scores: [60, 65, 62, 68, 64, 67, 63, 66] },
+  ]
+
+  const outcomes: SkillOutcome[] = []
+  for (const { agent, skill, scores } of demos) {
+    scores.forEach((score, i) => {
+      const ts = new Date(baseDate.getTime() + i * 3_600_000).toISOString()
+      outcomes.push({
+        agentType: agent,
+        skillCategory: skill,
+        score,
+        grade: score >= 90 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : score >= 40 ? 'D' : 'F',
+        recordedAt: ts,
+      })
+    })
+  }
+
+  store.outcomes = outcomes
+  store.updatedAt = new Date().toISOString()
+  write(store)
+}
