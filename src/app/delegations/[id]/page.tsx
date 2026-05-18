@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { Delegation, DelegationStatus, DelegationReport } from '@/lib/models/delegation'
@@ -107,6 +107,7 @@ export default function DelegationDetailPage() {
   const [orchestratedRun, setOrchestratedRun] = useState<OrchestratedRun | null>(null)
   const [orchestrating, setOrchestrating] = useState(false)
   const [executing, setExecuting] = useState(false)
+  const orchPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const handleOrchestrate = async () => {
     if (!delegation) return
@@ -129,21 +130,31 @@ export default function DelegationDetailPage() {
     }
   }
 
+  // Cleanup poll on unmount
+  useEffect(() => {
+    return () => {
+      if (orchPollRef.current) clearInterval(orchPollRef.current)
+    }
+  }, [])
+
   const handleExecuteOrchestrated = async () => {
     if (!orchestratedRun) return
     setExecuting(true)
-    await fetch(`/api/agents/orchestrate/${orchestratedRun.id}/execute`, {
+    const runId = orchestratedRun.id
+    await fetch(`/api/agents/orchestrate/${runId}/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
     })
-    // Poll for run updates every 4s
-    const poll = setInterval(async () => {
-      const res = await fetch(`/api/agents/orchestrate/${orchestratedRun.id}`)
+    // Poll for run updates every 4s — store ref for cleanup
+    if (orchPollRef.current) clearInterval(orchPollRef.current)
+    orchPollRef.current = setInterval(async () => {
+      const res = await fetch(`/api/agents/orchestrate/${runId}`)
       const updated = await res.json() as OrchestratedRun
       setOrchestratedRun(updated)
       if (updated.status === 'done' || updated.status === 'failed' || updated.status === 'aborted') {
-        clearInterval(poll)
+        if (orchPollRef.current) clearInterval(orchPollRef.current)
+        orchPollRef.current = null
         setExecuting(false)
       }
     }, 4000)
