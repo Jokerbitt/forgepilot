@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { decomposeTask } from '@/lib/agents/atomic-task'
+import { decomposeWithAI } from '@/lib/agents/ai-decomposer'
 import { createRun, listRuns } from '@/lib/agents/orchestrated-run'
 
 export async function GET(req: Request) {
@@ -15,6 +15,7 @@ export async function POST(req: Request) {
     delegationTitle: string
     goal: string
     context?: string
+    useAI?: boolean
   }
 
   const { delegationId, delegationTitle, goal, context } = body
@@ -22,7 +23,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'delegationId and goal are required' }, { status: 400 })
   }
 
-  const tasks = decomposeTask(goal, context)
+  // AI decomposition with pattern-based fallback
+  const tasks = await decomposeWithAI(goal, context)
   const run = createRun(delegationId, delegationTitle ?? goal, goal, tasks)
 
   return NextResponse.json({ run, taskCount: tasks.length }, { status: 201 })
