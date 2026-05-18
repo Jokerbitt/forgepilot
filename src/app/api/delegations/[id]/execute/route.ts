@@ -13,6 +13,7 @@ import {
   getExecutionStartBlocker,
 } from '@/lib/delegation-execution'
 import { OllamaAgentRunner, isOllamaReachable } from '@/lib/agent-runner/ollama-runner'
+import { budgetToMaxTurns } from '@/lib/budget-utils'
 
 const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
 
@@ -51,11 +52,13 @@ function buildPrompt(delegation: Delegation): string {
   const slug = c.workItemId.replace(/[^a-z0-9-]/gi, '-').toLowerCase()
   const branch = `${c.branchStrategy}/${slug}-task`
   const commitPrefix = c.taskType || 'feat'
+  const maxTurns = budgetToMaxTurns(c.maxBudgetUsd)
+  const checkpointTurn = Math.max(10, Math.floor(maxTurns * 0.4))
 
   const dod = (c.definitionOfDone ?? [])
     .filter(Boolean)
-    .map((d, i) => `${i + 1}. ${d}`)
-    .join('\n') || '1. Task erfolgreich abgeschlossen'
+    .map((d, i) => `- [ ] ${d}`)
+    .join('\n') || '- [ ] Task erfolgreich abgeschlossen'
 
   const context = c.context?.trim()
     ? `\n## Context\n${c.context.trim()}\n`
@@ -66,16 +69,16 @@ function buildPrompt(delegation: Delegation): string {
 ## Task
 ${c.goal}
 ${context}
-## Definition of Done
+## Definition of Done (check each before creating PR)
 ${dod}
 
 ## Constraints
 - Risk class: **${c.riskClass}** (A = safe/additive, B = modifies existing, C = needs human review)
 - Branch: \`${branch}\`
-- Max budget: $${c.maxBudgetUsd} (~${budgetToMaxTurns(c.maxBudgetUsd)} turns)
+- Max budget: $${c.maxBudgetUsd} (~${maxTurns} turns)
 - Work item: ${c.workItemId}
 
-## Execution protocol (follow exactly)
+## Execution protocol (follow exactly, in order)
 \`\`\`
 1. Read CLAUDE.md  →  understand conventions and project structure
 2. git checkout -b ${branch}
@@ -85,26 +88,27 @@ ${dod}
    (run type-check BEFORE build — never in parallel)
 6. Commit: git commit -m "${commitPrefix}: <description>"
 7. PR: gh pr create --title "${commitPrefix}: ${c.goal.substring(0, 60).replace(/"/g, "'")}" --body "## Summary\\n- <bullets>\\n\\n## Test plan\\n- [ ] tests pass"
-8. Final output: print a one-paragraph summary of what changed and why
+8. Final output: print DONE: <one-sentence summary>
 \`\`\`
+
+## Anti-drift rules (critical — read before each major action)
+- **Stay in scope**: only modify files directly needed for this task. Touching unrelated files = scope drift.
+- **No gold-plating**: implement exactly what the Definition of Done requires. Nothing more.
+- **Turn checkpoint**: at turn ${checkpointTurn}, stop and re-read "## Task" and "## Definition of Done" above before continuing.
+- **Progress signal every 10 turns**: print "PROGRESS: <what done> | <what next> | <turns used>/${maxTurns}"
+- **Abort conditions** — stop immediately and print "ESCALATION: <reason>" if:
+  - You've used more than 60% of turns without a commit
+  - A step fails 3 times with the same error
+  - The task requires touching Risk-C files and riskClass is A or B
+  - You are unsure which of 2+ approaches to take
 
 ## Quality rules
 - No \`any\` types. No unused imports. No comments stating the obvious.
 - Tests must cover the new behavior — not just type-check.
 - Never commit directly to main. Never force-push.
 - If a step fails, diagnose root cause before retrying.
-- If you are uncertain about scope or risk, stop and print "ESCALATION: <reason>" — do not guess.
 
 Start now.`
-}
-
-/**
- * Map budget USD → max turns for claude CLI.
- * Prevents runaway costs while allowing meaningful work.
- * $1 → 15 turns, $5 → 40 turns, capped at 60.
- */
-function budgetToMaxTurns(budgetUsd: number): number {
-  return Math.min(60, Math.max(5, Math.round(budgetUsd * 15)))
 }
 
 /**
