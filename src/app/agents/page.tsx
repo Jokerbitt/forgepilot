@@ -541,6 +541,7 @@ function OrchestrateTab() {
   const [goal, setGoal] = useState('')
   const [context, setContext] = useState('')
   const [creating, setCreating] = useState(false)
+  const [executing, setExecuting] = useState<string | null>(null)
   const [preview, setPreview] = useState<OrchestratedRun | null>(null)
 
   useEffect(() => {
@@ -569,6 +570,26 @@ function OrchestrateTab() {
       setContext('')
     } finally {
       setCreating(false)
+    }
+  }
+
+  const handleExecuteRun = async (runId: string) => {
+    setExecuting(runId)
+    try {
+      await fetch(`/api/agents/orchestrate/${runId}/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      // Refresh run list after a moment
+      setTimeout(async () => {
+        const res = await fetch('/api/agents/orchestrate')
+        const d = await res.json() as { runs: OrchestratedRun[] }
+        setRuns(d.runs ?? [])
+        setExecuting(null)
+      }, 2000)
+    } catch {
+      setExecuting(null)
     }
   }
 
@@ -655,6 +676,18 @@ function OrchestrateTab() {
               </div>
             ))}
           </div>
+          <div className="mt-3 flex items-center justify-between">
+            <p className="text-xs text-slate-600">
+              Klare Acceptance Criteria pro Task → weniger Drift, zuverlässigere Ergebnisse
+            </p>
+            <button
+              onClick={() => handleExecuteRun(preview.id)}
+              disabled={executing === preview.id || preview.status === 'running'}
+              className="rounded-lg bg-violet-700 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-violet-600 disabled:opacity-40"
+            >
+              {executing === preview.id ? 'Startet…' : preview.status === 'running' ? 'Läuft…' : '▶ Alle Tasks ausführen'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -678,6 +711,15 @@ function OrchestrateTab() {
                   <span className={cx('text-xs font-semibold capitalize', STATUS_COLOR[run.status])}>
                     {run.status}
                   </span>
+                  {(run.status === 'planning' || run.status === 'failed') && (
+                    <button
+                      onClick={() => handleExecuteRun(run.id)}
+                      disabled={executing === run.id}
+                      className="rounded bg-violet-800/60 px-2 py-0.5 text-xs text-violet-300 hover:bg-violet-700/60 disabled:opacity-40"
+                    >
+                      {executing === run.id ? '…' : '▶'}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
