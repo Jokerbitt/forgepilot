@@ -108,7 +108,16 @@ export function AppNav() {
           )}
         </div>
 
-        <div className="mt-auto border-t border-slate-800 p-4">
+        <div className="mt-auto border-t border-slate-800 p-4 space-y-3">
+          <button
+            onClick={() => {
+              window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }))
+            }}
+            className="w-full flex items-center justify-between rounded-md border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-500 hover:border-slate-700 hover:text-slate-400 transition-colors"
+          >
+            <span>Schnellsuche</span>
+            <kbd className="font-mono">⌘K</kbd>
+          </button>
           <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-3">
             <div className="flex items-center justify-between gap-3">
               <div>
