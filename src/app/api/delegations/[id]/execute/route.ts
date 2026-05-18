@@ -131,6 +131,15 @@ function parseCostFromOutput(output: string): number | undefined {
   return undefined
 }
 
+/**
+ * Parse a GitHub PR URL from claude CLI output.
+ * gh pr create prints the URL on its own line when successful.
+ */
+function parsePrUrlFromOutput(output: string): string | undefined {
+  const match = /https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+/i.exec(output)
+  return match ? match[0] : undefined
+}
+
 function isClaudeAvailable(): boolean {
   try {
     execSync('claude --version', { stdio: 'ignore', timeout: 3000 })
@@ -223,6 +232,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     const success = code === 0
     const elapsed = Math.round((Date.now() - startTime.getTime()) / 60000)
     const actualCost = parseCostFromOutput(fullOutput)
+    const prUrl = parsePrUrlFromOutput(fullOutput)
     const knownError = !success ? detectKnownError(fullOutput) : undefined
 
     const finalLog: AgentLog = {
@@ -236,7 +246,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     }
 
     const report: DelegationReport | undefined = success
-      ? { keyPoints: ['Ausführung via Claude CLI abgeschlossen'], changes: [], timeTakenMinutes: elapsed }
+      ? { keyPoints: ['Ausführung via Claude CLI abgeschlossen'], changes: [], timeTakenMinutes: elapsed, ...(prUrl ? { prUrl } : {}) }
       : undefined
 
     // Only update if still running (not already cancelled)

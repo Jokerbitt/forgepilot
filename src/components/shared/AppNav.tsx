@@ -10,6 +10,7 @@ const navItems = [
   { href: '/', label: 'Command Center', shortLabel: 'Command', section: 'Operate' },
   { href: '/project-briefs', label: 'Project Briefs', shortLabel: 'Briefs', section: 'Plan' },
   { href: '/work-items', label: 'Work Items', shortLabel: 'Items', section: 'Execute' },
+  { href: '/active', label: 'Active Runs', shortLabel: 'Active', section: 'Execute' },
   { href: '/delegations', label: 'Delegation Queue', shortLabel: 'Queue', section: 'Execute' },
   { href: '/agent-runs', label: 'Agent Runs', shortLabel: 'Runs', section: 'Execute' },
   { href: '/agents', label: 'Agent Control Plane', shortLabel: 'Agents', section: 'Execute' },
@@ -74,8 +75,8 @@ export function AppNav() {
                   label={item.label}
                   section={item.section}
                   isActive={item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)}
-                  count={item.href === '/delegations' ? totalActive : undefined}
-                  running={item.href === '/delegations' ? running : undefined}
+                  count={item.href === '/delegations' ? totalActive : item.href === '/active' ? running : undefined}
+                  running={item.href === '/delegations' || item.href === '/active' ? running : undefined}
                 />
               ))}
             </div>
