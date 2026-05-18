@@ -4,10 +4,12 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import type { Delegation } from '@/lib/models/delegation'
+import type { AttentionItem } from '@/lib/models/attention'
 import { Badge, StatusDot, cx } from '@/components/ui/primitives'
 
 const navItems = [
   { href: '/', label: 'Command Center', shortLabel: 'Command', section: 'Operate' },
+  { href: '/inbox', label: 'Inbox', shortLabel: 'Inbox', section: 'Operate' },
   { href: '/project-briefs', label: 'Project Briefs', shortLabel: 'Briefs', section: 'Plan' },
   { href: '/work-items', label: 'Work Items', shortLabel: 'Items', section: 'Execute' },
   { href: '/active', label: 'Active Runs', shortLabel: 'Active', section: 'Execute' },
@@ -28,15 +30,23 @@ export function AppNav() {
   const pathname = usePathname()
   const [running, setRunning] = useState(0)
   const [pending, setPending] = useState(0)
+  const [attentionCount, setAttentionCount] = useState(0)
 
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const res = await fetch('/api/delegations')
-        const data = await res.json() as Delegation[]
+        const [delRes, attRes] = await Promise.all([
+          fetch('/api/delegations'),
+          fetch('/api/attention'),
+        ])
+        const data = await delRes.json() as Delegation[]
         if (Array.isArray(data)) {
           setRunning(data.filter(d => d.status === 'running').length)
           setPending(data.filter(d => d.status === 'pending' || d.status === 'approved').length)
+        }
+        const att = await attRes.json() as AttentionItem[]
+        if (Array.isArray(att)) {
+          setAttentionCount(att.filter(i => !i.resolvedAt).length)
         }
       } catch {
         // ignore — nav badge is non-critical
@@ -75,7 +85,7 @@ export function AppNav() {
                   label={item.label}
                   section={item.section}
                   isActive={item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)}
-                  count={item.href === '/delegations' ? totalActive : item.href === '/active' ? running : undefined}
+                  count={item.href === '/delegations' ? totalActive : item.href === '/active' ? running : item.href === '/inbox' ? attentionCount : undefined}
                   running={item.href === '/delegations' || item.href === '/active' ? running : undefined}
                 />
               ))}
