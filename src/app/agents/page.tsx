@@ -438,11 +438,30 @@ function EmptyState() {
 const TREND_ICON = { improving: '↑', stable: '→', declining: '↓' } as const
 const TREND_COLOR = { improving: 'text-emerald-400', stable: 'text-slate-400', declining: 'text-red-400' } as const
 const GRADE_COLOR = { A: 'text-emerald-400', B: 'text-sky-400', C: 'text-amber-400', D: 'text-orange-400', F: 'text-red-400' } as const
+void GRADE_COLOR
+
+function Sparkline({ scores }: { scores: number[] }) {
+  if (scores.length < 2) return null
+  const h = 24
+  const w = scores.length * 10
+  const min = Math.min(...scores)
+  const max = Math.max(...scores)
+  const range = max - min || 1
+  const pts = scores
+    .map((v, i) => `${i * 10},${h - Math.round(((v - min) / range) * h)}`)
+    .join(' ')
+  return (
+    <svg width={w} height={h} className="overflow-visible">
+      <polyline points={pts} fill="none" strokeWidth="1.5" className="stroke-sky-500/70" />
+    </svg>
+  )
+}
 
 function PerformanceTab() {
   const [summaries, setSummaries] = useState<SkillPerformanceSummary[]>([])
   const [warnings, setWarnings] = useState<{ agentType: string; skillCategory: string; message: string }[]>([])
   const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState<string>('all')
 
   useEffect(() => {
     fetch('/api/agents/performance')
@@ -462,70 +481,146 @@ function PerformanceTab() {
       <div className="rounded-xl border border-slate-800 bg-slate-900 p-8 text-center">
         <p className="text-sm font-medium text-white">Noch keine Performance-Daten</p>
         <p className="mt-1 text-xs text-slate-500">
-          Sobald Agenten Tasks über den Optimizer bewerten, erscheinen hier Skill-Konfidenz und Trends.
+          Nach dem ersten Delegations-Lauf erscheinen hier Skill-Konfidenz und Trends automatisch.
         </p>
       </div>
     )
   }
 
+  const totalTasks = summaries.reduce((a, s) => a + s.taskCount, 0)
+  const improving = summaries.filter(s => s.trend === 'improving').length
+  const declining = summaries.filter(s => s.trend === 'declining').length
+  const avgScore = Math.round(summaries.reduce((a, s) => a + s.averageScore, 0) / summaries.length)
+
+  const agents = Array.from(new Set(summaries.map(s => s.agentType)))
+  const visible = filter === 'all' ? summaries : summaries.filter(s => s.agentType === filter)
+
   const byAgent: Record<string, SkillPerformanceSummary[]> = {}
-  for (const s of summaries) {
+  for (const s of visible) {
     byAgent[s.agentType] = byAgent[s.agentType] ?? []
     byAgent[s.agentType].push(s)
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Tasks tracked', value: totalTasks, color: 'text-white' },
+          { label: 'Ø Quality Score', value: avgScore, color: avgScore >= 80 ? 'text-emerald-400' : avgScore >= 60 ? 'text-amber-400' : 'text-red-400' },
+          { label: 'Improving', value: improving, color: 'text-emerald-400' },
+          { label: 'Declining', value: declining, color: declining > 0 ? 'text-red-400' : 'text-slate-500' },
+        ].map(kpi => (
+          <div key={kpi.label} className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-3">
+            <p className="text-xs text-slate-500">{kpi.label}</p>
+            <p className={cx('mt-0.5 text-2xl font-bold tabular-nums', kpi.color)}>{kpi.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Drift warnings — prominent */}
       {warnings.length > 0 && (
-        <div className="rounded-xl border border-red-900/40 bg-red-950/20 p-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-400">Drift Warnungen</p>
-          <ul className="space-y-1">
+        <div className="rounded-xl border border-red-800/50 bg-red-950/20 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
+            <p className="text-xs font-semibold uppercase tracking-wide text-red-400">
+              {warnings.length} Drift-Warnung{warnings.length > 1 ? 'en' : ''} erkannt
+            </p>
+          </div>
+          <div className="space-y-2">
             {warnings.map((w, i) => (
-              <li key={i} className="text-xs text-red-300">{w.message}</li>
+              <div key={i} className="flex items-start gap-3 rounded-lg bg-red-950/30 px-3 py-2">
+                <span className="mt-0.5 shrink-0 text-red-400">⚠</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-red-300 capitalize">
+                    {w.agentType} · {w.skillCategory.replace(/-/g, ' ')}
+                  </p>
+                  <p className="text-xs text-red-400/80 mt-0.5">{w.message}</p>
+                </div>
+                <span className="shrink-0 text-xs text-red-500 font-medium">Review →</span>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       )}
 
+      {warnings.length === 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-900/30 bg-emerald-950/10 px-4 py-2.5">
+          <span className="text-emerald-400">✓</span>
+          <p className="text-xs text-emerald-400">Alle Agenten stabil — kein Agentic Drift erkannt</p>
+        </div>
+      )}
+
+      {/* Agent filter */}
+      <div className="flex flex-wrap gap-2">
+        {['all', ...agents].map(a => (
+          <button
+            key={a}
+            onClick={() => setFilter(a)}
+            className={cx(
+              'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+              filter === a
+                ? 'bg-violet-700 text-white'
+                : 'border border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-300',
+            )}
+          >
+            {a === 'all' ? 'Alle Agenten' : a}
+          </button>
+        ))}
+      </div>
+
+      {/* Skills per agent */}
       {Object.entries(byAgent).map(([agentType, skills]) => (
         <div key={agentType} className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-          <p className="mb-4 text-sm font-semibold text-white capitalize">{agentType}</p>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {skills.map(s => (
-              <div key={s.skillCategory} className="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium text-slate-300 capitalize">{s.skillCategory.replace(/-/g, ' ')}</p>
-                  <span className={cx('text-xs font-bold', TREND_COLOR[s.trend])}>
-                    {TREND_ICON[s.trend]} {s.trend}
-                  </span>
-                </div>
-                <div className="mt-2 flex items-end gap-3">
-                  <div>
-                    <p className="text-xs text-slate-500">Ø Score</p>
-                    <p className={cx('text-lg font-bold', s.averageScore >= 90 ? 'text-emerald-400' : s.averageScore >= 75 ? 'text-sky-400' : s.averageScore >= 60 ? 'text-amber-400' : 'text-red-400')}>
-                      {s.averageScore}
-                    </p>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-semibold text-white capitalize">{agentType}</p>
+            <span className="text-xs text-slate-500">{skills.length} skills · {skills.reduce((a, s) => a + s.taskCount, 0)} tasks</span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {skills.map(s => {
+              const isDeclining = s.trend === 'declining'
+              const delta = s.recommendedConfidence - s.currentConfidence
+              return (
+                <div key={s.skillCategory} className={cx(
+                  'rounded-lg border p-3 transition-colors',
+                  isDeclining ? 'border-red-900/40 bg-red-950/10' : 'border-slate-800 bg-slate-950/60',
+                )}>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-medium text-slate-300 capitalize">{s.skillCategory.replace(/-/g, ' ')}</p>
+                    <span className={cx('text-xs font-bold', TREND_COLOR[s.trend])}>
+                      {TREND_ICON[s.trend]}
+                    </span>
                   </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Konfidenz</p>
-                    <p className="text-sm font-semibold text-slate-300">
-                      {s.currentConfidence} → <span className="text-sky-400">{s.recommendedConfidence}</span>
-                    </p>
+
+                  {/* Sparkline */}
+                  <div className="flex items-end justify-between mb-2">
+                    <div>
+                      <p className="text-xs text-slate-500">Ø Score</p>
+                      <p className={cx('text-xl font-bold tabular-nums', s.averageScore >= 90 ? 'text-emerald-400' : s.averageScore >= 75 ? 'text-sky-400' : s.averageScore >= 60 ? 'text-amber-400' : 'text-red-400')}>
+                        {s.averageScore}
+                      </p>
+                    </div>
+                    <Sparkline scores={s.recentScores} />
                   </div>
-                  <div className="ml-auto text-right">
-                    <p className="text-xs text-slate-500">Tasks</p>
-                    <p className="text-sm font-semibold text-slate-400">{s.taskCount}</p>
+
+                  {/* Confidence delta */}
+                  <div className="flex items-center justify-between text-xs mb-1.5">
+                    <span className="text-slate-500">Konfidenz</span>
+                    <span className={cx('font-semibold', delta > 0 ? 'text-emerald-400' : delta < 0 ? 'text-red-400' : 'text-slate-400')}>
+                      {s.currentConfidence}% → {s.recommendedConfidence}%
+                      {delta !== 0 && <span className="ml-1">({delta > 0 ? '+' : ''}{delta})</span>}
+                    </span>
                   </div>
+                  <div className="h-1.5 w-full rounded-full bg-slate-800">
+                    <div
+                      className={cx('h-1.5 rounded-full transition-all', isDeclining ? 'bg-red-500' : 'bg-sky-500')}
+                      style={{ width: `${s.recommendedConfidence}%` }}
+                    />
+                  </div>
+                  <p className="mt-1.5 text-right text-xs text-slate-600">{s.taskCount} tasks</p>
                 </div>
-                {/* Confidence bar */}
-                <div className="mt-2 h-1 w-full rounded-full bg-slate-800">
-                  <div
-                    className="h-1 rounded-full bg-sky-500 transition-all"
-                    style={{ width: `${s.recommendedConfidence}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       ))}
@@ -730,6 +825,3 @@ function OrchestrateTab() {
   )
 }
 
-// ─── grade helper (used in performance tab) ──────────────────────────────────
-const _gradeColor = GRADE_COLOR  // suppress unused warning
-void _gradeColor

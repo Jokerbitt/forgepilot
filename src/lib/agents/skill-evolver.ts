@@ -30,6 +30,8 @@ export interface SkillPerformanceSummary {
   trend: 'improving' | 'stable' | 'declining'
   currentConfidence: number
   recommendedConfidence: number
+  /** Last 8 scores (oldest→newest) for sparkline */
+  recentScores: number[]
 }
 
 interface HistoryStore {
@@ -116,6 +118,7 @@ export function getPerformanceSummaries(): SkillPerformanceSummary[] {
       trend,
       currentConfidence,
       recommendedConfidence,
+      recentScores: scores.slice(-8),
     })
   }
 
