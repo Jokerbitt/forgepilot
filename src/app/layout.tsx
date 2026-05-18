@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { ToastProvider } from '@/components/shared/ToastProvider'
 import { AppNav } from '@/components/shared/AppNav'
+import { GlobalKeyboardHandler } from '@/components/shared/GlobalKeyboardHandler'
 
 export const metadata: Metadata = {
   title: 'ForgePilot',
@@ -18,6 +19,7 @@ export default function RootLayout({
       <body className="bg-gray-950 text-white min-h-screen">
         <ToastProvider>
           <AppNav />
+          <GlobalKeyboardHandler />
           <div className="lg:pl-72">
             {children}
           </div>
