@@ -12,6 +12,9 @@ const navItems = [
   { href: '/delegations', label: 'Delegation Queue', shortLabel: 'Queue', section: 'Execute' },
   { href: '/agent-runs', label: 'Agent Runs', shortLabel: 'Runs', section: 'Execute' },
   { href: '/knowledge', label: 'Knowledge Center', shortLabel: 'Knowledge', section: 'Knowledge' },
+  { href: '/context-packages', label: 'Context Packages', shortLabel: 'Context', section: 'Knowledge' },
+  { href: '/model-router', label: 'Model Router', shortLabel: 'Router', section: 'System' },
+  { href: '/pilot', label: 'E2E Pilot', shortLabel: 'Pilot', section: 'System' },
   { href: '/settings', label: 'Settings', shortLabel: 'Settings', section: 'System' },
 ]
 
