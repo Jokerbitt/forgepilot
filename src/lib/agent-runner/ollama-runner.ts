@@ -1,4 +1,4 @@
-import type { AgentLog } from '@/lib/models/delegation'
+import type { AgentLog, TokenUsage, CostSavings } from '@/lib/models/delegation'
 import {
   OLLAMA_TOOLS,
   executeToolCall,
@@ -21,12 +21,39 @@ export interface OllamaChatResponse {
     tool_calls?: OllamaToolCall[]
   }
   done: boolean
+  /** Tokens used for the prompt in this turn */
+  prompt_eval_count?: number
+  /** Tokens generated in this turn */
+  eval_count?: number
 }
 
 export interface OllamaRunResult {
   success: boolean
   summary: string
   turns: number
+  tokenUsage: TokenUsage
+  costSavings: CostSavings
+}
+
+/**
+ * Claude Sonnet 4 pricing (May 2026):
+ * Input:  $3.00 / 1M tokens
+ * Output: $15.00 / 1M tokens
+ */
+const CLAUDE_INPUT_USD_PER_TOKEN  = 3.00  / 1_000_000
+const CLAUDE_OUTPUT_USD_PER_TOKEN = 15.00 / 1_000_000
+
+export function calculateCostSavings(usage: TokenUsage, model: string): CostSavings {
+  const claudeEquivalentUsd =
+    usage.promptTokens * CLAUDE_INPUT_USD_PER_TOKEN +
+    usage.completionTokens * CLAUDE_OUTPUT_USD_PER_TOKEN
+  return {
+    tokensUsed: usage,
+    claudeEquivalentUsd: Math.round(claudeEquivalentUsd * 100_000) / 100_000,
+    actualCostUsd: 0,
+    savedUsd: Math.round(claudeEquivalentUsd * 100_000) / 100_000,
+    localModel: model,
+  }
 }
 
 export interface OllamaRunnerOptions {
@@ -107,6 +134,17 @@ export class OllamaAgentRunner {
 
     let turns = 0
     let lastAssistantText = ''
+    let totalPromptTokens = 0
+    let totalCompletionTokens = 0
+
+    const makeResult = (success: boolean, summary: string): OllamaRunResult => {
+      const tokenUsage: TokenUsage = {
+        promptTokens: totalPromptTokens,
+        completionTokens: totalCompletionTokens,
+        totalTokens: totalPromptTokens + totalCompletionTokens,
+      }
+      return { success, summary, turns, tokenUsage, costSavings: calculateCostSavings(tokenUsage, this.model) }
+    }
 
     while (turns < maxTurns) {
       turns += 1
@@ -116,14 +154,29 @@ export class OllamaAgentRunner {
       } catch (err) {
         const msg = (err as Error).message
         this.emit(this.nowLog('error', `❌ Ollama nicht erreichbar: ${msg}`))
-        return { success: false, summary: `Ollama-Aufruf fehlgeschlagen: ${msg}`, turns }
+        return makeResult(false, `Ollama-Aufruf fehlgeschlagen: ${msg}`)
       }
+
+      // Accumulate token counts from Ollama response
+      totalPromptTokens += response.prompt_eval_count ?? 0
+      totalCompletionTokens += response.eval_count ?? 0
 
       const assistant = response.message
       lastAssistantText = assistant.content ?? ''
 
       if (lastAssistantText.trim()) {
         this.emit(this.nowLog('thought', `💭 ${lastAssistantText.trim().slice(0, 500)}`))
+      }
+
+      // Emit token progress every 5 turns
+      if (turns % 5 === 0) {
+        const saved = calculateCostSavings(
+          { promptTokens: totalPromptTokens, completionTokens: totalCompletionTokens, totalTokens: totalPromptTokens + totalCompletionTokens },
+          this.model
+        )
+        this.emit(this.nowLog('info',
+          `📊 Turn ${turns}/${maxTurns} · ${(totalPromptTokens + totalCompletionTokens).toLocaleString()} Tokens · Ersparnis: $${saved.savedUsd.toFixed(4)} gegenüber Claude`
+        ))
       }
 
       messages.push({
@@ -135,18 +188,18 @@ export class OllamaAgentRunner {
       const completeMatch = /\bTASK_COMPLETE\b/.test(lastAssistantText)
       const blockedMatch = /\bTASK_BLOCKED\b/.test(lastAssistantText)
       if (completeMatch) {
-        this.emit(this.nowLog('success', `✅ TASK_COMPLETE nach ${turns} Turns`))
-        return { success: true, summary: lastAssistantText.trim(), turns }
+        this.emit(this.nowLog('success', `✅ TASK_COMPLETE nach ${turns} Turns · ${(totalPromptTokens + totalCompletionTokens).toLocaleString()} Tokens total`))
+        return makeResult(true, lastAssistantText.trim())
       }
       if (blockedMatch) {
         this.emit(this.nowLog('error', `⛔ TASK_BLOCKED nach ${turns} Turns`))
-        return { success: false, summary: lastAssistantText.trim(), turns }
+        return makeResult(false, lastAssistantText.trim())
       }
 
       const toolCalls = assistant.tool_calls ?? []
       if (toolCalls.length === 0) {
-        this.emit(this.nowLog('success', `✅ Run beendet ohne weitere Tool-Calls nach ${turns} Turns`))
-        return { success: true, summary: lastAssistantText.trim() || 'Run beendet ohne Tool-Calls', turns }
+        this.emit(this.nowLog('success', `✅ Run beendet nach ${turns} Turns`))
+        return makeResult(true, lastAssistantText.trim() || 'Run beendet ohne Tool-Calls')
       }
 
       for (const call of toolCalls) {
@@ -171,7 +224,7 @@ export class OllamaAgentRunner {
     }
 
     this.emit(this.nowLog('error', `⏱️ maxTurns (${maxTurns}) erreicht ohne Abschluss`))
-    return { success: false, summary: `maxTurns erreicht. Letzte Antwort: ${lastAssistantText.slice(0, 500)}`, turns }
+    return makeResult(false, `maxTurns erreicht. Letzte Antwort: ${lastAssistantText.slice(0, 500)}`)
   }
 }
 

@@ -22,6 +22,9 @@ import {
   Command,
   ChevronRight,
   Zap,
+  BarChart3,
+  Search,
+  Brain,
 } from 'lucide-react'
 import type { Delegation } from '@/lib/models/delegation'
 import type { AttentionItem } from '@/lib/models/attention'
@@ -33,6 +36,7 @@ interface NavItem {
   shortLabel: string
   icon: React.ElementType
   section: string
+  isNew?: boolean
 }
 
 const navItems: NavItem[] = [
@@ -45,10 +49,13 @@ const navItems: NavItem[] = [
   { href: '/delegations', label: 'Delegation Queue', shortLabel: 'Queue', icon: ListChecks, section: 'Execute' },
   { href: '/agent-runs', label: 'Agent Runs', shortLabel: 'Runs', icon: History, section: 'Execute' },
   { href: '/agents', label: 'Agent Control', shortLabel: 'Agents', icon: Bot, section: 'Execute' },
+  { href: '/pm-agent', label: 'PM Agent', shortLabel: 'PM Agent', icon: Brain, section: 'Execute', isNew: true },
   { href: '/knowledge', label: 'Knowledge Center', shortLabel: 'Knowledge', icon: BookOpen, section: 'Knowledge' },
+  { href: '/knowledge/research', label: 'Research Platform', shortLabel: 'Research', icon: Search, section: 'Knowledge', isNew: true },
   { href: '/context-packages', label: 'Context Packages', shortLabel: 'Context', icon: Package, section: 'Knowledge' },
   { href: '/model-router', label: 'Model Router', shortLabel: 'Router', icon: GitBranch, section: 'System' },
   { href: '/governance', label: 'Governance Hub', shortLabel: 'Gov', icon: Shield, section: 'System' },
+  { href: '/analytics', label: 'Cost Analytics', shortLabel: 'Analytics', icon: BarChart3, section: 'System' },
   { href: '/pilot', label: 'E2E Pilot', shortLabel: 'Pilot', icon: FlaskConical, section: 'System' },
   { href: '/settings', label: 'Settings', shortLabel: 'Settings', icon: Settings, section: 'System' },
 ]
@@ -145,6 +152,7 @@ export function AppNav() {
                     isActive={isActive}
                     count={count}
                     isLive={isLive}
+                    isNew={item.isNew}
                   />
                 )
               })}
@@ -225,6 +233,7 @@ function SidebarLink({
   isActive,
   count,
   isLive,
+  isNew,
 }: {
   href: string
   label: string
@@ -232,6 +241,7 @@ function SidebarLink({
   isActive: boolean
   count?: number
   isLive?: boolean
+  isNew?: boolean
 }) {
   return (
     <Link
@@ -269,6 +279,8 @@ function SidebarLink({
         >
           {count}
         </span>
+      ) : isNew ? (
+        <span className="ml-auto rounded bg-violet-500/20 px-1 py-0.5 text-[9px] font-bold text-violet-400">NEU</span>
       ) : isActive ? (
         <ChevronRight className="ml-2 h-3 w-3 shrink-0 text-violet-400/50" />
       ) : null}
