@@ -7,6 +7,7 @@ import type { Delegation } from '@/lib/models/delegation'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 import { PolicyVerdictPanel } from '@/components/delegation/PolicyVerdictPanel'
+import { PipelineRunner } from '@/components/delegation/PipelineRunner'
 
 const STATUS_COLORS: Record<string, string> = {
   pending:   'bg-yellow-900/50 text-yellow-400 border-yellow-700',
@@ -296,6 +297,19 @@ export default function DelegationDetailPage() {
             </div>
 
             <PolicyVerdictPanel contract={d.contract} />
+
+            <PipelineRunner
+              workItemId={d.contract.workItemId ?? d.id}
+              title={d.contract.goal.slice(0, 80)}
+              goal={d.contract.goal}
+              privacyMode={
+                d.contract.privacyMode === 'local' ? 'local-only'
+                : d.contract.privacyMode === 'private-cloud' ? 'hybrid'
+                : 'hybrid'
+              }
+              riskClass={d.contract.riskClass}
+              maxBudgetUsd={d.contract.maxBudgetUsd}
+            />
 
             {/* Definition of Done */}
             {d.contract.definitionOfDone?.length > 0 && (
