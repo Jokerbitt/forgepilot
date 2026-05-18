@@ -8,6 +8,7 @@ import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 import { PreFlightModal } from '@/components/delegation/PreFlightModal'
 import { PolicyVerdictPanel } from '@/components/delegation/PolicyVerdictPanel'
 import { ContextPackageBuilder } from '@/components/delegation/ContextPackageBuilder'
+import { PipelineRunner } from '@/components/delegation/PipelineRunner'
 
 type Tab = 'details' | 'logs' | 'report' | 'notes'
 
@@ -566,6 +567,19 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
                     : delegation.contract.privacyMode === 'private-cloud' ? 'hybrid'
                     : 'hybrid'
                   }
+                />
+
+                <PipelineRunner
+                  workItemId={delegation.contract.workItemId ?? delegation.id}
+                  title={delegation.contract.goal.slice(0, 80)}
+                  goal={delegation.contract.goal}
+                  privacyMode={
+                    delegation.contract.privacyMode === 'local' ? 'local-only'
+                    : delegation.contract.privacyMode === 'private-cloud' ? 'hybrid'
+                    : 'hybrid'
+                  }
+                  riskClass={delegation.contract.riskClass}
+                  maxBudgetUsd={delegation.contract.maxBudgetUsd}
                 />
 
                 {delegation.agentRunId && (
