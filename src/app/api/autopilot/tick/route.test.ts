@@ -8,6 +8,8 @@ const mockConfig = {
   aiProvider: 'anthropic' as const,
   localCodingModel: 'qwen2.5-coder:14b',
   localFastModel: 'llama3.2:3b',
+  maxConcurrentAgents: 2,
+  autoStartApproved: false,
   ignoreStatuses: [],
   penalizeOldBacklogs: false,
   backlogPenaltyAgeDays: 90,
