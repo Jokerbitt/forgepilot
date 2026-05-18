@@ -22,10 +22,15 @@ interface ClaudeAuthStatus {
 
 function readClaudeAuthStatus(): AuthStatusResult {
   try {
+    // Strip ANTHROPIC_API_KEY so claude reports the session auth (Max subscription),
+    // not the API key. If ANTHROPIC_API_KEY is present, claude reports apiKeySource
+    // and returns null for subscriptionType/email.
+    const { ANTHROPIC_API_KEY: _stripped, ...baseEnv } = process.env
     const raw = execSync('claude auth status', {
       timeout: 5000,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).toString().trim()
+      encoding: 'utf-8',
+      env: baseEnv,
+    }).trim()
 
     if (!raw) {
       return { loggedIn: false, authMethod: 'none', subscriptionType: 'none' }
