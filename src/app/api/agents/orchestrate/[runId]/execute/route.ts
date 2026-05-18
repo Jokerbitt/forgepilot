@@ -10,7 +10,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { getRun, updateTaskStatus, updateRunStatus } from '@/lib/agents/orchestrated-run'
+import { getRun, updateTaskStatus, updateRunStatus, retryTask, canRetry } from '@/lib/agents/orchestrated-run'
 import { scoreWork } from '@/lib/agents/work-quality'
 import { recordOutcome } from '@/lib/agents/skill-evolver'
 
@@ -108,16 +108,29 @@ async function executeRunAsync(runId: string, skipFailed: boolean): Promise<void
       // 5. Record for skill evolution
       recordOutcome(entry.agentType, task.skillCategory, qualityResult)
 
-      // 6. Mark task done
+      // 6. Mark task done or failed + auto-retry on grade F
       const taskStatus = qualityResult.grade === 'F' ? 'failed' : 'done'
       updateTaskStatus(runId, task.id, taskStatus, qualityResult)
 
-      if (taskStatus === 'failed' && !skipFailed) {
-        updateRunStatus(runId, 'failed')
-        return
+      if (taskStatus === 'failed') {
+        if (canRetry(runId, task.id)) {
+          retryTask(runId, task.id)
+          // Re-add to pending queue by pushing back into loop
+          pendingTasks.push(entry)
+          continue
+        }
+        if (!skipFailed) {
+          updateRunStatus(runId, 'failed')
+          return
+        }
       }
     } catch {
       updateTaskStatus(runId, task.id, 'failed')
+      if (canRetry(runId, task.id)) {
+        retryTask(runId, task.id)
+        pendingTasks.push(entry)
+        continue
+      }
       if (!skipFailed) {
         updateRunStatus(runId, 'failed')
         return
