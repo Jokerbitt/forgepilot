@@ -1,10 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import * as config from '@/lib/connectors/config'
 
 global.fetch = vi.fn()
+
+// Mock readStoredApiKeys so tests are isolated from real config/api-keys.json
+vi.mock('@/lib/connectors/config', () => ({
+  readStoredApiKeys: vi.fn(() => ({})),
+}))
+
+// Mock child_process so tests don't spawn real binaries
+vi.mock('child_process', () => ({
+  execSync: vi.fn(() => 'claude 2.0.0'),
+}))
 
 describe('GET /api/local-ai/status', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    // Restore default mock after resetAllMocks clears implementations
+    vi.mocked(config.readStoredApiKeys).mockReturnValue({})
     delete process.env.ANTHROPIC_API_KEY
     delete process.env.DEFAULT_PRIVACY_MODE
   })
