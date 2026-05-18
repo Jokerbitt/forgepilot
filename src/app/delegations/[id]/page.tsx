@@ -92,6 +92,7 @@ export default function DelegationDetailPage() {
 
   const [orchestratedRun, setOrchestratedRun] = useState<OrchestratedRun | null>(null)
   const [orchestrating, setOrchestrating] = useState(false)
+  const [executing, setExecuting] = useState(false)
 
   const handleOrchestrate = async () => {
     if (!delegation) return
@@ -112,6 +113,26 @@ export default function DelegationDetailPage() {
     } finally {
       setOrchestrating(false)
     }
+  }
+
+  const handleExecuteOrchestrated = async () => {
+    if (!orchestratedRun) return
+    setExecuting(true)
+    await fetch(`/api/agents/orchestrate/${orchestratedRun.id}/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+    // Poll for run updates every 4s
+    const poll = setInterval(async () => {
+      const res = await fetch(`/api/agents/orchestrate/${orchestratedRun.id}`)
+      const updated = await res.json() as OrchestratedRun
+      setOrchestratedRun(updated)
+      if (updated.status === 'done' || updated.status === 'failed' || updated.status === 'aborted') {
+        clearInterval(poll)
+        setExecuting(false)
+      }
+    }, 4000)
   }
 
   const handleApprove = async () => {
@@ -289,39 +310,86 @@ export default function DelegationDetailPage() {
           <div className="bg-slate-900 border border-violet-800/30 rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-violet-400">Orchestrierung</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-violet-400">
+                  Orchestrierung
+                  {orchestratedRun.status === 'running' && (
+                    <span className="ml-2 inline-block h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />
+                  )}
+                </p>
                 <p className="mt-1 text-sm text-white">
-                  {orchestratedRun.tasks.length} atomare Sub-Tasks · kleinste Einheiten, ein Agent pro Task
+                  {orchestratedRun.tasks.length} Sub-Tasks ·{' '}
+                  <span className={
+                    orchestratedRun.status === 'done' ? 'text-emerald-400' :
+                    orchestratedRun.status === 'running' ? 'text-violet-400' :
+                    orchestratedRun.status === 'failed' ? 'text-red-400' : 'text-slate-400'
+                  }>
+                    {orchestratedRun.status}
+                  </span>
+                  {orchestratedRun.overallQualityScore !== undefined && (
+                    <span className="ml-2 text-xs text-emerald-400 font-bold">{orchestratedRun.overallQualityScore}pts</span>
+                  )}
                 </p>
               </div>
-              <button onClick={() => setOrchestratedRun(null)} className="text-xs text-slate-600 hover:text-slate-400">✕</button>
+              <div className="flex items-center gap-2">
+                {(orchestratedRun.status === 'planning' || orchestratedRun.status === 'failed') && (
+                  <button
+                    onClick={handleExecuteOrchestrated}
+                    disabled={executing}
+                    className="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-600 disabled:opacity-40 transition-colors"
+                  >
+                    {executing ? 'Startet…' : '▶ Ausführen'}
+                  </button>
+                )}
+                <button onClick={() => setOrchestratedRun(null)} className="text-xs text-slate-600 hover:text-slate-400">✕</button>
+              </div>
             </div>
             <div className="space-y-2">
-              {orchestratedRun.tasks.map((entry, i) => (
-                <div key={entry.task.id} className="flex items-start gap-3 rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-                  <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded bg-slate-800 text-xs font-bold text-slate-400">
-                    {i + 1}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-white">{entry.task.title}</p>
-                    <p className="mt-0.5 text-xs text-slate-500 truncate">{entry.task.description}</p>
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {entry.task.acceptanceCriteria.slice(0, 2).map((ac, j) => (
-                        <span key={j} className="text-xs text-slate-600">✓ {ac}</span>
-                      ))}
+              {orchestratedRun.tasks.map((entry, i) => {
+                const isRunning = entry.status === 'running'
+                const isDone = entry.status === 'done'
+                const isFailed = entry.status === 'failed'
+                return (
+                  <div key={entry.task.id} className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
+                    isRunning ? 'border-violet-700/60 bg-violet-950/20' :
+                    isDone ? 'border-emerald-900/40 bg-emerald-950/10' :
+                    isFailed ? 'border-red-900/40 bg-red-950/10' :
+                    'border-slate-800 bg-slate-950/60'
+                  }`}>
+                    <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded text-xs font-bold ${
+                      isDone ? 'bg-emerald-800/60 text-emerald-300' :
+                      isFailed ? 'bg-red-800/60 text-red-300' :
+                      isRunning ? 'bg-violet-800/60 text-violet-300' :
+                      'bg-slate-800 text-slate-400'
+                    }`}>
+                      {isDone ? '✓' : isFailed ? '✗' : isRunning ? '▶' : i + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-white">{entry.task.title}</p>
+                      <p className="mt-0.5 text-xs text-slate-500 truncate">{entry.task.description}</p>
+                      {entry.result && (
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <span className={`text-xs font-bold ${entry.result.qualityScore >= 90 ? 'text-emerald-400' : entry.result.qualityScore >= 75 ? 'text-sky-400' : 'text-amber-400'}`}>
+                            {entry.result.qualityScore}pts
+                          </span>
+                          <span className="text-xs text-slate-600">{entry.result.grade}</span>
+                          {entry.result.issues.length > 0 && (
+                            <span className="text-xs text-red-400">{entry.result.issues[0]}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <span className="block text-xs text-violet-400 font-medium">{entry.agentType}</span>
+                      <span className="block text-xs text-slate-600 mt-0.5">
+                        {entry.task.effort === 'S' ? '~15min' : entry.task.effort === 'M' ? '~45min' : '~2h'}
+                      </span>
                     </div>
                   </div>
-                  <div className="shrink-0 text-right">
-                    <span className="block text-xs text-violet-400 font-medium">{entry.agentType}</span>
-                    <span className="block text-xs text-slate-600 mt-0.5">
-                      {entry.task.effort === 'S' ? '~15min' : entry.task.effort === 'M' ? '~45min' : '~2h'}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
             <p className="mt-3 text-xs text-slate-600">
-              Jeder Sub-Task hat klare Acceptance Criteria → weniger Drift, zuverlässigere Ergebnisse
+              Klare Acceptance Criteria pro Task → weniger Agentic Drift
             </p>
           </div>
         )}
