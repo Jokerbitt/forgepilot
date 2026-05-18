@@ -10,6 +10,7 @@ import { PolicyVerdictPanel } from '@/components/delegation/PolicyVerdictPanel'
 import { PipelineRunner } from '@/components/delegation/PipelineRunner'
 import { AutopilotReadinessBadge } from '@/components/delegation/AutopilotReadinessBadge'
 import { LiveLogViewer } from '@/components/delegation/LiveLogViewer'
+import { DelegationTimeline } from '@/components/delegation/DelegationTimeline'
 
 const STATUS_COLORS: Record<string, string> = {
   pending:   'bg-yellow-900/50 text-yellow-400 border-yellow-700',
@@ -247,6 +248,9 @@ export default function DelegationDetailPage() {
             )}
           </div>
         </div>
+
+        {/* ── Timeline ─────────────────────────────────────────────────── */}
+        <DelegationTimeline delegation={d} />
 
         {/* ── Two-column: Contract + Logs ───────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

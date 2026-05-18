@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import type { Delegation } from '@/lib/models/delegation'
 import type { OperatorReadiness, ReadinessStatus } from '@/lib/operator/readiness'
 import type { WorkItem } from '@/lib/models/work-item'
@@ -293,6 +292,7 @@ export function CommandCenterOverview() {
       </Panel>
 
       <PMAgentWidget plan={pmPlan} />
+      <QuickActionsPanel />
     </div>
   )
 }
@@ -410,6 +410,70 @@ function toneBorder(tone: ActionTone): string {
   if (tone === 'blocked') return 'border-rose-500/40'
   if (tone === 'attention') return 'border-amber-500/40'
   return 'border-sky-500/30'
+}
+
+function QuickActionsPanel() {
+  const [pmStatus, setPmStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const [pmMessage, setPmMessage] = useState<string | null>(null)
+
+  const handleRunPmAgent = useCallback(async () => {
+    setPmStatus('loading')
+    setPmMessage(null)
+    try {
+      const res = await fetch('/api/pm-agent', { method: 'POST' })
+      const data = await res.json() as { plan?: { overallHealth?: string }; error?: string }
+      if (!res.ok || data.error) {
+        setPmStatus('error')
+        setPmMessage(data.error ?? 'Fehler beim Ausführen des PM-Agenten.')
+      } else {
+        const health = data.plan?.overallHealth ?? 'unknown'
+        const label = health === 'green' ? 'Gesund' : health === 'yellow' ? 'Aufmerksamkeit' : health === 'red' ? 'Kritisch' : health
+        setPmStatus('success')
+        setPmMessage(`PM-Agent abgeschlossen — Status: ${label}`)
+      }
+    } catch {
+      setPmStatus('error')
+      setPmMessage('Netzwerkfehler beim Starten des PM-Agenten.')
+    }
+    setTimeout(() => {
+      setPmStatus('idle')
+      setPmMessage(null)
+    }, 5000)
+  }, [])
+
+  const feedbackColor =
+    pmStatus === 'success' ? 'text-emerald-400' :
+    pmStatus === 'error'   ? 'text-rose-400' :
+    'text-amber-400'
+
+  return (
+    <Panel className="p-5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Quick Actions</p>
+      <div className="mt-4 flex flex-wrap gap-3 items-center">
+        <a
+          href="/knowledge/research?new=1"
+          className={buttonClassName('secondary', 'text-sm')}
+        >
+          + Neue Recherche
+        </a>
+        <button
+          onClick={handleRunPmAgent}
+          disabled={pmStatus === 'loading'}
+          className={cx(
+            buttonClassName('ghost', 'text-sm'),
+            pmStatus === 'loading' ? 'opacity-50 cursor-not-allowed' : ''
+          )}
+        >
+          {pmStatus === 'loading' ? '⏳ PM Agent läuft…' : '▶ PM Agent ausführen'}
+        </button>
+        {pmMessage && (
+          <span className={cx('text-xs', feedbackColor)}>
+            {pmMessage}
+          </span>
+        )}
+      </div>
+    </Panel>
+  )
 }
 
 function valueColor(tone: ActionTone | 'neutral'): string {
