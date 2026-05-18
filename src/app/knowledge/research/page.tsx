@@ -5,13 +5,14 @@ import {
   Search, BookOpen, Sparkles, ExternalLink, ChevronRight,
   Clock, CheckCircle2, XCircle, Loader2, Tag, GraduationCap,
   Building2, Newspaper, Globe, HelpCircle, Plus, FileText,
-  AlertTriangle, ArrowRight, RefreshCw,
+  AlertTriangle, ArrowRight, RefreshCw, Rocket,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { ResearchDocument, ResearchCitation, SourceCredibility } from '@/lib/models/research'
 import type { ResearchQuality } from '@/app/api/knowledge/research/[id]/quality/route'
 import { cx } from '@/components/ui/primitives'
+import { FullCycleModal } from '@/components/shared/FullCycleModal'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -403,6 +404,7 @@ export default function ResearchPage() {
   const [selected, setSelected] = useState<ResearchDocument | null>(null)
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
+  const [showFullCycle, setShowFullCycle] = useState(false)
   const [creatingBrief, setCreatingBrief] = useState(false)
   const [rerunning, setRerunning] = useState(false)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -473,6 +475,7 @@ export default function ResearchPage() {
   const completedCount = docs.filter(d => d.status === 'completed').length
 
   return (
+    <>
     <main className="min-h-screen p-6 text-white">
       <div className="mx-auto max-w-7xl">
 
@@ -493,6 +496,13 @@ export default function ResearchPage() {
               <BookOpen className="h-3.5 w-3.5 text-slate-500" />
               <span className="text-xs text-slate-400">{completedCount} Dokumente</span>
             </div>
+            <button
+              onClick={() => setShowFullCycle(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 text-sm font-bold text-emerald-300 transition-all hover:bg-emerald-500/25"
+            >
+              <Rocket className="h-4 w-4" />
+              Full Cycle starten
+            </button>
             <button
               onClick={() => setShowCreate(v => !v)}
               className="flex items-center gap-1.5 rounded-lg border border-violet-500/40 bg-violet-500/15 px-3 py-1.5 text-sm font-bold text-violet-300 transition-all hover:bg-violet-500/25"
@@ -669,5 +679,11 @@ export default function ResearchPage() {
         </div>
       </div>
     </main>
+
+    {/* Full Cycle Modal */}
+    {showFullCycle && (
+      <FullCycleModal onClose={() => setShowFullCycle(false)} />
+    )}
+    </>
   )
 }
