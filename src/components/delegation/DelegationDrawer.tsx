@@ -580,6 +580,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
                   }
                   riskClass={delegation.contract.riskClass}
                   maxBudgetUsd={delegation.contract.maxBudgetUsd}
+                  delegationId={delegation.id}
                 />
 
                 {delegation.agentRunId && (

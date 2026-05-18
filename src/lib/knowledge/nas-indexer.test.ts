@@ -97,6 +97,20 @@ describe('indexNasFiles', () => {
     expect(result.sourcesIndexed).toBe(0)
   })
 
+  it('skips credential files instead of storing sensitive content', async () => {
+    const content = `# Credentials\n\nANTHROPIC_API_KEY=secret-value`
+    mockNasFile('FORGEPILOT-SETTINGS-CREDENTIALS.md', content)
+
+    const { upsertSource, upsertItem, upsertCard } = await import('./store')
+    const result = await indexNasFiles()
+
+    expect(result.sensitiveSkipped).toBe(1)
+    expect(result.sourcesIndexed).toBe(0)
+    expect(upsertSource).not.toHaveBeenCalled()
+    expect(upsertItem).not.toHaveBeenCalled()
+    expect(upsertCard).not.toHaveBeenCalled()
+  })
+
   it('creates intro card when file has no H2 sections', async () => {
     const content = `# Simple Doc\n\nThis is a document without any H2 headings but has enough content to create a card from.`
     mockNasFile('simple.md', content)

@@ -13,6 +13,10 @@ function readDelegations(): Delegation[] {
   }
 }
 
+function writeDelegations(delegations: Delegation[]): void {
+  fs.writeFileSync(DELEGATIONS_FILE, JSON.stringify(delegations, null, 2))
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: { id: string } },
@@ -22,4 +26,25 @@ export async function GET(
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
   return NextResponse.json(delegation)
+}
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: { id: string } },
+) {
+  const delegations = readDelegations()
+  const idx = delegations.findIndex(d => d.id === params.id)
+  if (idx === -1) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+  const body = await req.json() as Partial<Pick<Delegation, 'status' | 'agentRunId'>>
+  const updated: Delegation = {
+    ...delegations[idx],
+    ...(body.status !== undefined ? { status: body.status } : {}),
+    ...(body.agentRunId !== undefined ? { agentRunId: body.agentRunId } : {}),
+    updatedAt: new Date().toISOString(),
+  }
+  delegations[idx] = updated
+  writeDelegations(delegations)
+  return NextResponse.json(updated)
 }
