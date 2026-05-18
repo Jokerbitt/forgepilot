@@ -2,27 +2,19 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import {
   Activity, Zap, Bot, DollarSign, Clock, Square,
   ChevronRight, Cpu, Cloud, AlertTriangle, CheckCircle2,
-  Circle, TrendingUp, Play,
+  Circle, TrendingUp, Play, StopCircle, ChevronDown,
 } from 'lucide-react'
 import type { Delegation, AgentLog, CostSavings } from '@/lib/models/delegation'
 import type { OllamaStatus } from '@/app/api/ollama/route'
 import type { DriftAnalysis } from '@/lib/drift-detector'
+import type { LiveAgentState } from '@/lib/models/live-agent'
 import { ElapsedTimer } from '@/components/shared/ElapsedTimer'
 import { cx } from '@/components/ui/primitives'
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface LiveAgentState {
-  delegation: Delegation
-  logs: AgentLog[]
-  status: Delegation['status']
-  actualCostUsd?: number
-  drift?: DriftAnalysis
-  streaming: boolean
-}
+import { AgentStatusMatrix } from '@/components/delegation/AgentStatusMatrix'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -389,6 +381,9 @@ function ApprovedCard({ d, onStart, starting }: {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ActiveRunsPage() {
+  const searchParams = useSearchParams()
+  const focusId = searchParams.get('focus')
+  const focusRef = useRef<HTMLDivElement>(null)
   const [delegations, setDelegations] = useState<Delegation[]>([])
   const [loading, setLoading] = useState(true)
   const [liveStates, setLiveStates] = useState<Map<string, LiveAgentState>>(new Map())
@@ -397,6 +392,9 @@ export default function ActiveRunsPage() {
   const [maxConcurrent, setMaxConcurrent] = useState(2)
   const [stoppingId, setStoppingId] = useState<string | null>(null)
   const [startingId, setStartingId] = useState<string | null>(null)
+  const [stoppingAll, setStoppingAll] = useState(false)
+  const [showStartDropdown, setShowStartDropdown] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const eventSourcesRef = useRef<Map<string, EventSource>>(new Map())
 
   const loadDelegations = useCallback(async () => {
@@ -406,6 +404,17 @@ export default function ActiveRunsPage() {
     setLoading(false)
     return all
   }, [])
+
+  // Scroll to focused delegation after load
+  useEffect(() => {
+    if (!focusId || loading) return
+    const timer = setTimeout(() => {
+      if (focusRef.current) {
+        focusRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [focusId, loading])
 
   // Initialize or update live state for a delegation
   const ensureLiveState = useCallback((d: Delegation) => {
@@ -558,6 +567,30 @@ export default function ActiveRunsPage() {
     await loadDelegations()
   }
 
+  const handleStopAll = async () => {
+    const runningOnes = delegations.filter(d => d.status === 'running')
+    setStoppingAll(true)
+    try {
+      await Promise.all(
+        runningOnes.map(d => fetch(`/api/delegations/${d.id}/cancel`, { method: 'POST' }))
+      )
+      await loadDelegations()
+    } finally {
+      setStoppingAll(false)
+    }
+  }
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowStartDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
   const running = delegations.filter(d => d.status === 'running')
   const approved = delegations.filter(d => d.status === 'approved')
   const recentDone = delegations
@@ -592,12 +625,13 @@ export default function ActiveRunsPage() {
       <div className="mx-auto max-w-7xl space-y-5">
 
         {/* Page header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-4">
           <div>
             <p className="page-eyebrow">Execute</p>
             <h1 className="page-title">Mission Control</h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* KPI pills */}
             <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">
               <DollarSign className="h-3.5 w-3.5 text-slate-500" />
               <span className="text-xs font-mono font-bold text-white">${totalActualCost.toFixed(3)}</span>
@@ -617,28 +651,124 @@ export default function ActiveRunsPage() {
                 <span className="text-[10px] text-slate-500">Tokens</span>
               </div>
             )}
+
+            {/* Quick-Stop All — nur wenn ≥2 Agents laufen */}
+            {running.length >= 2 && (
+              <button
+                onClick={handleStopAll}
+                disabled={stoppingAll}
+                className="flex items-center gap-2 rounded-lg border border-rose-500/40 bg-rose-500/15 px-3 py-1.5 text-sm font-bold text-rose-400 transition-all hover:bg-rose-500/25 disabled:opacity-40"
+              >
+                <StopCircle className="h-4 w-4" />
+                {stoppingAll ? 'Stoppe…' : `Alle stoppen (${running.length})`}
+              </button>
+            )}
+
+            {/* "Neue Delegation starten" Dropdown */}
+            {(approved.length > 0 || delegations.some(d => d.status === 'pending')) && (
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setShowStartDropdown(prev => !prev)}
+                  className="flex items-center gap-2 rounded-lg border border-violet-500/40 bg-violet-500/15 px-3 py-1.5 text-sm font-bold text-violet-300 transition-all hover:bg-violet-500/25"
+                >
+                  <Play className="h-4 w-4" />
+                  Neue Delegation starten
+                  <ChevronDown className={cx('h-3.5 w-3.5 transition-transform', showStartDropdown && 'rotate-180')} />
+                </button>
+
+                {showStartDropdown && (
+                  <div className="absolute right-0 top-full z-50 mt-1 w-96 rounded-xl border border-white/[0.1] bg-[#0f0f14] shadow-2xl">
+                    <div className="border-b border-white/[0.06] px-3 py-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                        Startbereit
+                      </p>
+                    </div>
+                    <div className="max-h-72 overflow-y-auto p-1.5">
+                      {[
+                        ...delegations.filter(d => d.status === 'approved'),
+                        ...delegations.filter(d => d.status === 'pending'),
+                      ].slice(0, 5).map(d => {
+                        const routeMeta = ROUTE_META[d.executionRoute ?? 'local-agent'] ?? ROUTE_META['local-agent']
+                        const RouteIcon = routeMeta.icon
+                        return (
+                          <button
+                            key={d.id}
+                            disabled={startingId === d.id}
+                            onClick={async () => {
+                              setShowStartDropdown(false)
+                              await handleStart(d.id)
+                            }}
+                            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-white/[0.05] disabled:opacity-40"
+                          >
+                            <span className={cx('flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-bold', routeMeta.color)}>
+                              <RouteIcon className="h-2.5 w-2.5" />
+                              {routeMeta.free ? 'FREE' : 'Max'}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-medium text-white">
+                                {d.title || d.contract.goal.slice(0, 55)}
+                              </p>
+                              <p className="text-[10px] text-slate-600">
+                                {d.contract.workItemId} · Risk {d.contract.riskClass} ·{' '}
+                                <span className={cx(
+                                  'font-semibold',
+                                  d.status === 'approved' ? 'text-emerald-500' : 'text-amber-500'
+                                )}>
+                                  {d.status === 'approved' ? 'Genehmigt' : 'Ausstehend'}
+                                </span>
+                              </p>
+                            </div>
+                            <Play className="h-3.5 w-3.5 shrink-0 text-violet-400" />
+                          </button>
+                        )
+                      })}
+                      {delegations.filter(d => d.status === 'approved' || d.status === 'pending').length === 0 && (
+                        <p className="px-3 py-4 text-center text-xs text-slate-600">
+                          Keine Delegationen verfügbar
+                        </p>
+                      )}
+                    </div>
+                    <div className="border-t border-white/[0.06] p-1.5">
+                      <Link
+                        href="/delegations"
+                        onClick={() => setShowStartDropdown(false)}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs text-slate-500 transition-colors hover:bg-white/[0.04] hover:text-slate-300"
+                      >
+                        Alle Delegationen anzeigen <ChevronRight className="h-3 w-3" />
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Alle-starten shortcut wenn approved vorhanden */}
             {approved.length > 0 && (
               <button
                 onClick={handleStartAll}
-                className="flex items-center gap-2 rounded-lg border border-violet-500/40 bg-violet-500/15 px-3 py-1.5 text-sm font-bold text-violet-300 transition-all hover:bg-violet-500/25"
+                className="flex items-center gap-2 rounded-lg border border-violet-500/20 bg-white/[0.04] px-3 py-1.5 text-sm font-bold text-violet-400/70 transition-all hover:bg-violet-500/10"
               >
                 <Activity className="h-4 w-4" />
                 Alle starten ({Math.min(approved.length, maxConcurrent)})
               </button>
             )}
+
             <Link href="/delegations" className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-300 transition-colors">
               Queue <ChevronRight className="h-3.5 w-3.5" />
             </Link>
           </div>
         </div>
 
-        {/* System status bar */}
-        <SystemStatusBar
-          ollama={ollama}
-          claudeMax={claudeMax}
-          running={running.length}
-          maxConcurrent={maxConcurrent}
-        />
+        {/* System status bar + Agent Status Matrix */}
+        <div className="space-y-2">
+          <SystemStatusBar
+            ollama={ollama}
+            claudeMax={claudeMax}
+            running={running.length}
+            maxConcurrent={maxConcurrent}
+          />
+          <AgentStatusMatrix liveStates={Array.from(liveStates.values())} />
+        </div>
 
         {/* Mission Control — Live Agent Grid */}
         {running.length > 0 ? (
@@ -656,13 +786,19 @@ export default function ActiveRunsPage() {
                   delegation: d, logs: d.logs ?? [], status: d.status,
                   actualCostUsd: d.actualCostUsd, streaming: false,
                 }
+                const isFocused = focusId === d.id
                 return (
-                  <AgentLivePanel
+                  <div
                     key={d.id}
-                    state={state}
-                    onStop={handleStop}
-                    stopping={stoppingId === d.id}
-                  />
+                    ref={isFocused ? focusRef : null}
+                    className={isFocused ? 'ring-2 ring-sky-500/60 rounded-xl' : undefined}
+                  >
+                    <AgentLivePanel
+                      state={state}
+                      onStop={handleStop}
+                      stopping={stoppingId === d.id}
+                    />
+                  </div>
                 )
               })}
             </div>
@@ -709,14 +845,22 @@ export default function ActiveRunsPage() {
           <section>
             <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-500">Bereit zum Start</h2>
             <div className="space-y-2">
-              {approved.map(d => (
-                <ApprovedCard
-                  key={d.id}
-                  d={d}
-                  onStart={handleStart}
-                  starting={startingId === d.id}
-                />
-              ))}
+              {approved.map(d => {
+                const isFocused = focusId === d.id
+                return (
+                  <div
+                    key={d.id}
+                    ref={isFocused ? focusRef : null}
+                    className={isFocused ? 'ring-2 ring-sky-500/60 rounded-xl' : undefined}
+                  >
+                    <ApprovedCard
+                      d={d}
+                      onStart={handleStart}
+                      starting={startingId === d.id}
+                    />
+                  </div>
+                )
+              })}
             </div>
           </section>
         )}
