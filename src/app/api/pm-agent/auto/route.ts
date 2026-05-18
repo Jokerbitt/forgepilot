@@ -4,6 +4,7 @@ import { readMilestones, readWorkPackages } from '@/lib/knowledge/milestone-stor
 import { readStoredApiKeys } from '@/lib/connectors/config'
 import { runPMAgent } from '@/lib/agent-runner/pm-agent'
 import { readLastPMPlan, writePMPlan, isPlanStale } from '@/lib/agent-runner/pm-plan-store'
+import { appendPMHistory } from '@/lib/agent-runner/pm-history-store'
 import type { Delegation } from '@/lib/models/delegation'
 import { getNBAConfig, saveNBAConfig } from '@/lib/nba-engine/nba-config'
 import fs from 'fs'
@@ -44,6 +45,7 @@ export async function POST() {
   try {
     const result = await runPMAgent(briefs, milestones, workPackages, delegations, { apiKey })
     writePMPlan(result)
+    appendPMHistory(result)
     return NextResponse.json({ ran: true, health: result.overallHealth })
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 })
