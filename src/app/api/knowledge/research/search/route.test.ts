@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { GET } from './route'
-import type { SearchResult } from './route'
+import type { SearchResult } from '@/lib/knowledge/research-types'
 
 const mockRead = vi.fn()
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeQuality } from './route'
+import { computeQuality } from '@/lib/knowledge/quality-scorer'
 import type { ResearchDocument } from '@/lib/models/research'
 
 // ─── Fixture factory ──────────────────────────────────────────────────────────
