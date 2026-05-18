@@ -4,10 +4,25 @@ import { useEffect, useState } from 'react'
 import {
   DollarSign, Cpu, TrendingDown, Activity, BarChart3,
   CheckCircle2, XCircle, Clock, Zap, ChevronRight,
+  BookOpen, GraduationCap, Tag,
 } from 'lucide-react'
 import Link from 'next/link'
 import type { Delegation } from '@/lib/models/delegation'
 import { cx } from '@/components/ui/primitives'
+
+interface ResearchStats {
+  total: number
+  completed: number
+  running: number
+  failed: number
+  totalCitations: number
+  academicCitations: number
+  governmentCitations: number
+  avgCitationsPerDoc: number
+  academicRatio: number
+  totalTokens: number
+  topTags: { tag: string; count: number }[]
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -248,16 +263,18 @@ function RecentRunsTable({ delegations }: { delegations: Delegation[] }) {
 
 export default function AnalyticsPage() {
   const [delegations, setDelegations] = useState<Delegation[]>([])
+  const [researchStats, setResearchStats] = useState<ResearchStats | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/delegations')
-      .then(r => r.json())
-      .then((all: Delegation[]) => {
-        setDelegations(all)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
+    Promise.all([
+      fetch('/api/delegations').then(r => r.json() as Promise<Delegation[]>),
+      fetch('/api/knowledge/research/stats').then(r => r.json() as Promise<ResearchStats>).catch(() => null),
+    ]).then(([dels, rs]) => {
+      setDelegations(dels)
+      setResearchStats(rs)
+      setLoading(false)
+    }).catch(() => setLoading(false))
   }, [])
 
   const completed = delegations.filter(d => d.status === 'completed')
@@ -386,6 +403,65 @@ export default function AnalyticsPage() {
               <Activity className="h-4 w-4" />
               Mission Control
             </Link>
+          </div>
+        )}
+
+        {/* Research Platform Stats */}
+        {researchStats && researchStats.total > 0 && (
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Research Platform</p>
+              <Link href="/knowledge/research" className="flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 transition-colors">
+                Öffnen <ChevronRight className="h-3 w-3" />
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-lg border border-white/[0.06] bg-white/[0.03] p-3">
+                <div className="mb-1 flex items-center gap-1.5">
+                  <BookOpen className="h-3.5 w-3.5 text-violet-400" />
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Dokumente</span>
+                </div>
+                <p className="text-xl font-bold tabular-nums text-white">{researchStats.completed}</p>
+                <p className="mt-0.5 text-[10px] text-slate-600">{researchStats.total} total</p>
+              </div>
+              <div className="rounded-lg border border-white/[0.06] bg-white/[0.03] p-3">
+                <div className="mb-1 flex items-center gap-1.5">
+                  <GraduationCap className="h-3.5 w-3.5 text-violet-400" />
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Akademisch</span>
+                </div>
+                <p className="text-xl font-bold tabular-nums text-violet-400">{Math.round(researchStats.academicRatio * 100)}%</p>
+                <p className="mt-0.5 text-[10px] text-slate-600">{researchStats.academicCitations + researchStats.governmentCitations} hochwertig</p>
+              </div>
+              <div className="rounded-lg border border-white/[0.06] bg-white/[0.03] p-3">
+                <div className="mb-1 flex items-center gap-1.5">
+                  <BarChart3 className="h-3.5 w-3.5 text-emerald-400" />
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Quellen ø</span>
+                </div>
+                <p className="text-xl font-bold tabular-nums text-white">{researchStats.avgCitationsPerDoc}</p>
+                <p className="mt-0.5 text-[10px] text-slate-600">{researchStats.totalCitations} gesamt</p>
+              </div>
+              <div className="rounded-lg border border-white/[0.06] bg-white/[0.03] p-3">
+                <div className="mb-1 flex items-center gap-1.5">
+                  <Cpu className="h-3.5 w-3.5 text-sky-400" />
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Tokens</span>
+                </div>
+                <p className="text-xl font-bold tabular-nums text-white">
+                  {researchStats.totalTokens > 0 ? (researchStats.totalTokens / 1000).toFixed(1) + 'K' : '0'}
+                </p>
+                <p className="mt-0.5 text-[10px] text-slate-600">Claude Opus</p>
+              </div>
+            </div>
+            {researchStats.topTags.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-3">
+                <Tag className="h-3 w-3 text-slate-600" />
+                {researchStats.topTags.slice(0, 6).map(({ tag, count }) => (
+                  <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10px] text-slate-400">
+                    {tag}
+                    <span className="text-slate-600">{count}</span>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
