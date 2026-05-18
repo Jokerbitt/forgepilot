@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { Delegation, DelegationStatus, DelegationReport } from '@/lib/models/delegation'
+import type { OrchestratedRun } from '@/lib/agents/orchestrated-run'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 import { PolicyVerdictPanel } from '@/components/delegation/PolicyVerdictPanel'
@@ -87,6 +88,30 @@ export default function DelegationDetailPage() {
     setDelegation(prev => prev ? { ...prev, status: 'running', updatedAt: new Date().toISOString() } : prev)
     await fetch(`/api/delegations/${id}/execute`, { method: 'POST' })
     setTimeout(loadDelegation, 1500)
+  }
+
+  const [orchestratedRun, setOrchestratedRun] = useState<OrchestratedRun | null>(null)
+  const [orchestrating, setOrchestrating] = useState(false)
+
+  const handleOrchestrate = async () => {
+    if (!delegation) return
+    setOrchestrating(true)
+    try {
+      const res = await fetch('/api/agents/orchestrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          delegationId: delegation.id,
+          delegationTitle: delegation.title || delegation.contract.goal,
+          goal: delegation.contract.goal,
+          context: delegation.contract.context,
+        }),
+      })
+      const data = await res.json() as { run: OrchestratedRun }
+      setOrchestratedRun(data.run)
+    } finally {
+      setOrchestrating(false)
+    }
   }
 
   const handleApprove = async () => {
@@ -226,6 +251,13 @@ export default function DelegationDetailPage() {
                   🔄 Wiederholen
                 </button>
               )}
+              <button
+                onClick={handleOrchestrate}
+                disabled={orchestrating}
+                className="px-3 py-1.5 text-xs bg-violet-900/40 text-violet-300 hover:bg-violet-900/70 border border-violet-800/60 rounded-lg transition-colors disabled:opacity-40"
+                title="Task in atomare Sub-Tasks zerlegen und den besten Agenten zuweisen">
+                {orchestrating ? '⚙ Zerlege…' : '⚙ Orchestrieren'}
+              </button>
               <button onClick={handleCopy}
                 className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${copied ? 'text-green-400 border-green-800' : 'text-gray-500 border-gray-800 hover:text-gray-300'}`}
                 title="Permalink kopieren">
@@ -251,6 +283,48 @@ export default function DelegationDetailPage() {
 
         {/* ── Timeline ─────────────────────────────────────────────────── */}
         <DelegationTimeline delegation={d} />
+
+        {/* ── Orchestrated Sub-Tasks ───────────────────────────────────── */}
+        {orchestratedRun && (
+          <div className="bg-slate-900 border border-violet-800/30 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-violet-400">Orchestrierung</p>
+                <p className="mt-1 text-sm text-white">
+                  {orchestratedRun.tasks.length} atomare Sub-Tasks · kleinste Einheiten, ein Agent pro Task
+                </p>
+              </div>
+              <button onClick={() => setOrchestratedRun(null)} className="text-xs text-slate-600 hover:text-slate-400">✕</button>
+            </div>
+            <div className="space-y-2">
+              {orchestratedRun.tasks.map((entry, i) => (
+                <div key={entry.task.id} className="flex items-start gap-3 rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+                  <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded bg-slate-800 text-xs font-bold text-slate-400">
+                    {i + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-white">{entry.task.title}</p>
+                    <p className="mt-0.5 text-xs text-slate-500 truncate">{entry.task.description}</p>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {entry.task.acceptanceCriteria.slice(0, 2).map((ac, j) => (
+                        <span key={j} className="text-xs text-slate-600">✓ {ac}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <span className="block text-xs text-violet-400 font-medium">{entry.agentType}</span>
+                    <span className="block text-xs text-slate-600 mt-0.5">
+                      {entry.task.effort === 'S' ? '~15min' : entry.task.effort === 'M' ? '~45min' : '~2h'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-slate-600">
+              Jeder Sub-Task hat klare Acceptance Criteria → weniger Drift, zuverlässigere Ergebnisse
+            </p>
+          </div>
+        )}
 
         {/* ── Two-column: Contract + Logs ───────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
