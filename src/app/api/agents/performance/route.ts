@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
-import { getPerformanceSummaries, getDriftWarnings } from '@/lib/agents/skill-evolver'
+import { getPerformanceSummaries, getDriftWarnings, seedDemoOutcomes } from '@/lib/agents/skill-evolver'
 
 export async function GET() {
+  // Auto-seed demo data when no real outcomes exist yet
+  seedDemoOutcomes()
   const summaries = getPerformanceSummaries()
   const warnings = getDriftWarnings()
 
