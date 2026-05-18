@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation'
 import { findProjectBriefById } from '@/lib/project-briefs'
 import { BlueprintScreen } from '@/components/project-briefs/BlueprintScreen'
 
+export const dynamic = 'force-dynamic'
+
 interface Props {
   params: { id: string }
 }

@@ -5,6 +5,47 @@ export type { ApprovalRequest, ApprovalStatus } from '@/lib/models/approval'
 export type { CostEntry, CostBudget, CostSummary, CostPeriod, CostCategory } from '@/lib/models/cost'
 export type { NBARecommendation, NBAScore, SuggestedAction } from '@/lib/models/nba'
 export type {
+  Project,
+  ProjectStatus,
+  Milestone,
+  MilestoneStatus,
+  WorkPackage,
+  WorkPackageStatus,
+  ProjectDependency,
+  DependencyType,
+} from '@/lib/models/project'
+export type {
+  KnowledgeSource,
+  KnowledgeItem,
+  KnowledgeItemType,
+  KnowledgePrivacyClass,
+  MemoryCard,
+  MemoryCardType,
+  FreshnessStatus,
+} from '@/lib/models/knowledge'
+export type {
+  ContextPackage,
+  ContextPackageStatus,
+  ContextPrivacyMode,
+  ContextReference,
+} from '@/lib/models/context-package'
+export type {
+  AgentProfile,
+  AgentRole,
+  AgentAvailability,
+  AgentAutonomyLevel,
+  AgentSkillRef,
+} from '@/lib/models/agent-profile'
+export type {
+  ModelProfile,
+  ModelProvider,
+  ModelExecutionMode,
+  ModelCostClass,
+  ModelHealthStatus,
+  ModelWorkload,
+  RoutingDecision,
+} from '@/lib/models/model-router'
+export type {
   ProjectBrief,
   ProjectBriefStatus,
   BriefScope,

@@ -1,12 +1,28 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import type { ProjectBrief, Requirement, UseCase, Risk, Finding, FindingConfidence } from '@/lib/models/project-brief'
+import type { ProjectBrief, Requirement, UseCase, Risk, Finding, FindingConfidence, ResearchRun } from '@/lib/models/project-brief'
 
 interface Props {
   initialBrief: ProjectBrief
+}
+
+type ReadinessTone = 'good' | 'warning' | 'blocked'
+
+interface BlueprintViewModel {
+  acceptedReqs: Requirement[]
+  proposedReqs: Requirement[]
+  openRisks: Risk[]
+  openAssumptions: Risk[]
+  acceptedUseCases: UseCase[]
+  readinessScore: number
+  readinessTone: ReadinessTone
+  nextAction: string
+  nextActionDetail: string
+  deliveryStage: string
+  contextMode: string
 }
 
 const STATUS_LABELS: Record<ProjectBrief['status'], string> = {
@@ -16,23 +32,35 @@ const STATUS_LABELS: Record<ProjectBrief['status'], string> = {
   archived: 'Archiviert',
 }
 
-const STATUS_COLORS: Record<ProjectBrief['status'], string> = {
-  draft: 'bg-gray-800 text-gray-400',
-  in_review: 'bg-yellow-900/40 text-yellow-400',
-  accepted: 'bg-green-900/40 text-green-400',
-  archived: 'bg-gray-900 text-gray-600',
+const STATUS_STYLES: Record<ProjectBrief['status'], string> = {
+  draft: 'border-slate-700 bg-slate-900 text-slate-300',
+  in_review: 'border-amber-700/60 bg-amber-950/40 text-amber-200',
+  accepted: 'border-emerald-700/60 bg-emerald-950/40 text-emerald-200',
+  archived: 'border-slate-800 bg-slate-950 text-slate-500',
 }
 
-const PRIORITY_COLORS: Record<Requirement['priority'], string> = {
-  must:   'bg-red-900/40 text-red-400',
-  should: 'bg-yellow-900/40 text-yellow-400',
-  could:  'bg-blue-900/40 text-blue-400',
-  wont:   'bg-gray-800 text-gray-600',
+const PRIORITY_STYLES: Record<Requirement['priority'], string> = {
+  must: 'border-red-700/50 bg-red-950/30 text-red-200',
+  should: 'border-amber-700/50 bg-amber-950/30 text-amber-200',
+  could: 'border-sky-700/50 bg-sky-950/30 text-sky-200',
+  wont: 'border-slate-700 bg-slate-900 text-slate-500',
 }
 
 const PRIORITY_LABELS: Record<Requirement['priority'], string> = {
-  must: 'Muss', should: 'Sollte', could: 'Könnte', wont: 'Nicht',
+  must: 'Must',
+  should: 'Should',
+  could: 'Could',
+  wont: 'Wont',
 }
+
+const WORKFLOW_STEPS = [
+  'Brief',
+  'Requirements',
+  'Risiken',
+  'Context',
+  'Approval',
+  'Delegation',
+]
 
 export function BlueprintScreen({ initialBrief }: Props) {
   const router = useRouter()
@@ -51,15 +79,15 @@ export function BlueprintScreen({ initialBrief }: Props) {
   const [showApproveConfirm, setShowApproveConfirm] = useState(false)
   const [delegationError, setDelegationError] = useState('')
 
-  const acceptedReqs = brief.requirements.filter(r => r.status === 'accepted')
-  const proposedReqs = brief.requirements.filter(r => r.status === 'proposed')
-  const canApprove   = acceptedReqs.length > 0 && brief.status !== 'accepted' && brief.status !== 'archived'
+  const vm = useMemo(() => buildBlueprintViewModel(brief), [brief])
+  const canApprove = vm.acceptedReqs.length > 0 && brief.status !== 'accepted' && brief.status !== 'archived'
 
-  // Group requirements by priority
-  const byPriority = (['must', 'should', 'could', 'wont'] as const).map(p => ({
-    priority: p,
-    items: brief.requirements.filter(r => r.priority === p && r.status !== 'rejected'),
-  })).filter(g => g.items.length > 0)
+  const byPriority = (['must', 'should', 'could', 'wont'] as const)
+    .map(priority => ({
+      priority,
+      items: brief.requirements.filter(req => req.priority === priority && req.status !== 'rejected'),
+    }))
+    .filter(group => group.items.length > 0)
 
   async function patchBrief(patch: Partial<ProjectBrief>) {
     const res = await fetch(`/api/project-briefs/${brief.id}`, {
@@ -87,9 +115,7 @@ export function BlueprintScreen({ initialBrief }: Props) {
 
   function handleGenerate() {
     startGenerate(async () => {
-      const res = await fetch(`/api/project-briefs/${brief.id}/generate-requirements`, {
-        method: 'POST',
-      })
+      const res = await fetch(`/api/project-briefs/${brief.id}/generate-requirements`, { method: 'POST' })
       if (res.ok) {
         const data = await res.json() as { brief: ProjectBrief; generationNotes: string }
         setBrief(data.brief)
@@ -119,19 +145,14 @@ export function BlueprintScreen({ initialBrief }: Props) {
     setResearchError('')
     setResearchNotes('')
     startResearch(async () => {
-      const res = await fetch(`/api/project-briefs/${brief.id}/research-run`, {
-        method: 'POST',
-      })
+      const res = await fetch(`/api/project-briefs/${brief.id}/research-run`, { method: 'POST' })
       if (res.ok) {
         const data = await res.json() as {
           generationNotes: string
           newRequirementsCount: number
           newRisksCount: number
         }
-        setResearchNotes(
-          `Research abgeschlossen: +${data.newRequirementsCount} Requirements, +${data.newRisksCount} Risiken. ${data.generationNotes}`
-        )
-        // Reload brief to get enriched requirements/risks
+        setResearchNotes(`Research abgeschlossen: +${data.newRequirementsCount} Requirements, +${data.newRisksCount} Risiken. ${data.generationNotes}`)
         const briefRes = await fetch(`/api/project-briefs/${brief.id}`)
         if (briefRes.ok) setBrief(await briefRes.json() as ProjectBrief)
       } else {
@@ -145,9 +166,7 @@ export function BlueprintScreen({ initialBrief }: Props) {
     setLinearTicketError('')
     setLinearTicketUrl('')
     startTicket(async () => {
-      const res = await fetch(`/api/project-briefs/${brief.id}/create-linear-ticket`, {
-        method: 'POST',
-      })
+      const res = await fetch(`/api/project-briefs/${brief.id}/create-linear-ticket`, { method: 'POST' })
       if (res.ok) {
         const data = await res.json() as { url: string; identifier: string }
         setLinearTicketUrl(data.url)
@@ -161,9 +180,7 @@ export function BlueprintScreen({ initialBrief }: Props) {
   function handleDelegate() {
     setDelegationError('')
     startDelegate(async () => {
-      const res = await fetch(`/api/project-briefs/${brief.id}/create-delegation`, {
-        method: 'POST',
-      })
+      const res = await fetch(`/api/project-briefs/${brief.id}/create-delegation`, { method: 'POST' })
       if (res.ok) {
         const delegation = await res.json() as { id: string }
         router.push(`/delegations/${delegation.id}`)
@@ -175,275 +192,175 @@ export function BlueprintScreen({ initialBrief }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-
-        {/* Breadcrumb */}
-        <div className="mb-4 flex items-center gap-2 text-sm text-gray-500">
-          <Link href="/project-briefs" className="hover:text-gray-300 transition-colors">Projekte</Link>
-          <span>›</span>
-          <span className="text-gray-300 truncate max-w-xs">{brief.title}</span>
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <main className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+        <div className="mb-5 flex items-center gap-2 text-sm text-slate-500">
+          <Link href="/project-briefs" className="hover:text-slate-300">Projekte</Link>
+          <span>/</span>
+          <span className="max-w-xs truncate text-slate-300">{brief.title}</span>
         </div>
 
-        {/* Header */}
-        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-2xl font-bold text-white">{brief.title}</h1>
-              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[brief.status]}`}>
-                {STATUS_LABELS[brief.status]}
-              </span>
-            </div>
-            <p className="text-xs text-gray-500">
-              Erstellt {new Date(brief.createdAt).toLocaleDateString('de-DE')} ·
-              Scope: {brief.scope} ·
-              {brief.requirements.length} Requirements ({acceptedReqs.length} akzeptiert)
-            </p>
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex flex-wrap gap-2">
-            {brief.status !== 'accepted' && brief.status !== 'archived' && (
-              <>
-                <button
-                  onClick={handleResearch}
-                  disabled={researching || generating}
-                  className="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center gap-1.5"
-                >
-                  {researching ? (
-                    <><span className="animate-spin">⟳</span> Recherchiert…</>
-                  ) : (
-                    <>🔍 Research starten</>
-                  )}
-                </button>
-                <button
-                  onClick={handleGenerate}
-                  disabled={generating || researching}
-                  className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center gap-1.5"
-                >
-                  {generating ? (
-                    <><span className="animate-spin">⟳</span> Generiere…</>
-                  ) : (
-                    <>✨ Requirements generieren</>
-                  )}
-                </button>
-              </>
-            )}
-
-            {canApprove && (
-              <button
-                onClick={() => setShowApproveConfirm(true)}
-                className="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-              >
-                ✓ Brief freigeben
-              </button>
-            )}
-
-            {brief.status === 'accepted' && (
-              <button
-                onClick={handleDelegate}
-                disabled={delegating}
-                className="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center gap-1.5"
-              >
-                {delegating ? (
-                  <><span className="animate-spin">⟳</span> Erstelle…</>
-                ) : (
-                  <>🚀 Delegation starten</>
-                )}
-              </button>
-            )}
-
-            <button
-              onClick={handleCreateLinearTicket}
-              disabled={ticketing}
-              className="px-3 py-1.5 text-sm bg-violet-700 hover:bg-violet-800 disabled:opacity-50 text-white rounded-lg transition-colors flex items-center gap-1.5"
-            >
-              {ticketing ? (
-                <><span className="animate-spin">⟳</span> Erstelle…</>
-              ) : (
-                <>◈ Linear Ticket</>
-              )}
-            </button>
-
-            {brief.status !== 'archived' && (
-              <button
-                onClick={() => setShowArchiveConfirm(true)}
-                className="px-3 py-1.5 text-sm text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-lg transition-colors"
-              >
-                Archivieren
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* KI Notes Banner */}
-        {generationNotes && (
-          <div className="mb-4 p-3 bg-blue-950/40 border border-blue-800/50 rounded-lg text-sm text-blue-300 flex gap-2">
-            <span className="shrink-0">💡</span>
-            <span><strong>KI-Annahmen:</strong> {generationNotes}</span>
-          </div>
-        )}
-
-        {/* Research Success Banner */}
-        {researchNotes && (
-          <div className="mb-4 p-3 bg-indigo-950/40 border border-indigo-800/50 rounded-lg text-sm text-indigo-300 flex items-center gap-2">
-            <span className="shrink-0">🔍</span>
-            <span>{researchNotes}</span>
-            <button onClick={() => setResearchNotes('')} className="ml-auto text-indigo-500 hover:text-indigo-300">✕</button>
-          </div>
-        )}
-
-        {/* Research Error Banner */}
-        {researchError && (
-          <div className="mb-4 p-3 bg-red-950/40 border border-red-800/50 rounded-lg text-sm text-red-300 flex items-center gap-2">
-            <span>⚠️</span>
-            <span>{researchError}</span>
-            <button onClick={() => setResearchError('')} className="ml-auto text-red-500 hover:text-red-300">✕</button>
-          </div>
-        )}
-
-        {/* Linear Ticket Success Banner */}
-        {linearTicketUrl && (
-          <div className="mb-4 p-3 bg-violet-950/40 border border-violet-800/50 rounded-lg text-sm text-violet-300 flex items-center gap-2">
-            <span className="shrink-0">◈</span>
-            <span>Linear Ticket erstellt! </span>
-            <a href={linearTicketUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-violet-100">
-              Ticket ansehen →
-            </a>
-            <button onClick={() => setLinearTicketUrl('')} className="ml-auto text-violet-500 hover:text-violet-300">✕</button>
-          </div>
-        )}
-
-        {/* Linear Ticket Error Banner */}
-        {linearTicketError && (
-          <div className="mb-4 p-3 bg-red-950/40 border border-red-800/50 rounded-lg text-sm text-red-300 flex items-center gap-2">
-            <span>⚠️</span>
-            <span>{linearTicketError}</span>
-            <button onClick={() => setLinearTicketError('')} className="ml-auto text-red-500 hover:text-red-300">✕</button>
-          </div>
-        )}
-
-        {/* Delegation Error Banner */}
-        {delegationError && (
-          <div className="mb-4 p-3 bg-red-950/40 border border-red-800/50 rounded-lg text-sm text-red-300 flex items-center gap-2">
-            <span>⚠️</span>
-            <span>{delegationError}</span>
-            <button onClick={() => setDelegationError('')} className="ml-auto text-red-500 hover:text-red-300">✕</button>
-          </div>
-        )}
-
-        {/* Main grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-          {/* LEFT — Overview */}
-          <div className="space-y-4">
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Projektübersicht</h2>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-xs text-gray-500 mb-1">Idee</p>
-                  <blockquote className="text-sm text-gray-300 italic border-l-2 border-gray-700 pl-3">{brief.rawIdea}</blockquote>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 mb-1">Problem</p>
-                  <p className="text-sm text-white">{brief.problemStatement}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 mb-1">Ziel</p>
-                  <p className="text-sm text-white">{brief.desiredOutcome}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 mb-1">Zielgruppe</p>
-                  <p className="text-sm text-white">{brief.targetAudience}</p>
-                </div>
-                {brief.constraints.length > 0 && (
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Constraints</p>
-                    <div className="flex flex-wrap gap-1">
-                      {brief.constraints.map((c, i) => (
-                        <span key={i} className="px-2 py-0.5 bg-gray-800 text-gray-300 text-xs rounded">{c}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {brief.nonGoals.length > 0 && (
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Nicht-Ziele</p>
-                    <ul className="space-y-0.5">
-                      {brief.nonGoals.map((g, i) => (
-                        <li key={i} className="text-xs text-gray-500 line-through">{g}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Research Brief */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Research</h2>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="px-1.5 py-0.5 text-xs rounded bg-gray-800 text-gray-400">{brief.privacyMode}</span>
-                <span className="px-1.5 py-0.5 text-xs rounded bg-gray-800 text-gray-400">{brief.researchMode}</span>
-              </div>
-              <Link
-                href={`/api/project-briefs/${brief.id}/research-brief`}
-                target="_blank"
-                className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-              >
-                Research Brief ansehen →
-              </Link>
-            </div>
-
-            {/* Delegations */}
-            {brief.delegationIds && brief.delegationIds.length > 0 && (
-              <div className="bg-gray-900 border border-purple-900/40 rounded-xl p-4">
-                <h2 className="text-xs font-semibold text-purple-400 uppercase tracking-wider mb-2">
-                  Delegationen ({brief.delegationIds.length})
-                </h2>
-                <div className="space-y-1.5">
-                  {brief.delegationIds.map((dId, i) => (
-                    <Link
-                      key={dId}
-                      href={`/delegations/${dId}`}
-                      className="flex items-center gap-2 text-xs text-purple-300 hover:text-purple-100 transition-colors group"
-                    >
-                      <span className="text-purple-700 group-hover:text-purple-400">⚡</span>
-                      <span className="font-mono truncate">Delegation {i + 1}</span>
-                      <span className="text-purple-700 group-hover:text-purple-400 ml-auto">→</span>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Research Findings */}
-            {brief.lastResearchRun && (
-              <FindingsPanel run={brief.lastResearchRun} />
-            )}
-          </div>
-
-          {/* MIDDLE — Requirements */}
-          <div className="space-y-4">
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Requirements</h2>
-                <span className="text-xs text-gray-600">
-                  {acceptedReqs.length} akzeptiert · {proposedReqs.length} offen
+        <section className="mb-5 border-b border-slate-800 pb-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span className={`rounded-md border px-2 py-1 text-xs font-medium ${STATUS_STYLES[brief.status]}`}>
+                  {STATUS_LABELS[brief.status]}
+                </span>
+                <span className="rounded-md border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-400">
+                  Scope {brief.scope}
+                </span>
+                <span className="rounded-md border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-400">
+                  {vm.contextMode}
                 </span>
               </div>
+              <h1 className="max-w-4xl text-2xl font-semibold tracking-normal text-white sm:text-3xl">
+                {brief.title}
+              </h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+                {brief.problemStatement}
+              </p>
+            </div>
 
-              {brief.requirements.length === 0 ? (
-                <div className="text-center py-6 text-gray-600 text-sm">
-                  <span className="block text-2xl mb-2">📋</span>
-                  Noch keine Requirements.<br />
-                  Klicke &ldquo;Requirements generieren&rdquo; um zu starten.
+            <div className="flex flex-wrap gap-2 lg:justify-end">
+              {brief.status !== 'accepted' && brief.status !== 'archived' && (
+                <>
+                  <ActionButton onClick={handleResearch} disabled={researching || generating} tone="secondary">
+                    {researching ? 'Research laeuft' : 'Research starten'}
+                  </ActionButton>
+                  <ActionButton onClick={handleGenerate} disabled={generating || researching} tone="secondary">
+                    {generating ? 'Generiere' : 'Requirements generieren'}
+                  </ActionButton>
+                </>
+              )}
+              {canApprove && (
+                <ActionButton onClick={() => setShowApproveConfirm(true)} tone="success">
+                  Brief freigeben
+                </ActionButton>
+              )}
+              {brief.status === 'accepted' && (
+                <ActionButton onClick={handleDelegate} disabled={delegating} tone="primary">
+                  {delegating ? 'Erstelle Delegation' : 'Delegation starten'}
+                </ActionButton>
+              )}
+              <ActionButton onClick={handleCreateLinearTicket} disabled={ticketing} tone="secondary">
+                {ticketing ? 'Erstelle Ticket' : 'Linear Ticket'}
+              </ActionButton>
+              {brief.status !== 'archived' && (
+                <ActionButton onClick={() => setShowArchiveConfirm(true)} tone="ghost">
+                  Archivieren
+                </ActionButton>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <StatusMessages
+          generationNotes={generationNotes}
+          researchNotes={researchNotes}
+          researchError={researchError}
+          linearTicketUrl={linearTicketUrl}
+          linearTicketError={linearTicketError}
+          delegationError={delegationError}
+          onDismissResearch={() => setResearchNotes('')}
+          onDismissResearchError={() => setResearchError('')}
+          onDismissLinearTicket={() => setLinearTicketUrl('')}
+          onDismissLinearError={() => setLinearTicketError('')}
+          onDismissDelegationError={() => setDelegationError('')}
+        />
+
+        <section className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-4">
+          <MetricPanel label="Readiness" value={`${vm.readinessScore}%`} detail={vm.deliveryStage} tone={vm.readinessTone} />
+          <MetricPanel label="Requirements" value={`${vm.acceptedReqs.length}/${brief.requirements.length}`} detail={`${vm.proposedReqs.length} offen`} tone={vm.acceptedReqs.length > 0 ? 'good' : 'warning'} />
+          <MetricPanel label="Risiken" value={`${vm.openRisks.length}`} detail={`${vm.openAssumptions.length} offene Annahmen`} tone={vm.openRisks.length > 2 ? 'blocked' : vm.openRisks.length > 0 ? 'warning' : 'good'} />
+          <MetricPanel label="Research" value={brief.lastResearchRun ? `${brief.lastResearchRun.confidenceScore ?? 0}%` : 'offen'} detail={brief.researchMode} tone={brief.lastResearchRun ? 'good' : 'warning'} />
+        </section>
+
+        <section className="mb-5 border border-slate-800 bg-slate-900/70">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr]">
+            <div className="border-b border-slate-800 p-4 lg:border-b-0 lg:border-r">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Naechste beste Aktion</p>
+              <h2 className="mt-2 text-lg font-semibold text-white">{vm.nextAction}</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-400">{vm.nextActionDetail}</p>
+            </div>
+            <div className="p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Projektziel</p>
+              <p className="mt-2 text-sm leading-6 text-slate-200">{brief.desiredOutcome}</p>
+              <p className="mt-3 text-xs text-slate-500">Zielgruppe</p>
+              <p className="mt-1 text-sm text-slate-300">{brief.targetAudience}</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="mb-5 border border-slate-800 bg-slate-900/50 p-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Delivery Pipeline</p>
+              <p className="mt-1 text-sm text-slate-400">Vom Brief zur kontrollierten Agentenarbeit</p>
+            </div>
+            <Link href={`/api/project-briefs/${brief.id}/research-brief`} target="_blank" className="text-sm text-sky-300 hover:text-sky-200">
+              Research Brief
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
+            {WORKFLOW_STEPS.map((step, index) => (
+              <PipelineStep key={step} label={step} active={index <= activePipelineIndex(brief, vm)} />
+            ))}
+          </div>
+        </section>
+
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.08fr_1.6fr_1.08fr]">
+          <aside className="space-y-5">
+            <Section title="Projektsteckbrief" eyebrow="Ausgangslage">
+              <DefinitionList
+                items={[
+                  ['Idee', brief.rawIdea],
+                  ['Problem', brief.problemStatement],
+                  ['Zielgruppe', brief.targetAudience],
+                  ['Zielzustand', brief.desiredOutcome],
+                ]}
+              />
+              {brief.constraints.length > 0 && (
+                <div className="mt-4">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Constraints</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {brief.constraints.map((constraint, index) => (
+                      <span key={`${constraint}-${index}`} className="rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-300">
+                        {constraint}
+                      </span>
+                    ))}
+                  </div>
                 </div>
+              )}
+            </Section>
+
+            <Section title="Knowledge & Context" eyebrow="Local-first">
+              <div className="space-y-3 text-sm">
+                <SignalRow label="Privacy Mode" value={brief.privacyMode} />
+                <SignalRow label="Research Mode" value={brief.researchMode} />
+                <SignalRow label="Executor" value={brief.researchBriefDraft.preferredExecutor} />
+                <SignalRow label="Writeback" value={brief.status === 'accepted' ? 'bereit' : 'nach Freigabe'} />
+              </div>
+            </Section>
+
+            {brief.lastResearchRun && <FindingsPanel run={brief.lastResearchRun} />}
+          </aside>
+
+          <section className="space-y-5">
+            <Section
+              title="Requirements"
+              eyebrow={`${vm.acceptedReqs.length} akzeptiert, ${vm.proposedReqs.length} offen`}
+            >
+              {brief.requirements.length === 0 ? (
+                <EmptyState title="Noch keine Requirements" detail="Starte Research oder generiere Requirements, damit aus der Idee ein belastbarer Umsetzungsplan wird." />
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-5">
                   {byPriority.map(group => (
                     <div key={group.priority}>
-                      <p className="text-xs text-gray-600 uppercase tracking-wide mb-2">{PRIORITY_LABELS[group.priority]}</p>
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{PRIORITY_LABELS[group.priority]}</p>
+                        <span className="text-xs text-slate-600">{group.items.length}</span>
+                      </div>
                       <div className="space-y-2">
                         {group.items.map(req => (
                           <RequirementCard
@@ -458,182 +375,368 @@ export function BlueprintScreen({ initialBrief }: Props) {
                   ))}
                 </div>
               )}
-            </div>
-          </div>
+            </Section>
+          </section>
 
-          {/* RIGHT — Use Cases + Risks */}
-          <div className="space-y-4">
-            {/* Use Cases */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Use Cases</h2>
+          <aside className="space-y-5">
+            <Section title="Use Cases" eyebrow={`${brief.useCases.length} Szenarien`}>
               {brief.useCases.length === 0 ? (
-                <p className="text-xs text-gray-600 text-center py-3">Keine Use Cases. Requirements generieren um erste Use Cases zu erhalten.</p>
+                <EmptyState title="Noch keine Use Cases" detail="Use Cases entstehen aus Research und akzeptierten Requirements." />
               ) : (
                 <div className="space-y-3">
-                  {brief.useCases.map(uc => (
-                    <UseCaseCard key={uc.id} uc={uc} />
-                  ))}
+                  {brief.useCases.map(useCase => <UseCaseCard key={useCase.id} uc={useCase} />)}
                 </div>
               )}
-            </div>
+            </Section>
 
-            {/* Risks */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Risiken</h2>
+            <Section title="Risiken" eyebrow={`${brief.risks.length} Eintraege`}>
               {brief.risks.length === 0 ? (
-                <p className="text-xs text-gray-600 text-center py-3">Keine Risiken identifiziert.</p>
+                <EmptyState title="Keine Risiken" detail="Aktuell sind keine Risiken erfasst." />
               ) : (
                 <div className="space-y-3">
-                  {brief.risks.map(risk => (
-                    <RiskCard key={risk.id} risk={risk} />
-                  ))}
+                  {brief.risks.map(risk => <RiskCard key={risk.id} risk={risk} />)}
                 </div>
               )}
-            </div>
-          </div>
+            </Section>
+
+            {brief.delegationIds && brief.delegationIds.length > 0 && (
+              <Section title="Delegationen" eyebrow={`${brief.delegationIds.length} Runs`}>
+                <div className="space-y-2">
+                  {brief.delegationIds.map((delegationId, index) => (
+                    <Link
+                      key={delegationId}
+                      href={`/delegations/${delegationId}`}
+                      className="flex items-center justify-between border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-300 hover:border-slate-600"
+                    >
+                      <span>Delegation {index + 1}</span>
+                      <span className="text-slate-500">oeffnen</span>
+                    </Link>
+                  ))}
+                </div>
+              </Section>
+            )}
+          </aside>
         </div>
 
-        {/* Approve Dialog */}
         {showApproveConfirm && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-sm w-full">
-              <h3 className="text-lg font-semibold mb-2">Brief freigeben?</h3>
-              <div className="text-sm text-gray-400 space-y-1 mb-4">
-                <p>✓ {acceptedReqs.length} Requirements akzeptiert</p>
-                <p>✓ {brief.useCases.filter(u => u.status === 'accepted').length} Use Cases akzeptiert</p>
-                {brief.risks.some(r => r.isOpenAssumption) && (
-                  <p className="text-yellow-500">⚠ {brief.risks.filter(r => r.isOpenAssumption).length} offene Annahmen</p>
-                )}
-                <p className="text-gray-500 mt-2 text-xs">Nach der Freigabe kannst du den Brief direkt als Delegation starten.</p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleApprove}
-                  disabled={approving}
-                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg"
-                >
-                  {approving ? 'Wird freigegeben…' : 'Jetzt freigeben'}
-                </button>
-                <button
-                  onClick={() => setShowApproveConfirm(false)}
-                  className="px-4 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg"
-                >
-                  Abbrechen
-                </button>
-              </div>
-            </div>
-          </div>
+          <ConfirmDialog
+            title="Brief freigeben?"
+            detail={`${vm.acceptedReqs.length} Requirements sind akzeptiert. Nach der Freigabe kann daraus eine kontrollierte Delegation entstehen.`}
+            primaryLabel={approving ? 'Wird freigegeben' : 'Jetzt freigeben'}
+            onPrimary={handleApprove}
+            onCancel={() => setShowApproveConfirm(false)}
+            disabled={approving}
+          />
         )}
 
-        {/* Archive Dialog */}
         {showArchiveConfirm && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 max-w-sm w-full">
-              <h3 className="text-lg font-semibold mb-2">Brief archivieren?</h3>
-              <p className="text-sm text-gray-400 mb-4">Der Brief wird nicht gelöscht und kann jederzeit wiederhergestellt werden.</p>
-              <div className="flex gap-2">
-                <button onClick={handleArchive} className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-lg">
-                  Archivieren
-                </button>
-                <button onClick={() => setShowArchiveConfirm(false)} className="px-4 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg">
-                  Abbrechen
-                </button>
-              </div>
-            </div>
-          </div>
+          <ConfirmDialog
+            title="Brief archivieren?"
+            detail="Der Brief wird nicht geloescht und kann spaeter wiederhergestellt werden."
+            primaryLabel="Archivieren"
+            onPrimary={handleArchive}
+            onCancel={() => setShowArchiveConfirm(false)}
+          />
         )}
-      </div>
+      </main>
     </div>
   )
 }
 
-// ── Sub-components ──────────────────────────────────────────────
+export function buildBlueprintViewModel(brief: ProjectBrief): BlueprintViewModel {
+  const acceptedReqs = brief.requirements.filter(req => req.status === 'accepted')
+  const proposedReqs = brief.requirements.filter(req => req.status === 'proposed')
+  const openRisks = brief.risks.filter(risk => risk.impact === 'high' || risk.isOpenAssumption)
+  const openAssumptions = brief.risks.filter(risk => risk.isOpenAssumption)
+  const acceptedUseCases = brief.useCases.filter(useCase => useCase.status === 'accepted')
+  const hasResearch = Boolean(brief.lastResearchRun)
+  const statusScore = brief.status === 'accepted' ? 25 : brief.status === 'in_review' ? 15 : 5
+  const requirementScore = brief.requirements.length === 0 ? 0 : Math.round((acceptedReqs.length / brief.requirements.length) * 35)
+  const useCaseScore = acceptedUseCases.length > 0 ? 15 : brief.useCases.length > 0 ? 8 : 0
+  const researchScore = hasResearch ? 15 : 0
+  const riskPenalty = Math.min(20, openRisks.length * 5)
+  const readinessScore = Math.max(0, Math.min(100, statusScore + requirementScore + useCaseScore + researchScore + 10 - riskPenalty))
+  const readinessTone: ReadinessTone = readinessScore >= 70 ? 'good' : readinessScore >= 40 ? 'warning' : 'blocked'
 
-const CONFIDENCE_COLORS: Record<FindingConfidence, string> = {
-  high:      'bg-green-900/40 text-green-400',
-  medium:    'bg-yellow-900/40 text-yellow-400',
-  low:       'bg-red-900/40 text-red-400',
-  uncertain: 'bg-gray-800 text-gray-500',
+  if (brief.status === 'accepted') {
+    return {
+      acceptedReqs,
+      proposedReqs,
+      openRisks,
+      openAssumptions,
+      acceptedUseCases,
+      readinessScore,
+      readinessTone,
+      nextAction: 'Delegation vorbereiten',
+      nextActionDetail: 'Der Brief ist freigegeben. Erzeuge als naechstes einen Task Contract und pruefe Context Package, Risiko, Datenschutz und Kosten.',
+      deliveryStage: 'bereit fuer Delegation',
+      contextMode: contextModeLabel(brief.privacyMode),
+    }
+  }
+
+  if (acceptedReqs.length === 0) {
+    return {
+      acceptedReqs,
+      proposedReqs,
+      openRisks,
+      openAssumptions,
+      acceptedUseCases,
+      readinessScore,
+      readinessTone,
+      nextAction: 'Requirements pruefen und akzeptieren',
+      nextActionDetail: 'Mindestens ein Must-have Requirement muss akzeptiert sein, bevor ForgePilot kontrolliert delegieren kann.',
+      deliveryStage: 'Anforderungen offen',
+      contextMode: contextModeLabel(brief.privacyMode),
+    }
+  }
+
+  if (!hasResearch && brief.researchMode !== 'quick') {
+    return {
+      acceptedReqs,
+      proposedReqs,
+      openRisks,
+      openAssumptions,
+      acceptedUseCases,
+      readinessScore,
+      readinessTone,
+      nextAction: 'Research starten',
+      nextActionDetail: 'Der Brief hat akzeptierte Requirements, aber noch keinen Research Run. Fuehre Research aus, um Annahmen und Risiken zu belegen.',
+      deliveryStage: 'Validierung offen',
+      contextMode: contextModeLabel(brief.privacyMode),
+    }
+  }
+
+  return {
+    acceptedReqs,
+    proposedReqs,
+    openRisks,
+    openAssumptions,
+    acceptedUseCases,
+    readinessScore,
+    readinessTone,
+    nextAction: 'Brief freigeben',
+    nextActionDetail: 'Die wichtigsten Grundlagen sind vorhanden. Pruefe offene Risiken und gib den Brief frei, wenn Ziel, Scope und Anforderungen stimmen.',
+    deliveryStage: 'Review bereit',
+    contextMode: contextModeLabel(brief.privacyMode),
+  }
 }
 
-function FindingsPanel({ run }: { run: import('@/lib/models/project-brief').ResearchRun }) {
+function activePipelineIndex(brief: ProjectBrief, vm: BlueprintViewModel): number {
+  if (brief.status === 'accepted' && brief.delegationIds && brief.delegationIds.length > 0) return 5
+  if (brief.status === 'accepted') return 4
+  if (vm.acceptedReqs.length > 0 && vm.openRisks.length === 0) return 3
+  if (vm.acceptedReqs.length > 0) return 2
+  if (brief.requirements.length > 0) return 1
+  return 0
+}
+
+function contextModeLabel(mode: ProjectBrief['privacyMode']): string {
+  if (mode === 'local') return 'local-only'
+  if (mode === 'hybrid') return 'hybrid'
+  return 'cloud-approved'
+}
+
+function ActionButton({
+  children,
+  disabled,
+  onClick,
+  tone,
+}: {
+  children: React.ReactNode
+  disabled?: boolean
+  onClick: () => void
+  tone: 'primary' | 'secondary' | 'success' | 'ghost'
+}) {
+  const styles = {
+    primary: 'border-sky-500 bg-sky-500 text-slate-950 hover:bg-sky-400',
+    secondary: 'border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500 hover:bg-slate-800',
+    success: 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-500',
+    ghost: 'border-transparent bg-transparent text-slate-400 hover:bg-slate-900 hover:text-slate-200',
+  }
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`min-h-[36px] rounded-md border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${styles[tone]}`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function StatusMessages({
+  generationNotes,
+  researchNotes,
+  researchError,
+  linearTicketUrl,
+  linearTicketError,
+  delegationError,
+  onDismissResearch,
+  onDismissResearchError,
+  onDismissLinearTicket,
+  onDismissLinearError,
+  onDismissDelegationError,
+}: {
+  generationNotes: string
+  researchNotes: string
+  researchError: string
+  linearTicketUrl: string
+  linearTicketError: string
+  delegationError: string
+  onDismissResearch: () => void
+  onDismissResearchError: () => void
+  onDismissLinearTicket: () => void
+  onDismissLinearError: () => void
+  onDismissDelegationError: () => void
+}) {
+  return (
+    <div className="mb-5 space-y-2">
+      {generationNotes && <Notice tone="info" text={`KI-Annahmen: ${generationNotes}`} />}
+      {researchNotes && <Notice tone="info" text={researchNotes} onDismiss={onDismissResearch} />}
+      {researchError && <Notice tone="error" text={researchError} onDismiss={onDismissResearchError} />}
+      {linearTicketUrl && (
+        <Notice tone="info" text="Linear Ticket erstellt." onDismiss={onDismissLinearTicket}>
+          <a href={linearTicketUrl} target="_blank" rel="noopener noreferrer" className="ml-2 underline hover:text-sky-100">
+            Ticket ansehen
+          </a>
+        </Notice>
+      )}
+      {linearTicketError && <Notice tone="error" text={linearTicketError} onDismiss={onDismissLinearError} />}
+      {delegationError && <Notice tone="error" text={delegationError} onDismiss={onDismissDelegationError} />}
+    </div>
+  )
+}
+
+function Notice({ tone, text, children, onDismiss }: { tone: 'info' | 'error'; text: string; children?: React.ReactNode; onDismiss?: () => void }) {
+  const style = tone === 'error'
+    ? 'border-red-800 bg-red-950/40 text-red-200'
+    : 'border-sky-800 bg-sky-950/30 text-sky-200'
+  return (
+    <div className={`flex items-center gap-2 border px-3 py-2 text-sm ${style}`}>
+      <span>{text}</span>
+      {children}
+      {onDismiss && (
+        <button onClick={onDismiss} className="ml-auto text-slate-400 hover:text-white" aria-label="Hinweis schliessen">
+          x
+        </button>
+      )}
+    </div>
+  )
+}
+
+function MetricPanel({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: ReadinessTone }) {
+  const dot = tone === 'good' ? 'bg-emerald-400' : tone === 'warning' ? 'bg-amber-400' : 'bg-red-400'
+  return (
+    <div className="border border-slate-800 bg-slate-900/70 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+        <span className={`h-2 w-2 rounded-full ${dot}`} />
+      </div>
+      <p className="text-2xl font-semibold text-white">{value}</p>
+      <p className="mt-1 text-xs text-slate-500">{detail}</p>
+    </div>
+  )
+}
+
+function PipelineStep({ label, active }: { label: string; active: boolean }) {
+  return (
+    <div className={`min-h-[54px] border px-3 py-2 ${active ? 'border-sky-700/60 bg-sky-950/20 text-sky-100' : 'border-slate-800 bg-slate-950 text-slate-500'}`}>
+      <p className="text-xs font-medium">{label}</p>
+      <p className="mt-1 text-[11px]">{active ? 'aktiv' : 'offen'}</p>
+    </div>
+  )
+}
+
+function Section({ title, eyebrow, children }: { title: string; eyebrow?: string; children: React.ReactNode }) {
+  return (
+    <section className="border border-slate-800 bg-slate-900/70">
+      <div className="border-b border-slate-800 px-4 py-3">
+        {eyebrow && <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{eyebrow}</p>}
+        <h2 className="mt-1 text-base font-semibold text-white">{title}</h2>
+      </div>
+      <div className="p-4">{children}</div>
+    </section>
+  )
+}
+
+function DefinitionList({ items }: { items: Array<[string, string]> }) {
+  return (
+    <dl className="space-y-4">
+      {items.map(([label, value]) => (
+        <div key={label}>
+          <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</dt>
+          <dd className="mt-1 text-sm leading-6 text-slate-200">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+function SignalRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-2 last:border-0 last:pb-0">
+      <span className="text-slate-500">{label}</span>
+      <span className="text-right font-medium text-slate-200">{value}</span>
+    </div>
+  )
+}
+
+function EmptyState({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="border border-dashed border-slate-800 bg-slate-950/50 p-4 text-sm">
+      <p className="font-medium text-slate-300">{title}</p>
+      <p className="mt-1 leading-6 text-slate-500">{detail}</p>
+    </div>
+  )
+}
+
+const CONFIDENCE_STYLES: Record<FindingConfidence, string> = {
+  high: 'border-emerald-700/50 bg-emerald-950/30 text-emerald-200',
+  medium: 'border-amber-700/50 bg-amber-950/30 text-amber-200',
+  low: 'border-red-700/50 bg-red-950/30 text-red-200',
+  uncertain: 'border-slate-700 bg-slate-900 text-slate-400',
+}
+
+function FindingsPanel({ run }: { run: ResearchRun }) {
   const [expanded, setExpanded] = useState(false)
-  const summaryOutput = run.outputs.find(o => o.type === 'findings_summary')
+  const summaryOutput = run.outputs.find(output => output.type === 'findings_summary')
 
   return (
-    <div className="bg-gray-900 border border-indigo-900/40 rounded-xl p-4">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-xs font-semibold text-indigo-400 uppercase tracking-wider">Research Findings</h2>
-        <div className="flex items-center gap-2">
-          {run.confidenceScore !== undefined && (
-            <span className="text-xs text-gray-500">
-              Konfidenz: <span className="text-white">{run.confidenceScore}%</span>
-            </span>
-          )}
-          {run.actualCostUsd !== undefined && run.actualCostUsd > 0 && (
-            <span className="text-xs text-gray-600">${run.actualCostUsd.toFixed(4)}</span>
-          )}
-        </div>
-      </div>
-
-      {/* Summary */}
-      {summaryOutput && (
-        <p className="text-xs text-gray-400 mb-3 line-clamp-3">{summaryOutput.content}</p>
-      )}
-
-      {/* Findings list */}
-      <button
-        onClick={() => setExpanded(e => !e)}
-        className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors mb-2 flex items-center gap-1"
-      >
-        {expanded ? '▲' : '▼'} {run.findings.length} Findings
+    <Section title="Research Findings" eyebrow={`Konfidenz ${run.confidenceScore ?? 0}%`}>
+      {summaryOutput && <p className="mb-3 line-clamp-4 text-sm leading-6 text-slate-400">{summaryOutput.content}</p>}
+      <button onClick={() => setExpanded(value => !value)} className="text-sm text-sky-300 hover:text-sky-200">
+        {expanded ? 'Findings ausblenden' : `${run.findings.length} Findings anzeigen`}
       </button>
-
       {expanded && (
-        <div className="space-y-2">
-          {run.findings.map(f => (
-            <FindingCard key={f.id} finding={f} />
-          ))}
+        <div className="mt-3 space-y-2">
+          {run.findings.map(finding => <FindingCard key={finding.id} finding={finding} />)}
         </div>
       )}
-
-      {/* Open uncertainties */}
       {run.openUncertainties.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-gray-800">
-          <p className="text-xs text-yellow-500 mb-1.5">⚠ Offene Annahmen ({run.openUncertainties.length})</p>
-          <ul className="space-y-1">
-            {run.openUncertainties.map((u, i) => (
-              <li key={i} className="text-xs text-gray-500 line-clamp-2">· {u}</li>
+        <div className="mt-4 border-t border-slate-800 pt-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-amber-300">Offene Annahmen</p>
+          <ul className="mt-2 space-y-1">
+            {run.openUncertainties.map((uncertainty, index) => (
+              <li key={`${uncertainty}-${index}`} className="text-sm leading-6 text-slate-500">{uncertainty}</li>
             ))}
           </ul>
         </div>
       )}
-    </div>
+    </Section>
   )
 }
 
 function FindingCard({ finding }: { finding: Finding }) {
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-800/30 p-2.5">
-      <div className="flex items-start gap-2">
-        <span className={`shrink-0 px-1.5 py-0.5 text-xs rounded font-medium ${CONFIDENCE_COLORS[finding.confidence]}`}>
+    <div className="border border-slate-800 bg-slate-950 p-3">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <span className={`rounded border px-2 py-0.5 text-xs font-medium ${CONFIDENCE_STYLES[finding.confidence]}`}>
           {finding.confidence}
         </span>
-        <div className="min-w-0">
-          <p className="text-xs text-white leading-snug">{finding.claim}</p>
-          {finding.summary && (
-            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{finding.summary}</p>
-          )}
-          <div className="flex flex-wrap gap-1 mt-1">
-            {finding.isOpenAssumption && (
-              <span className="px-1 py-0.5 text-xs bg-yellow-950/40 text-yellow-600 rounded">Annahme</span>
-            )}
-            {finding.tags.slice(0, 2).map(tag => (
-              <span key={tag} className="px-1 py-0.5 text-xs bg-gray-900 text-gray-600 rounded">{tag}</span>
-            ))}
-          </div>
-        </div>
+        {finding.isOpenAssumption && <span className="rounded border border-amber-800 bg-amber-950/30 px-2 py-0.5 text-xs text-amber-200">Annahme</span>}
       </div>
+      <p className="text-sm font-medium leading-5 text-white">{finding.claim}</p>
+      {finding.summary && <p className="mt-1 line-clamp-3 text-sm leading-6 text-slate-500">{finding.summary}</p>}
     </div>
   )
 }
@@ -650,125 +753,130 @@ function RequirementCard({
   const [evidenceExpanded, setEvidenceExpanded] = useState(false)
   const isAccepted = req.status === 'accepted'
   const isRejected = req.status === 'rejected'
-  const linkedFindings = allFindings.filter(f => req.findingIds?.includes(f.id))
+  const linkedFindings = allFindings.filter(finding => req.findingIds?.includes(finding.id))
 
   return (
-    <div className={`rounded-lg border p-3 transition-opacity ${
-      isRejected ? 'opacity-40 border-gray-800' : isAccepted ? 'border-green-800/50 bg-green-950/20' : 'border-gray-700 bg-gray-800/40'
-    }`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-            <span className={`px-1.5 py-0.5 text-xs rounded font-medium ${PRIORITY_COLORS[req.priority]}`}>
+    <article className={`border p-3 ${isRejected ? 'border-slate-800 opacity-50' : isAccepted ? 'border-emerald-800/60 bg-emerald-950/10' : 'border-slate-800 bg-slate-950'}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+            <span className={`rounded border px-2 py-0.5 text-xs font-medium ${PRIORITY_STYLES[req.priority]}`}>
               {PRIORITY_LABELS[req.priority]}
             </span>
-            {req.source === 'ai_proposed' && !isAccepted && (
-              <span className="px-1.5 py-0.5 text-xs rounded bg-blue-950/50 text-blue-400">KI</span>
-            )}
-            {req.source === 'research' && !isAccepted && (
-              <span className="px-1.5 py-0.5 text-xs rounded bg-indigo-950/50 text-indigo-400">🔍 Research</span>
-            )}
-            {isAccepted && <span className="text-xs text-green-400">✓</span>}
+            <span className="rounded border border-slate-800 px-2 py-0.5 text-xs text-slate-500">{req.type}</span>
+            <span className="rounded border border-slate-800 px-2 py-0.5 text-xs text-slate-500">{req.source}</span>
+            {isAccepted && <span className="rounded border border-emerald-800 bg-emerald-950/20 px-2 py-0.5 text-xs text-emerald-200">akzeptiert</span>}
           </div>
-          <p className="text-sm font-medium text-white truncate">{req.title}</p>
-          <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{req.description}</p>
+          <h3 className="text-sm font-semibold leading-5 text-white">{req.title}</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-400">{req.description}</p>
         </div>
       </div>
 
       {!isAccepted && !isRejected && (
-        <div className="flex gap-1.5 mt-2">
-          <button
-            onClick={() => onStatusChange(req.id, 'accepted')}
-            className="px-2 py-0.5 text-xs bg-green-900/50 hover:bg-green-900 text-green-400 rounded transition-colors"
-          >
-            ✓ Annehmen
+        <div className="mt-3 flex gap-2">
+          <button onClick={() => onStatusChange(req.id, 'accepted')} className="rounded border border-emerald-800 bg-emerald-950/20 px-2 py-1 text-xs font-medium text-emerald-200 hover:bg-emerald-900/30">
+            Annehmen
           </button>
-          <button
-            onClick={() => onStatusChange(req.id, 'rejected')}
-            className="px-2 py-0.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-500 rounded transition-colors"
-          >
-            ✕ Ablehnen
+          <button onClick={() => onStatusChange(req.id, 'rejected')} className="rounded border border-slate-800 px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-900 hover:text-slate-300">
+            Ablehnen
           </button>
         </div>
       )}
       {isAccepted && (
-        <button
-          onClick={() => onStatusChange(req.id, 'proposed')}
-          className="mt-1.5 text-xs text-gray-600 hover:text-gray-400 transition-colors"
-        >
-          Rückgängig
+        <button onClick={() => onStatusChange(req.id, 'proposed')} className="mt-3 text-xs text-slate-500 hover:text-slate-300">
+          Zurueck auf offen
         </button>
       )}
 
       {linkedFindings.length > 0 && (
-        <div className="mt-2 pt-2 border-t border-gray-800">
-          <button
-            onClick={() => setEvidenceExpanded(e => !e)}
-            className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1"
-          >
-            {evidenceExpanded ? '▲' : '▼'} Belege ({linkedFindings.length})
+        <div className="mt-3 border-t border-slate-800 pt-3">
+          <button onClick={() => setEvidenceExpanded(value => !value)} className="text-xs text-sky-300 hover:text-sky-200">
+            {evidenceExpanded ? 'Belege ausblenden' : `${linkedFindings.length} Belege anzeigen`}
           </button>
           {evidenceExpanded && (
-            <div className="mt-2 space-y-1.5">
-              {linkedFindings.map(f => (
-                <div key={f.id} className="flex items-start gap-1.5 rounded bg-gray-900 p-2">
-                  <span className={`shrink-0 px-1 py-0.5 text-xs rounded ${CONFIDENCE_COLORS[f.confidence]}`}>
-                    {f.confidence}
-                  </span>
-                  <p className="text-xs text-gray-300 leading-snug">{f.claim}</p>
+            <div className="mt-2 space-y-2">
+              {linkedFindings.map(finding => (
+                <div key={finding.id} className="border border-slate-800 bg-slate-900 p-2 text-xs leading-5 text-slate-300">
+                  {finding.claim}
                 </div>
               ))}
             </div>
           )}
         </div>
       )}
-    </div>
+    </article>
   )
 }
 
 function UseCaseCard({ uc }: { uc: UseCase }) {
   const [expanded, setExpanded] = useState(false)
   return (
-    <div className="border border-gray-700 rounded-lg p-3">
-      <button
-        onClick={() => setExpanded(e => !e)}
-        className="w-full text-left"
-      >
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-white">{uc.title}</p>
-          <span className="text-gray-600 text-xs">{expanded ? '▲' : '▼'}</span>
+    <article className="border border-slate-800 bg-slate-950 p-3">
+      <button onClick={() => setExpanded(value => !value)} className="w-full text-left">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-white">{uc.title}</h3>
+            <p className="mt-1 text-xs text-slate-500">Akteur: {uc.actor}</p>
+          </div>
+          <span className="text-xs text-slate-500">{expanded ? 'weniger' : 'mehr'}</span>
         </div>
-        <p className="text-xs text-gray-500 mt-0.5">Akteur: {uc.actor}</p>
       </button>
       {expanded && (
-        <div className="mt-2 pt-2 border-t border-gray-800">
-          <p className="text-xs text-gray-500 mb-1">Auslöser: {uc.trigger}</p>
-          <ol className="text-xs text-gray-300 space-y-0.5 list-decimal list-inside">
-            {uc.mainFlow.map((step, i) => <li key={i}>{step}</li>)}
+        <div className="mt-3 border-t border-slate-800 pt-3">
+          <p className="mb-2 text-xs text-slate-500">Trigger: {uc.trigger}</p>
+          <ol className="space-y-1 text-sm leading-6 text-slate-300">
+            {uc.mainFlow.map((step, index) => <li key={`${step}-${index}`}>{index + 1}. {step}</li>)}
           </ol>
         </div>
       )}
-    </div>
+    </article>
   )
 }
 
 function RiskCard({ risk }: { risk: Risk }) {
-  const impactColor = risk.impact === 'high' ? 'text-red-400' : risk.impact === 'medium' ? 'text-yellow-400' : 'text-gray-400'
+  const tone = risk.impact === 'high' ? 'border-red-800/70 text-red-200' : risk.impact === 'medium' ? 'border-amber-800/70 text-amber-200' : 'border-slate-800 text-slate-300'
   return (
-    <div className="border border-gray-700 rounded-lg p-3">
-      <div className="flex items-start justify-between gap-2 mb-1">
-        <p className="text-sm font-medium text-white">{risk.title}</p>
-        <span className={`text-xs shrink-0 ${impactColor}`}>
-          {risk.impact === 'high' ? '🔴' : risk.impact === 'medium' ? '🟡' : '🟢'} {risk.impact}
-        </span>
+    <article className={`border bg-slate-950 p-3 ${tone}`}>
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <h3 className="text-sm font-semibold text-white">{risk.title}</h3>
+        <span className="shrink-0 text-xs">{risk.impact}</span>
       </div>
-      <p className="text-xs text-gray-400">{risk.description}</p>
-      {risk.mitigationIdea && (
-        <p className="text-xs text-gray-500 mt-1">💡 {risk.mitigationIdea}</p>
-      )}
-      {risk.isOpenAssumption && (
-        <span className="mt-1.5 inline-block px-1.5 py-0.5 text-xs bg-yellow-950/40 text-yellow-500 rounded">Offene Annahme</span>
-      )}
+      <p className="text-sm leading-6 text-slate-400">{risk.description}</p>
+      {risk.mitigationIdea && <p className="mt-2 text-xs leading-5 text-slate-500">Massnahme: {risk.mitigationIdea}</p>}
+      {risk.isOpenAssumption && <span className="mt-2 inline-block rounded border border-amber-800 bg-amber-950/20 px-2 py-0.5 text-xs text-amber-200">offene Annahme</span>}
+    </article>
+  )
+}
+
+function ConfirmDialog({
+  title,
+  detail,
+  primaryLabel,
+  onPrimary,
+  onCancel,
+  disabled,
+}: {
+  title: string
+  detail: string
+  primaryLabel: string
+  onPrimary: () => void
+  onCancel: () => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-md border border-slate-700 bg-slate-950 p-5 shadow-2xl">
+        <h3 className="text-lg font-semibold text-white">{title}</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-400">{detail}</p>
+        <div className="mt-5 flex gap-2">
+          <button onClick={onPrimary} disabled={disabled} className="min-h-[38px] flex-1 rounded-md border border-sky-500 bg-sky-500 px-3 py-2 text-sm font-medium text-slate-950 hover:bg-sky-400 disabled:opacity-50">
+            {primaryLabel}
+          </button>
+          <button onClick={onCancel} className="min-h-[38px] rounded-md border border-slate-700 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-900">
+            Abbrechen
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

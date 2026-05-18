@@ -18,7 +18,9 @@ export default function RootLayout({
       <body className="bg-gray-950 text-white min-h-screen">
         <ToastProvider>
           <AppNav />
-          {children}
+          <div className="lg:pl-72">
+            {children}
+          </div>
         </ToastProvider>
       </body>
     </html>
