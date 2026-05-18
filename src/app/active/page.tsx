@@ -536,9 +536,10 @@ function ActiveRunsContent() {
       })
     }, 4000)
 
+    const sources = eventSourcesRef.current
     return () => {
       clearInterval(interval)
-      eventSourcesRef.current.forEach(es => es.close())
+      sources.forEach(es => es.close())
     }
   }, [loadDelegations, ensureLiveState, subscribeSSE, fetchDrift])
 
