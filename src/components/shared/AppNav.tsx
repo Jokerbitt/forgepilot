@@ -10,6 +10,7 @@ const navItems = [
   { href: '/', label: 'Command Center', shortLabel: 'Command', section: 'Operate' },
   { href: '/project-briefs', label: 'Project Briefs', shortLabel: 'Briefs', section: 'Plan' },
   { href: '/delegations', label: 'Delegation Queue', shortLabel: 'Queue', section: 'Execute' },
+  { href: '/agent-runs', label: 'Agent Runs', shortLabel: 'Runs', section: 'Execute' },
   { href: '/settings', label: 'Settings', shortLabel: 'Settings', section: 'System' },
 ]
 
