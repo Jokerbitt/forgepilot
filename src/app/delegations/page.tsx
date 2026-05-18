@@ -9,6 +9,7 @@ import { DelegationDrawer } from '@/components/delegation/DelegationDrawer'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
 import { NewDelegationDialog } from '@/components/delegation/NewDelegationDialog'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
+import { AutopilotReadinessPill } from '@/components/delegation/AutopilotReadinessBadge'
 
 type ApprovalFilter = 'Alle' | 'approval-required' | 'auto-approved' | 'risk-blocked'
 
@@ -783,7 +784,10 @@ function DelegationsContent() {
 
                           {/* Agent */}
                           <td className="p-3 hidden md:table-cell">
-                            <div className="text-xs text-gray-400">{del.executionRoute}</div>
+                            <div className="flex items-center gap-2">
+                              <div className="text-xs text-gray-400">{del.executionRoute}</div>
+                              <AutopilotReadinessPill contract={del.contract} />
+                            </div>
                             {del.contract.llmModel && (
                               <div className="text-xs text-gray-600 mt-0.5">🧠 {del.contract.llmModel}</div>
                             )}
