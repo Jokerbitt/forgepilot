@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import type { Delegation, DelegationStatus } from '@/lib/models/delegation'
 import { ElapsedTimer } from '@/components/shared/ElapsedTimer'
 import { detectConflicts, conflictingIds, type ConflictWarning } from '@/lib/board/conflicts'
@@ -36,9 +37,11 @@ const COLUMNS: Column[] = [
 ]
 
 export default function BoardPage() {
+  const router = useRouter()
   const [delegations, setDelegations] = useState<Delegation[]>([])
   const [loading, setLoading] = useState(true)
   const [stoppingId, setStoppingId] = useState<string | null>(null)
+  const [startingId, setStartingId] = useState<string | null>(null)
   const [conflicts, setConflicts] = useState<ConflictWarning[]>([])
   const [conflicted, setConflicted] = useState<Set<string>>(new Set())
 
@@ -63,6 +66,16 @@ export default function BoardPage() {
     await fetch(`/api/delegations/${id}/cancel`, { method: 'POST' })
     await load()
     setStoppingId(null)
+  }
+
+  const handleStart = async (id: string) => {
+    setStartingId(id)
+    try {
+      await fetch(`/api/delegations/${id}/execute`, { method: 'POST' })
+      router.push(`/active?focus=${id}`)
+    } finally {
+      setStartingId(null)
+    }
   }
 
   const recentDone = delegations
@@ -148,6 +161,8 @@ export default function BoardPage() {
                         delegation={d}
                         onStop={handleStop}
                         stopping={stoppingId === d.id}
+                        onStart={handleStart}
+                        starting={startingId === d.id}
                         hasConflict={conflicted.has(d.id)}
                       />
                     ))
@@ -167,11 +182,15 @@ function KanbanCard({
   delegation: d,
   onStop,
   stopping,
+  onStart,
+  starting,
   hasConflict,
 }: {
   delegation: Delegation
   onStop: (id: string) => void
   stopping: boolean
+  onStart: (id: string) => void
+  starting: boolean
   hasConflict: boolean
 }) {
   const avatar = AGENT_AVATAR[d.executionRoute] ?? AGENT_AVATAR['manual']
@@ -218,6 +237,19 @@ function KanbanCard({
 
       {/* Work item ID */}
       <p className="mt-1 font-mono text-[10px] text-slate-600">{d.contract.workItemId}</p>
+
+      {/* Approved: start button */}
+      {d.status === 'approved' && (
+        <div className="mt-2 flex items-center justify-end">
+          <button
+            onClick={() => onStart(d.id)}
+            disabled={starting}
+            className="rounded border border-emerald-800/40 bg-emerald-950/10 px-2 py-0.5 text-[10px] text-emerald-400 hover:border-emerald-600 transition-colors disabled:opacity-50"
+          >
+            {starting ? '…' : '▶ Starten'}
+          </button>
+        </div>
+      )}
 
       {/* Running: timer + stop */}
       {d.status === 'running' && (
