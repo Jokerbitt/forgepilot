@@ -269,14 +269,14 @@ export function BlueprintScreen({ initialBrief }: Props) {
           onDismissDelegationError={() => setDelegationError('')}
         />
 
-        <section className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-4">
-          <MetricPanel label="Readiness" value={`${vm.readinessScore}%`} detail={vm.deliveryStage} tone={vm.readinessTone} />
+        <section className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <MetricPanel label="Readiness" value={`${vm.readinessScore}%`} detail={vm.deliveryStage} tone={vm.readinessTone} progress={vm.readinessScore} />
           <MetricPanel label="Requirements" value={`${vm.acceptedReqs.length}/${brief.requirements.length}`} detail={`${vm.proposedReqs.length} offen`} tone={vm.acceptedReqs.length > 0 ? 'good' : 'warning'} />
           <MetricPanel label="Risiken" value={`${vm.openRisks.length}`} detail={`${vm.openAssumptions.length} offene Annahmen`} tone={vm.openRisks.length > 2 ? 'blocked' : vm.openRisks.length > 0 ? 'warning' : 'good'} />
           <MetricPanel label="Research" value={brief.lastResearchRun ? `${brief.lastResearchRun.confidenceScore ?? 0}%` : 'offen'} detail={brief.researchMode} tone={brief.lastResearchRun ? 'good' : 'warning'} />
         </section>
 
-        <section className="mb-5 border border-slate-800 bg-slate-900/70">
+        <section className={`mb-5 border bg-slate-900/70 ${vm.readinessTone === 'good' ? 'border-l-4 border-emerald-700/60 border-l-emerald-500' : vm.readinessTone === 'warning' ? 'border-l-4 border-amber-700/60 border-l-amber-500' : 'border-l-4 border-red-700/60 border-l-red-500'}`}>
           <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr]">
             <div className="border-b border-slate-800 p-4 lg:border-b-0 lg:border-r">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Naechste beste Aktion</p>
@@ -304,7 +304,7 @@ export function BlueprintScreen({ initialBrief }: Props) {
           </div>
           <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
             {WORKFLOW_STEPS.map((step, index) => (
-              <PipelineStep key={step} label={step} active={index <= activePipelineIndex(brief, vm)} />
+              <PipelineStep key={step} label={step} state={pipelineStepState(index, activePipelineIndex(brief, vm))} />
             ))}
           </div>
         </section>
@@ -530,6 +530,12 @@ function activePipelineIndex(brief: ProjectBrief, vm: BlueprintViewModel): numbe
   return 0
 }
 
+function pipelineStepState(index: number, activeIndex: number): 'done' | 'active' | 'pending' {
+  if (index < activeIndex) return 'done'
+  if (index === activeIndex) return 'active'
+  return 'pending'
+}
+
 function contextModeLabel(mode: ProjectBrief['privacyMode']): string {
   if (mode === 'local') return 'local-only'
   if (mode === 'hybrid') return 'hybrid'
@@ -624,8 +630,9 @@ function Notice({ tone, text, children, onDismiss }: { tone: 'info' | 'error'; t
   )
 }
 
-function MetricPanel({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: ReadinessTone }) {
+function MetricPanel({ label, value, detail, tone, progress }: { label: string; value: string; detail: string; tone: ReadinessTone; progress?: number }) {
   const dot = tone === 'good' ? 'bg-emerald-400' : tone === 'warning' ? 'bg-amber-400' : 'bg-red-400'
+  const bar = tone === 'good' ? 'bg-emerald-500' : tone === 'warning' ? 'bg-amber-500' : 'bg-red-500'
   return (
     <div className="border border-slate-800 bg-slate-900/70 p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -634,15 +641,30 @@ function MetricPanel({ label, value, detail, tone }: { label: string; value: str
       </div>
       <p className="text-2xl font-semibold text-white">{value}</p>
       <p className="mt-1 text-xs text-slate-500">{detail}</p>
+      {progress !== undefined && (
+        <div className="mt-3 h-1 w-full rounded-full bg-slate-800">
+          <div className={`h-1 rounded-full transition-all ${bar}`} style={{ width: `${Math.max(4, progress)}%` }} />
+        </div>
+      )}
     </div>
   )
 }
 
-function PipelineStep({ label, active }: { label: string; active: boolean }) {
+function PipelineStep({ label, state }: { label: string; state: 'done' | 'active' | 'pending' }) {
+  const styles = {
+    done: 'border-emerald-800/50 bg-emerald-950/20 text-emerald-100',
+    active: 'border-sky-700/60 bg-sky-950/20 text-sky-100',
+    pending: 'border-slate-800 bg-slate-950 text-slate-500',
+  }
+  const indicators = {
+    done: <span className="mt-1 block text-[11px] text-emerald-400">&#x2713; erledigt</span>,
+    active: <span className="mt-1 block text-[11px] text-sky-300">&#x25CF; aktiv</span>,
+    pending: <span className="mt-1 block text-[11px]">offen</span>,
+  }
   return (
-    <div className={`min-h-[54px] border px-3 py-2 ${active ? 'border-sky-700/60 bg-sky-950/20 text-sky-100' : 'border-slate-800 bg-slate-950 text-slate-500'}`}>
+    <div className={`min-h-[54px] border px-3 py-2 ${styles[state]}`}>
       <p className="text-xs font-medium">{label}</p>
-      <p className="mt-1 text-[11px]">{active ? 'aktiv' : 'offen'}</p>
+      {indicators[state]}
     </div>
   )
 }
