@@ -12,6 +12,7 @@ const navItems = [
   { href: '/work-items', label: 'Work Items', shortLabel: 'Items', section: 'Execute' },
   { href: '/delegations', label: 'Delegation Queue', shortLabel: 'Queue', section: 'Execute' },
   { href: '/agent-runs', label: 'Agent Runs', shortLabel: 'Runs', section: 'Execute' },
+  { href: '/agents', label: 'Agent Control Plane', shortLabel: 'Agents', section: 'Execute' },
   { href: '/knowledge', label: 'Knowledge Center', shortLabel: 'Knowledge', section: 'Knowledge' },
   { href: '/context-packages', label: 'Context Packages', shortLabel: 'Context', section: 'Knowledge' },
   { href: '/model-router', label: 'Model Router', shortLabel: 'Router', section: 'System' },
@@ -21,7 +22,6 @@ const navItems = [
 
 const plannedItems = [
   'Governance Hub',
-  'Agent Control Plane',
 ]
 
 export function AppNav() {
