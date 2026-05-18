@@ -99,6 +99,8 @@ export interface Delegation {
   logs?: AgentLog[]
   summaryReport?: DelegationReport
   note?: DelegationNote
+  /** When true, execute route auto-orchestrates into sub-tasks */
+  autoOrchestrate?: boolean
   createdAt: string
   updatedAt: string
 }
