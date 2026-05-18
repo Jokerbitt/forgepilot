@@ -6,6 +6,7 @@ import type { AgentLog, Delegation, DelegationStatus, ExecutionRoute, OutputMode
 import type { RiskClass } from '@/lib/models/work-item'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 import { PreFlightModal } from '@/components/delegation/PreFlightModal'
+import { PolicyVerdictPanel } from '@/components/delegation/PolicyVerdictPanel'
 
 type Tab = 'details' | 'logs' | 'report' | 'notes'
 
@@ -550,6 +551,11 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
                     </div>
                   )}
                 </div>
+
+                <div className="col-span-2">
+                  <PolicyVerdictPanel contract={delegation.contract} />
+                </div>
+
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
                   <select
