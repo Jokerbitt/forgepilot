@@ -11,6 +11,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { ResearchDocument, ResearchCitation, SourceCredibility } from '@/lib/models/research'
 import type { ResearchQuality } from '@/app/api/knowledge/research/[id]/quality/route'
+import type { SearchResult } from '@/app/api/knowledge/research/search/route'
 import { cx } from '@/components/ui/primitives'
 import { FullCycleModal } from '@/components/shared/FullCycleModal'
 
@@ -297,6 +298,39 @@ function ResearchCard({ doc, onSelect, selected }: {
   )
 }
 
+// ─── Search Result Card ───────────────────────────────────────────────────────
+
+function SearchResultCard({ result, onSelect }: {
+  result: SearchResult
+  onSelect: (id: string) => void
+}) {
+  const scoreColor = result.score >= 60
+    ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+    : result.score >= 30
+      ? 'text-amber-400 border-amber-500/30 bg-amber-500/10'
+      : 'text-rose-400 border-rose-500/30 bg-rose-500/10'
+
+  return (
+    <button
+      onClick={() => onSelect(result.id)}
+      className="w-full text-left rounded-xl border border-white/[0.07] bg-white/[0.02] p-4 transition-all hover:border-white/[0.12] hover:bg-white/[0.04]"
+    >
+      <div className="mb-1.5 flex items-start justify-between gap-2">
+        <p className="truncate font-semibold text-white text-sm">{result.title}</p>
+        <span className={cx(
+          'shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold',
+          scoreColor,
+        )}>
+          {result.score}
+        </span>
+      </div>
+      {result.highlights.slice(0, 2).map((h, i) => (
+        <p key={i} className="mt-1 text-xs italic text-slate-400 leading-relaxed line-clamp-1">{h}</p>
+      ))}
+    </button>
+  )
+}
+
 // ─── Create Dialog ────────────────────────────────────────────────────────────
 
 function CreateResearchForm({ onCreated }: { onCreated: (id: string) => void }) {
@@ -407,6 +441,10 @@ export default function ResearchPage() {
   const [showFullCycle, setShowFullCycle] = useState(false)
   const [creatingBrief, setCreatingBrief] = useState(false)
   const [rerunning, setRerunning] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null)
+  const [searching, setSearching] = useState(false)
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const router = useRouter()
 
@@ -432,6 +470,33 @@ export default function ResearchPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    if (!searchQuery.trim() || searchQuery.trim().length < 2) {
+      setSearchResults(null)
+      return
+    }
+    searchDebounceRef.current = setTimeout(async () => {
+      setSearching(true)
+      try {
+        const res = await fetch(`/api/knowledge/research/search?q=${encodeURIComponent(searchQuery.trim())}`)
+        if (res.ok) {
+          const data = await res.json() as SearchResult[]
+          setSearchResults(data)
+        }
+      } catch { /* non-critical */ }
+      setSearching(false)
+    }, 300)
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    }
+  }, [searchQuery])
+
+  const handleSearchSelect = (id: string) => {
+    const doc = docs.find(d => d.id === id)
+    if (doc) setSelected(doc)
+  }
 
   const handleCreateBrief = async (researchId: string) => {
     setCreatingBrief(true)
@@ -526,9 +591,46 @@ export default function ResearchPage() {
         {/* Two-column layout */}
         <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
 
-          {/* Left: document list */}
+          {/* Left: search + document list */}
           <div className="space-y-3">
-            {loading ? (
+            {/* Search input */}
+            <div className="relative w-full max-w-md">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+              <input
+                type="search"
+                placeholder="Recherchen durchsuchen…"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="input-field w-full pl-9 pr-3"
+              />
+              {searching && (
+                <Loader2 className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-slate-500" />
+              )}
+            </div>
+
+            {/* Search results mode */}
+            {searchResults !== null ? (
+              <div className="space-y-2">
+                <p className="text-[11px] text-slate-500">
+                  {searchResults.length > 0
+                    ? `${searchResults.length} Ergebnis${searchResults.length === 1 ? '' : 'se'} für „${searchQuery.trim()}"`
+                    : `Keine Treffer für „${searchQuery.trim()}"`}
+                </p>
+                {searchResults.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.07] bg-white/[0.02] p-8 text-center">
+                    <p className="text-sm text-slate-500">Keine Dokumente gefunden</p>
+                  </div>
+                ) : (
+                  searchResults.map(result => (
+                    <SearchResultCard
+                      key={result.id}
+                      result={result}
+                      onSelect={handleSearchSelect}
+                    />
+                  ))
+                )}
+              </div>
+            ) : loading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="h-28 animate-pulse rounded-xl border border-white/[0.07] bg-white/[0.03]" />
               ))
