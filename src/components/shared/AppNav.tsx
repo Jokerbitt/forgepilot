@@ -12,6 +12,7 @@ const navItems = [
   { href: '/inbox', label: 'Inbox', shortLabel: 'Inbox', section: 'Operate' },
   { href: '/project-briefs', label: 'Project Briefs', shortLabel: 'Briefs', section: 'Plan' },
   { href: '/work-items', label: 'Work Items', shortLabel: 'Items', section: 'Execute' },
+  { href: '/board', label: 'Agent Board', shortLabel: 'Board', section: 'Execute' },
   { href: '/active', label: 'Active Runs', shortLabel: 'Active', section: 'Execute' },
   { href: '/delegations', label: 'Delegation Queue', shortLabel: 'Queue', section: 'Execute' },
   { href: '/agent-runs', label: 'Agent Runs', shortLabel: 'Runs', section: 'Execute' },
