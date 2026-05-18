@@ -5,7 +5,7 @@ import {
   Search, BookOpen, Sparkles, ExternalLink, ChevronRight,
   Clock, CheckCircle2, XCircle, Loader2, Tag, GraduationCap,
   Building2, Newspaper, Globe, HelpCircle, Plus, FileText,
-  AlertTriangle, ArrowRight,
+  AlertTriangle, ArrowRight, RefreshCw,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -404,6 +404,7 @@ export default function ResearchPage() {
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [creatingBrief, setCreatingBrief] = useState(false)
+  const [rerunning, setRerunning] = useState(false)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const router = useRouter()
 
@@ -454,6 +455,19 @@ export default function ResearchPage() {
       if (doc) setSelected(doc)
     })
   }
+
+  const handleRerun = async (docId: string) => {
+    setRerunning(true)
+    try {
+      await fetch(`/api/knowledge/research/${docId}/rerun`, { method: 'POST' })
+      await fetchDocs()
+    } catch { /* non-critical */ }
+    setRerunning(false)
+  }
+
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
+  const isStale = (doc: ResearchDocument) =>
+    doc.status === 'completed' && Date.now() - new Date(doc.updatedAt).getTime() > THIRTY_DAYS_MS
 
   const runningCount = docs.filter(d => d.status === 'running').length
   const completedCount = docs.filter(d => d.status === 'completed').length
@@ -576,9 +590,21 @@ export default function ResearchPage() {
                 {selected.status === 'completed' && (
                   <div className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] p-3">
                     <div className="flex-1">
-                      <p className="text-xs font-semibold text-emerald-400">Recherche abgeschlossen</p>
+                      <p className="text-xs font-semibold text-emerald-400">
+                        Recherche abgeschlossen{isStale(selected) ? ' · älter als 30 Tage' : ''}
+                      </p>
                       <p className="text-[11px] text-slate-500">Erstelle jetzt einen Projektsteckbrief oder generiere direkt Meilensteine</p>
                     </div>
+                    {isStale(selected) && (
+                      <button
+                        onClick={() => handleRerun(selected.id)}
+                        disabled={rerunning}
+                        className="flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs font-medium text-amber-400 transition-all hover:bg-amber-500/20 disabled:opacity-40"
+                      >
+                        {rerunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                        Aktualisieren
+                      </button>
+                    )}
                     <button
                       onClick={() => handleCreateBrief(selected.id)}
                       disabled={creatingBrief}
@@ -613,6 +639,14 @@ export default function ResearchPage() {
                     {selected.abstract && (
                       <p className="mt-2 text-sm text-rose-300/80">{selected.abstract}</p>
                     )}
+                    <button
+                      onClick={() => handleRerun(selected.id)}
+                      disabled={rerunning}
+                      className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-sm font-medium text-rose-300 transition-all hover:bg-rose-500/20 disabled:opacity-40"
+                    >
+                      {rerunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                      Erneut starten
+                    </button>
                   </div>
                 )}
 
