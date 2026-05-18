@@ -8,6 +8,8 @@ export type AttentionType =
   | 'approval_pending'
   | 'escalation'
   | 'system_error'
+  | 'review_passed'
+  | 'review_failed'
 
 export interface AttentionItem {
   id: string
