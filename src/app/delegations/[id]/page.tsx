@@ -3,12 +3,13 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import type { Delegation } from '@/lib/models/delegation'
+import type { Delegation, DelegationStatus, DelegationReport } from '@/lib/models/delegation'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 import { PolicyVerdictPanel } from '@/components/delegation/PolicyVerdictPanel'
 import { PipelineRunner } from '@/components/delegation/PipelineRunner'
 import { AutopilotReadinessBadge } from '@/components/delegation/AutopilotReadinessBadge'
+import { LiveLogViewer } from '@/components/delegation/LiveLogViewer'
 
 const STATUS_COLORS: Record<string, string> = {
   pending:   'bg-yellow-900/50 text-yellow-400 border-yellow-700',
@@ -28,13 +29,6 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: 'Abgebrochen',
 }
 
-const LOG_COLORS: Record<string, string> = {
-  info:    'text-gray-300',
-  error:   'text-red-400',
-  success: 'text-green-400',
-  command: 'text-blue-400 font-mono',
-  thought: 'text-purple-400 italic',
-}
 
 const RISK_COLORS: Record<string, string> = {
   A: 'bg-green-900/30 text-green-400 border-green-800',
@@ -66,12 +60,14 @@ export default function DelegationDetailPage() {
 
   useEffect(() => { loadDelegation() }, [loadDelegation])
 
-  // Poll when running
-  useEffect(() => {
-    if (!delegation || delegation.status !== 'running') return
-    const interval = setInterval(loadDelegation, 4000)
-    return () => clearInterval(interval)
-  }, [delegation, loadDelegation])
+  const handleLiveStatusChange = useCallback((newStatus: DelegationStatus, report?: DelegationReport) => {
+    setDelegation(prev => prev ? {
+      ...prev,
+      status: newStatus,
+      ...(report ? { summaryReport: report } : {}),
+      updatedAt: new Date().toISOString(),
+    } : prev)
+  }, [])
 
   // ── Actions ─────────────────────────────────────────────────────────────
   const updateStatus = async (newStatus: string) => {
@@ -363,32 +359,18 @@ export default function DelegationDetailPage() {
             )}
           </div>
 
-          {/* Agent Logs */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col" style={{ minHeight: '300px', maxHeight: '600px' }}>
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+          {/* Live Agent Logs */}
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
               Agent Logs
-              {d.status === 'running' && (
-                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-              )}
             </h2>
-            {!d.logs || d.logs.length === 0 ? (
-              <div className="flex-1 flex items-center justify-center text-gray-700 text-sm">
-                Noch keine Logs
-              </div>
-            ) : (
-              <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
-                {d.logs.map((log, i) => (
-                  <div key={i} className="flex gap-2">
-                    <span className="text-gray-700 font-mono text-[10px] shrink-0 mt-0.5">
-                      {new Date(log.timestamp).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                    </span>
-                    <span className={`text-xs leading-relaxed break-all ${LOG_COLORS[log.type] || 'text-gray-400'}`}>
-                      {log.message}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
+            <LiveLogViewer
+              delegationId={id}
+              initialLogs={d.logs ?? []}
+              initialStatus={d.status}
+              initialCostEstimate={d.contract.maxBudgetUsd}
+              onStatusChange={handleLiveStatusChange}
+            />
           </div>
         </div>
 
