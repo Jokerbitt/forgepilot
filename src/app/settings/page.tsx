@@ -45,6 +45,8 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [newModel, setNewModel] = useState('')
   const [execStatus, setExecStatus] = useState<{ executeMode: string; executeModeHint: string; anthropic: { status: string }; claudeCode: { status: string } } | null>(null)
+  const [authStatus, setAuthStatus] = useState<{ loggedIn: boolean; authMethod: string; subscriptionType: string; email?: string } | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
 
   // API Keys state
   const [apiKeySet, setApiKeySet] = useState<Record<string, boolean>>({})
@@ -70,7 +72,16 @@ export default function SettingsPage() {
       .then(res => res.json())
       .then(setExecStatus)
       .catch(() => null)
+    fetch('/api/auth/status')
+      .then(res => res.json())
+      .then((data: { loggedIn: boolean; authMethod: string; subscriptionType: string; email?: string }) => {
+        setAuthStatus(data)
+      })
+      .catch(() => setAuthStatus({ loggedIn: false, authMethod: 'none', subscriptionType: 'none' }))
+      .finally(() => setAuthLoading(false))
   }, [])
+
+  const isMaxActive = authStatus?.loggedIn === true && authStatus.subscriptionType === 'max'
 
   const handleSaveApiKeys = async () => {
     setApiKeySaving(true)
@@ -126,6 +137,47 @@ export default function SettingsPage() {
         <header className="border-b border-gray-800 pb-4">
           <h1 className="text-3xl font-bold">⚙️ Engine Einstellungen</h1>
         </header>
+
+        {/* Claude CLI Auth Section */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-gray-300">🤖 Claude CLI Auth</h2>
+            {authLoading ? (
+              <span className="text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-500">Lade…</span>
+            ) : isMaxActive ? (
+              <span className="text-xs px-2 py-1 rounded-full bg-green-900/40 text-green-400 font-medium">Max aktiv</span>
+            ) : authStatus?.loggedIn ? (
+              <span className="text-xs px-2 py-1 rounded-full bg-yellow-900/40 text-yellow-400 font-medium">Eingeloggt</span>
+            ) : (
+              <span className="text-xs px-2 py-1 rounded-full bg-red-900/40 text-red-400 font-medium">Nicht eingeloggt</span>
+            )}
+          </div>
+          <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 space-y-2">
+            <p className="text-sm text-gray-400">
+              Status der lokalen <code className="text-xs bg-gray-800 px-1 py-0.5 rounded">claude</code> CLI-Session.
+              Bei aktiver Max-Subscription wird kein API Key benötigt — die CLI nutzt die OAuth-Session.
+            </p>
+            {authStatus && !authLoading && (
+              <dl className="text-xs text-gray-400 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 pt-1">
+                <dt className="text-gray-500">Auth-Methode</dt>
+                <dd className="font-mono text-gray-300">{authStatus.authMethod}</dd>
+                <dt className="text-gray-500">Subscription</dt>
+                <dd className="font-mono text-gray-300">{authStatus.subscriptionType}</dd>
+                {authStatus.email && (
+                  <>
+                    <dt className="text-gray-500">Konto</dt>
+                    <dd className="font-mono text-gray-300">{authStatus.email}</dd>
+                  </>
+                )}
+              </dl>
+            )}
+            {!authLoading && !authStatus?.loggedIn && (
+              <p className="text-xs text-red-400 pt-1">
+                Mit <code className="bg-gray-800 px-1 py-0.5 rounded">claude login</code> im Terminal anmelden.
+              </p>
+            )}
+          </div>
+        </section>
 
         {/* API Keys Section */}
         <section className="space-y-4">
@@ -188,6 +240,9 @@ export default function SettingsPage() {
                   className="w-full bg-gray-950 text-white px-3 py-2 rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-mono"
                 />
                 <p className="text-xs text-gray-500 mt-1">{hint}</p>
+                {key === 'ANTHROPIC_API_KEY' && isMaxActive && (
+                  <p className="text-xs text-green-400 mt-1">Nicht nötig bei Max-Subscription — claude CLI nutzt die OAuth-Session.</p>
+                )}
               </div>
             ))}
             <button
