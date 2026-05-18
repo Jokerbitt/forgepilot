@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import type { NBAConfig } from '@/lib/nba-engine/nba-config'
 import { describeApprovalMode } from '@/lib/nba-engine/approval-policy'
+import type { PMAgentResult } from '@/lib/agent-runner/pm-agent'
 
 interface ApiKeyField {
   key: 'GITHUB_TOKEN' | 'LINEAR_API_KEY' | 'LINEAR_TEAM_ID' | 'ANTHROPIC_API_KEY'
@@ -55,6 +56,8 @@ export default function SettingsPage() {
   const [authLoading, setAuthLoading] = useState(true)
   const [autoPmStatus, setAutoPmStatus] = useState<AutoPmStatus | null>(null)
   const [autoPmSaving, setAutoPmSaving] = useState(false)
+  const [pmHistory, setPmHistory] = useState<PMAgentResult[]>([])
+  const [expandedRun, setExpandedRun] = useState<string | null>(null)
 
   // API Keys state
   const [apiKeySet, setApiKeySet] = useState<Record<string, boolean>>({})
@@ -90,6 +93,10 @@ export default function SettingsPage() {
     fetch('/api/pm-agent/auto')
       .then(res => res.json())
       .then((data: AutoPmStatus) => setAutoPmStatus(data))
+      .catch(() => null)
+    fetch('/api/pm-agent/history?limit=5')
+      .then(res => res.json())
+      .then((data: PMAgentResult[]) => setPmHistory(data))
       .catch(() => null)
   }, [])
 
@@ -388,8 +395,8 @@ export default function SettingsPage() {
           <h2 className="text-xl font-bold text-gray-300">Anzeige Limits</h2>
           <div className="flex justify-between items-center bg-gray-900 p-4 rounded-lg">
             <span>Maximal sichtbare Empfehlungen</span>
-            <input 
-              type="number" 
+            <input
+              type="number"
               value={config.maxRecommendations}
               onChange={e => setConfig({...config, maxRecommendations: parseInt(e.target.value)})}
               className="bg-gray-800 text-white px-3 py-1 rounded w-20 text-center"
@@ -401,29 +408,29 @@ export default function SettingsPage() {
           <h2 className="text-xl font-bold text-gray-300">Time-Decay (Verrottende Backlogs)</h2>
           <div className="bg-gray-900 p-4 rounded-lg space-y-4">
             <label className="flex items-center space-x-3 cursor-pointer">
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 checked={config.penalizeOldBacklogs}
                 onChange={e => setConfig({...config, penalizeOldBacklogs: e.target.checked})}
                 className="form-checkbox h-5 w-5 text-blue-600 rounded bg-gray-800 border-gray-700"
               />
               <span>Alte Backlogs automatisch abwerten</span>
             </label>
-            
+
             <div className="flex justify-between items-center opacity-80">
               <span>Alter in Tagen (Threshold)</span>
-              <input 
-                type="number" 
+              <input
+                type="number"
                 value={config.backlogPenaltyAgeDays}
                 onChange={e => setConfig({...config, backlogPenaltyAgeDays: parseInt(e.target.value)})}
                 className="bg-gray-800 text-white px-3 py-1 rounded w-20 text-center"
               />
             </div>
-            
+
             <div className="flex justify-between items-center opacity-80">
               <span>Punkte Abzug (Penalty)</span>
-              <input 
-                type="number" 
+              <input
+                type="number"
                 value={config.backlogPenaltyScore}
                 onChange={e => setConfig({...config, backlogPenaltyScore: parseInt(e.target.value)})}
                 className="bg-gray-800 text-white px-3 py-1 rounded w-20 text-center"
@@ -436,8 +443,8 @@ export default function SettingsPage() {
           <h2 className="text-xl font-bold text-gray-300">Triage & Extras</h2>
           <div className="bg-gray-900 p-4 rounded-lg">
             <label className="flex items-center space-x-3 cursor-pointer">
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 checked={config.showTriageJoker}
                 onChange={e => setConfig({...config, showTriageJoker: e.target.checked})}
                 className="form-checkbox h-5 w-5 text-blue-600 rounded bg-gray-800 border-gray-700"
@@ -505,16 +512,16 @@ export default function SettingsPage() {
           <h2 className="text-xl font-bold text-gray-300">Eigene KI-Modelle</h2>
           <div className="bg-gray-900 p-4 rounded-lg space-y-4">
             <p className="text-sm text-gray-400">Füge eigene oder lokale LLM-Modelle hinzu, die du bei der Delegation auswählen möchtest.</p>
-            
+
             <div className="flex space-x-2">
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={newModel}
                 onChange={e => setNewModel(e.target.value)}
                 placeholder="z.B. ollama/llama-3-8b"
                 className="flex-1 bg-gray-800 text-white px-3 py-2 rounded border border-gray-700"
               />
-              <button 
+              <button
                 onClick={() => {
                   if (newModel && !config.customLlmModels?.includes(newModel)) {
                     setConfig({...config, customLlmModels: [...(config.customLlmModels || []), newModel]})
@@ -526,7 +533,7 @@ export default function SettingsPage() {
                 Hinzufügen
               </button>
             </div>
-            
+
             <div className="flex flex-wrap gap-2 pt-2">
               {(config.customLlmModels || []).length === 0 ? (
                 <span className="text-sm text-gray-500 italic">Keine eigenen Modelle hinterlegt.</span>
@@ -534,7 +541,7 @@ export default function SettingsPage() {
                 (config.customLlmModels || []).map(model => (
                   <div key={model} className="bg-gray-800 border border-gray-700 rounded-full px-3 py-1 flex items-center space-x-2 text-sm text-gray-300">
                     <span>{model}</span>
-                    <button 
+                    <button
                       onClick={() => setConfig({...config, customLlmModels: config.customLlmModels.filter(m => m !== model)})}
                       className="text-gray-500 hover:text-red-400"
                     >
@@ -589,6 +596,80 @@ export default function SettingsPage() {
               </div>
             ) : (
               <p className="text-xs text-gray-600 italic">Noch kein PM Agent Run gefunden.</p>
+            )}
+
+            {/* Run History */}
+            {pmHistory.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-gray-800">
+                <p className="text-xs font-medium text-gray-400">Letzte Runs</p>
+                <div className="space-y-1">
+                  {pmHistory.map((run) => {
+                    const isExpanded = expandedRun === run.runAt
+                    const healthColor =
+                      run.overallHealth === 'green'
+                        ? 'bg-green-900/40 text-green-400'
+                        : run.overallHealth === 'yellow'
+                          ? 'bg-yellow-900/40 text-yellow-400'
+                          : 'bg-red-900/40 text-red-400'
+                    const runDate = new Date(run.runAt).toLocaleString('de-DE', {
+                      day: 'numeric',
+                      month: 'long',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })
+                    return (
+                      <div key={run.runAt} className="rounded-lg border border-gray-800 overflow-hidden">
+                        <button
+                          onClick={() => setExpandedRun(isExpanded ? null : run.runAt)}
+                          className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-gray-800/50 transition-colors text-left"
+                        >
+                          <span className="text-gray-300 font-mono">{runDate}</span>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className="text-gray-500">
+                              {run.reviews?.length ?? 0} WPs · {run.blockers?.length ?? 0} Blocker
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${healthColor}`}>
+                              {run.overallHealth}
+                            </span>
+                            <span className="text-gray-600">{isExpanded ? '▲' : '▼'}</span>
+                          </div>
+                        </button>
+                        {isExpanded && (
+                          <div className="px-3 pb-3 pt-1 border-t border-gray-800 space-y-2">
+                            <p className="text-xs text-gray-400 leading-relaxed">{run.summary}</p>
+                            {run.blockers && run.blockers.length > 0 && (
+                              <div>
+                                <p className="text-xs font-medium text-red-400 mb-1">Blocker</p>
+                                <ul className="space-y-0.5">
+                                  {run.blockers.map((b, i) => (
+                                    <li key={i} className="text-xs text-gray-400 flex gap-1">
+                                      <span className="text-red-500 shrink-0">·</span>
+                                      <span>{b}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {run.recommendations && run.recommendations.length > 0 && (
+                              <div>
+                                <p className="text-xs font-medium text-blue-400 mb-1">Empfehlungen</p>
+                                <ul className="space-y-0.5">
+                                  {run.recommendations.slice(0, 3).map((r, i) => (
+                                    <li key={i} className="text-xs text-gray-400 flex gap-1">
+                                      <span className="text-blue-500 shrink-0">·</span>
+                                      <span>{r}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             )}
           </div>
         </section>
