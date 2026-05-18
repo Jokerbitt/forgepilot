@@ -11,6 +11,7 @@ const navItems = [
   { href: '/project-briefs', label: 'Project Briefs', shortLabel: 'Briefs', section: 'Plan' },
   { href: '/delegations', label: 'Delegation Queue', shortLabel: 'Queue', section: 'Execute' },
   { href: '/agent-runs', label: 'Agent Runs', shortLabel: 'Runs', section: 'Execute' },
+  { href: '/knowledge', label: 'Knowledge Center', shortLabel: 'Knowledge', section: 'Knowledge' },
   { href: '/settings', label: 'Settings', shortLabel: 'Settings', section: 'System' },
 ]
 
