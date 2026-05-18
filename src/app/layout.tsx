@@ -16,11 +16,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="de" className="dark">
-      <body className="bg-gray-950 text-white min-h-screen">
+      <body className="bg-[#07070c] text-white min-h-screen">
         <ToastProvider>
           <AppNav />
           <GlobalKeyboardHandler />
-          <div className="lg:pl-72">
+          <div className="lg:pl-64">
             {children}
           </div>
         </ToastProvider>
