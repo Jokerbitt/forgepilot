@@ -7,6 +7,7 @@ import type { RiskClass } from '@/lib/models/work-item'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 import { PreFlightModal } from '@/components/delegation/PreFlightModal'
 import { PolicyVerdictPanel } from '@/components/delegation/PolicyVerdictPanel'
+import { ContextPackageBuilder } from '@/components/delegation/ContextPackageBuilder'
 
 type Tab = 'details' | 'logs' | 'report' | 'notes'
 
@@ -555,6 +556,29 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
                 <div className="col-span-2">
                   <PolicyVerdictPanel contract={delegation.contract} />
                 </div>
+
+                <ContextPackageBuilder
+                  workItemId={delegation.contract.workItemId ?? delegation.id}
+                  title={delegation.contract.goal.slice(0, 80)}
+                  objective={delegation.contract.goal}
+                  privacyMode={
+                    delegation.contract.privacyMode === 'local' ? 'local-only'
+                    : delegation.contract.privacyMode === 'private-cloud' ? 'hybrid'
+                    : 'hybrid'
+                  }
+                />
+
+                {delegation.agentRunId && (
+                  <div className="col-span-2 flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
+                    <p className="text-xs text-slate-500">Agent Run verknüpft</p>
+                    <a
+                      href={`/agent-runs/${delegation.agentRunId}`}
+                      className="text-xs font-medium text-sky-400 hover:underline"
+                    >
+                      Run ansehen →
+                    </a>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
