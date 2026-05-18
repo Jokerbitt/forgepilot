@@ -263,10 +263,32 @@ export default function DelegationDetailPage() {
                 </button>
               )}
               {canStart && (
-                <button onClick={handleStart}
-                  className="px-3 py-1.5 text-sm bg-blue-900/50 text-blue-300 hover:bg-blue-900 border border-blue-800 rounded-lg transition-colors font-medium">
-                  ▶ Starten
-                </button>
+                <div className="flex items-center gap-1">
+                  <button onClick={handleStart}
+                    className="px-3 py-1.5 text-sm bg-blue-900/50 text-blue-300 hover:bg-blue-900 border border-blue-800 rounded-lg transition-colors font-medium">
+                    ▶ Starten
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!delegation) return
+                      const updated = { ...delegation, autoOrchestrate: !delegation.autoOrchestrate }
+                      setDelegation(updated)
+                      await fetch('/api/delegations', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(updated),
+                      })
+                    }}
+                    title="Auto-Orchestrierung: Task automatisch in Sub-Tasks aufteilen"
+                    className={`px-2 py-1.5 text-xs rounded-lg border transition-colors ${
+                      delegation?.autoOrchestrate
+                        ? 'bg-violet-900/60 text-violet-300 border-violet-700'
+                        : 'text-slate-600 border-slate-800 hover:text-violet-400 hover:border-violet-900'
+                    }`}
+                  >
+                    ⚙ Auto
+                  </button>
+                </div>
               )}
               {canStop && (
                 <button onClick={() => updateStatus('cancelled')}
