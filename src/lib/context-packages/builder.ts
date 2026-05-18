@@ -55,6 +55,33 @@ function formatItem(item: KnowledgeItem): string {
   return `## ${item.title}\n${item.summary || item.content.slice(0, 500)}`
 }
 
+// Score a card by keyword overlap with the query text (0..1)
+function relevanceScore(cardTitle: string, cardBody: string, queryText: string): number {
+  if (!queryText.trim()) return 0
+  const words = queryText.toLowerCase().split(/\W+/).filter(w => w.length > 3)
+  if (words.length === 0) return 0
+  const target = `${cardTitle} ${cardBody}`.toLowerCase()
+  const matches = words.filter(w => target.includes(w)).length
+  return matches / words.length
+}
+
+function rankByRelevance<T extends { title: string }>(
+  items: T[],
+  getBody: (item: T) => string,
+  queryText: string,
+  topN: number
+): T[] {
+  const scored = items.map(item => ({
+    item,
+    score: relevanceScore(item.title, getBody(item), queryText),
+  }))
+  scored.sort((a, b) => b.score - a.score)
+  // Include items with any relevance first; fall back to first topN if nothing matches
+  const relevant = scored.filter(s => s.score > 0).slice(0, topN)
+  if (relevant.length >= Math.min(5, topN)) return relevant.map(s => s.item)
+  return scored.slice(0, topN).map(s => s.item)
+}
+
 export function buildContextPackage(
   input: BuildContextPackageInput
 ): BuildContextPackageResult {
@@ -62,17 +89,20 @@ export function buildContextPackage(
   const privacyMode: ContextPrivacyMode = input.privacyMode ?? 'hybrid'
   const tokenBudget = input.tokenBudget ?? DEFAULT_TOKEN_BUDGET
 
-  // Fetch relevant memory cards
+  // Fetch relevant memory cards — tag filter first, then keyword ranking
   const allCards = getCards(input.projectId)
-  const relevantCards = input.tags?.length
+  const queryText = `${input.title} ${input.objective}`
+  const tagFilteredCards = input.tags?.length
     ? allCards.filter(c => input.tags!.some(t => c.tags.includes(t)))
-    : allCards.slice(0, 20)
+    : allCards
+  const relevantCards = rankByRelevance(tagFilteredCards, c => c.body, queryText, 20)
 
-  // Fetch relevant knowledge items
+  // Fetch relevant knowledge items — same approach
   const allItems = getItems()
-  const relevantItems = input.tags?.length
+  const tagFilteredItems = input.tags?.length
     ? allItems.filter(i => input.tags!.some(t => i.tags.includes(t)))
-    : allItems.slice(0, 10)
+    : allItems
+  const relevantItems = rankByRelevance(tagFilteredItems, i => i.summary || i.content.slice(0, 300), queryText, 10)
 
   const sources: ContextSource[] = []
   const contentParts: string[] = []
