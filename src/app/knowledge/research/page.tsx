@@ -5,9 +5,10 @@ import {
   Search, BookOpen, Sparkles, ExternalLink, ChevronRight,
   Clock, CheckCircle2, XCircle, Loader2, Tag, GraduationCap,
   Building2, Newspaper, Globe, HelpCircle, Plus, FileText,
-  AlertTriangle,
+  AlertTriangle, ArrowRight,
 } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import type { ResearchDocument, ResearchCitation, SourceCredibility } from '@/lib/models/research'
 import { cx } from '@/components/ui/primitives'
 
@@ -344,7 +345,9 @@ export default function ResearchPage() {
   const [selected, setSelected] = useState<ResearchDocument | null>(null)
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
+  const [creatingBrief, setCreatingBrief] = useState(false)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const router = useRouter()
 
   const fetchDocs = async () => {
     try {
@@ -368,6 +371,23 @@ export default function ResearchPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const handleCreateBrief = async (researchId: string) => {
+    setCreatingBrief(true)
+    try {
+      const res = await fetch('/api/project-briefs/from-research', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ researchId }),
+      })
+      const data = await res.json() as { briefId?: string; error?: string }
+      if (res.ok && data.briefId) {
+        router.push(`/project-briefs/${data.briefId}`)
+      }
+    } finally {
+      setCreatingBrief(false)
+    }
+  }
 
   const handleCreated = (id: string) => {
     setShowCreate(false)
@@ -494,6 +514,23 @@ export default function ResearchPage() {
                     )}
                   </div>
                 </div>
+
+                {selected.status === 'completed' && (
+                  <div className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] p-3">
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold text-emerald-400">Recherche abgeschlossen</p>
+                      <p className="text-[11px] text-slate-500">Erstelle jetzt einen Projektsteckbrief oder generiere direkt Meilensteine</p>
+                    </div>
+                    <button
+                      onClick={() => handleCreateBrief(selected.id)}
+                      disabled={creatingBrief}
+                      className="flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-emerald-500 disabled:opacity-40"
+                    >
+                      {creatingBrief ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRight className="h-3.5 w-3.5" />}
+                      {creatingBrief ? 'Erstelle Brief…' : 'Brief erstellen'}
+                    </button>
+                  </div>
+                )}
 
                 {selected.status === 'running' && (
                   <div className="flex flex-col items-center justify-center rounded-xl border border-violet-500/20 bg-violet-500/[0.04] p-12 text-center">

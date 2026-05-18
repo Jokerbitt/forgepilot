@@ -1,9 +1,10 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useMemo, useState, useTransition, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { ProjectBrief, Requirement, UseCase, Risk, Finding, FindingConfidence, ResearchRun } from '@/lib/models/project-brief'
+import type { Milestone, WorkPackage } from '@/lib/models/milestone'
 
 interface Props {
   initialBrief: ProjectBrief
@@ -78,8 +79,19 @@ export function BlueprintScreen({ initialBrief }: Props) {
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
   const [showApproveConfirm, setShowApproveConfirm] = useState(false)
   const [delegationError, setDelegationError] = useState('')
+  const [milestones, setMilestones] = useState<(Milestone & { workPackages: WorkPackage[] })[]>([])
+  const [generatingMilestones, setGeneratingMilestones] = useState(false)
+  const [milestonesError, setMilestonesError] = useState('')
 
   const vm = useMemo(() => buildBlueprintViewModel(brief), [brief])
+
+  // Load existing milestones
+  useEffect(() => {
+    fetch(`/api/milestones?briefId=${brief.id}`)
+      .then(r => r.json())
+      .then((data: (Milestone & { workPackages: WorkPackage[] })[]) => setMilestones(data))
+      .catch(() => {})
+  }, [brief.id])
   const canApprove = vm.acceptedReqs.length > 0 && brief.status !== 'accepted' && brief.status !== 'archived'
 
   const byPriority = (['must', 'should', 'could', 'wont'] as const)
@@ -177,6 +189,27 @@ export function BlueprintScreen({ initialBrief }: Props) {
     })
   }
 
+  async function handleGenerateMilestones() {
+    setGeneratingMilestones(true)
+    setMilestonesError('')
+    try {
+      const res = await fetch(`/api/project-briefs/${brief.id}/generate-milestones`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      if (res.ok) {
+        const data = await res.json() as { milestones: Milestone[]; workPackages: WorkPackage[] }
+        const enriched = data.milestones.map(m => ({
+          ...m,
+          workPackages: data.workPackages.filter(wp => wp.milestoneId === m.id),
+        }))
+        setMilestones(enriched)
+      } else {
+        const err = await res.json() as { error?: string }
+        setMilestonesError(err.error ?? 'Meilensteine konnten nicht generiert werden')
+      }
+    } finally {
+      setGeneratingMilestones(false)
+    }
+  }
+
   function handleDelegate() {
     setDelegationError('')
     startDelegate(async () => {
@@ -239,9 +272,14 @@ export function BlueprintScreen({ initialBrief }: Props) {
                 </ActionButton>
               )}
               {brief.status === 'accepted' && (
-                <ActionButton onClick={handleDelegate} disabled={delegating} tone="primary">
-                  {delegating ? 'Erstelle Delegation' : 'Delegation starten'}
-                </ActionButton>
+                <>
+                  <ActionButton onClick={handleGenerateMilestones} disabled={generatingMilestones} tone="secondary">
+                    {generatingMilestones ? 'Generiere…' : milestones.length > 0 ? 'Meilensteine neu' : 'Meilensteine generieren'}
+                  </ActionButton>
+                  <ActionButton onClick={handleDelegate} disabled={delegating} tone="primary">
+                    {delegating ? 'Erstelle Delegation' : 'Delegation starten'}
+                  </ActionButton>
+                </>
               )}
               <ActionButton onClick={handleCreateLinearTicket} disabled={ticketing} tone="secondary">
                 {ticketing ? 'Erstelle Ticket' : 'Linear Ticket'}
@@ -417,6 +455,90 @@ export function BlueprintScreen({ initialBrief }: Props) {
             )}
           </aside>
         </div>
+
+        {/* Milestone + Work Package Section */}
+        {(milestones.length > 0 || generatingMilestones) && (
+          <section className="mt-5 border border-slate-800 bg-slate-900/50 p-4">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Projektplan</p>
+                <h2 className="mt-1 text-lg font-semibold text-white">
+                  {generatingMilestones ? 'Generiere Meilensteine…' : `${milestones.length} Meilensteine · ${milestones.reduce((s, m) => s + m.workPackages.length, 0)} Arbeitspakete`}
+                </h2>
+              </div>
+              <Link href="/active" className="text-sm text-violet-400 hover:text-violet-300 transition-colors">
+                Zur Ausführung →
+              </Link>
+            </div>
+
+            {milestonesError && (
+              <div className="mb-3 rounded border border-rose-800/40 bg-rose-950/20 p-3 text-sm text-rose-300">{milestonesError}</div>
+            )}
+
+            {generatingMilestones ? (
+              <div className="py-8 text-center text-sm text-slate-500">KI plant Meilensteine und Arbeitspakete…</div>
+            ) : (
+              <div className="space-y-4">
+                {milestones.map((m, mi) => (
+                  <div key={m.id} className="border border-slate-800 bg-slate-950 p-4">
+                    <div className="mb-3 flex items-start gap-3">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-500/20 text-xs font-bold text-violet-400">
+                        {mi + 1}
+                      </span>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-white">{m.title}</h3>
+                          {m.targetWeek && (
+                            <span className="rounded border border-slate-700 px-1.5 py-0.5 text-[10px] text-slate-500">Woche {m.targetWeek}</span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-sm text-slate-400">{m.goal}</p>
+                      </div>
+                    </div>
+
+                    {m.workPackages.length > 0 && (
+                      <div className="ml-9 space-y-2">
+                        {m.workPackages.map(wp => (
+                          <div key={wp.id} className="flex items-start gap-3 rounded border border-slate-800 bg-slate-900 px-3 py-2">
+                            <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                              wp.riskClass === 'A' ? 'bg-emerald-900/40 text-emerald-400' :
+                              wp.riskClass === 'B' ? 'bg-amber-900/40 text-amber-400' :
+                              'bg-rose-900/40 text-rose-400'
+                            }`}>
+                              {wp.riskClass}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-white">{wp.title}</p>
+                              <p className="mt-0.5 text-xs text-slate-500 line-clamp-1">{wp.description}</p>
+                              {wp.definitionOfDone.length > 0 && (
+                                <div className="mt-1.5 flex flex-wrap gap-1">
+                                  {wp.definitionOfDone.slice(0, 2).map((d, i) => (
+                                    <span key={i} className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400">✓ {d}</span>
+                                  ))}
+                                  {wp.definitionOfDone.length > 2 && (
+                                    <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-500">+{wp.definitionOfDone.length - 2}</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <p className="text-[11px] font-mono text-slate-500">{wp.estimatedHours}h</p>
+                              <p className={`text-[10px] font-semibold ${
+                                wp.priority === 'critical' ? 'text-rose-400' :
+                                wp.priority === 'high' ? 'text-amber-400' :
+                                wp.priority === 'medium' ? 'text-sky-400' : 'text-slate-500'
+                              }`}>{wp.priority}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {showApproveConfirm && (
           <ConfirmDialog
