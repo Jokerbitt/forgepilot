@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import type { Delegation } from '@/lib/models/delegation'
 import type { AttentionItem } from '@/lib/models/attention'
+import type { Notification } from '@/lib/models/notification'
 import { cx } from '@/components/ui/primitives'
 
 interface NavItem {
@@ -75,13 +76,15 @@ export function AppNav() {
   const [running, setRunning] = useState(0)
   const [pending, setPending] = useState(0)
   const [attentionCount, setAttentionCount] = useState(0)
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
 
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const [delRes, attRes] = await Promise.all([
+        const [delRes, attRes, notifRes] = await Promise.all([
           fetch('/api/delegations'),
           fetch('/api/attention'),
+          fetch('/api/notifications?unread=true'),
         ])
         const data = await delRes.json() as Delegation[]
         if (Array.isArray(data)) {
@@ -91,6 +94,10 @@ export function AppNav() {
         const att = await attRes.json() as AttentionItem[]
         if (Array.isArray(att)) {
           setAttentionCount(att.filter(i => !i.resolvedAt).length)
+        }
+        const notifs = await notifRes.json() as Notification[]
+        if (Array.isArray(notifs)) {
+          setUnreadNotificationCount(notifs.length)
         }
       } catch {
         // nav badge is non-critical
@@ -140,7 +147,7 @@ export function AppNav() {
                 const count =
                   item.href === '/delegations' ? totalActive
                     : item.href === '/active' ? running
-                    : item.href === '/inbox' ? attentionCount
+                    : item.href === '/inbox' ? attentionCount + unreadNotificationCount
                     : undefined
                 const isLive = (item.href === '/delegations' || item.href === '/active') && running > 0
                 return (

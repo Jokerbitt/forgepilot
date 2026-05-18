@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
+import crypto from 'crypto'
 import { readProjectBriefs } from '@/lib/project-briefs'
 import { readMilestones, readWorkPackages } from '@/lib/knowledge/milestone-store'
 import { readStoredApiKeys } from '@/lib/connectors/config'
 import { runPMAgent, type PMAgentResult } from '@/lib/agent-runner/pm-agent'
+import { saveNotification } from '@/lib/notifications/notification-store'
 import type { Delegation } from '@/lib/models/delegation'
+import type { NotificationSeverity } from '@/lib/models/notification'
 
 const PM_PLAN_FILE = path.join(process.cwd(), 'config', 'pm-plan.json')
 
@@ -46,6 +49,25 @@ export async function POST() {
   try {
     const result = await runPMAgent(briefs, milestones, workPackages, delegations, { apiKey })
     writePMPlan(result)
+
+    if (result.overallHealth === 'red' || result.overallHealth === 'yellow') {
+      const severity: NotificationSeverity = result.overallHealth === 'red' ? 'critical' : 'warning'
+      const title = result.overallHealth === 'red'
+        ? 'PM Agent: Kritische Blocker'
+        : 'PM Agent: Warnung'
+      const body = result.blockers.slice(0, 2).join(' · ')
+      saveNotification({
+        id: crypto.randomUUID(),
+        type: 'pm-alert',
+        severity,
+        title,
+        body: body || result.summary.slice(0, 120),
+        link: '/pm-agent',
+        read: false,
+        createdAt: new Date().toISOString(),
+      })
+    }
+
     return NextResponse.json(result)
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 })
