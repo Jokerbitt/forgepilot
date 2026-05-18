@@ -62,6 +62,20 @@ export default function DelegationDetailPage() {
 
   useEffect(() => { loadDelegation() }, [loadDelegation])
 
+  // Auto-load existing orchestrated run for this delegation
+  useEffect(() => {
+    if (!id) return
+    fetch(`/api/agents/orchestrate?delegationId=${id}`)
+      .then(r => r.json())
+      .then((d: { runs: OrchestratedRun[] }) => {
+        if (d.runs && d.runs.length > 0) {
+          // Load the most recent run
+          setOrchestratedRun(d.runs[0])
+        }
+      })
+      .catch(() => undefined)
+  }, [id])
+
   const handleLiveStatusChange = useCallback((newStatus: DelegationStatus, report?: DelegationReport) => {
     setDelegation(prev => prev ? {
       ...prev,

@@ -72,6 +72,12 @@ export interface TaskContract {
   privacyMode: PrivacyMode
   llmModel?: string
   outputMode?: OutputMode
+  /** Skill category — set by orchestrator for targeted prompting */
+  skillCategory?: 'api-route' | 'ui-component' | 'data-model' | 'test' | 'refactor' | 'infrastructure' | 'documentation'
+  /** File patterns this task is allowed to touch */
+  allowedFilePatterns?: string[]
+  /** Parent orchestrated run ID — set when created by orchestrator */
+  orchestratedRunId?: string
   createdAt: string
 }
 
