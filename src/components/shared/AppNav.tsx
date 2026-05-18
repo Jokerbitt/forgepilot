@@ -22,6 +22,7 @@ import {
   Command,
   ChevronRight,
   Zap,
+  BarChart3,
 } from 'lucide-react'
 import type { Delegation } from '@/lib/models/delegation'
 import type { AttentionItem } from '@/lib/models/attention'
@@ -49,6 +50,7 @@ const navItems: NavItem[] = [
   { href: '/context-packages', label: 'Context Packages', shortLabel: 'Context', icon: Package, section: 'Knowledge' },
   { href: '/model-router', label: 'Model Router', shortLabel: 'Router', icon: GitBranch, section: 'System' },
   { href: '/governance', label: 'Governance Hub', shortLabel: 'Gov', icon: Shield, section: 'System' },
+  { href: '/analytics', label: 'Cost Analytics', shortLabel: 'Analytics', icon: BarChart3, section: 'System' },
   { href: '/pilot', label: 'E2E Pilot', shortLabel: 'Pilot', icon: FlaskConical, section: 'System' },
   { href: '/settings', label: 'Settings', shortLabel: 'Settings', icon: Settings, section: 'System' },
 ]
