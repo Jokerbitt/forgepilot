@@ -11,3 +11,6 @@ tsconfig.tsbuildinfo
 *.log
 .DS_Store
 start-preview.sh
+
+# Agent worktrees
+.claude/worktrees/
