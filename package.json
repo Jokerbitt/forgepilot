@@ -9,7 +9,9 @@
     "lint": "next lint",
     "test": "vitest",
     "test:run": "vitest run",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "validate:agent": "bash scripts/validate-agent-work.sh",
+    "validate:quick": "bash scripts/validate-agent-work.sh --quick"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",
