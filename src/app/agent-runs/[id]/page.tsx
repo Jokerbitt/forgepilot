@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import type { AgentRun, TraceEvent } from '@/lib/models/agent-run'
 import { Badge, StatusDot, cx } from '@/components/ui/primitives'
+import { MarkdownBlock } from '@/components/shared/MarkdownBlock'
 
 function statusLabel(status: AgentRun['status']): string {
   if (status === 'queued') return 'Warteschlange'
@@ -162,7 +163,7 @@ export default function AgentRunDetailPage() {
           <section className="mb-6">
             <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Run Summary</h2>
             <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
-              <pre className="whitespace-pre-wrap text-sm leading-relaxed text-slate-300">{run.resultSummary}</pre>
+              <MarkdownBlock text={run.resultSummary} />
             </div>
           </section>
         )}

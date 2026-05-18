@@ -69,6 +69,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
   const delegation: Delegation = {
     id: delegationId,
+    title: brief.title.slice(0, 80),
     briefId: brief.id,
     briefTitle: brief.title,
     contract: {

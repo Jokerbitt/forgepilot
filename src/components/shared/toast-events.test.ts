@@ -9,6 +9,7 @@ import {
 function createDelegation(id: string, status: DelegationStatus, goal = 'Implement the next useful feature'): Delegation {
   return {
     id,
+    title: goal.slice(0, 80),
     status,
     executionRoute: 'local-agent',
     costEstimateUsd: 0.5,

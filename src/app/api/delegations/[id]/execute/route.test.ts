@@ -49,6 +49,7 @@ Arbeite sorgfältig und melde Fortschritt.`
 function makeDelegation(overrides: Partial<Delegation> = {}): Delegation {
   return {
     id: 'del-test-1',
+    title: 'Test delegation',
     status: 'approved',
     executionRoute: 'local-agent',
     costEstimateUsd: 0.5,

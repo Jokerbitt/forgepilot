@@ -64,13 +64,19 @@ export function PipelineRunner({
       const agentRunId = data.agentRunId
       if (agentRunId) {
         onRunCreated?.(agentRunId)
-        // Link the agent run back to the delegation
+        // Link the agent run back to the delegation and trigger execution
         if (delegationId) {
           await fetch(`/api/delegations/${delegationId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ agentRunId, status: 'running' }),
           }).catch(() => {/* best-effort */})
+          // Auto-trigger execution for Risk A/B (non-critical) delegations
+          if (riskClass !== 'C') {
+            fetch(`/api/delegations/${delegationId}/execute`, {
+              method: 'POST',
+            }).catch(() => {/* best-effort — Claude CLI may not be available */})
+          }
         }
       }
     } catch {

@@ -124,7 +124,7 @@ export function DelegationQueueSummary() {
             </span>
             <div className="flex-1 min-w-0">
               <div className="text-xs text-gray-300 truncate group-hover:text-white transition-colors">
-                {del.contract.goal}
+                {del.title || del.contract.goal}
               </div>
               <div className="text-[10px] text-gray-600 font-mono">{del.contract.workItemId}</div>
             </div>

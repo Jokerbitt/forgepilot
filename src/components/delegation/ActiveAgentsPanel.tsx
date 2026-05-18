@@ -93,7 +93,7 @@ export function ActiveAgentsPanel() {
                     <ElapsedTime startedAt={startedAt} />
                   </span>
                 </div>
-                <div className="text-xs opacity-80 truncate mb-1.5">{del.contract.goal}</div>
+                <div className="text-xs opacity-80 truncate mb-1.5">{del.title || del.contract.goal}</div>
                 {lastLog && (
                   <div className="text-xs opacity-60 truncate font-mono">
                     {lastLog.type === 'command' ? '› ' : ''}{lastLog.message.substring(0, 80)}
