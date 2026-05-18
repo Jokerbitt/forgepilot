@@ -6,6 +6,7 @@ import type { Delegation } from '@/lib/models/delegation'
 import type { OperatorReadiness, ReadinessStatus } from '@/lib/operator/readiness'
 import type { WorkItem } from '@/lib/models/work-item'
 import type { ResearchDocument } from '@/lib/models/research'
+import type { PMAgentResult } from '@/lib/agent-runner/pm-agent'
 import { Badge, Panel, StatusDot, buttonClassName, cx } from '@/components/ui/primitives'
 
 interface RecommendationsResponse {
@@ -30,16 +31,18 @@ export function CommandCenterOverview() {
   const [delegations, setDelegations] = useState<Delegation[]>([])
   const [recommendations, setRecommendations] = useState<WorkItem[]>([])
   const [researchDocs, setResearchDocs] = useState<ResearchDocument[]>([])
+  const [pmPlan, setPmPlan] = useState<PMAgentResult | null | undefined>(undefined)
 
   useEffect(() => {
     let cancelled = false
 
     async function load() {
-      const [readinessRes, delegationsRes, recommendationsRes, researchRes] = await Promise.allSettled([
+      const [readinessRes, delegationsRes, recommendationsRes, researchRes, pmRes] = await Promise.allSettled([
         fetch('/api/operator/readiness').then(res => res.json() as Promise<OperatorReadiness>),
         fetch('/api/delegations').then(res => res.json() as Promise<Delegation[]>),
         fetch('/api/recommendations').then(res => res.json() as Promise<RecommendationsResponse>),
         fetch('/api/knowledge/research').then(res => res.json() as Promise<ResearchDocument[]>),
+        fetch('/api/pm-agent').then(res => res.json() as Promise<{ plan: PMAgentResult | null }>),
       ])
 
       if (cancelled) return
@@ -48,6 +51,7 @@ export function CommandCenterOverview() {
       if (delegationsRes.status === 'fulfilled' && Array.isArray(delegationsRes.value)) setDelegations(delegationsRes.value)
       if (recommendationsRes.status === 'fulfilled') setRecommendations(recommendationsRes.value.recommendations ?? [])
       if (researchRes.status === 'fulfilled' && Array.isArray(researchRes.value)) setResearchDocs(researchRes.value)
+      if (pmRes.status === 'fulfilled') setPmPlan(pmRes.value.plan)
     }
 
     load()
@@ -287,7 +291,77 @@ export function CommandCenterOverview() {
           )}
         </div>
       </Panel>
+
+      <PMAgentWidget plan={pmPlan} />
     </div>
+  )
+}
+
+function PMAgentWidget({ plan }: { plan: PMAgentResult | null | undefined }) {
+  if (plan === undefined) return null
+
+  if (!plan) {
+    return (
+      <Panel className="p-5 border border-slate-800">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">PM Agent</p>
+            <h2 className="mt-1 text-lg font-semibold text-white">PM-Agent noch nicht ausgeführt</h2>
+            <p className="mt-1 text-sm text-slate-400">Analysiere Briefs, Meilensteine und Delegationen automatisch.</p>
+          </div>
+          <a href="/pm-agent" className={buttonClassName('secondary', 'shrink-0')}>
+            PM-Agent starten
+          </a>
+        </div>
+      </Panel>
+    )
+  }
+
+  const healthBorder = plan.overallHealth === 'green'
+    ? 'border-emerald-500/30'
+    : plan.overallHealth === 'yellow'
+    ? 'border-amber-500/30'
+    : 'border-rose-500/30'
+
+  const healthBadgeTone: 'success' | 'warning' | 'danger' =
+    plan.overallHealth === 'green' ? 'success' : plan.overallHealth === 'yellow' ? 'warning' : 'danger'
+
+  const healthLabel = plan.overallHealth === 'green' ? 'Gesund' : plan.overallHealth === 'yellow' ? 'Aufmerksamkeit' : 'Kritisch'
+
+  const topDelegations = plan.nextDelegations.slice(0, 2)
+
+  return (
+    <Panel className={cx('p-5 border', healthBorder)}>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">PM Agent</p>
+            <Badge tone={healthBadgeTone}>{healthLabel}</Badge>
+          </div>
+          <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-300">{plan.summary}</p>
+        </div>
+        <a href="/pm-agent" className={buttonClassName('ghost', 'shrink-0 text-xs')}>
+          PM-Agent öffnen
+        </a>
+      </div>
+
+      {topDelegations.length > 0 && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {topDelegations.map(d => (
+            <div key={d.workPackageId} className="rounded-lg border border-slate-800 bg-slate-950 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Nächste Delegation</span>
+                <span className="rounded border border-slate-700 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+                  Risk {d.riskClass}
+                </span>
+              </div>
+              <p className="mt-1.5 line-clamp-2 text-xs font-semibold text-white">{d.title}</p>
+              <p className="mt-1 text-[10px] text-slate-500">~{d.estimatedHours}h</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </Panel>
   )
 }
 
