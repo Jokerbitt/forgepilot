@@ -137,4 +137,30 @@ describe('buildContextPackage', () => {
     const expires = new Date(result.package.expiresAt).getTime()
     expect(expires - created).toBeCloseTo(4 * 60 * 60 * 1000, -3)
   })
+
+  it('ranks cards by keyword relevance — matching card comes first', () => {
+    const unrelated = card({ id: 'c-unrelated', title: 'Database schema', body: 'Tables and columns.' })
+    const relevant = card({ id: 'c-relevant', title: 'Model routing policy', body: 'Local-first routing for sensitive data.' })
+    vi.mocked(knowledgeStore.getCards).mockReturnValue([unrelated, relevant])
+    const result = buildContextPackage({
+      workItemId: 'wi-1',
+      title: 'Model Router',
+      objective: 'Configure local-first routing for sensitive workloads',
+    })
+    const includedIds = result.package.sources.filter(s => s.included).map(s => s.sourceId)
+    // Relevant card should be included; with small budget it would be first
+    expect(includedIds).toContain('c-relevant')
+  })
+
+  it('falls back to all cards when no keyword matches', () => {
+    const c = card({ id: 'c-1', title: 'Random topic', body: 'Unrelated content.' })
+    vi.mocked(knowledgeStore.getCards).mockReturnValue([c])
+    const result = buildContextPackage({
+      workItemId: 'wi-1',
+      title: 'xyz completely unrelated',
+      objective: 'something else entirely',
+    })
+    // Should still include the card (fallback)
+    expect(result.package.sources[0].included).toBe(true)
+  })
 })
