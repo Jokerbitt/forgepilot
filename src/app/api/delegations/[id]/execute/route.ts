@@ -488,6 +488,36 @@ export async function POST(
     return NextResponse.json({ error: blocker.error }, { status: blocker.status })
   }
 
+  // Auto-orchestrate: decompose into sub-tasks and run each sequentially
+  if (delegation.autoOrchestrate) {
+    const startLog = buildExecutionStartLog(delegation)
+    appendLogs(id, [startLog], 'running')
+
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+
+    // Create orchestrated run
+    const orchRes = await fetch(`${baseUrl}/api/agents/orchestrate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        delegationId: id,
+        delegationTitle: delegation.title || delegation.contract.goal,
+        goal: delegation.contract.goal,
+        context: delegation.contract.context,
+      }),
+    })
+    const { run } = await orchRes.json() as { run: { id: string } }
+
+    // Fire-and-forget execution
+    fetch(`${baseUrl}/api/agents/orchestrate/${run.id}/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    }).catch(console.error)
+
+    return NextResponse.json({ started: true, mode: 'orchestrated', delegationId: id, runId: run.id })
+  }
+
   // Immediately mark as running
   const startLog = buildExecutionStartLog(delegation)
   appendLogs(id, [startLog], 'running')
