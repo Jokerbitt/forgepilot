@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import type { Delegation } from '@/lib/models/delegation'
 import type { OperatorReadiness, ReadinessStatus } from '@/lib/operator/readiness'
 import type { WorkItem } from '@/lib/models/work-item'
+import type { ResearchDocument } from '@/lib/models/research'
 import { Badge, Panel, StatusDot, buttonClassName, cx } from '@/components/ui/primitives'
 
 interface RecommendationsResponse {
@@ -28,15 +29,17 @@ export function CommandCenterOverview() {
   const [readiness, setReadiness] = useState<OperatorReadiness | null>(null)
   const [delegations, setDelegations] = useState<Delegation[]>([])
   const [recommendations, setRecommendations] = useState<WorkItem[]>([])
+  const [researchDocs, setResearchDocs] = useState<ResearchDocument[]>([])
 
   useEffect(() => {
     let cancelled = false
 
     async function load() {
-      const [readinessRes, delegationsRes, recommendationsRes] = await Promise.allSettled([
+      const [readinessRes, delegationsRes, recommendationsRes, researchRes] = await Promise.allSettled([
         fetch('/api/operator/readiness').then(res => res.json() as Promise<OperatorReadiness>),
         fetch('/api/delegations').then(res => res.json() as Promise<Delegation[]>),
         fetch('/api/recommendations').then(res => res.json() as Promise<RecommendationsResponse>),
+        fetch('/api/knowledge/research').then(res => res.json() as Promise<ResearchDocument[]>),
       ])
 
       if (cancelled) return
@@ -44,6 +47,7 @@ export function CommandCenterOverview() {
       if (readinessRes.status === 'fulfilled') setReadiness(readinessRes.value)
       if (delegationsRes.status === 'fulfilled' && Array.isArray(delegationsRes.value)) setDelegations(delegationsRes.value)
       if (recommendationsRes.status === 'fulfilled') setRecommendations(recommendationsRes.value.recommendations ?? [])
+      if (researchRes.status === 'fulfilled' && Array.isArray(researchRes.value)) setResearchDocs(researchRes.value)
     }
 
     load()
@@ -55,6 +59,8 @@ export function CommandCenterOverview() {
   }, [])
 
   const active = delegations.filter(item => item.status === 'running')
+  const researchCompleted = researchDocs.filter(d => d.status === 'completed').length
+  const researchRunning = researchDocs.filter(d => d.status === 'running').length
   const approvals = delegations.filter(item => item.status === 'pending' && item.contract.requiresApproval)
   const approved = delegations.filter(item => item.status === 'approved')
   const failed = delegations.filter(item => item.status === 'failed')
@@ -185,6 +191,17 @@ export function CommandCenterOverview() {
             <MiniMetric label="Freigabe" value={approvals.length} tone={approvals.length > 0 ? 'attention' : 'neutral'} />
             <MiniMetric label="Fehler" value={failed.length} tone={failed.length > 0 ? 'blocked' : 'neutral'} />
           </div>
+          {(researchCompleted > 0 || researchRunning > 0) && (
+            <a href="/knowledge/research" className="mt-3 flex items-center justify-between rounded-lg border border-violet-500/20 bg-violet-500/[0.05] px-3 py-2 text-xs transition-colors hover:border-violet-500/40">
+              <span className="text-slate-400">Research-Dokumente</span>
+              <span className="flex items-center gap-2 font-semibold text-violet-400">
+                {researchRunning > 0 && (
+                  <span className="text-[10px] text-amber-400">{researchRunning} läuft</span>
+                )}
+                {researchCompleted}
+              </span>
+            </a>
+          )}
           <div className="mt-5 border-t border-slate-800 pt-4">
             <div className="flex items-center justify-between gap-3 text-sm">
               <span className="text-slate-400">Systemstatus</span>
