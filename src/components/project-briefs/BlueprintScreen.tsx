@@ -82,6 +82,8 @@ export function BlueprintScreen({ initialBrief }: Props) {
   const [milestones, setMilestones] = useState<(Milestone & { workPackages: WorkPackage[] })[]>([])
   const [generatingMilestones, setGeneratingMilestones] = useState(false)
   const [milestonesError, setMilestonesError] = useState('')
+  const [wpDelegating, setWpDelegating] = useState<Record<string, boolean>>({})
+  const [wpDelegationErrors, setWpDelegationErrors] = useState<Record<string, string>>({})
 
   const vm = useMemo(() => buildBlueprintViewModel(brief), [brief])
 
@@ -207,6 +209,23 @@ export function BlueprintScreen({ initialBrief }: Props) {
       }
     } finally {
       setGeneratingMilestones(false)
+    }
+  }
+
+  async function handleDelegateWorkPackage(wpId: string) {
+    setWpDelegating(prev => ({ ...prev, [wpId]: true }))
+    setWpDelegationErrors(prev => ({ ...prev, [wpId]: '' }))
+    try {
+      const res = await fetch(`/api/work-packages/${wpId}/create-delegation`, { method: 'POST' })
+      if (res.ok) {
+        const data = await res.json() as { delegationId: string }
+        router.push(`/delegations/${data.delegationId}`)
+      } else {
+        const err = await res.json() as { error?: string }
+        setWpDelegationErrors(prev => ({ ...prev, [wpId]: err.error ?? 'Fehler beim Erstellen der Delegation' }))
+      }
+    } finally {
+      setWpDelegating(prev => ({ ...prev, [wpId]: false }))
     }
   }
 
@@ -520,6 +539,9 @@ export function BlueprintScreen({ initialBrief }: Props) {
                                   )}
                                 </div>
                               )}
+                              {wpDelegationErrors[wp.id] && (
+                                <p className="mt-1 text-[10px] text-rose-400">{wpDelegationErrors[wp.id]}</p>
+                              )}
                             </div>
                             <div className="shrink-0 text-right">
                               <p className="text-[11px] font-mono text-slate-500">{wp.estimatedHours}h</p>
@@ -528,6 +550,13 @@ export function BlueprintScreen({ initialBrief }: Props) {
                                 wp.priority === 'high' ? 'text-amber-400' :
                                 wp.priority === 'medium' ? 'text-sky-400' : 'text-slate-500'
                               }`}>{wp.priority}</p>
+                              <button
+                                onClick={() => handleDelegateWorkPackage(wp.id)}
+                                disabled={wpDelegating[wp.id]}
+                                className="mt-1.5 flex items-center gap-1 rounded border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold text-violet-400 hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {wpDelegating[wp.id] ? '…' : 'Delegieren'}
+                              </button>
                             </div>
                           </div>
                         ))}
