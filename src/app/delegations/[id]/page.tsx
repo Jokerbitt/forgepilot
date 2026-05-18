@@ -6,6 +6,7 @@ import Link from 'next/link'
 import type { Delegation } from '@/lib/models/delegation'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
+import { PolicyVerdictPanel } from '@/components/delegation/PolicyVerdictPanel'
 
 const STATUS_COLORS: Record<string, string> = {
   pending:   'bg-yellow-900/50 text-yellow-400 border-yellow-700',
@@ -293,6 +294,8 @@ export default function DelegationDetailPage() {
                 )}
               </dl>
             </div>
+
+            <PolicyVerdictPanel contract={d.contract} />
 
             {/* Definition of Done */}
             {d.contract.definitionOfDone?.length > 0 && (
