@@ -69,6 +69,15 @@ export function LocalAIPanel() {
         </span>
       </div>
 
+      <div className={`mb-3 flex items-start gap-2 rounded border p-2 text-xs ${
+        data.executeMode === 'real'
+          ? 'border-emerald-800/50 bg-emerald-950/20 text-emerald-300'
+          : 'border-amber-800/50 bg-amber-950/20 text-amber-300'
+      }`}>
+        <span className="mt-0.5 shrink-0">{data.executeMode === 'real' ? '✅' : '⚡'}</span>
+        <span>{data.executeModeHint}</span>
+      </div>
+
       <div className="grid grid-cols-3 gap-2">
         {providers.map(provider => (
           <ProviderCard key={provider.name} provider={provider} />

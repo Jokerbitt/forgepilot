@@ -4,6 +4,7 @@ import fs from 'fs'
 import path from 'path'
 import type { Delegation, AgentLog, DelegationReport } from '@/lib/models/delegation'
 import { registerProcess, unregisterProcess } from '@/lib/process-registry'
+import { readStoredApiKeys } from '@/lib/connectors/config'
 import {
   buildExecutionStartLog,
   buildSimulationBudgetLog,
@@ -83,6 +84,33 @@ Arbeite sorgfältig und melde Fortschritt.`
 }
 
 /**
+ * Map budget USD → max turns for claude CLI.
+ * Prevents runaway costs while allowing meaningful work.
+ * $1 → 15 turns, $5 → 40 turns, capped at 60.
+ */
+function budgetToMaxTurns(budgetUsd: number): number {
+  return Math.min(60, Math.max(5, Math.round(budgetUsd * 15)))
+}
+
+/**
+ * Detect credit/auth errors in claude CLI output.
+ * Returns a user-friendly message or undefined if no known error.
+ */
+function detectKnownError(output: string): string | undefined {
+  const lower = output.toLowerCase()
+  if (lower.includes('credit balance') || lower.includes('insufficient_quota') || lower.includes('billing')) {
+    return 'Anthropic-Guthaben aufgebraucht. Bitte unter console.anthropic.com aufladen.'
+  }
+  if (lower.includes('authentication') || lower.includes('invalid x-api-key') || lower.includes('api_key')) {
+    return 'Anthropic API Key ungültig oder nicht konfiguriert. Bitte in den Einstellungen prüfen.'
+  }
+  if (lower.includes('rate limit') || lower.includes('rate_limit')) {
+    return 'Anthropic Rate Limit erreicht. Warte kurz und versuche es erneut.'
+  }
+  return undefined
+}
+
+/**
  * Parse actual cost from Claude CLI output.
  * Claude outputs something like: "Cost: $0.0234" or "Total cost: $0.01"
  */
@@ -112,13 +140,25 @@ function isClaudeAvailable(): boolean {
   }
 }
 
-function runWithClaudeCLI(id: string, prompt: string, startTime: Date) {
-  const proc = spawn('claude', ['-p', prompt, '--dangerously-skip-permissions'], {
-    cwd: process.cwd(),
-    detached: true,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env },
-  })
+function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd: number) {
+  // Merge stored API keys so the setting-UI key reaches the claude process
+  const storedKeys = readStoredApiKeys()
+  const anthropicKey = (process.env.ANTHROPIC_API_KEY || storedKeys.ANTHROPIC_API_KEY)?.trim()
+  const maxTurns = budgetToMaxTurns(budgetUsd)
+
+  const proc = spawn(
+    'claude',
+    ['-p', prompt, '--dangerously-skip-permissions', '--max-turns', String(maxTurns)],
+    {
+      cwd: process.cwd(),
+      detached: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        ...(anthropicKey ? { ANTHROPIC_API_KEY: anthropicKey } : {}),
+      },
+    },
+  )
   proc.unref()
 
   // Register PID for cancellation
@@ -157,12 +197,20 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date) {
   proc.stderr?.on('data', (chunk: Buffer) => {
     const text = chunk.toString()
     fullOutput += text
+    const knownError = detectKnownError(text)
     const lines = text.split('\n').filter(l => l.trim())
     for (const line of lines) {
       logBuffer.push({
         timestamp: new Date().toISOString(),
         type: 'error',
         message: line.substring(0, 500),
+      })
+    }
+    if (knownError) {
+      logBuffer.push({
+        timestamp: new Date().toISOString(),
+        type: 'error',
+        message: `⚠️ ${knownError}`,
       })
     }
     scheduleFlush()
@@ -175,13 +223,16 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date) {
     const success = code === 0
     const elapsed = Math.round((Date.now() - startTime.getTime()) / 60000)
     const actualCost = parseCostFromOutput(fullOutput)
+    const knownError = !success ? detectKnownError(fullOutput) : undefined
 
     const finalLog: AgentLog = {
       timestamp: new Date().toISOString(),
       type: success ? 'success' : 'error',
       message: success
         ? `✅ Ausführung abgeschlossen (Exit-Code: ${code}${actualCost ? `, Kosten: $${actualCost.toFixed(4)}` : ''})`
-        : `❌ Ausführung fehlgeschlagen (Exit-Code: ${code})`,
+        : knownError
+          ? `❌ ${knownError}`
+          : `❌ Ausführung fehlgeschlagen (Exit-Code: ${code})`,
     }
 
     const report: DelegationReport | undefined = success
@@ -221,7 +272,7 @@ function runSimulation(id: string, delegation: Delegation) {
     { delay: 11000,type: 'success', message: '✓ Tests grün' },
     { delay: 12500,type: 'command', message: `$ git commit -m "${delegation.contract.taskType || 'feat'}: ${goal.substring(0, 50).replace(/"/g, "'")}"` },
     { delay: 13500,type: 'command', message: '$ gh pr create --title "..." --body "..."' },
-    { delay: 14500,type: 'success', message: '✅ Simulation abgeschlossen (claude CLI nicht verfügbar — installiere claude für echte Ausführung)' },
+    { delay: 14500,type: 'success', message: '✅ Simulation abgeschlossen — echte Ausführung startet sobald Anthropic-Guthaben verfügbar ist' },
   ]
 
   let totalDelay = 0
@@ -275,7 +326,7 @@ export async function POST(
   const prompt = buildPrompt(delegation)
 
   if (isClaudeAvailable()) {
-    runWithClaudeCLI(id, prompt, startTime)
+    runWithClaudeCLI(id, prompt, startTime, delegation.contract.maxBudgetUsd)
     return NextResponse.json({ started: true, mode: 'claude-cli', delegationId: id })
   } else {
     runSimulation(id, delegation)

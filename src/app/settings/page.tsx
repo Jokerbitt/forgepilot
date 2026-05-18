@@ -44,6 +44,7 @@ export default function SettingsPage() {
   const [config, setConfig] = useState<NBAConfig | null>(null)
   const [saving, setSaving] = useState(false)
   const [newModel, setNewModel] = useState('')
+  const [execStatus, setExecStatus] = useState<{ executeMode: string; executeModeHint: string; anthropic: { status: string }; claudeCode: { status: string } } | null>(null)
 
   // API Keys state
   const [apiKeySet, setApiKeySet] = useState<Record<string, boolean>>({})
@@ -65,6 +66,10 @@ export default function SettingsPage() {
     fetch('/api/api-keys')
       .then(res => res.json())
       .then((data: { _set: Record<string, boolean> }) => setApiKeySet(data._set ?? {}))
+    fetch('/api/local-ai/status')
+      .then(res => res.json())
+      .then(setExecStatus)
+      .catch(() => null)
   }, [])
 
   const handleSaveApiKeys = async () => {
@@ -461,8 +466,70 @@ export default function SettingsPage() {
           </div>
         </section>
 
+        {/* Production Readiness Checklist */}
+        <section className="space-y-4 border border-gray-700 rounded-xl p-5 bg-gray-900/60">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+            <span>🚀</span> Bereit für echten Agenten-Betrieb?
+          </h2>
+          <div className="space-y-3 text-sm">
+            {/* claude CLI */}
+            <div className="flex items-start gap-3">
+              <span className={`mt-0.5 text-base ${execStatus?.claudeCode?.status === 'healthy' ? 'text-emerald-400' : 'text-red-400'}`}>
+                {execStatus?.claudeCode?.status === 'healthy' ? '✅' : '❌'}
+              </span>
+              <div>
+                <p className="font-medium text-white">claude CLI installiert</p>
+                <p className="text-gray-400 text-xs mt-0.5">
+                  {execStatus?.claudeCode?.status === 'healthy'
+                    ? 'claude CLI gefunden — Agenten können echten Code schreiben'
+                    : 'Nicht gefunden — npm install -g @anthropic-ai/claude-code'}
+                </p>
+              </div>
+            </div>
+            {/* Anthropic API Key */}
+            <div className="flex items-start gap-3">
+              <span className={`mt-0.5 text-base ${execStatus?.anthropic?.status === 'healthy' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {execStatus?.anthropic?.status === 'healthy' ? '✅' : '⚠️'}
+              </span>
+              <div>
+                <p className="font-medium text-white">Anthropic API Key</p>
+                <p className="text-gray-400 text-xs mt-0.5">
+                  {execStatus?.anthropic?.status === 'healthy'
+                    ? 'API Key konfiguriert (Env-Variable oder Einstellungen)'
+                    : 'Fehlend — oben unter "API Keys" eintragen'}
+                </p>
+              </div>
+            </div>
+            {/* Credits */}
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 text-base text-sky-400">ℹ️</span>
+              <div>
+                <p className="font-medium text-white">Anthropic-Guthaben</p>
+                <p className="text-gray-400 text-xs mt-0.5">
+                  Kann nicht automatisch geprüft werden — bitte unter{' '}
+                  <span className="text-sky-400 font-mono">console.anthropic.com → Billing</span>{' '}
+                  prüfen und aufladen
+                </p>
+              </div>
+            </div>
+            {/* Execute mode badge */}
+            {execStatus && (
+              <div className={`mt-3 rounded-lg border p-3 text-xs ${
+                execStatus.executeMode === 'real'
+                  ? 'border-emerald-800/50 bg-emerald-950/20 text-emerald-300'
+                  : 'border-amber-800/50 bg-amber-950/20 text-amber-300'
+              }`}>
+                <span className="font-semibold">
+                  {execStatus.executeMode === 'real' ? '✅ Echter Agent-Modus aktiv' : '⚡ Simulation-Modus aktiv'}
+                </span>
+                <p className="mt-1 text-gray-400">{execStatus.executeModeHint}</p>
+              </div>
+            )}
+          </div>
+        </section>
+
         <div className="pt-4 border-t border-gray-800">
-          <button 
+          <button
             onClick={handleSave}
             disabled={saving}
             className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg transition-colors"
