@@ -16,13 +16,12 @@ const navItems = [
   { href: '/knowledge', label: 'Knowledge Center', shortLabel: 'Knowledge', section: 'Knowledge' },
   { href: '/context-packages', label: 'Context Packages', shortLabel: 'Context', section: 'Knowledge' },
   { href: '/model-router', label: 'Model Router', shortLabel: 'Router', section: 'System' },
+  { href: '/governance', label: 'Governance Hub', shortLabel: 'Gov', section: 'System' },
   { href: '/pilot', label: 'E2E Pilot', shortLabel: 'Pilot', section: 'System' },
   { href: '/settings', label: 'Settings', shortLabel: 'Settings', section: 'System' },
 ]
 
-const plannedItems = [
-  'Governance Hub',
-]
+const plannedItems: string[] = []
 
 export function AppNav() {
   const pathname = usePathname()
@@ -82,17 +81,19 @@ export function AppNav() {
             </div>
           </div>
 
-          <div>
-            <p className="px-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Next Modules</p>
-            <div className="mt-2 space-y-1">
-              {plannedItems.map(item => (
-                <div key={item} className="flex items-center justify-between rounded-md px-3 py-2 text-sm text-slate-500">
-                  <span>{item}</span>
-                  <Badge>Geplant</Badge>
-                </div>
-              ))}
+          {plannedItems.length > 0 && (
+            <div>
+              <p className="px-3 text-xs font-semibold uppercase tracking-wide text-slate-600">Next Modules</p>
+              <div className="mt-2 space-y-1">
+                {plannedItems.map(item => (
+                  <div key={item} className="flex items-center justify-between rounded-md px-3 py-2 text-sm text-slate-500">
+                    <span>{item}</span>
+                    <Badge>Geplant</Badge>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="mt-auto border-t border-slate-800 p-4">
