@@ -172,9 +172,13 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
   // session auth (Max subscription). Only re-inject if a key is explicitly
   // configured via the Settings UI — that key takes precedence.
   const { ANTHROPIC_API_KEY: _stripped, ...baseEnv } = process.env
-  const childEnv = anthropicKey
-    ? { ...baseEnv, ANTHROPIC_API_KEY: anthropicKey }
-    : baseEnv
+  // Ensure GH_TOKEN reaches the subprocess so agents can run `gh pr create`
+  const ghToken = storedKeys.GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim() || process.env.GITHUB_TOKEN?.trim()
+  const childEnv = {
+    ...baseEnv,
+    ...(anthropicKey ? { ANTHROPIC_API_KEY: anthropicKey } : {}),
+    ...(ghToken ? { GH_TOKEN: ghToken, GITHUB_TOKEN: ghToken } : {}),
+  }
 
   const proc = spawn(
     'claude',
