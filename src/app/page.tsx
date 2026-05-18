@@ -9,6 +9,7 @@ import { MagicCreate } from '@/components/command-center/MagicCreate'
 import { OperatorReadinessPanel } from '@/components/command-center/OperatorReadinessPanel'
 import { ApiKeysBanner } from '@/components/shared/ApiKeysBanner'
 import { ProjectBriefsSummary } from '@/components/project-briefs/ProjectBriefsSummary'
+import { LocalAIPanel } from '@/components/command-center/LocalAIPanel'
 import { buttonClassName } from '@/components/ui/primitives'
 
 export default function Home() {
@@ -42,6 +43,7 @@ export default function Home() {
 
         <MagicCreate />
         <OperatorReadinessPanel />
+        <LocalAIPanel />
         <ProjectBriefsSummary />
         <ActiveAgentsPanel />
         <DelegationQueueSummary />
