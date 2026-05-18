@@ -201,7 +201,7 @@ export default function GovernancePage() {
                       <tr key={d.id} className="hover:bg-slate-800/30">
                         <td className="px-4 py-3">
                           <Link href={`/delegations/${d.id}`} className="block truncate max-w-xs font-medium text-white hover:text-sky-400">
-                            {d.contract.goal.slice(0, 80)}
+                            {d.title || d.contract.goal.slice(0, 80)}
                           </Link>
                         </td>
                         <td className="hidden px-4 py-3 sm:table-cell">
@@ -302,7 +302,7 @@ function DelegationRow({ d, showPrivacy }: { d: Delegation; showPrivacy?: boolea
       className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2.5 hover:border-slate-700 hover:bg-slate-800/60"
     >
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-white">{d.contract.goal.slice(0, 80)}</p>
+        <p className="truncate text-sm font-medium text-white">{d.title || d.contract.goal.slice(0, 80)}</p>
         <p className="mt-0.5 font-mono text-xs text-slate-600">{d.id.slice(0, 8)}</p>
       </div>
       <div className="flex shrink-0 items-center gap-2">

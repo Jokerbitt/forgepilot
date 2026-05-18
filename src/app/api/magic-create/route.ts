@@ -96,6 +96,7 @@ export async function POST(request: NextRequest) {
 
       const newDelegation: Delegation = {
         id: `DEL-${Date.now().toString().slice(-4)}`,
+        title: prompt.slice(0, 80),
         status: requiresApproval ? 'pending' : 'approved',
         executionRoute: 'local-agent',
         costEstimateUsd: estimateCostFromText(prompt),

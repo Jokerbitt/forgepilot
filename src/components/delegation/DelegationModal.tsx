@@ -78,6 +78,7 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
     })
     const delegation: Delegation = {
       id: delegationId,
+      title: rec.workItem.title.slice(0, 80),
       contract: {
         id: `tc-${Date.now()}`,
         workItemId: rec.workItem.id,

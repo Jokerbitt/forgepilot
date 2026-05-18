@@ -74,6 +74,7 @@ export function NewDelegationDialog({ onClose, onCreate, prefillWorkItemId = '',
     const id = `del-${Date.now()}`
     const newDelegation: Delegation = {
       id,
+      title: goal.trim().slice(0, 80),
       status: 'pending',
       executionRoute,
       costEstimateUsd: maxBudgetUsd * 0.5,

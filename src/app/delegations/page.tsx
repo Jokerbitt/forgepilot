@@ -370,6 +370,7 @@ function DelegationsContent() {
       (approvalFilter === 'risk-blocked' && d.contract.riskClass === 'C')
     const q = searchQuery.toLowerCase().trim()
     const matchSearch = !q ||
+      (d.title || '').toLowerCase().includes(q) ||
       d.contract.goal.toLowerCase().includes(q) ||
       d.contract.workItemId.toLowerCase().includes(q) ||
       (d.contract.context || '').toLowerCase().includes(q) ||

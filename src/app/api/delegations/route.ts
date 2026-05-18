@@ -22,29 +22,40 @@ function writeDelegations(delegations: Delegation[]) {
   fs.writeFileSync(DELEGATIONS_FILE, JSON.stringify(delegations, null, 2), 'utf-8')
 }
 
+function backfillTitle(d: Delegation): Delegation {
+  if (d.title) return d
+  return { ...d, title: d.contract.goal.slice(0, 80) }
+}
+
 export async function GET() {
-  return NextResponse.json(readDelegations())
+  return NextResponse.json(readDelegations().map(backfillTitle))
 }
 
 export async function POST(request: Request) {
   try {
     const delegation = await request.json() as Delegation
     const delegations = readDelegations()
-    
+
+    // Ensure title is set
+    const withTitle: Delegation = {
+      ...delegation,
+      title: delegation.title || delegation.contract.goal.slice(0, 80),
+    }
+
     // Add or update
-    const index = delegations.findIndex(d => d.id === delegation.id)
+    const index = delegations.findIndex(d => d.id === withTitle.id)
     if (index >= 0) {
-      delegations[index] = { ...delegations[index], ...delegation, updatedAt: new Date().toISOString() }
+      delegations[index] = { ...delegations[index], ...withTitle, updatedAt: new Date().toISOString() }
     } else {
       delegations.push({
-        ...delegation,
+        ...withTitle,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       })
     }
-    
+
     writeDelegations(delegations)
-    return NextResponse.json(delegation)
+    return NextResponse.json(withTitle)
   } catch (e) {
     return NextResponse.json({ error: 'Failed to save delegation' }, { status: 500 })
   }

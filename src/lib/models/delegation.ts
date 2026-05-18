@@ -57,6 +57,7 @@ export interface TaskContract {
 
 export interface Delegation {
   id: string
+  title: string
   contract: TaskContract
   status: DelegationStatus
   executionRoute: ExecutionRoute

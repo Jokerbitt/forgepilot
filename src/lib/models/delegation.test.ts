@@ -61,6 +61,7 @@ describe('Delegation type', () => {
 
     const delegation: Delegation = {
       id: 'del-1',
+      title: 'Test delegation',
       contract,
       status: 'pending',
       executionRoute: 'runner',

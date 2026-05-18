@@ -78,7 +78,7 @@ export function FailedDelegationsWidget() {
               className="flex-1 min-w-0 group"
             >
               <div className="text-xs text-gray-300 truncate group-hover:text-white transition-colors">
-                {del.contract.goal}
+                {del.title || del.contract.goal}
               </div>
               {del.errorMessage && (
                 <div className="text-[10px] text-red-500 truncate mt-0.5">{del.errorMessage}</div>
