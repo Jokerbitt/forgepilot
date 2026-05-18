@@ -17,4 +17,5 @@ export interface PilotRunResult {
   totalDurationMs: number
   startedAt: string
   completedAt: string
+  agentRunId?: string
 }

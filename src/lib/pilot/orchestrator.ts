@@ -122,7 +122,9 @@ export async function runPilot(input: PilotInput): Promise<PilotRunResult> {
   steps.push(writebackStep)
 
   const anyError = steps.some(s => s.status === 'error')
-  return buildResult(id, input, anyError ? 'failed' : 'completed', steps, startedAt)
+  const runOutput = runTraceStep.output as { runId?: string } | undefined
+  const result = buildResult(id, input, anyError ? 'failed' : 'completed', steps, startedAt)
+  return runOutput?.runId ? { ...result, agentRunId: runOutput.runId } : result
 }
 
 function buildResult(
