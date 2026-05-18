@@ -9,6 +9,7 @@ interface IndexResult {
   itemsIndexed: number
   cardsCreated: number
   skipped: number
+  sensitiveSkipped: number
   errors: string[]
 }
 
@@ -64,6 +65,7 @@ export default function KnowledgeCenterPage() {
   const [sources, setSources] = useState<KnowledgeSource[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<MemoryCardType | ''>('')
+  const [search, setSearch] = useState('')
   const [selectedCard, setSelectedCard] = useState<MemoryCard | null>(null)
   const [indexing, setIndexing] = useState(false)
   const [indexResult, setIndexResult] = useState<IndexResult | null>(null)
@@ -93,24 +95,33 @@ export default function KnowledgeCenterPage() {
       setIndexResult(data)
       await loadData()
     } catch {
-      setIndexResult({ sourcesIndexed: 0, itemsIndexed: 0, cardsCreated: 0, skipped: 0, errors: ['Verbindungsfehler'] })
+      setIndexResult({ sourcesIndexed: 0, itemsIndexed: 0, cardsCreated: 0, skipped: 0, sensitiveSkipped: 0, errors: ['Verbindungsfehler'] })
     } finally {
       setIndexing(false)
     }
   }
 
-  const filteredCards = filter ? cards.filter(c => c.type === filter) : cards
+  const searchLower = search.toLowerCase().trim()
+  const filteredCards = cards
+    .filter(c => !filter || c.type === filter)
+    .filter(c => !searchLower || (
+      c.title.toLowerCase().includes(searchLower) ||
+      c.body.toLowerCase().includes(searchLower) ||
+      c.tags.some(t => t.toLowerCase().includes(searchLower))
+    ))
   const staleCount = sources.filter(s => s.isStale).length
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
-      <div className="mx-auto max-w-5xl p-6">
+      <div className="mx-auto max-w-7xl p-6">
         <header className="mb-8 mt-2 border-b border-slate-800 pb-6">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Knowledge</p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight">Knowledge Center</h1>
-              <p className="mt-2 text-sm text-slate-400">Memory Cards, Quellen und Kontext-Signale für Agenten.</p>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                Kuratierte Memory Cards, Quellen und Kontext-Signale fuer Agenten. NAS-Importe laufen mit Privacy Guardrails.
+              </p>
             </div>
             <div className="flex flex-col items-end gap-2">
               <button
@@ -145,11 +156,18 @@ export default function KnowledgeCenterPage() {
             )}>
               {indexResult.errors.length > 0
                 ? indexResult.errors[0]
-                : `${indexResult.sourcesIndexed} Quellen · ${indexResult.itemsIndexed} Items · ${indexResult.cardsCreated} Cards erstellt · ${indexResult.skipped} unverändert`
+                : `${indexResult.sourcesIndexed} Quellen · ${indexResult.itemsIndexed} Items · ${indexResult.cardsCreated} Cards erstellt · ${indexResult.skipped} unverändert · ${indexResult.sensitiveSkipped} sensitive übersprungen`
               }
             </div>
           )}
         </header>
+
+        <section className="mb-6 grid gap-3 md:grid-cols-4">
+          <KnowledgeMetric label="Memory Cards" value={cards.length} detail="kuratierte Agenten-Erinnerungen" />
+          <KnowledgeMetric label="Quellen" value={sources.length} detail="registrierte Wissensquellen" />
+          <KnowledgeMetric label="Veraltet" value={staleCount} detail="brauchen Refresh" tone={staleCount > 0 ? 'warn' : 'neutral'} />
+          <KnowledgeMetric label="Privacy Guard" value={indexResult?.sensitiveSkipped ?? 0} detail="sensitive Dateien übersprungen" tone="good" />
+        </section>
 
         {/* Tabs */}
         <div className="mb-6 flex gap-1 border-b border-slate-800">
@@ -175,6 +193,8 @@ export default function KnowledgeCenterPage() {
             allCards={cards}
             filter={filter}
             setFilter={setFilter}
+            search={search}
+            setSearch={setSearch}
             selectedCard={selectedCard}
             setSelectedCard={setSelectedCard}
           />
@@ -186,17 +206,44 @@ export default function KnowledgeCenterPage() {
   )
 }
 
+function KnowledgeMetric({
+  label,
+  value,
+  detail,
+  tone = 'neutral',
+}: {
+  label: string
+  value: number
+  detail: string
+  tone?: 'neutral' | 'good' | 'warn'
+}) {
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-950 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className={cx(
+        'mt-2 text-2xl font-semibold',
+        tone === 'good' ? 'text-emerald-300' : tone === 'warn' ? 'text-amber-300' : 'text-white'
+      )}>
+        {value}
+      </p>
+      <p className="mt-1 text-xs leading-5 text-slate-500">{detail}</p>
+    </div>
+  )
+}
+
 // ─── cards tab ───────────────────────────────────────────────────
 
 const CARD_TYPES: MemoryCardType[] = ['decision', 'learning', 'pattern', 'risk', 'requirement', 'context']
 
 function CardsTab({
-  cards, allCards, filter, setFilter, selectedCard, setSelectedCard,
+  cards, allCards, filter, setFilter, search, setSearch, selectedCard, setSelectedCard,
 }: {
   cards: MemoryCard[]
   allCards: MemoryCard[]
   filter: MemoryCardType | ''
   setFilter: (v: MemoryCardType | '') => void
+  search: string
+  setSearch: (v: string) => void
   selectedCard: MemoryCard | null
   setSelectedCard: (c: MemoryCard | null) => void
 }) {
@@ -213,6 +260,16 @@ function CardsTab({
     <div className="flex gap-4">
       {/* List */}
       <div className={cx('flex-1 min-w-0', selectedCard ? 'hidden sm:block sm:w-1/2 sm:flex-none' : '')}>
+        {/* Search */}
+        <div className="mb-3">
+          <input
+            type="text"
+            placeholder="Suchen…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-sky-600"
+          />
+        </div>
         {/* Type filter */}
         <div className="mb-4 flex flex-wrap gap-2">
           <button
@@ -236,6 +293,9 @@ function CardsTab({
           })}
         </div>
 
+        {cards.length === 0 && (
+          <p className="py-8 text-center text-sm text-slate-500">Keine Cards für diese Suche.</p>
+        )}
         <div className="space-y-2">
           {cards.map(card => (
             <button

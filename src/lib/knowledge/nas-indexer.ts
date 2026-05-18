@@ -10,12 +10,25 @@ export interface IndexResult {
   itemsIndexed: number
   cardsCreated: number
   skipped: number
+  sensitiveSkipped: number
   errors: string[]
 }
 
 const NAS_ROOT = '/Volumes/Sven/NAS/Codex/KI Betriebssystem'
 
 const NAS_SUBDIRS = ['Standards', 'ADRs', 'Agent_Skills', 'Screen_Specs']
+
+const SENSITIVE_FILE_PATTERNS = [
+  'credential',
+  'credentials',
+  'secret',
+  'secrets',
+  'api-key',
+  'api_keys',
+  'settings-credentials',
+  'forgerpilot-settings-credentials',
+  'forgepilot-settings-credentials',
+]
 
 // Classify the memory card type from section heading and content
 function inferCardType(heading: string, body: string): MemoryCardType {
@@ -33,6 +46,11 @@ function privacyFromPath(filePath: string): PrivacyClass {
   const name = basename(filePath).toLowerCase()
   if (name.includes('credentials') || name.includes('secret') || name.includes('settings')) return 'sensitive'
   return 'internal'
+}
+
+function shouldSkipSensitiveFile(filePath: string): boolean {
+  const name = basename(filePath).toLowerCase()
+  return SENSITIVE_FILE_PATTERNS.some(pattern => name.includes(pattern))
 }
 
 function contentHash(content: string): string {
@@ -87,7 +105,7 @@ function collectMarkdownFiles(dir: string): string[] {
 }
 
 export async function indexNasFiles(): Promise<IndexResult> {
-  const result: IndexResult = { sourcesIndexed: 0, itemsIndexed: 0, cardsCreated: 0, skipped: 0, errors: [] }
+  const result: IndexResult = { sourcesIndexed: 0, itemsIndexed: 0, cardsCreated: 0, skipped: 0, sensitiveSkipped: 0, errors: [] }
 
   if (!existsSync(NAS_ROOT)) {
     result.errors.push(`NAS nicht erreichbar: ${NAS_ROOT}`)
@@ -106,6 +124,11 @@ export async function indexNasFiles(): Promise<IndexResult> {
   const now = new Date().toISOString()
 
   for (const filePath of files) {
+    if (shouldSkipSensitiveFile(filePath)) {
+      result.sensitiveSkipped++
+      continue
+    }
+
     let content: string
     try {
       content = readFileSync(filePath, 'utf-8')
