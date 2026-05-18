@@ -209,7 +209,7 @@ export function CommandCenterOverview() {
 
           <div className="mt-5 grid gap-3 md:grid-cols-3">
             {attentionItems.length > 0 ? (
-              attentionItems.map(item => item && (
+              attentionItems.filter((item): item is NonNullable<typeof item> => item !== null).map(item => (
                 <a
                   key={item.label}
                   href={item.href}

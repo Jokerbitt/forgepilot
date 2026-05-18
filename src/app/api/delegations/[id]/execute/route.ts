@@ -5,6 +5,8 @@ import path from 'path'
 import type { Delegation, AgentLog, DelegationReport } from '@/lib/models/delegation'
 import { registerProcess, unregisterProcess } from '@/lib/process-registry'
 import { readStoredApiKeys } from '@/lib/connectors/config'
+import { postLinearCompletionComment } from '@/lib/connectors/linear-writeback'
+import { upsertAttentionItem } from '@/lib/attention/store'
 import {
   buildExecutionStartLog,
   buildSimulationBudgetLog,
@@ -254,15 +256,38 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     const current = allDelegations.find(d => d.id === id)
     if (current && current.status === 'running') {
       const idx = allDelegations.findIndex(d => d.id === id)
+      const finalStatus = success ? 'completed' : 'failed'
       allDelegations[idx] = {
         ...current,
-        status: success ? 'completed' : 'failed',
+        status: finalStatus,
         ...(actualCost ? { actualCostUsd: actualCost } : {}),
         ...(report ? { summaryReport: report } : {}),
         logs: [...(current.logs ?? []), ...logBuffer, finalLog],
         updatedAt: new Date().toISOString(),
       }
       writeDelegationsAtomic(allDelegations)
+
+      const finishedDelegation = allDelegations[idx]
+
+      // Linear writeback — fire-and-forget
+      if (success && report) {
+        postLinearCompletionComment(finishedDelegation).catch(() => {})
+      }
+
+      // Completion attention item
+      const label = finishedDelegation.title || finishedDelegation.contract.goal.slice(0, 60)
+      upsertAttentionItem({
+        id: `completion:${id}`,
+        type: success ? 'delegation_completed' : 'delegation_failed',
+        severity: success ? 'info' : 'critical',
+        title: success ? `✅ Abgeschlossen: ${label}` : `❌ Fehlgeschlagen: ${label}`,
+        body: success
+          ? `Agent-Lauf abgeschlossen${report?.prUrl ? ` · PR: ${report.prUrl}` : ''}${actualCost ? ` · $${actualCost.toFixed(4)}` : ''}`
+          : knownError ?? `Exit-Code: ${code}`,
+        delegationId: id,
+        actionUrl: `/delegations/${id}`,
+        createdAt: new Date().toISOString(),
+      })
     }
   })
 }
