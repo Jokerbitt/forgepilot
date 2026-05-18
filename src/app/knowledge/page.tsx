@@ -1,8 +1,16 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import type { KnowledgeSource, MemoryCard, MemoryCardType, SourceType } from '@/lib/knowledge/types'
 import { Badge, EmptyState, StatusDot, cx } from '@/components/ui/primitives'
+
+interface IndexResult {
+  sourcesIndexed: number
+  itemsIndexed: number
+  cardsCreated: number
+  skipped: number
+  errors: string[]
+}
 
 // ─── helpers ────────────────────────────────────────────────────
 
@@ -57,9 +65,11 @@ export default function KnowledgeCenterPage() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<MemoryCardType | ''>('')
   const [selectedCard, setSelectedCard] = useState<MemoryCard | null>(null)
+  const [indexing, setIndexing] = useState(false)
+  const [indexResult, setIndexResult] = useState<IndexResult | null>(null)
 
-  useEffect(() => {
-    Promise.all([
+  const loadData = useCallback(() => {
+    return Promise.all([
       fetch('/api/knowledge/cards').then(r => r.json()) as Promise<MemoryCard[]>,
       fetch('/api/knowledge/sources').then(r => r.json()) as Promise<KnowledgeSource[]>,
     ])
@@ -68,8 +78,26 @@ export default function KnowledgeCenterPage() {
         setSources(Array.isArray(s) ? s : [])
       })
       .catch(() => { setCards([]); setSources([]) })
-      .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    loadData().finally(() => setLoading(false))
+  }, [loadData])
+
+  const handleIndexNas = async () => {
+    setIndexing(true)
+    setIndexResult(null)
+    try {
+      const res = await fetch('/api/knowledge/index-nas', { method: 'POST' })
+      const data = await res.json() as IndexResult
+      setIndexResult(data)
+      await loadData()
+    } catch {
+      setIndexResult({ sourcesIndexed: 0, itemsIndexed: 0, cardsCreated: 0, skipped: 0, errors: ['Verbindungsfehler'] })
+    } finally {
+      setIndexing(false)
+    }
+  }
 
   const filteredCards = filter ? cards.filter(c => c.type === filter) : cards
   const staleCount = sources.filter(s => s.isStale).length
@@ -84,18 +112,43 @@ export default function KnowledgeCenterPage() {
               <h1 className="mt-2 text-3xl font-semibold tracking-tight">Knowledge Center</h1>
               <p className="mt-2 text-sm text-slate-400">Memory Cards, Quellen und Kontext-Signale für Agenten.</p>
             </div>
-            <div className="flex items-center gap-3 text-xs text-slate-500">
-              <span>{cards.length} Cards</span>
-              <span>·</span>
-              <span>{sources.length} Quellen</span>
-              {staleCount > 0 && (
-                <>
-                  <span>·</span>
-                  <span className="text-amber-400">{staleCount} veraltet</span>
-                </>
-              )}
+            <div className="flex flex-col items-end gap-2">
+              <button
+                onClick={handleIndexNas}
+                disabled={indexing}
+                className={cx(
+                  'rounded-lg px-4 py-2 text-xs font-semibold transition-colors',
+                  indexing ? 'bg-slate-700 text-slate-400' : 'bg-sky-600 text-white hover:bg-sky-500'
+                )}
+              >
+                {indexing ? 'Indiziere NAS…' : 'NAS indizieren'}
+              </button>
+              <div className="flex items-center gap-3 text-xs text-slate-500">
+                <span>{cards.length} Cards</span>
+                <span>·</span>
+                <span>{sources.length} Quellen</span>
+                {staleCount > 0 && (
+                  <>
+                    <span>·</span>
+                    <span className="text-amber-400">{staleCount} veraltet</span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
+          {indexResult && (
+            <div className={cx(
+              'mt-3 rounded-lg border px-4 py-2 text-xs',
+              indexResult.errors.length > 0
+                ? 'border-red-800/50 bg-red-900/10 text-red-400'
+                : 'border-emerald-800/50 bg-emerald-900/10 text-emerald-400'
+            )}>
+              {indexResult.errors.length > 0
+                ? indexResult.errors[0]
+                : `${indexResult.sourcesIndexed} Quellen · ${indexResult.itemsIndexed} Items · ${indexResult.cardsCreated} Cards erstellt · ${indexResult.skipped} unverändert`
+              }
+            </div>
+          )}
         </header>
 
         {/* Tabs */}
@@ -151,7 +204,7 @@ function CardsTab({
     return (
       <EmptyState
         title="Noch keine Memory Cards"
-        description="Memory Cards entstehen automatisch durch Agent Runs oder können manuell über die API erstellt werden."
+        description='Klicke "NAS indizieren" um alle NAS-Dokumente als Memory Cards zu importieren, oder erstelle Cards manuell über die API.'
       />
     )
   }
