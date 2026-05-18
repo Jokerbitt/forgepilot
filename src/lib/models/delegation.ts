@@ -11,6 +11,24 @@ export interface AgentLog {
   message: string
 }
 
+export interface TokenUsage {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+}
+
+export interface CostSavings {
+  tokensUsed: TokenUsage
+  /** What Claude Sonnet would have cost for the same tokens */
+  claudeEquivalentUsd: number
+  /** Actual cost (0 for Ollama) */
+  actualCostUsd: number
+  /** Money saved by running locally */
+  savedUsd: number
+  /** Which model ran locally */
+  localModel: string
+}
+
 export interface DelegationReport {
   keyPoints: string[]
   changes: string[]        // legacy — bleibt für Rückwärtskompatibilität
@@ -28,6 +46,8 @@ export interface DelegationReport {
   commitMessages?: string[]
   warnings?: string[]
   nextSuggestions?: string[]
+  // Token tracking (M27)
+  costSavings?: CostSavings
 }
 
 export interface DelegationNote {

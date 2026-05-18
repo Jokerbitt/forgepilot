@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { readProjectBriefs } from '@/lib/project-briefs'
 import type { ProjectBrief } from '@/lib/models/project-brief'
 import { buildProjectBriefsWorkspaceViewModel, type WorkspaceBrief } from '@/lib/project-briefs-workspace'
+import { readMilestones } from '@/lib/knowledge/milestone-store'
 import {
   Badge,
   DecisionCallout,
@@ -33,6 +34,11 @@ const RISK_LABELS: Record<WorkspaceBrief['riskLevel'], string> = {
 export default function ProjectBriefsPage() {
   const briefs = readProjectBriefs()
   const viewModel = buildProjectBriefsWorkspaceViewModel(briefs)
+  const allMilestones = readMilestones()
+  const milestonesPerBrief = allMilestones.reduce<Record<string, number>>((acc, m) => {
+    acc[m.briefId] = (acc[m.briefId] ?? 0) + 1
+    return acc
+  }, {})
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -100,7 +106,7 @@ export default function ProjectBriefsPage() {
 
             <div className="divide-y divide-slate-800">
               {viewModel.active.map(brief => (
-                <BriefRow key={brief.id} brief={brief} />
+                <BriefRow key={brief.id} brief={brief} milestoneCount={milestonesPerBrief[brief.id] ?? 0} />
               ))}
             </div>
 
@@ -111,7 +117,7 @@ export default function ProjectBriefsPage() {
                 </div>
                 <div className="divide-y divide-slate-800">
                   {viewModel.archived.map(brief => (
-                    <BriefRow key={brief.id} brief={brief} />
+                    <BriefRow key={brief.id} brief={brief} milestoneCount={milestonesPerBrief[brief.id] ?? 0} />
                   ))}
                 </div>
               </div>
@@ -123,7 +129,7 @@ export default function ProjectBriefsPage() {
   )
 }
 
-function BriefRow({ brief }: { brief: WorkspaceBrief }) {
+function BriefRow({ brief, milestoneCount }: { brief: WorkspaceBrief; milestoneCount: number }) {
   return (
     <Link
       href={`/project-briefs/${brief.id}`}
@@ -134,6 +140,11 @@ function BriefRow({ brief }: { brief: WorkspaceBrief }) {
           <Badge tone={STATUS_TONES[brief.status]}>{brief.statusLabel}</Badge>
           <RiskIndicator level={brief.riskLevel} label={`Risiko ${RISK_LABELS[brief.riskLevel]}`} />
           {brief.delegationCount > 0 && <Badge tone="privacy">{brief.delegationCount} Delegationen</Badge>}
+          {milestoneCount > 0 && (
+            <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
+              {milestoneCount} Meilenstein{milestoneCount === 1 ? '' : 'e'}
+            </span>
+          )}
         </div>
         <p className="truncate text-sm font-semibold text-white">{brief.title}</p>
         <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-400">{brief.problemStatement}</p>
