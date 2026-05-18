@@ -12,6 +12,7 @@ import {
   buildSimulationBudgetLog,
   getExecutionStartBlocker,
 } from '@/lib/delegation-execution'
+import { OllamaAgentRunner, isOllamaReachable } from '@/lib/agent-runner/ollama-runner'
 
 const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
 
@@ -312,6 +313,86 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
   })
 }
 
+async function runWithOllamaAgent(
+  id: string,
+  prompt: string,
+  startTime: Date,
+  budgetUsd: number,
+  model: string,
+) {
+  const maxTurns = budgetToMaxTurns(budgetUsd)
+  const reachable = await isOllamaReachable()
+  if (!reachable) {
+    const errLog: AgentLog = {
+      timestamp: new Date().toISOString(),
+      type: 'error',
+      message: '❌ Ollama nicht erreichbar (http://localhost:11434). Bitte `ollama serve` starten.',
+    }
+    appendLogs(id, [errLog], 'failed')
+    upsertAttentionItem({
+      id: `completion:${id}`,
+      type: 'delegation_failed',
+      severity: 'critical',
+      title: `❌ Ollama nicht erreichbar`,
+      body: 'Bitte Ollama starten (ollama serve) und erneut versuchen.',
+      delegationId: id,
+      actionUrl: `/delegations/${id}`,
+      createdAt: new Date().toISOString(),
+    })
+    return
+  }
+
+  const runner = new OllamaAgentRunner(id, model, process.cwd(), {
+    onLog: logs => appendLogs(id, logs),
+  })
+
+  try {
+    const result = await runner.run(prompt, maxTurns)
+    const elapsed = Math.round((Date.now() - startTime.getTime()) / 60000)
+    const finalLog: AgentLog = {
+      timestamp: new Date().toISOString(),
+      type: result.success ? 'success' : 'error',
+      message: result.success
+        ? `✅ Ollama-Run abgeschlossen (${result.turns} Turns)`
+        : `❌ Ollama-Run fehlgeschlagen nach ${result.turns} Turns`,
+    }
+    const report: DelegationReport | undefined = result.success
+      ? {
+          keyPoints: [`Ollama-Run abgeschlossen mit ${model}`, result.summary.slice(0, 200)],
+          changes: [],
+          timeTakenMinutes: elapsed,
+        }
+      : undefined
+
+    appendLogs(id, [finalLog], result.success ? 'completed' : 'failed', report)
+
+    const finished = readDelegations().find(d => d.id === id)
+    if (finished) {
+      const label = finished.title || finished.contract.goal.slice(0, 60)
+      upsertAttentionItem({
+        id: `completion:${id}`,
+        type: result.success ? 'delegation_completed' : 'delegation_failed',
+        severity: result.success ? 'info' : 'critical',
+        title: result.success ? `✅ Abgeschlossen: ${label}` : `❌ Fehlgeschlagen: ${label}`,
+        body: result.success
+          ? `Ollama-Run abgeschlossen · ${result.turns} Turns · ${model}`
+          : `Run nach ${result.turns} Turns abgebrochen`,
+        delegationId: id,
+        actionUrl: `/delegations/${id}`,
+        createdAt: new Date().toISOString(),
+      })
+    }
+  } catch (err) {
+    const msg = (err as Error).message
+    const errLog: AgentLog = {
+      timestamp: new Date().toISOString(),
+      type: 'error',
+      message: `❌ Ollama-Runner-Fehler: ${msg}`,
+    }
+    appendLogs(id, [errLog], 'failed')
+  }
+}
+
 function runSimulation(id: string, delegation: Delegation) {
   const goal = delegation.contract.goal
   const budgetLog = buildSimulationBudgetLog(delegation)
@@ -379,6 +460,12 @@ export async function POST(
 
   const startTime = new Date()
   const prompt = buildPrompt(delegation)
+
+  if (delegation.executionRoute === 'ollama-agent') {
+    const model = delegation.contract.llmModel?.trim() || 'qwen2.5-coder:14b'
+    void runWithOllamaAgent(id, prompt, startTime, delegation.contract.maxBudgetUsd, model)
+    return NextResponse.json({ started: true, mode: 'ollama-agent', delegationId: id, model })
+  }
 
   if (isClaudeAvailable()) {
     runWithClaudeCLI(id, prompt, startTime, delegation.contract.maxBudgetUsd)
