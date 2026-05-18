@@ -8,6 +8,7 @@ import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/Elaps
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 import { PolicyVerdictPanel } from '@/components/delegation/PolicyVerdictPanel'
 import { PipelineRunner } from '@/components/delegation/PipelineRunner'
+import { AutopilotReadinessBadge } from '@/components/delegation/AutopilotReadinessBadge'
 
 const STATUS_COLORS: Record<string, string> = {
   pending:   'bg-yellow-900/50 text-yellow-400 border-yellow-700',
@@ -295,6 +296,8 @@ export default function DelegationDetailPage() {
                 )}
               </dl>
             </div>
+
+            <AutopilotReadinessBadge contract={d.contract} showReasons />
 
             <PolicyVerdictPanel contract={d.contract} />
 
