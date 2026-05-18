@@ -191,7 +191,7 @@ export default function DelegationDetailPage() {
                 </span>
                 <ApprovalBadge requiresApproval={d.contract.requiresApproval} riskClass={d.contract.riskClass} compact />
               </div>
-              <h1 className="text-xl font-bold text-white leading-snug">{d.contract.goal}</h1>
+              <h1 className="text-xl font-bold text-white leading-snug">{d.title || d.contract.goal}</h1>
               {d.contract.context && (
                 <p className="text-sm text-gray-500 mt-2 leading-relaxed">{d.contract.context}</p>
               )}
@@ -303,7 +303,7 @@ export default function DelegationDetailPage() {
 
             <PipelineRunner
               workItemId={d.contract.workItemId ?? d.id}
-              title={d.contract.goal.slice(0, 80)}
+              title={d.title || d.contract.goal.slice(0, 80)}
               goal={d.contract.goal}
               privacyMode={
                 d.contract.privacyMode === 'local' ? 'local-only'

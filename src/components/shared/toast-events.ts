@@ -35,7 +35,7 @@ export function buildDelegationCompletionToasts(
       toasts.push({
         type: 'success',
         title: 'Agent fertig',
-        message: truncateToastMessage(delegation.contract.goal),
+        message: truncateToastMessage(delegation.title || delegation.contract.goal),
         delegationId: delegation.id,
       })
     }
@@ -44,7 +44,7 @@ export function buildDelegationCompletionToasts(
       toasts.push({
         type: 'error',
         title: 'Agent fehlgeschlagen',
-        message: truncateToastMessage(delegation.contract.goal),
+        message: truncateToastMessage(delegation.title || delegation.contract.goal),
         delegationId: delegation.id,
       })
     }

@@ -138,6 +138,7 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
   const handleManualTask = () => {
     const newDelegation: Delegation = {
       id: `DEL-${Date.now().toString().slice(-4)}`,
+      title: workItem.title.slice(0, 80),
       status: 'pending',
       executionRoute: 'local-agent',
       costEstimateUsd: 0.1,

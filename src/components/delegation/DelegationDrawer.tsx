@@ -336,6 +336,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
     setCreatingSuggestion(suggestion)
     const newDelegation: Delegation = {
       id: `del-${Date.now()}`,
+      title: suggestion.slice(0, 80),
       status: 'pending',
       executionRoute: delegation.executionRoute,
       costEstimateUsd: 0.5,
@@ -560,7 +561,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
 
                 <ContextPackageBuilder
                   workItemId={delegation.contract.workItemId ?? delegation.id}
-                  title={delegation.contract.goal.slice(0, 80)}
+                  title={delegation.title || delegation.contract.goal.slice(0, 80)}
                   objective={delegation.contract.goal}
                   privacyMode={
                     delegation.contract.privacyMode === 'local' ? 'local-only'
@@ -571,7 +572,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
 
                 <PipelineRunner
                   workItemId={delegation.contract.workItemId ?? delegation.id}
-                  title={delegation.contract.goal.slice(0, 80)}
+                  title={delegation.title || delegation.contract.goal.slice(0, 80)}
                   goal={delegation.contract.goal}
                   privacyMode={
                     delegation.contract.privacyMode === 'local' ? 'local-only'
