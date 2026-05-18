@@ -11,7 +11,7 @@ describe('GET /api/auth/status', () => {
   })
 
   it('returns max subscription details when claude is logged in via Max', async () => {
-    vi.mocked(execSync).mockReturnValueOnce(Buffer.from(JSON.stringify({
+    vi.mocked(execSync).mockReturnValueOnce(JSON.stringify({
       loggedIn: true,
       authMethod: 'claude.ai',
       apiProvider: 'firstParty',
@@ -19,7 +19,7 @@ describe('GET /api/auth/status', () => {
       orgId: 'bca7ce30-6cc4-46ee-b9d9-b7462796770f',
       orgName: "sven.bittl@gmx.de's Organization",
       subscriptionType: 'max',
-    })))
+    }))
 
     const { GET } = await import('./route')
     const res = await GET()
@@ -47,10 +47,10 @@ describe('GET /api/auth/status', () => {
   })
 
   it('returns logged-out result when CLI reports loggedIn=false', async () => {
-    vi.mocked(execSync).mockReturnValueOnce(Buffer.from(JSON.stringify({
+    vi.mocked(execSync).mockReturnValueOnce(JSON.stringify({
       loggedIn: false,
       authMethod: 'apiKey',
-    })))
+    }))
 
     const { GET } = await import('./route')
     const res = await GET()
@@ -62,7 +62,7 @@ describe('GET /api/auth/status', () => {
   })
 
   it('falls back gracefully on malformed JSON output', async () => {
-    vi.mocked(execSync).mockReturnValueOnce(Buffer.from('not-json'))
+    vi.mocked(execSync).mockReturnValueOnce('not-json')
 
     const { GET } = await import('./route')
     const res = await GET()
