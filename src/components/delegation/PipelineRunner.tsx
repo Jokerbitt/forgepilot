@@ -11,6 +11,7 @@ interface Props {
   privacyMode?: 'local-only' | 'hybrid' | 'cloud-approved'
   riskClass?: 'A' | 'B' | 'C'
   maxBudgetUsd?: number
+  delegationId?: string
   onRunCreated?: (agentRunId: string) => void
 }
 
@@ -41,6 +42,7 @@ export function PipelineRunner({
   privacyMode = 'hybrid',
   riskClass = 'A',
   maxBudgetUsd = 5,
+  delegationId,
   onRunCreated,
 }: Props) {
   const [running, setRunning] = useState(false)
@@ -59,11 +61,17 @@ export function PipelineRunner({
       })
       const data = await res.json() as PilotRunResult
       setResult(data)
-      // Find agent run ID from steps
-      const runStep = data.steps.find(s => s.step === 'agent-run-create' && s.status === 'ok')
-      if (runStep && typeof runStep.output === 'object' && runStep.output !== null) {
-        const runId = (runStep.output as Record<string, unknown>).runId
-        if (typeof runId === 'string') onRunCreated?.(runId)
+      const agentRunId = data.agentRunId
+      if (agentRunId) {
+        onRunCreated?.(agentRunId)
+        // Link the agent run back to the delegation
+        if (delegationId) {
+          await fetch(`/api/delegations/${delegationId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agentRunId, status: 'running' }),
+          }).catch(() => {/* best-effort */})
+        }
       }
     } catch {
       setError('Verbindungsfehler')
