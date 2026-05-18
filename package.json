@@ -14,6 +14,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",
     "libsodium-wrappers": "^0.8.4",
+    "lucide-react": "^1.16.0",
     "next": "14.2.29",
     "react": "^18",
     "react-dom": "^18"

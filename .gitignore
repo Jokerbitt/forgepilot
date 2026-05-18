@@ -2,12 +2,12 @@ node_modules/
 .env
 .env.local
 .env*.local
-config/api-keys.json
-config/project-briefs.json
-config/running-processes.json
+# All config/*.json are runtime state — never commit (may contain secrets)
+config/*.json
 dist/
 build/
 .next/
 tsconfig.tsbuildinfo
 *.log
 .DS_Store
+start-preview.sh
