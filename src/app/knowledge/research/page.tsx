@@ -214,23 +214,23 @@ function ResearchCard({ doc, onSelect, selected }: {
         <p className="mb-2 line-clamp-2 text-xs text-slate-400 leading-relaxed">{doc.abstract}</p>
       )}
 
-      <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-600">
-        {doc.citations.length > 0 && (
-          <span>{doc.citations.length} Quellen</span>
-        )}
+      <div className="flex flex-wrap items-center gap-2">
         {academicCount > 0 && (
-          <span className="flex items-center gap-1 text-violet-500">
-            <GraduationCap className="h-2.5 w-2.5" />
+          <span className="inline-flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] font-semibold text-violet-400">
+            <GraduationCap className="h-3 w-3" />
             {academicCount} akademisch
           </span>
         )}
         {govCount > 0 && (
-          <span className="flex items-center gap-1 text-sky-500">
-            <Building2 className="h-2.5 w-2.5" />
+          <span className="inline-flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-400">
+            <Building2 className="h-3 w-3" />
             {govCount} offiziell
           </span>
         )}
-        <span className="ml-auto">
+        {doc.citations.length > 0 && academicCount === 0 && govCount === 0 && (
+          <span className="text-[10px] text-slate-600">{doc.citations.length} Quellen</span>
+        )}
+        <span className="ml-auto text-[10px] text-slate-600">
           {new Date(doc.createdAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })}
         </span>
       </div>
