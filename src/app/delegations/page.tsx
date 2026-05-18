@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { Download } from 'lucide-react'
 import type { Delegation, TaskContract } from '@/lib/models/delegation'
 import { formatAge, isCreatedToday } from '@/lib/utils/delegation-age'
 import { DelegationDrawer } from '@/components/delegation/DelegationDrawer'
@@ -326,34 +327,21 @@ function DelegationsContent() {
 
   const handleDrop = () => setDraggedIndex(null)
 
-  // ── CSV Export ──────────────────────────────────────────────────────────
-  const handleExportCsv = () => {
-    const rows = sortedDelegations
-    const header = ['ID', 'Ticket', 'Ziel', 'Status', 'RiskClass', 'Route', 'Budget ($)', 'Tatsächlich ($)', 'Erstellt', 'Aktualisiert']
-    const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`
-    const lines = [
-      header.map(escape).join(','),
-      ...rows.map(d => [
-        d.id,
-        d.contract.workItemId,
-        d.contract.goal,
-        d.status,
-        d.contract.riskClass,
-        d.executionRoute,
-        d.contract.maxBudgetUsd.toFixed(2),
-        d.actualCostUsd != null ? d.actualCostUsd.toFixed(4) : '',
-        new Date(d.createdAt).toLocaleString('de-DE'),
-        new Date(d.updatedAt).toLocaleString('de-DE'),
-      ].map(escape).join(',')),
-    ]
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `forgepilot-delegations-${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
+  // ── Export Dropdown ─────────────────────────────────────────────────────────
+  const [showExportDropdown, setShowExportDropdown] = useState(false)
+  const exportDropdownRef = useRef<HTMLDivElement | null>(null)
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showExportDropdown) return
+    const handler = (e: MouseEvent) => {
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(e.target as Node)) {
+        setShowExportDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showExportDropdown])
 
   // ── Filters ─────────────────────────────────────────────────────────────
   const uniqueProjects = Array.from(
@@ -479,13 +467,40 @@ function DelegationsContent() {
               </button>
             )}
             {delegations.length > 0 && (
-              <button
-                onClick={handleExportCsv}
-                className="text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-700 px-3 py-2 rounded-lg transition-colors"
-                title="Aktuelle Ansicht als CSV exportieren"
-              >
-                ↓ CSV
-              </button>
+              <div className="relative" ref={exportDropdownRef}>
+                <button
+                  onClick={() => setShowExportDropdown(v => !v)}
+                  className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-700 px-3 py-2 rounded-lg transition-colors"
+                  title="Delegationen exportieren"
+                >
+                  <Download size={13} />
+                  Export
+                </button>
+                {showExportDropdown && (
+                  <div className="absolute right-0 top-full mt-1 w-48 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                    <button
+                      onClick={() => {
+                        window.location.href = '/api/delegations/export?format=csv'
+                        setShowExportDropdown(false)
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs text-gray-300 hover:bg-gray-800 hover:text-white transition-colors flex items-center gap-2"
+                    >
+                      <Download size={12} className="text-gray-500" />
+                      Als CSV exportieren
+                    </button>
+                    <button
+                      onClick={() => {
+                        window.location.href = '/api/delegations/export?format=json'
+                        setShowExportDropdown(false)
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs text-gray-300 hover:bg-gray-800 hover:text-white transition-colors flex items-center gap-2"
+                    >
+                      <Download size={12} className="text-gray-500" />
+                      Als JSON exportieren
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
             <button
               onClick={() => setShowNewDialog(true)}
