@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { cx } from '@/components/ui/primitives'
 
 interface PipelineResult {
@@ -14,6 +14,24 @@ interface PipelineResult {
 }
 
 type Stage = 'idle' | 'expanding' | 'brief' | 'items' | 'orchestrating' | 'done' | 'error'
+type RunStatus = 'planning' | 'running' | 'done' | 'failed' | 'aborted'
+type TaskStatus = 'pending' | 'assigned' | 'running' | 'done' | 'failed' | 'skipped'
+
+interface LiveTask {
+  id: string
+  title: string
+  status: TaskStatus
+  grade?: string
+  qualityScore?: number
+}
+
+interface LiveRunState {
+  status: RunStatus
+  tasks: LiveTask[]
+  doneTasks: number
+  totalTasks: number
+  overallScore?: number
+}
 
 const STAGE_LABELS: Record<Stage, string> = {
   idle: '',
@@ -33,15 +51,100 @@ const EXAMPLES = [
   'Eine React-Komponente für ein interaktives Gantt-Diagramm',
 ]
 
+const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  pending: 'Warte',
+  assigned: 'Zugewiesen',
+  running: 'Läuft',
+  done: 'Fertig',
+  failed: 'Fehler',
+  skipped: 'Übersprungen',
+}
+
+function taskStatusColor(s: TaskStatus): string {
+  if (s === 'done') return 'text-emerald-400'
+  if (s === 'running') return 'text-violet-400'
+  if (s === 'failed') return 'text-rose-400'
+  if (s === 'assigned') return 'text-sky-400'
+  return 'text-slate-600'
+}
+
+function taskStatusIcon(s: TaskStatus): string {
+  if (s === 'done') return '✓'
+  if (s === 'running') return '⚙'
+  if (s === 'failed') return '✗'
+  if (s === 'assigned') return '→'
+  return '○'
+}
+
 export default function IdeaPage() {
   const [idea, setIdea] = useState('')
   const [stage, setStage] = useState<Stage>('idle')
   const [result, setResult] = useState<PipelineResult | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [autoExecuting, setAutoExecuting] = useState(false)
+  const [liveRun, setLiveRun] = useState<LiveRunState | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const isRunning = stage !== 'idle' && stage !== 'done' && stage !== 'error'
+
+  // ─── Live run polling ──────────────────────────────────────────────────────
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+  }, [])
+
+  const pollRun = useCallback(async (runId: string) => {
+    try {
+      const res = await fetch(`/api/agents/orchestrate/${runId}`)
+      if (!res.ok) return
+      const run = await res.json() as {
+        status: RunStatus
+        tasks: Array<{
+          task: { id: string; title: string }
+          status: TaskStatus
+          result?: { grade: string; qualityScore: number }
+        }>
+        overallQualityScore?: number
+      }
+
+      const tasks: LiveTask[] = run.tasks.map(entry => ({
+        id: entry.task.id,
+        title: entry.task.title,
+        status: entry.status,
+        grade: entry.result?.grade,
+        qualityScore: entry.result?.qualityScore,
+      }))
+
+      setLiveRun({
+        status: run.status,
+        tasks,
+        doneTasks: tasks.filter(t => t.status === 'done').length,
+        totalTasks: tasks.length,
+        overallScore: run.overallQualityScore,
+      })
+
+      // Stop polling when run reaches terminal state
+      if (run.status === 'done' || run.status === 'failed' || run.status === 'aborted') {
+        stopPolling()
+      }
+    } catch {
+      // Continue polling on transient errors
+    }
+  }, [stopPolling])
+
+  const startPolling = useCallback((runId: string) => {
+    stopPolling()
+    void pollRun(runId)
+    pollRef.current = setInterval(() => void pollRun(runId), 3000)
+  }, [pollRun, stopPolling])
+
+  // Cleanup on unmount
+  useEffect(() => () => stopPolling(), [stopPolling])
+
+  // ─── Pipeline execution ────────────────────────────────────────────────────
 
   const handleBuild = async () => {
     if (!idea.trim() || isRunning) return
@@ -49,8 +152,9 @@ export default function IdeaPage() {
     setStage('expanding')
     setResult(null)
     setError(null)
+    setLiveRun(null)
+    stopPolling()
 
-    // Simulate pipeline stage transitions for UX feedback
     const stageTimer1 = setTimeout(() => setStage('brief'), 1800)
     const stageTimer2 = setTimeout(() => setStage('items'), 3800)
     const stageTimer3 = setTimeout(() => setStage('orchestrating'), 5500)
@@ -75,10 +179,10 @@ export default function IdeaPage() {
       setResult(data)
       setStage('done')
 
-      // Auto-execute the run
-      setAutoExecuting(true)
+      // Auto-execute the run, then start polling
       void fetch(`/api/agents/orchestrate/${data.run.id}/execute`, { method: 'POST' })
-        .finally(() => setAutoExecuting(false))
+        .then(() => startPolling(data.run.id))
+        .catch(() => startPolling(data.run.id)) // poll even if execute fails (may already be running)
 
     } catch (err) {
       clearTimeout(stageTimer1)
@@ -90,10 +194,12 @@ export default function IdeaPage() {
   }
 
   const handleReset = () => {
+    stopPolling()
     setIdea('')
     setStage('idle')
     setResult(null)
     setError(null)
+    setLiveRun(null)
     setTimeout(() => textareaRef.current?.focus(), 100)
   }
 
@@ -101,6 +207,12 @@ export default function IdeaPage() {
     setIdea(ex)
     textareaRef.current?.focus()
   }
+
+  // ─── Derived state for live run ────────────────────────────────────────────
+
+  const runIsLive = liveRun !== null && (liveRun.status === 'running' || liveRun.status === 'planning')
+  const runIsDone = liveRun?.status === 'done'
+  const runIsFailed = liveRun?.status === 'failed' || liveRun?.status === 'aborted'
 
   return (
     <main className="min-h-screen bg-[#08080d] flex flex-col">
@@ -260,7 +372,6 @@ export default function IdeaPage() {
               <h2 className="text-lg font-bold text-white">{result.briefTitle}</h2>
               <p className="text-sm text-emerald-400 mt-1">
                 {result.workItemCount} Work Items erstellt · {result.taskCount} Agenten-Tasks orchestriert
-                {autoExecuting && <span className="ml-2 text-violet-400 animate-pulse">· Agenten laufen…</span>}
               </p>
             </div>
 
@@ -288,19 +399,105 @@ export default function IdeaPage() {
               </a>
 
               <a
-                href="/orchestrations"
+                href={`/orchestrations`}
                 className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 hover:border-emerald-500/30 transition-colors"
               >
                 <p className="text-2xl mb-2">⚙</p>
                 <p className="text-xs text-slate-500 mb-0.5">Orchestrierung</p>
                 <p className="text-sm font-medium text-white">{result.taskCount} Sub-Tasks</p>
-                {autoExecuting
-                  ? <p className="mt-1 text-xs text-violet-400 animate-pulse">Agenten laufen…</p>
-                  : <p className="mt-1 text-xs text-slate-500">Bereit zur Ausführung</p>
+                {runIsDone
+                  ? <p className="mt-1 text-xs text-emerald-400">✓ Run abgeschlossen</p>
+                  : runIsFailed
+                  ? <p className="mt-1 text-xs text-rose-400">✗ Run fehlgeschlagen</p>
+                  : <p className="mt-1 text-xs text-violet-400 animate-pulse">Agenten laufen…</p>
                 }
                 <p className="mt-2 text-xs text-emerald-400 group-hover:underline">Run ansehen →</p>
               </a>
             </div>
+
+            {/* Live Run Status Widget */}
+            {liveRun && liveRun.tasks.length > 0 && (
+              <div className={cx(
+                'rounded-xl border p-4 transition-all',
+                runIsDone
+                  ? 'border-emerald-500/20 bg-emerald-950/10'
+                  : runIsFailed
+                  ? 'border-rose-500/20 bg-rose-950/10'
+                  : 'border-violet-500/20 bg-violet-950/10',
+              )}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    {runIsLive && (
+                      <span className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />
+                    )}
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                      {runIsDone ? 'Run abgeschlossen' : runIsFailed ? 'Run fehlgeschlagen' : 'Agenten aktiv'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {liveRun.overallScore !== undefined && runIsDone && (
+                      <span className="text-xs font-bold text-emerald-400">
+                        Ø {liveRun.overallScore} Punkte
+                      </span>
+                    )}
+                    <span className="text-xs text-slate-500">
+                      {liveRun.doneTasks}/{liveRun.totalTasks} fertig
+                    </span>
+                    <a
+                      href="/orchestrations"
+                      className="text-xs text-violet-400 hover:underline"
+                    >
+                      Details →
+                    </a>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-full h-1 bg-white/[0.05] rounded-full mb-3 overflow-hidden">
+                  <div
+                    className={cx(
+                      'h-full rounded-full transition-all duration-500',
+                      runIsDone ? 'bg-emerald-500' : runIsFailed ? 'bg-rose-500' : 'bg-violet-500',
+                    )}
+                    style={{
+                      width: liveRun.totalTasks > 0
+                        ? `${(liveRun.doneTasks / liveRun.totalTasks) * 100}%`
+                        : '0%',
+                    }}
+                  />
+                </div>
+
+                {/* Task list */}
+                <div className="space-y-1.5">
+                  {liveRun.tasks.map(task => (
+                    <div key={task.id} className="flex items-center gap-2.5">
+                      <span className={cx('text-xs font-mono w-3 text-center', taskStatusColor(task.status))}>
+                        {taskStatusIcon(task.status)}
+                      </span>
+                      <span className={cx(
+                        'text-xs flex-1 truncate',
+                        task.status === 'done' ? 'text-slate-400' : task.status === 'running' ? 'text-white' : 'text-slate-600',
+                      )}>
+                        {task.title}
+                      </span>
+                      <span className={cx('text-xs shrink-0', taskStatusColor(task.status))}>
+                        {task.grade
+                          ? <span className="font-bold">{task.grade}</span>
+                          : TASK_STATUS_LABELS[task.status]
+                        }
+                      </span>
+                      {task.status === 'running' && (
+                        <span className="flex gap-0.5 shrink-0">
+                          {[0, 1, 2].map(d => (
+                            <span key={d} className="h-1 w-1 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: `${d * 120}ms` }} />
+                          ))}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Next delegation */}
             <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
