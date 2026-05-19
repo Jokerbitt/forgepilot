@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { cx } from '@/components/ui/primitives'
-import type { AIProviderConfig, AIModelSelection } from '@/lib/ai/providers/types'
+import type { AIProviderConfig, AIModelSelection, AIModelDef } from '@/lib/ai/providers/types'
 
 function GeminiQuickSetupBanner({ onActivated }: { onActivated: () => void }) {
   const [apiKey, setApiKey]     = useState('')
@@ -674,6 +674,204 @@ function AddCustomProviderForm({ onAdd }: { onAdd: (config: Partial<AIProviderCo
   )
 }
 
+// ─── Dedicated Model Picker Section ──────────────────────────────────────────
+
+interface ModelPickerRowProps {
+  label: string
+  subtitle: string
+  purpose: 'fast' | 'coding'
+  providers: ProviderWithStatus[]
+  selectedProvider: string
+  selectedModel: string
+  onSave: (providerId: string, modelId: string) => Promise<void>
+}
+
+function ModelPickerRow({
+  label,
+  subtitle,
+  purpose,
+  providers,
+  selectedProvider,
+  selectedModel,
+  onSave,
+}: ModelPickerRowProps) {
+  const [localProvider, setLocalProvider] = useState(selectedProvider)
+  const [localModel,    setLocalModel]    = useState(selectedModel)
+  const [saving,        setSaving]        = useState(false)
+  const [saved,         setSaved]         = useState(false)
+
+  // Sync when parent selection changes (e.g. after ProviderCard quick-select)
+  useEffect(() => { setLocalProvider(selectedProvider) }, [selectedProvider])
+  useEffect(() => { setLocalModel(selectedModel)       }, [selectedModel])
+
+  const eligibleProviders = providers.filter(p =>
+    p.models.some((m: AIModelDef) => m.purpose === purpose || m.purpose === 'both')
+  )
+
+  const modelsForProvider: AIModelDef[] = (() => {
+    const p = providers.find(pr => pr.id === localProvider)
+    if (!p) return []
+    return p.models.filter((m: AIModelDef) => m.purpose === purpose || m.purpose === 'both')
+  })()
+
+  const handleProviderChange = (newProviderId: string) => {
+    setLocalProvider(newProviderId)
+    const p = providers.find(pr => pr.id === newProviderId)
+    const firstModel = p?.models.find((m: AIModelDef) => m.purpose === purpose || m.purpose === 'both')
+    setLocalModel(firstModel?.id ?? '')
+  }
+
+  const handleSave = async () => {
+    if (!localProvider || !localModel) return
+    setSaving(true)
+    await onSave(localProvider, localModel)
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  const isDirty = localProvider !== selectedProvider || localModel !== selectedModel
+
+  return (
+    <div className="rounded-xl border border-slate-700 bg-slate-800/50 p-4 ring-1 ring-slate-600/30">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-white">{label}</p>
+          <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {saved && <span className="text-xs text-emerald-400">&#10003; Gespeichert</span>}
+          <button
+            onClick={() => { void handleSave() }}
+            disabled={saving || !isDirty || !localProvider || !localModel}
+            className={cx(
+              'rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
+              isDirty && localProvider && localModel
+                ? 'bg-violet-700 hover:bg-violet-600 text-white'
+                : 'bg-slate-700 text-slate-500 cursor-not-allowed opacity-50'
+            )}
+          >
+            {saving ? 'Speichern…' : 'Speichern'}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        {/* Provider dropdown */}
+        <div>
+          <label className="block text-[10px] font-medium text-slate-500 mb-1.5 uppercase tracking-wide">
+            Provider
+          </label>
+          <select
+            value={localProvider}
+            onChange={e => handleProviderChange(e.target.value)}
+            className="w-full rounded-lg bg-slate-700 border border-slate-600 ring-1 ring-slate-600 hover:ring-slate-400 focus:ring-violet-500 focus:outline-none px-3 py-2 text-sm text-white transition-all"
+          >
+            {eligibleProviders.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.name}{!p.hasApiKey && p.apiKeyRef ? ' (kein API Key)' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Model dropdown */}
+        <div>
+          <label className="block text-[10px] font-medium text-slate-500 mb-1.5 uppercase tracking-wide">
+            Modell
+          </label>
+          <select
+            value={localModel}
+            onChange={e => setLocalModel(e.target.value)}
+            disabled={modelsForProvider.length === 0}
+            className="w-full rounded-lg bg-slate-700 border border-slate-600 ring-1 ring-slate-600 hover:ring-slate-400 focus:ring-violet-500 focus:outline-none px-3 py-2 text-sm text-white transition-all disabled:opacity-40"
+          >
+            {modelsForProvider.length === 0 && (
+              <option value="">&mdash; keine Modelle verfügbar &mdash;</option>
+            )}
+            {modelsForProvider.map(m => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Currently active indicator */}
+      {!isDirty && (
+        <p className="mt-2 text-[10px] text-slate-600 font-mono">
+          Aktiv: {selectedProvider} / {selectedModel}
+        </p>
+      )}
+    </div>
+  )
+}
+
+interface ModelPickerSectionProps {
+  providers: ProviderWithStatus[]
+  selection: AIModelSelection
+  onSelectionChange: (selection: AIModelSelection) => void
+}
+
+function ModelPickerSection({ providers, selection, onSelectionChange }: ModelPickerSectionProps) {
+  const handleFastSave = async (providerId: string, modelId: string) => {
+    const updated: AIModelSelection = {
+      ...selection,
+      fastProvider: providerId,
+      fastModel:    modelId,
+    }
+    await fetch('/api/ai/model-selection', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ fastProvider: providerId, fastModel: modelId }),
+    })
+    onSelectionChange(updated)
+  }
+
+  const handleCodingSave = async (providerId: string, modelId: string) => {
+    const updated: AIModelSelection = {
+      ...selection,
+      codingProvider: providerId,
+      codingModel:    modelId,
+    }
+    await fetch('/api/ai/model-selection', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ codingProvider: providerId, codingModel: modelId }),
+    })
+    onSelectionChange(updated)
+  }
+
+  return (
+    <section>
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
+        Modell-Auswahl
+      </h2>
+      <div className="space-y-3">
+        <ModelPickerRow
+          label="Schnelle Antworten (Fast)"
+          subtitle="Für kurze Tasks, Autocomplete, Chat — Haiku-Klasse"
+          purpose="fast"
+          providers={providers}
+          selectedProvider={selection.fastProvider}
+          selectedModel={selection.fastModel}
+          onSave={handleFastSave}
+        />
+        <ModelPickerRow
+          label="Komplexe Aufgaben (Coding)"
+          subtitle="Für Code-Generierung, Research, Analyse — Sonnet-Klasse"
+          purpose="coding"
+          providers={providers}
+          selectedProvider={selection.codingProvider}
+          selectedModel={selection.codingModel}
+          onSave={handleCodingSave}
+        />
+      </div>
+    </section>
+  )
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function ProvidersPage() {
   const [data, setData]       = useState<ProvidersData | null>(null)
   const [saving, setSaving]   = useState(false)
@@ -841,6 +1039,13 @@ export default function ProvidersPage() {
             ))}
           </div>
         </section>
+
+        {/* Dedicated model picker — fast vs coding */}
+        <ModelPickerSection
+          providers={data.providers}
+          selection={activeSelection}
+          onSelectionChange={newSel => setData(prev => prev ? { ...prev, selection: newSel } : prev)}
+        />
 
         {/* Add custom */}
         <section>
