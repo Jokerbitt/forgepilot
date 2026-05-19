@@ -84,6 +84,7 @@ export default function IdeaPage() {
   const [error, setError] = useState<string | null>(null)
   const [liveRun, setLiveRun] = useState<LiveRunState | null>(null)
   const [history, setHistory] = useState<IdeaHistoryEntry[]>([])
+  const [aborting, setAborting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const historyPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -171,6 +172,15 @@ export default function IdeaPage() {
 
   // Cleanup on unmount
   useEffect(() => () => stopPolling(), [stopPolling])
+
+  const handleAbort = useCallback(async () => {
+    if (!result?.run.id) return
+    setAborting(true)
+    await fetch(`/api/agents/orchestrate/${result.run.id}/abort`, { method: 'POST' }).catch(() => {})
+    setLiveRun(r => r ? { ...r, status: 'aborted' } : r)
+    stopPolling()
+    setAborting(false)
+  }, [result, stopPolling])
 
   // ─── Pipeline execution ────────────────────────────────────────────────────
 
@@ -521,6 +531,15 @@ export default function IdeaPage() {
                     >
                       Details →
                     </a>
+                    {runIsLive && (
+                      <button
+                        onClick={handleAbort}
+                        disabled={aborting}
+                        className="text-xs text-rose-400 hover:text-rose-300 disabled:opacity-40 transition-colors"
+                      >
+                        {aborting ? 'Abbrechend…' : '■ Abbrechen'}
+                      </button>
+                    )}
                   </div>
                 </div>
 
