@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import type { OrchestratedRun, OrchestratedTaskEntry } from '@/lib/agents/orchestrated-run'
 import { cx } from '@/components/ui/primitives'
@@ -114,18 +114,8 @@ function RunCard({ run: initialRun }: { run: OrchestratedRun }) {
   const [executing, setExecuting] = useState(false)
   const [aborting, setAborting] = useState(false)
 
-  // Auto-poll when running
-  useEffect(() => {
-    if (run.status !== 'running') return
-    const iv = setInterval(async () => {
-      const res = await fetch(`/api/agents/orchestrate/${run.id}`)
-      if (!res.ok) return
-      const updated = await res.json() as OrchestratedRun
-      setRun(updated)
-      if (updated.status !== 'running') clearInterval(iv)
-    }, 3000)
-    return () => clearInterval(iv)
-  }, [run.id, run.status])
+  // RunCard now stays in sync via the page-level SSE; no local polling needed.
+  // We still keep `run` as local state so execute/abort optimistic updates work.
 
   const handleExecute = async () => {
     setExecuting(true)
@@ -306,15 +296,41 @@ export default function OrchestrationsPage() {
   const [runs, setRuns] = useState<OrchestratedRun[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
+  const [sseConnected, setSseConnected] = useState(false)
+  const [sseError, setSseError] = useState<string | null>(null)
+  const retryTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const load = useCallback(async () => {
-    const res = await fetch('/api/agents/orchestrate')
-    const { runs: fetched } = await res.json() as { runs: OrchestratedRun[] }
-    setRuns(fetched ?? [])
-    setLoading(false)
+  const connectSSE = useCallback(() => {
+    const es = new EventSource('/api/orchestrations/stream')
+
+    es.addEventListener('runs', (e: MessageEvent) => {
+      const parsed = JSON.parse(e.data as string) as OrchestratedRun[]
+      setRuns(parsed)
+      setLoading(false)
+      setSseConnected(true)
+      setSseError(null)
+    })
+
+    es.onerror = () => {
+      setSseConnected(false)
+      setSseError('Verbindung unterbrochen – erneuter Versuch in 3 s …')
+      es.close()
+      retryTimeout.current = setTimeout(() => {
+        setSseError(null)
+        connectSSE()
+      }, 3000)
+    }
+
+    return es
   }, [])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    const es = connectSSE()
+    return () => {
+      es.close()
+      if (retryTimeout.current !== null) clearTimeout(retryTimeout.current)
+    }
+  }, [connectSSE])
 
   const filters = ['all', 'running', 'planning', 'done', 'failed'] as const
   const visible = filter === 'all' ? runs : runs.filter(r => r.status === filter)
@@ -339,12 +355,26 @@ export default function OrchestrationsPage() {
                 AI-dekomponierten Runs verwalten · Qualität verfolgen · Drift reduzieren
               </p>
             </div>
-            {activeCount > 0 && (
-              <div className="flex items-center gap-1.5 rounded-full border border-violet-700/40 bg-violet-950/40 px-3 py-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />
-                <span className="text-xs font-medium text-violet-300">{activeCount} aktiv</span>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              {/* SSE LIVE badge */}
+              {sseConnected ? (
+                <div className="flex items-center gap-1.5 rounded-full border border-emerald-700/40 bg-emerald-950/40 px-3 py-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-xs font-medium text-emerald-300">LIVE</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 rounded-full border border-slate-700/40 bg-slate-900/40 px-3 py-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-slate-600" />
+                  <span className="text-xs font-medium text-slate-500">Verbinde…</span>
+                </div>
+              )}
+              {activeCount > 0 && (
+                <div className="flex items-center gap-1.5 rounded-full border border-violet-700/40 bg-violet-950/40 px-3 py-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />
+                  <span className="text-xs font-medium text-violet-300">{activeCount} aktiv</span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* KPI strip */}
@@ -371,6 +401,14 @@ export default function OrchestrationsPage() {
             </div>
           )}
         </div>
+
+        {/* SSE error banner */}
+        {sseError !== null && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-700/40 bg-amber-950/20 px-4 py-2.5 text-xs text-amber-400">
+            <span>⚠</span>
+            <span>{sseError}</span>
+          </div>
+        )}
 
         {/* New run form */}
         <div className="mb-6">
