@@ -109,6 +109,36 @@ export default function DelegationDetailPage() {
   const [executing, setExecuting] = useState(false)
   const orchPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  const [creatingPR, setCreatingPR] = useState(false)
+  const [prError, setPrError] = useState<string | null>(null)
+
+  const handleCreatePR = async () => {
+    if (!delegation) return
+    setCreatingPR(true)
+    setPrError(null)
+    try {
+      const res = await fetch(`/api/delegations/${id}/create-pr`, { method: 'POST' })
+      const data = await res.json() as { prUrl?: string; prNumber?: number; status?: string; error?: string }
+      if (data.prUrl) {
+        setDelegation(prev => prev
+          ? {
+              ...prev,
+              summaryReport: prev.summaryReport
+                ? { ...prev.summaryReport, prUrl: data.prUrl }
+                : { keyPoints: [], changes: [], timeTakenMinutes: 0, prUrl: data.prUrl },
+            }
+          : prev)
+      }
+      if (data.status === 'error') {
+        setPrError(data.error ?? 'PR-Erstellung fehlgeschlagen')
+      }
+    } catch {
+      setPrError('Netzwerkfehler beim Erstellen des PRs')
+    } finally {
+      setCreatingPR(false)
+    }
+  }
+
   const handleOrchestrate = async () => {
     if (!delegation) return
     setOrchestrating(true)
@@ -212,12 +242,13 @@ export default function DelegationDetailPage() {
   }
 
   const d = delegation
-  const canApprove = d.status === 'pending' && d.contract.requiresApproval && d.contract.riskClass !== 'C'
-  const canStart   = d.status === 'approved'
-  const canCancel  = d.status === 'pending' || d.status === 'approved'
-  const canStop    = d.status === 'running'
-  const canRetry   = d.status === 'failed' || d.status === 'cancelled'
-  const isDone     = d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled'
+  const canApprove  = d.status === 'pending' && d.contract.requiresApproval && d.contract.riskClass !== 'C'
+  const canStart    = d.status === 'approved'
+  const canCancel   = d.status === 'pending' || d.status === 'approved'
+  const canStop     = d.status === 'running'
+  const canRetry    = d.status === 'failed' || d.status === 'cancelled'
+  const isDone      = d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled'
+  const canCreatePR = d.status === 'completed' && !d.summaryReport?.prUrl
 
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6 md:p-8">
@@ -318,6 +349,30 @@ export default function DelegationDetailPage() {
                   className="px-3 py-1.5 text-sm bg-blue-900/40 text-blue-400 hover:bg-blue-900 border border-blue-900/60 rounded-lg transition-colors">
                   🔄 Wiederholen
                 </button>
+              )}
+              {canCreatePR && (
+                <button
+                  onClick={handleCreatePR}
+                  disabled={creatingPR}
+                  className="px-3 py-1.5 text-xs bg-emerald-900/40 text-emerald-300 hover:bg-emerald-900/70 border border-emerald-800/60 rounded-lg transition-colors disabled:opacity-40"
+                  title="GitHub Pull Request für diese abgeschlossene Delegation erstellen">
+                  {creatingPR ? '⏳ PR wird erstellt…' : '⎇ GitHub PR erstellen'}
+                </button>
+              )}
+              {d.summaryReport?.prUrl && (
+                <a
+                  href={d.summaryReport.prUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 text-xs bg-emerald-950/40 text-emerald-400 hover:text-emerald-300 border border-emerald-900/60 rounded-lg transition-colors"
+                  title="Pull Request auf GitHub öffnen">
+                  ⎇ PR #{d.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? ''}
+                </a>
+              )}
+              {prError && (
+                <span className="text-xs text-red-400 border border-red-900/40 bg-red-950/20 rounded-lg px-2 py-1.5 max-w-xs truncate" title={prError}>
+                  ⚠ {prError}
+                </span>
               )}
               <button
                 onClick={handleOrchestrate}
