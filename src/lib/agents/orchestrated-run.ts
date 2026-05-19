@@ -104,6 +104,20 @@ export function createRun(
   }
 
   store.runs.push(run)
+
+  // Store rotation: cap at 100 runs, dropping oldest terminal-status runs first
+  const MAX_RUNS = 100
+  if (store.runs.length > MAX_RUNS) {
+    const terminalStatuses: RunStatus[] = ['done', 'failed', 'aborted']
+    const terminal = store.runs.filter(r => terminalStatuses.includes(r.status))
+    const active   = store.runs.filter(r => !terminalStatuses.includes(r.status))
+    const keepTerminal = Math.max(MAX_RUNS - active.length, 0)
+    const trimmedTerminal = terminal
+      .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt))
+      .slice(-keepTerminal)
+    store.runs = [...active, ...trimmedTerminal]
+  }
+
   write(store)
   return run
 }

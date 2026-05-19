@@ -20,9 +20,20 @@ function write(notifications: Notification[]): void {
   fs.renameSync(tmp, NOTIFICATIONS_FILE)
 }
 
+const MAX_NOTIFICATIONS = 50
+
 export function saveNotification(notification: Notification): void {
   const notifications = read()
   notifications.unshift(notification)
+  // Store rotation: drop oldest read notifications first, then unread, cap at MAX
+  if (notifications.length > MAX_NOTIFICATIONS) {
+    const readOnes = notifications.filter(n => n.read)
+    const unreadOnes = notifications.filter(n => !n.read)
+    const keepRead = Math.max(MAX_NOTIFICATIONS - unreadOnes.length, 0)
+    const trimmed = [...unreadOnes, ...readOnes.slice(0, keepRead)]
+    write(trimmed.slice(0, MAX_NOTIFICATIONS))
+    return
+  }
   write(notifications)
 }
 
