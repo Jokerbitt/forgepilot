@@ -90,6 +90,7 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
   const [created, setCreated] = useState<Set<string>>(new Set())
   const [orchestrating, setOrchestrating] = useState<string | null>(null)
   const [orchestrated, setOrchestrated] = useState<Map<string, string>>(new Map()) // itemId → runId
+  const [csvImportOpen, setCsvImportOpen] = useState(false)
 
   const load = useCallback((isSyncClick = false) => {
     if (isSyncClick) setSyncing(true)

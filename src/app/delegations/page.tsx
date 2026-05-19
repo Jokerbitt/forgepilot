@@ -11,6 +11,7 @@ import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/Elaps
 import { NewDelegationDialog } from '@/components/delegation/NewDelegationDialog'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 import { AutopilotReadinessPill } from '@/components/delegation/AutopilotReadinessBadge'
+import { VersionBadge } from '@/components/delegation/VersionBadge'
 
 type ApprovalFilter = 'Alle' | 'approval-required' | 'auto-approved' | 'risk-blocked'
 
@@ -901,6 +902,7 @@ function DelegationsContent() {
                                 riskClass={del.contract.riskClass}
                                 compact
                               />
+                              <VersionBadge delegationId={del.id} compact />
                             </div>
                             <div className={`text-sm font-medium ${GOAL_STYLE[del.status] || 'text-gray-200'}`}>
                               {del.contract.goal}
