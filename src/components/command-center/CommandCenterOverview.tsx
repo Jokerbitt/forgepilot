@@ -577,24 +577,35 @@ function QuickActionsPanel({ activeRunCount }: { activeRunCount: number }) {
 
   const handleAutoPilot = useCallback(async () => {
     setPilotStatus('loading')
-    setPilotMessage(null)
+    setPilotMessage('Erstelle Delegation…')
     setPilotRunId(null)
     try {
+      // Step 1: Create delegation + decompose into tasks
       const res = await fetch('/api/pilot/auto-run', { method: 'POST' })
       const data = await res.json() as { run?: { id: string }; delegation?: { title: string }; taskCount?: number; error?: string }
       if (!res.ok || data.error) {
         setPilotStatus('error')
         setPilotMessage(data.error ?? 'Kein delegierbares Work Item gefunden.')
-      } else {
-        setPilotStatus('success')
-        setPilotRunId(data.run?.id ?? null)
-        setPilotMessage(`✓ "${data.delegation?.title?.slice(0, 40) ?? 'Task'}" → ${data.taskCount ?? 0} Sub-Tasks erstellt`)
+        setTimeout(() => { setPilotStatus('idle'); setPilotMessage(null) }, 6000)
+        return
       }
+
+      const runId = data.run?.id
+      if (runId) {
+        setPilotRunId(runId)
+        setPilotMessage(`Starte ${data.taskCount ?? 0} Sub-Tasks…`)
+
+        // Step 2: Fire-and-forget execute — server handles async execution
+        void fetch(`/api/agents/orchestrate/${runId}/execute`, { method: 'POST' })
+      }
+
+      setPilotStatus('success')
+      setPilotMessage(`⚙ "${data.delegation?.title?.slice(0, 35) ?? 'Task'}" läuft (${data.taskCount ?? 0} Tasks)`)
     } catch {
       setPilotStatus('error')
       setPilotMessage('Netzwerkfehler beim Auto-Pilot.')
     }
-    setTimeout(() => { setPilotStatus('idle'); setPilotMessage(null); setPilotRunId(null) }, 8000)
+    setTimeout(() => { setPilotStatus('idle'); setPilotMessage(null); setPilotRunId(null) }, 10000)
   }, [])
 
   const pmFeedbackColor =
