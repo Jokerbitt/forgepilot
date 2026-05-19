@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import type { KnowledgeSource, MemoryCard, MemoryCardType, SourceType } from '@/lib/knowledge/types'
 import { Badge, EmptyState, StatusDot, cx } from '@/components/ui/primitives'
 
@@ -31,26 +32,69 @@ function confidenceColor(c: string): string {
 
 function cardTypeBadgeColor(t: MemoryCardType): string {
   const map: Record<MemoryCardType, string> = {
-    decision: 'bg-sky-900/40 text-sky-300 border-sky-800/50',
-    learning: 'bg-emerald-900/40 text-emerald-300 border-emerald-800/50',
-    pattern:  'bg-violet-900/40 text-violet-300 border-violet-800/50',
-    risk:     'bg-red-900/40 text-red-300 border-red-800/50',
+    decision:    'bg-sky-900/40 text-sky-300 border-sky-800/50',
+    learning:    'bg-emerald-900/40 text-emerald-300 border-emerald-800/50',
+    pattern:     'bg-violet-900/40 text-violet-300 border-violet-800/50',
+    risk:        'bg-red-900/40 text-red-300 border-red-800/50',
     requirement: 'bg-amber-900/40 text-amber-300 border-amber-800/50',
-    context:  'bg-slate-800 text-slate-400 border-slate-700',
+    context:     'bg-slate-800 text-slate-400 border-slate-700',
   }
   return map[t] ?? 'bg-slate-800 text-slate-400 border-slate-700'
 }
 
 function sourceTypeLabel(t: SourceType): string {
   const map: Record<SourceType, string> = {
-    nas: 'NAS', markdown: 'Markdown', linear: 'Linear', github: 'GitHub',
-    'agent-run': 'Agent Run', obsidian: 'Obsidian', manual: 'Manual',
+    nas:         'NAS',
+    markdown:    'Markdown',
+    linear:      'Linear',
+    github:      'GitHub',
+    'agent-run': 'Agent Run',
+    obsidian:    'Obsidian',
+    manual:      'Manual',
   }
   return map[t] ?? t
 }
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })
+}
+
+function formatRelativeDate(iso: string): string {
+  const now = Date.now()
+  const then = new Date(iso).getTime()
+  const diffMs = now - then
+  const diffMin = Math.floor(diffMs / 60_000)
+  const diffH = Math.floor(diffMs / 3_600_000)
+  const diffD = Math.floor(diffMs / 86_400_000)
+  if (diffMin < 2) return 'gerade eben'
+  if (diffMin < 60) return `vor ${diffMin} Min.`
+  if (diffH < 24) return `vor ${diffH} Std.`
+  if (diffD === 1) return 'gestern'
+  if (diffD < 30) return `vor ${diffD} Tagen`
+  return formatDate(iso)
+}
+
+function truncate(text: string, max: number): string {
+  if (text.length <= max) return text
+  return text.slice(0, max).trimEnd() + '…'
+}
+
+/** Derive a short source label from a MemoryCard's projectId / sourceIds count */
+function sourceBadgeLabel(card: MemoryCard): string {
+  if (card.projectId) return `#${card.projectId.slice(-8)}`
+  if (card.sourceIds.length > 0) return `${card.sourceIds.length} Quelle${card.sourceIds.length > 1 ? 'n' : ''}`
+  return 'manual'
+}
+
+// ─── debounce hook ───────────────────────────────────────────────
+
+function useDebounced<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(id)
+  }, [value, delay])
+  return debounced
 }
 
 // ─── tabs ────────────────────────────────────────────────────────
@@ -64,11 +108,14 @@ export default function KnowledgeCenterPage() {
   const [cards, setCards] = useState<MemoryCard[]>([])
   const [sources, setSources] = useState<KnowledgeSource[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<MemoryCardType | ''>('')
+  const [typeFilter, setTypeFilter] = useState<MemoryCardType | ''>('')
+  const [activeTags, setActiveTags] = useState<string[]>([])
   const [search, setSearch] = useState('')
-  const [selectedCard, setSelectedCard] = useState<MemoryCard | null>(null)
+  const [expandedCardId, setExpandedCardId] = useState<string | null>(null)
   const [indexing, setIndexing] = useState(false)
   const [indexResult, setIndexResult] = useState<IndexResult | null>(null)
+
+  const debouncedSearch = useDebounced(search, 300)
 
   const loadData = useCallback(() => {
     return Promise.all([
@@ -101,15 +148,28 @@ export default function KnowledgeCenterPage() {
     }
   }
 
-  const searchLower = search.toLowerCase().trim()
+  // All unique tags across all cards, sorted
+  const allTags = Array.from(new Set(cards.flatMap(c => c.tags))).sort()
+
+  const searchLower = debouncedSearch.toLowerCase().trim()
   const filteredCards = cards
-    .filter(c => !filter || c.type === filter)
+    .filter(c => !typeFilter || c.type === typeFilter)
+    .filter(c => activeTags.length === 0 || activeTags.every(tag => c.tags.includes(tag)))
     .filter(c => !searchLower || (
       c.title.toLowerCase().includes(searchLower) ||
       c.body.toLowerCase().includes(searchLower) ||
       c.tags.some(t => t.toLowerCase().includes(searchLower))
     ))
+
   const staleCount = sources.filter(s => s.isStale).length
+
+  const toggleTag = (tag: string) => {
+    setActiveTags(prev =>
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+    )
+  }
+
+  const clearTags = () => setActiveTags([])
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -136,11 +196,11 @@ export default function KnowledgeCenterPage() {
               </button>
               <div className="flex items-center gap-3 text-xs text-slate-500">
                 <span>{cards.length} Cards</span>
-                <span>·</span>
+                <span>&middot;</span>
                 <span>{sources.length} Quellen</span>
                 {staleCount > 0 && (
                   <>
-                    <span>·</span>
+                    <span>&middot;</span>
                     <span className="text-amber-400">{staleCount} veraltet</span>
                   </>
                 )}
@@ -191,12 +251,16 @@ export default function KnowledgeCenterPage() {
           <CardsTab
             cards={filteredCards}
             allCards={cards}
-            filter={filter}
-            setFilter={setFilter}
+            allTags={allTags}
+            typeFilter={typeFilter}
+            setTypeFilter={setTypeFilter}
+            activeTags={activeTags}
+            toggleTag={toggleTag}
+            clearTags={clearTags}
             search={search}
             setSearch={setSearch}
-            selectedCard={selectedCard}
-            setSelectedCard={setSelectedCard}
+            expandedCardId={expandedCardId}
+            setExpandedCardId={setExpandedCardId}
           />
         ) : (
           <SourcesTab sources={sources} />
@@ -236,152 +300,233 @@ function KnowledgeMetric({
 const CARD_TYPES: MemoryCardType[] = ['decision', 'learning', 'pattern', 'risk', 'requirement', 'context']
 
 function CardsTab({
-  cards, allCards, filter, setFilter, search, setSearch, selectedCard, setSelectedCard,
+  cards,
+  allCards,
+  allTags,
+  typeFilter,
+  setTypeFilter,
+  activeTags,
+  toggleTag,
+  clearTags,
+  search,
+  setSearch,
+  expandedCardId,
+  setExpandedCardId,
 }: {
   cards: MemoryCard[]
   allCards: MemoryCard[]
-  filter: MemoryCardType | ''
-  setFilter: (v: MemoryCardType | '') => void
+  allTags: string[]
+  typeFilter: MemoryCardType | ''
+  setTypeFilter: (v: MemoryCardType | '') => void
+  activeTags: string[]
+  toggleTag: (tag: string) => void
+  clearTags: () => void
   search: string
   setSearch: (v: string) => void
-  selectedCard: MemoryCard | null
-  setSelectedCard: (c: MemoryCard | null) => void
+  expandedCardId: string | null
+  setExpandedCardId: (id: string | null) => void
 }) {
   if (allCards.length === 0) {
     return (
       <EmptyState
-        title="Noch keine Memory Cards"
-        description='Klicke "NAS indizieren" um alle NAS-Dokumente als Memory Cards zu importieren, oder erstelle Cards manuell über die API.'
+        title="Noch keine Knowledge Cards"
+        description="Knowledge Cards werden automatisch nach jedem Orchestration-Run erstellt."
+        icon={<span className="text-2xl" aria-hidden="true">&#x1F4DA;</span>}
+        action={
+          <Link
+            href="/delegations"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-sky-700/50 bg-sky-900/20 px-4 py-2 text-sm font-semibold text-sky-300 transition-colors hover:bg-sky-900/40 hover:text-sky-200"
+          >
+            Erste Orchestration starten &rarr;
+          </Link>
+        }
       />
     )
   }
 
   return (
-    <div className="flex gap-4">
-      {/* List */}
-      <div className={cx('flex-1 min-w-0', selectedCard ? 'hidden sm:block sm:w-1/2 sm:flex-none' : '')}>
-        {/* Search */}
-        <div className="mb-3">
-          <input
-            type="text"
-            placeholder="Suchen…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-sky-600"
-          />
-        </div>
-        {/* Type filter */}
-        <div className="mb-4 flex flex-wrap gap-2">
-          <button
-            onClick={() => setFilter('')}
-            className={cx('rounded-full px-3 py-1 text-xs font-medium transition-colors', filter === '' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300')}
-          >
-            Alle ({allCards.length})
-          </button>
-          {CARD_TYPES.map(t => {
-            const count = allCards.filter(c => c.type === t).length
-            if (count === 0) return null
-            return (
-              <button
-                key={t}
-                onClick={() => setFilter(t)}
-                className={cx('rounded-full border px-3 py-1 text-xs font-medium transition-colors', filter === t ? cardTypeBadgeColor(t) : 'border-transparent text-slate-500 hover:text-slate-300')}
-              >
-                {t} ({count})
-              </button>
-            )
-          })}
-        </div>
+    <div className="space-y-4">
+      {/* Search */}
+      <div>
+        <input
+          type="text"
+          placeholder="Knowledge durchsuchen…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="w-full rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-sky-600 focus:ring-1 focus:ring-sky-600/30"
+        />
+      </div>
 
-        {cards.length === 0 && (
-          <p className="py-8 text-center text-sm text-slate-500">Keine Cards für diese Suche.</p>
-        )}
-        <div className="space-y-2">
-          {cards.map(card => (
+      {/* Type filter */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Typ:</span>
+        <button
+          onClick={() => setTypeFilter('')}
+          className={cx(
+            'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+            typeFilter === '' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'
+          )}
+        >
+          Alle ({allCards.length})
+        </button>
+        {CARD_TYPES.map(t => {
+          const count = allCards.filter(c => c.type === t).length
+          if (count === 0) return null
+          return (
             <button
-              key={card.id}
-              onClick={() => setSelectedCard(selectedCard?.id === card.id ? null : card)}
+              key={t}
+              onClick={() => setTypeFilter(t)}
               className={cx(
-                'w-full rounded-xl border p-4 text-left transition-all',
-                selectedCard?.id === card.id
-                  ? 'border-sky-700/60 bg-sky-900/10'
-                  : 'border-slate-800 bg-slate-900 hover:border-slate-700'
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                typeFilter === t ? cardTypeBadgeColor(t) : 'border-transparent text-slate-500 hover:text-slate-300'
               )}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="mb-1.5 flex flex-wrap items-center gap-2">
-                    <span className={cx('rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide', cardTypeBadgeColor(card.type))}>
-                      {card.type}
-                    </span>
-                    <span className={cx('text-xs font-medium', confidenceColor(card.confidence))}>
-                      {card.confidence}
-                    </span>
-                  </div>
-                  <p className="truncate text-sm font-medium text-white">{card.title}</p>
-                  <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{card.body}</p>
-                </div>
-                <div className="shrink-0">
-                  <StatusDot tone={privacyTone(card.privacyClass)} />
-                </div>
-              </div>
-              {card.tags.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {card.tags.slice(0, 4).map(tag => (
-                    <Badge key={tag}>{tag}</Badge>
-                  ))}
-                </div>
+              {t} ({count})
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Tag filter chips */}
+      {allTags.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">Tags:</span>
+          {allTags.map(tag => (
+            <button
+              key={tag}
+              onClick={() => toggleTag(tag)}
+              className={cx(
+                'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors',
+                activeTags.includes(tag)
+                  ? 'border-sky-600/60 bg-sky-900/30 text-sky-300'
+                  : 'border-slate-700 text-slate-500 hover:border-slate-600 hover:text-slate-300'
               )}
+            >
+              {tag}
             </button>
           ))}
+          {activeTags.length > 0 && (
+            <button
+              onClick={clearTags}
+              className="ml-1 text-xs text-slate-600 underline hover:text-slate-400"
+            >
+              zur&uuml;cksetzen
+            </button>
+          )}
+        </div>
+      )}
+
+      {cards.length === 0 && (
+        <p className="py-8 text-center text-sm text-slate-500">Keine Cards f&uuml;r diese Suche.</p>
+      )}
+
+      {/* Card grid */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {cards.map(card => (
+          <KnowledgeCard
+            key={card.id}
+            card={card}
+            expanded={expandedCardId === card.id}
+            onToggle={() => setExpandedCardId(expandedCardId === card.id ? null : card.id)}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── individual card ─────────────────────────────────────────────
+
+function KnowledgeCard({
+  card,
+  expanded,
+  onToggle,
+}: {
+  card: MemoryCard
+  expanded: boolean
+  onToggle: () => void
+}) {
+  const bodyPreview = truncate(card.body, 120)
+
+  return (
+    <button
+      onClick={onToggle}
+      className={cx(
+        'group w-full rounded-xl border p-4 text-left transition-all duration-200',
+        expanded
+          ? 'border-sky-700/60 bg-sky-900/10 shadow-lg shadow-sky-900/10'
+          : 'border-slate-800 bg-slate-900 hover:border-slate-600 hover:bg-slate-800/60 hover:shadow-md hover:shadow-black/20',
+        'cursor-pointer'
+      )}
+    >
+      {/* Row 1: type badge + source badge + privacy dot */}
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className={cx('rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide', cardTypeBadgeColor(card.type))}>
+            {card.type}
+          </span>
+          <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-400">
+            {sourceBadgeLabel(card)}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className={cx('text-[10px] font-medium', confidenceColor(card.confidence))}>
+            {card.confidence}
+          </span>
+          <StatusDot tone={privacyTone(card.privacyClass)} />
         </div>
       </div>
 
-      {/* Detail panel */}
-      {selectedCard && (
-        <div className="w-full sm:w-80 sm:flex-none">
-          <div className="sticky top-20 rounded-xl border border-slate-800 bg-slate-900 p-4">
-            <div className="mb-3 flex items-start justify-between gap-2">
-              <span className={cx('rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide', cardTypeBadgeColor(selectedCard.type))}>
-                {selectedCard.type}
-              </span>
-              <button onClick={() => setSelectedCard(null)} className="text-slate-600 hover:text-slate-300">✕</button>
-            </div>
-            <h3 className="mb-2 text-sm font-semibold leading-snug text-white">{selectedCard.title}</h3>
-            <p className="mb-4 text-xs leading-relaxed text-slate-400">{selectedCard.body}</p>
-            <dl className="space-y-2 text-xs">
-              <div className="flex justify-between">
-                <dt className="text-slate-500">Confidence</dt>
-                <dd className={confidenceColor(selectedCard.confidence)}>{selectedCard.confidence}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-slate-500">Privacy</dt>
-                <dd className="text-slate-300">{selectedCard.privacyClass}</dd>
-              </div>
-              {selectedCard.projectId && (
-                <div className="flex justify-between">
-                  <dt className="text-slate-500">Projekt</dt>
-                  <dd className="truncate font-mono text-slate-300">{selectedCard.projectId}</dd>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <dt className="text-slate-500">Erstellt</dt>
-                <dd className="text-slate-400">{formatDate(selectedCard.createdAt)}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-slate-500">Quellen</dt>
-                <dd className="text-slate-400">{selectedCard.sourceIds.length}</dd>
-              </div>
-            </dl>
-            {selectedCard.tags.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-1">
-                {selectedCard.tags.map(tag => <Badge key={tag}>{tag}</Badge>)}
-              </div>
-            )}
+      {/* Row 2: title */}
+      <p className="text-sm font-semibold leading-snug text-white">{card.title}</p>
+
+      {/* Row 3: body preview or full body when expanded */}
+      <p className={cx(
+        'mt-1.5 text-xs leading-relaxed text-slate-400',
+        expanded ? '' : 'line-clamp-3'
+      )}>
+        {expanded ? card.body : bodyPreview}
+      </p>
+
+      {/* Row 4 (expanded only): metadata */}
+      {expanded && (
+        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 border-t border-slate-800 pt-3 text-xs">
+          <div>
+            <dt className="text-slate-600">Privacy</dt>
+            <dd className="text-slate-300">{card.privacyClass}</dd>
           </div>
-        </div>
+          <div>
+            <dt className="text-slate-600">Quellen</dt>
+            <dd className="text-slate-300">{card.sourceIds.length}</dd>
+          </div>
+          {card.projectId && (
+            <div className="col-span-2">
+              <dt className="text-slate-600">Projekt</dt>
+              <dd className="truncate font-mono text-slate-300">{card.projectId}</dd>
+            </div>
+          )}
+        </dl>
       )}
-    </div>
+
+      {/* Row 5: tags + date */}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-1">
+          {card.tags.slice(0, expanded ? undefined : 4).map(tag => (
+            <Badge key={tag}>{tag}</Badge>
+          ))}
+          {!expanded && card.tags.length > 4 && (
+            <span className="text-[10px] text-slate-600">+{card.tags.length - 4}</span>
+          )}
+        </div>
+        <time
+          dateTime={card.createdAt}
+          className="shrink-0 text-[10px] text-slate-600"
+          title={formatDate(card.createdAt)}
+        >
+          {formatRelativeDate(card.createdAt)}
+        </time>
+      </div>
+    </button>
   )
 }
 
