@@ -13,6 +13,7 @@ import { NextResponse } from 'next/server'
 import { getRun, updateTaskStatus, updateRunStatus, retryTask, canRetry } from '@/lib/agents/orchestrated-run'
 import { scoreWork } from '@/lib/agents/work-quality'
 import { recordOutcome } from '@/lib/agents/skill-evolver'
+import { upsertCard } from '@/lib/knowledge/store'
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
 
@@ -136,6 +137,55 @@ async function executeRunAsync(runId: string, skipFailed: boolean): Promise<void
         return
       }
     }
+  }
+
+  // All tasks processed — write summary knowledge card
+  writeRunKnowledgeCard(runId)
+}
+
+/** Write a MemoryCard summarising this run's outcomes to the Knowledge Store */
+function writeRunKnowledgeCard(runId: string): void {
+  try {
+    const run = getRun(runId)
+    if (!run || run.status !== 'done') return
+
+    const doneTasks = run.tasks.filter(t => t.status === 'done')
+    const failedTasks = run.tasks.filter(t => t.status === 'failed')
+    const scores = doneTasks.map(t => t.result?.qualityScore ?? 0).filter(s => s > 0)
+    const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null
+    const gradeMap = { A: '🟢', B: '🔵', C: '🟡', D: '🟠', F: '🔴' }
+
+    const taskLines = run.tasks.map(t => {
+      const grade = t.result?.grade ?? '—'
+      const icon = gradeMap[grade as keyof typeof gradeMap] ?? '—'
+      const score = t.result?.qualityScore != null ? ` (${t.result.qualityScore})` : ''
+      return `- ${icon} ${t.task.title} [${t.task.skillCategory}]${score}`
+    })
+
+    const body = [
+      `Orchestration run completed: ${run.delegationTitle}`,
+      `Tasks: ${doneTasks.length} done, ${failedTasks.length} failed`,
+      avgScore != null ? `Average quality score: ${avgScore}` : null,
+      '',
+      'Sub-tasks:',
+      ...taskLines,
+    ].filter(Boolean).join('\n')
+
+    const now = new Date().toISOString()
+    upsertCard({
+      id: `orch-run-${runId}`,
+      type: 'learning',
+      title: `Orchestration: ${run.delegationTitle.slice(0, 60)}`,
+      body,
+      sourceIds: [],
+      tags: ['orchestration', 'agent-run', avgScore != null && avgScore >= 80 ? 'high-quality' : 'review'],
+      privacyClass: 'internal',
+      confidence: avgScore != null && avgScore >= 75 ? 'high' : 'medium',
+      createdAt: now,
+      updatedAt: now,
+    })
+  } catch {
+    // Non-fatal — knowledge writeback should never break execution
   }
 }
 
