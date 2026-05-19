@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { ProjectBrief, Requirement, UseCase, Risk, Finding, FindingConfidence, ResearchRun } from '@/lib/models/project-brief'
 import type { Milestone, WorkPackage } from '@/lib/models/milestone'
+import { briefToMarkdown, briefMarkdownFilename } from '@/lib/project-briefs/markdown-export'
 
 interface Props {
   initialBrief: ProjectBrief
@@ -243,7 +244,20 @@ export function BlueprintScreen({ initialBrief }: Props) {
     })
   }
 
-  return (
+
+  function handleDownloadMarkdown() {
+    const markdown = briefToMarkdown(brief)
+    const filename = briefMarkdownFilename(brief)
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+    return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <main className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <div className="mb-5 flex items-center gap-2 text-sm text-slate-500">
@@ -302,6 +316,9 @@ export function BlueprintScreen({ initialBrief }: Props) {
               )}
               <ActionButton onClick={handleCreateLinearTicket} disabled={ticketing} tone="secondary">
                 {ticketing ? 'Erstelle Ticket' : 'Linear Ticket'}
+              </ActionButton>
+              <ActionButton onClick={handleDownloadMarkdown} tone="ghost">
+                ⬇ Markdown
               </ActionButton>
               {brief.status !== 'archived' && (
                 <ActionButton onClick={() => setShowArchiveConfirm(true)} tone="ghost">

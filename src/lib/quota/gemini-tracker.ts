@@ -1,6 +1,5 @@
 /**
  * Gemini Free Tier Quota Tracker
- *
  * Persists daily call counts in config/gemini-quota.json.
  * Auto-rotates: keeps only the last 7 days.
  */
@@ -9,7 +8,7 @@ import fs from 'fs'
 import path from 'path'
 
 export interface QuotaEntry {
-  date: string  // ISO date string "YYYY-MM-DD"
+  date: string
   calls: number
 }
 
@@ -29,8 +28,6 @@ const QUOTA_FILE = path.join(process.cwd(), 'config', 'gemini-quota.json')
 const DAILY_LIMIT = 1500
 const RETENTION_DAYS = 7
 
-// ─── Date helpers ─────────────────────────────────────────────────────────────
-
 function todayUTC(): string {
   return new Date().toISOString().slice(0, 10)
 }
@@ -47,8 +44,6 @@ function cutoffDate(): string {
   cutoff.setUTCDate(cutoff.getUTCDate() - RETENTION_DAYS)
   return cutoff.toISOString().slice(0, 10)
 }
-
-// ─── Store I/O ─────────────────────────────────────────────────────────────────
 
 function readStore(): QuotaStore {
   try {
@@ -72,38 +67,26 @@ function rotateEntries(entries: QuotaEntry[]): QuotaEntry[] {
   return entries.filter(e => e.date >= cutoff)
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
-
-/**
- * Increment today's Gemini call counter by 1.
- */
 export function incrementGeminiCall(): void {
   const store = readStore()
   const today = todayUTC()
-
   const existing = store.entries.find(e => e.date === today)
   if (existing) {
     existing.calls += 1
   } else {
     store.entries.push({ date: today, calls: 1 })
   }
-
   store.entries = rotateEntries(store.entries)
   store.lastUpdated = new Date().toISOString()
-
   writeStore(store)
 }
 
-/**
- * Get current quota status for today.
- */
 export function getGeminiQuota(): GeminiQuotaStatus {
   const store = readStore()
   const today = todayUTC()
   const entry = store.entries.find(e => e.date === today)
   const todayCalls = entry?.calls ?? 0
   const percentage = Math.round((todayCalls / DAILY_LIMIT) * 100)
-
   return {
     today: todayCalls,
     limit: DAILY_LIMIT,
@@ -112,9 +95,6 @@ export function getGeminiQuota(): GeminiQuotaStatus {
   }
 }
 
-/**
- * Get call history for the last N days (for charts etc.).
- */
 export function getGeminiQuotaHistory(): QuotaEntry[] {
   const store = readStore()
   return rotateEntries(store.entries).sort((a, b) => a.date.localeCompare(b.date))
