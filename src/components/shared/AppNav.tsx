@@ -29,6 +29,7 @@ import {
   Lightbulb,
   FolderOpen,
   Bell,
+  Radio,
 } from 'lucide-react'
 import type { Delegation } from '@/lib/models/delegation'
 import type { AttentionItem } from '@/lib/models/attention'
@@ -57,6 +58,7 @@ const navItems: NavItem[] = [
   { href: '/agent-runs', label: 'Agent Runs', shortLabel: 'Runs', icon: History, section: 'Execute' },
   { href: '/agents', label: 'Agent Control', shortLabel: 'Agents', icon: Bot, section: 'Execute' },
   { href: '/orchestrations', label: 'Orchestrierungen', shortLabel: 'Orch.', icon: Network, section: 'Execute', isNew: true },
+  { href: '/monitor', label: 'Agent Monitor', shortLabel: 'Monitor', icon: Radio, section: 'Execute', isNew: true },
   { href: '/pm-agent', label: 'PM Agent', shortLabel: 'PM Agent', icon: Brain, section: 'Execute', isNew: true },
   { href: '/knowledge', label: 'Knowledge Center', shortLabel: 'Knowledge', icon: BookOpen, section: 'Knowledge' },
   { href: '/knowledge/research', label: 'Research Platform', shortLabel: 'Research', icon: Search, section: 'Knowledge', isNew: true },
