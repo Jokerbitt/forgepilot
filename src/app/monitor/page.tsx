@@ -253,6 +253,15 @@ function severityText(severity: MonitorRecommendation['severity']): string {
   return 'text-blue-300'
 }
 
+// ─── Gemini Quota ─────────────────────────────────────────────────────────────
+
+interface GeminiQuotaStatus {
+  today: number
+  limit: number
+  percentage: number
+  resetAt: string
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function MonitorPage() {
@@ -260,6 +269,15 @@ export default function MonitorPage() {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [isLive, setIsLive] = useState(false)
   const [useMock, setUseMock] = useState(true)
+  const [geminiQuota, setGeminiQuota] = useState<GeminiQuotaStatus | null>(null)
+
+  const fetchGeminiQuota = useCallback(async () => {
+    try {
+      const res = await fetch('/api/monitor/quota')
+      if (!res.ok) return
+      setGeminiQuota(await res.json() as GeminiQuotaStatus)
+    } catch { /* quota endpoint not yet available */ }
+  }, [])
 
   const fetchSnapshot = useCallback(async () => {
     try {
@@ -279,9 +297,13 @@ export default function MonitorPage() {
 
   useEffect(() => {
     void fetchSnapshot()
-    const interval = window.setInterval(() => { void fetchSnapshot() }, 5000)
+    void fetchGeminiQuota()
+    const interval = window.setInterval(() => {
+      void fetchSnapshot()
+      void fetchGeminiQuota()
+    }, 30000)
     return () => window.clearInterval(interval)
-  }, [fetchSnapshot])
+  }, [fetchSnapshot, fetchGeminiQuota])
 
   const hasActive = snapshot.activeAgents.length > 0
   const recentSlice = snapshot.recentAgents.slice(0, 10)
@@ -368,6 +390,9 @@ export default function MonitorPage() {
             </div>
           </div>
         )}
+
+        {/* ── Sektion 2b: Gemini Free Tier Quota ── */}
+        <GeminiQuotaWidget quota={geminiQuota} />
 
         {/* ── Sektion 3: Empfehlungen ── */}
         {snapshot.recommendations.length > 0 && (
@@ -649,5 +674,61 @@ function SummaryMetric({ label, value, sub, color }: { label: string; value: str
       <p className={cx('mt-1.5 text-2xl font-bold tabular-nums', color ?? 'text-white')}>{value}</p>
       {sub && <p className="mt-0.5 text-[10px] text-slate-600">{sub}</p>}
     </div>
+  )
+}
+
+// ─── Gemini Quota Widget ──────────────────────────────────────────────────────
+
+function GeminiQuotaWidget({ quota }: { quota: GeminiQuotaStatus | null }) {
+  const today = quota?.today ?? 0
+  const limit = quota?.limit ?? 1500
+  const percentage = quota?.percentage ?? 0
+  const resetAt = quota?.resetAt ?? ''
+
+  const barColor =
+    percentage >= 95 ? 'bg-rose-500' : percentage >= 80 ? 'bg-amber-400' : 'bg-emerald-500'
+
+  const textColor =
+    percentage >= 95 ? 'text-rose-300' : percentage >= 80 ? 'text-amber-300' : 'text-emerald-300'
+
+  const filledBlocks = Math.round((percentage / 100) * 14)
+  const emptyBlocks = 14 - filledBlocks
+  const bar = '\u2588'.repeat(filledBlocks) + '\u2591'.repeat(emptyBlocks)
+
+  const resetLabel = resetAt
+    ? `T\u00e4gl. Reset: ${new Date(resetAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })} 00:00 UTC`
+    : 'T\u00e4gl. Reset: morgen 00:00 UTC'
+
+  return (
+    <Panel className="p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Gemini Free Tier</p>
+          <h2 className="mt-1 text-lg font-semibold text-white">API-Quota heute</h2>
+        </div>
+        <span className={cx('text-xs font-semibold tabular-nums', textColor)}>
+          {percentage}%
+        </span>
+      </div>
+
+      <div className="mb-3 font-mono text-sm text-slate-300">
+        <span className={textColor}>{bar}</span>
+        {' '}
+        <span className="font-semibold">{today}</span>
+        <span className="text-slate-500"> / {limit} heute</span>
+      </div>
+
+      <div className="mb-3 h-2 w-full overflow-hidden rounded-full bg-slate-800">
+        <div
+          className={cx('h-full rounded-full transition-all', barColor)}
+          style={{ width: `${Math.min(percentage, 100)}%` }}
+        />
+      </div>
+
+      <p className="text-xs text-slate-500">{resetLabel}</p>
+      {!quota && (
+        <p className="mt-1 text-[10px] text-amber-500">Demo-Daten — /api/monitor/quota nicht aktiv</p>
+      )}
+    </Panel>
   )
 }

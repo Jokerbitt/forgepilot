@@ -1,9 +1,5 @@
 /**
  * Webhook Intake Endpoint — POST /api/webhooks/intake
- * Accepts external triggers from n8n, Zapier, or any HTTP client.
- * Optional Bearer token auth via WEBHOOK_SECRET env variable.
- * Body: { event: string; payload: unknown; source?: string }
- * Supported events: 'new-idea', 'new-task', 'delegation-trigger'
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -35,9 +31,7 @@ function handleNewIdea(payload: unknown): string {
     targetAudience: String(p.targetAudience ?? p.target_audience ?? p.audience ?? 'Unbekannt'),
     desiredOutcome: String(p.desiredOutcome ?? p.desired_outcome ?? p.outcome ?? 'Zu definieren.'),
     constraints: Array.isArray(p.constraints) ? (p.constraints as string[]).map(String) : [],
-    scope: 'minimal',
-    researchMode: 'quick',
-    privacyMode: 'local',
+    scope: 'minimal', researchMode: 'quick', privacyMode: 'local',
   }
   const brief = buildProjectBrief(input)
   saveProjectBrief(brief)
@@ -63,8 +57,7 @@ function handleNewTask(payload: unknown): string {
   const id = crypto.randomUUID()
   const item: WorkItem = {
     id, source: 'local', type: 'ticket',
-    title: String(p.title ?? 'Webhook-Task'),
-    url: '',
+    title: String(p.title ?? 'Webhook-Task'), url: '',
     projectId: String(p.projectId ?? p.project_id ?? 'webhook'),
     status: 'backlog', priority: 2, blocked: false, risk: 'A',
     aiDelegable: true, updatedAt: now, createdAt: now, labels: ['webhook'],
@@ -121,18 +114,9 @@ export async function POST(request: NextRequest) {
   const processed: string[] = []
 
   switch (event) {
-    case 'new-idea': {
-      processed.push(`brief:${handleNewIdea(payload)}`)
-      break
-    }
-    case 'new-task': {
-      processed.push(`task:${handleNewTask(payload)}`)
-      break
-    }
-    case 'delegation-trigger': {
-      processed.push(`delegation-trigger:${handleDelegationTrigger(payload, source)}`)
-      break
-    }
+    case 'new-idea': { processed.push(`brief:${handleNewIdea(payload)}`); break }
+    case 'new-task': { processed.push(`task:${handleNewTask(payload)}`); break }
+    case 'delegation-trigger': { processed.push(`delegation-trigger:${handleDelegationTrigger(payload, source)}`); break }
   }
 
   return NextResponse.json({ received: true, processed }, { status: 200 })
