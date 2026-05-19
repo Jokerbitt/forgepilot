@@ -329,6 +329,80 @@ function OpenRouterQuickSetupBanner({ onActivated }: { onActivated: () => void }
   )
 }
 
+interface OllamaDetectedModel {
+  id: string
+  name: string
+  size: number
+  modifiedAt: string
+}
+
+interface OllamaModelsApiResponse {
+  models: OllamaDetectedModel[]
+  error?: string
+}
+
+function OllamaAutoDetect() {
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<OllamaModelsApiResponse | null>(null)
+
+  const handleDetect = async () => {
+    setLoading(true)
+    setResult(null)
+    try {
+      const res = await fetch('/api/ai/providers/ollama-models')
+      const data = await res.json() as OllamaModelsApiResponse
+      setResult(data)
+    } catch {
+      setResult({ models: [], error: 'Ollama not running' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatSize = (bytes: number): string => {
+    const gb = bytes / 1_073_741_824
+    return `${gb.toFixed(1)} GB`
+  }
+
+  return (
+    <div className="mt-3">
+      <button
+        onClick={() => { void handleDetect() }}
+        disabled={loading}
+        className="text-xs text-slate-400 hover:text-white border border-white/[0.08] rounded px-2 py-1 transition-colors disabled:opacity-40"
+      >
+        {loading ? 'Erkenne…' : '🔍 Modelle erkennen'}
+      </button>
+
+      {result && (
+        <div className="mt-2">
+          {result.error ? (
+            <div className="rounded-lg border border-rose-500/20 bg-rose-950/20 px-3 py-2">
+              <p className="text-xs text-rose-400">&#9888; Ollama not running &#8212; stelle sicher, dass Ollama lokal gestartet ist.</p>
+            </div>
+          ) : result.models.length === 0 ? (
+            <div className="rounded-lg border border-slate-700/40 bg-slate-900/40 px-3 py-2">
+              <p className="text-xs text-slate-500">Keine Modelle gefunden &#8212; führe <span className="font-mono text-violet-400">ollama pull llama3</span> aus.</p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-slate-700/40 bg-slate-900/40 px-3 py-2 space-y-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-2">
+                {result.models.length} Modell{result.models.length !== 1 ? 'e' : ''} gefunden
+              </p>
+              {result.models.map((model) => (
+                <div key={model.id} className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-mono text-slate-300 truncate">{model.name}</span>
+                  <span className="text-[10px] text-slate-500 shrink-0">{formatSize(model.size)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface ProviderWithStatus extends AIProviderConfig {
   hasApiKey: boolean
 }
@@ -536,6 +610,9 @@ function ProviderCard({
           )}
         </div>
       )}
+
+      {/* Ollama auto-detect — shown for Ollama provider regardless of enabled state */}
+      {provider.type === 'ollama' && <OllamaAutoDetect />}
     </div>
   )
 }
