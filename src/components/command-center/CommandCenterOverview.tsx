@@ -6,6 +6,8 @@ import type { OperatorReadiness, ReadinessStatus } from '@/lib/operator/readines
 import type { WorkItem } from '@/lib/models/work-item'
 import type { ResearchDocument } from '@/lib/models/research'
 import type { PMAgentResult } from '@/lib/agent-runner/pm-agent'
+import type { OrchestratedRun } from '@/lib/agents/orchestrated-run'
+import type { SkillPerformanceSummary } from '@/lib/agents/skill-evolver'
 import { Badge, Panel, StatusDot, buttonClassName, cx } from '@/components/ui/primitives'
 
 interface RecommendationsResponse {
@@ -25,23 +27,32 @@ interface NextAction {
   tone: ActionTone
 }
 
+interface PerformanceResponse {
+  summaries: SkillPerformanceSummary[]
+  warnings: { agentType: string; skillCategory: string; message: string }[]
+}
+
 export function CommandCenterOverview() {
   const [readiness, setReadiness] = useState<OperatorReadiness | null>(null)
   const [delegations, setDelegations] = useState<Delegation[]>([])
   const [recommendations, setRecommendations] = useState<WorkItem[]>([])
   const [researchDocs, setResearchDocs] = useState<ResearchDocument[]>([])
   const [pmPlan, setPmPlan] = useState<PMAgentResult | null | undefined>(undefined)
+  const [activeRuns, setActiveRuns] = useState<OrchestratedRun[]>([])
+  const [performance, setPerformance] = useState<PerformanceResponse | null>(null)
 
   useEffect(() => {
     let cancelled = false
 
     async function load() {
-      const [readinessRes, delegationsRes, recommendationsRes, researchRes, pmRes] = await Promise.allSettled([
+      const [readinessRes, delegationsRes, recommendationsRes, researchRes, pmRes, runsRes, perfRes] = await Promise.allSettled([
         fetch('/api/operator/readiness').then(res => res.json() as Promise<OperatorReadiness>),
         fetch('/api/delegations').then(res => res.json() as Promise<Delegation[]>),
         fetch('/api/recommendations').then(res => res.json() as Promise<RecommendationsResponse>),
         fetch('/api/knowledge/research').then(res => res.json() as Promise<ResearchDocument[]>),
         fetch('/api/pm-agent').then(res => res.json() as Promise<{ plan: PMAgentResult | null }>),
+        fetch('/api/agents/orchestrate').then(res => res.json() as Promise<{ runs: OrchestratedRun[] }>),
+        fetch('/api/agents/performance').then(res => res.json() as Promise<PerformanceResponse>),
       ])
 
       if (cancelled) return
@@ -51,6 +62,8 @@ export function CommandCenterOverview() {
       if (recommendationsRes.status === 'fulfilled') setRecommendations(recommendationsRes.value.recommendations ?? [])
       if (researchRes.status === 'fulfilled' && Array.isArray(researchRes.value)) setResearchDocs(researchRes.value)
       if (pmRes.status === 'fulfilled') setPmPlan(pmRes.value.plan)
+      if (runsRes.status === 'fulfilled') setActiveRuns(runsRes.value.runs ?? [])
+      if (perfRes.status === 'fulfilled') setPerformance(perfRes.value)
     }
 
     load()
@@ -291,9 +304,130 @@ export function CommandCenterOverview() {
         </div>
       </Panel>
 
+      <AgentActivityWidget runs={activeRuns} performance={performance} />
       <PMAgentWidget plan={pmPlan} />
-      <QuickActionsPanel />
+      <QuickActionsPanel activeRunCount={activeRuns.filter(r => r.status === 'running').length} />
     </div>
+  )
+}
+
+// ─── Agent Activity Widget (M62) ────────────────────────────────────────────
+
+function AgentActivityWidget({
+  runs,
+  performance,
+}: {
+  runs: OrchestratedRun[]
+  performance: PerformanceResponse | null
+}) {
+  const running = runs.filter(r => r.status === 'running')
+  const recent = runs.filter(r => r.status === 'done' || r.status === 'failed').slice(0, 3)
+  const avgScore = performance?.summaries.length
+    ? Math.round(performance.summaries.reduce((a, s) => a + s.averageScore, 0) / performance.summaries.length)
+    : null
+  const improving = performance?.summaries.filter(s => s.trend === 'improving').length ?? 0
+  const declining = performance?.summaries.filter(s => s.trend === 'declining').length ?? 0
+  const topWarning = performance?.warnings[0] ?? null
+
+  if (runs.length === 0 && !performance) return null
+
+  return (
+    <Panel className="p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">KI-Agenten</p>
+          <h2 className="mt-1 text-lg font-semibold text-white">Live Agent Activity</h2>
+        </div>
+        <a href="/orchestrations" className={buttonClassName('ghost', 'text-xs')}>Alle Runs →</a>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+        {/* Orchestration runs */}
+        <div className="space-y-2">
+          {running.length > 0 ? (
+            running.map(run => {
+              const total = run.tasks.length
+              const done = run.tasks.filter(t => t.status === 'done' || t.status === 'failed').length
+              const pct = total > 0 ? Math.round((done / total) * 100) : 0
+              return (
+                <a
+                  key={run.id}
+                  href="/orchestrations"
+                  className="flex items-center gap-3 rounded-lg border border-sky-800/40 bg-sky-950/20 px-3 py-2.5 transition-colors hover:border-sky-700/50"
+                >
+                  <span className="h-2 w-2 rounded-full bg-sky-400 animate-pulse shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-sky-300 truncate">{run.delegationTitle}</p>
+                    <div className="mt-1 h-1 w-full rounded-full bg-slate-800">
+                      <div className="h-1 rounded-full bg-sky-500 transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-xs text-slate-500 tabular-nums">{done}/{total}</span>
+                </a>
+              )
+            })
+          ) : recent.length > 0 ? (
+            recent.map(run => (
+              <a
+                key={run.id}
+                href="/orchestrations"
+                className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 transition-colors hover:border-slate-700"
+              >
+                <span className={cx('h-2 w-2 rounded-full shrink-0', run.status === 'done' ? 'bg-emerald-400' : 'bg-red-400')} />
+                <p className="flex-1 text-xs text-slate-400 truncate">{run.delegationTitle}</p>
+                <span className="text-xs text-slate-600 capitalize">{run.status}</span>
+              </a>
+            ))
+          ) : (
+            <div className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-3">
+              <p className="text-xs text-slate-500">Keine aktiven Orchestrierungen</p>
+              <p className="mt-0.5 text-xs text-slate-600">Starte einen Run über Work Items oder den Auto-Pilot</p>
+            </div>
+          )}
+        </div>
+
+        {/* Quality KPIs */}
+        <div className="space-y-2">
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-center">
+              <p className={cx('text-xl font-bold tabular-nums', avgScore !== null ? (avgScore >= 80 ? 'text-emerald-400' : avgScore >= 60 ? 'text-amber-400' : 'text-red-400') : 'text-slate-500')}>
+                {avgScore ?? '—'}
+              </p>
+              <p className="text-[10px] text-slate-600 mt-0.5">Ø Score</p>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-center">
+              <p className={cx('text-xl font-bold tabular-nums', improving > 0 ? 'text-emerald-400' : 'text-slate-500')}>{improving}</p>
+              <p className="text-[10px] text-slate-600 mt-0.5">↑ Besser</p>
+            </div>
+            <div className="rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-center">
+              <p className={cx('text-xl font-bold tabular-nums', declining > 0 ? 'text-red-400' : 'text-slate-500')}>{declining}</p>
+              <p className="text-[10px] text-slate-600 mt-0.5">↓ Drift</p>
+            </div>
+          </div>
+
+          {topWarning ? (
+            <div className="flex items-start gap-2 rounded-lg border border-red-900/40 bg-red-950/20 px-3 py-2">
+              <span className="text-red-400 text-xs mt-0.5 shrink-0">⚠</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-red-300 capitalize">{topWarning.agentType} · {topWarning.skillCategory}</p>
+                <p className="text-[10px] text-red-400/70 mt-0.5 truncate">{topWarning.message}</p>
+              </div>
+              <a href="/agents?tab=performance" className="shrink-0 text-[10px] text-red-500 hover:text-red-400">Review →</a>
+            </div>
+          ) : performance && (
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-900/20 bg-emerald-950/10 px-3 py-2">
+              <span className="text-emerald-400 text-xs">✓</span>
+              <p className="text-xs text-emerald-400/80">Alle Agenten stabil</p>
+            </div>
+          )}
+
+          <a href="/agents?tab=performance" className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs transition-colors hover:border-slate-700">
+            <span className="text-slate-500">Performance-Dashboard</span>
+            <span className="text-slate-600">→</span>
+          </a>
+        </div>
+      </div>
+    </Panel>
   )
 }
 
@@ -412,9 +546,12 @@ function toneBorder(tone: ActionTone): string {
   return 'border-sky-500/30'
 }
 
-function QuickActionsPanel() {
+function QuickActionsPanel({ activeRunCount }: { activeRunCount: number }) {
   const [pmStatus, setPmStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [pmMessage, setPmMessage] = useState<string | null>(null)
+  const [pilotStatus, setPilotStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const [pilotMessage, setPilotMessage] = useState<string | null>(null)
+  const [pilotRunId, setPilotRunId] = useState<string | null>(null)
 
   const handleRunPmAgent = useCallback(async () => {
     setPmStatus('loading')
@@ -435,21 +572,71 @@ function QuickActionsPanel() {
       setPmStatus('error')
       setPmMessage('Netzwerkfehler beim Starten des PM-Agenten.')
     }
-    setTimeout(() => {
-      setPmStatus('idle')
-      setPmMessage(null)
-    }, 5000)
+    setTimeout(() => { setPmStatus('idle'); setPmMessage(null) }, 5000)
   }, [])
 
-  const feedbackColor =
+  const handleAutoPilot = useCallback(async () => {
+    setPilotStatus('loading')
+    setPilotMessage(null)
+    setPilotRunId(null)
+    try {
+      const res = await fetch('/api/pilot/auto-run', { method: 'POST' })
+      const data = await res.json() as { run?: { id: string }; delegation?: { title: string }; taskCount?: number; error?: string }
+      if (!res.ok || data.error) {
+        setPilotStatus('error')
+        setPilotMessage(data.error ?? 'Kein delegierbares Work Item gefunden.')
+      } else {
+        setPilotStatus('success')
+        setPilotRunId(data.run?.id ?? null)
+        setPilotMessage(`✓ "${data.delegation?.title?.slice(0, 40) ?? 'Task'}" → ${data.taskCount ?? 0} Sub-Tasks erstellt`)
+      }
+    } catch {
+      setPilotStatus('error')
+      setPilotMessage('Netzwerkfehler beim Auto-Pilot.')
+    }
+    setTimeout(() => { setPilotStatus('idle'); setPilotMessage(null); setPilotRunId(null) }, 8000)
+  }, [])
+
+  const pmFeedbackColor =
     pmStatus === 'success' ? 'text-emerald-400' :
     pmStatus === 'error'   ? 'text-rose-400' :
     'text-amber-400'
 
+  const pilotFeedbackColor =
+    pilotStatus === 'success' ? 'text-emerald-400' :
+    pilotStatus === 'error'   ? 'text-rose-400' :
+    'text-amber-400'
+
   return (
     <Panel className="p-5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Quick Actions</p>
-      <div className="mt-4 flex flex-wrap gap-3 items-center">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Quick Actions</p>
+        {activeRunCount > 0 && (
+          <a href="/orchestrations" className="flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
+            {activeRunCount} aktiv
+          </a>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-3 items-center">
+        {/* M63: Autonomous Pilot Button */}
+        <button
+          onClick={() => { void handleAutoPilot() }}
+          disabled={pilotStatus === 'loading'}
+          className={cx(
+            'flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+            pilotStatus === 'loading'
+              ? 'bg-violet-900/40 text-violet-400 cursor-not-allowed'
+              : 'bg-violet-700 text-white hover:bg-violet-600',
+          )}
+        >
+          {pilotStatus === 'loading' ? (
+            <><span className="animate-spin">⚙</span> Pilot läuft…</>
+          ) : (
+            <><span>⚙</span> Auto-Pilot</>
+          )}
+        </button>
+
         <a
           href="/knowledge/research?new=1"
           className={buttonClassName('secondary', 'text-sm')}
@@ -457,7 +644,7 @@ function QuickActionsPanel() {
           + Neue Recherche
         </a>
         <button
-          onClick={handleRunPmAgent}
+          onClick={() => { void handleRunPmAgent() }}
           disabled={pmStatus === 'loading'}
           className={cx(
             buttonClassName('ghost', 'text-sm'),
@@ -466,10 +653,17 @@ function QuickActionsPanel() {
         >
           {pmStatus === 'loading' ? '⏳ PM Agent läuft…' : '▶ PM Agent ausführen'}
         </button>
-        {pmMessage && (
-          <span className={cx('text-xs', feedbackColor)}>
-            {pmMessage}
+
+        {pilotMessage && (
+          <span className={cx('text-xs', pilotFeedbackColor)}>
+            {pilotMessage}
+            {pilotRunId && pilotStatus === 'success' && (
+              <a href="/orchestrations" className="ml-2 underline text-sky-400">Run ansehen</a>
+            )}
           </span>
+        )}
+        {pmMessage && !pilotMessage && (
+          <span className={cx('text-xs', pmFeedbackColor)}>{pmMessage}</span>
         )}
       </div>
     </Panel>
