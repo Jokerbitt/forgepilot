@@ -34,7 +34,7 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 
 ## 🟢 Lower Priority
 
-- [x] feat: Dark/Light mode toggle (persist in localStorage, default dark)
+- [ ] feat: Dark/Light mode toggle (persist in localStorage, default dark)
 - [ ] feat: Project Brief PDF export (use puppeteer or jsPDF)
 - [ ] feat: Agent skill library page — show all available agent skills with descriptions
 - [ ] feat: Delegation contract versioning — track changes to contracts over time

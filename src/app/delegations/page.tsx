@@ -285,6 +285,43 @@ function DelegationsContent() {
     d => d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled'
   ).length
 
+  // ── Checkbox selection (pending delegations only) ───────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  const pendingDelegations = delegations.filter(d => d.status === 'pending')
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    const visiblePendingIds = sortedDelegations
+      .filter(d => d.status === 'pending')
+      .map(d => d.id)
+    const allSelected = visiblePendingIds.every(id => selectedIds.has(id))
+    if (allSelected) {
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        visiblePendingIds.forEach(id => next.delete(id))
+        return next
+      })
+    } else {
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        visiblePendingIds.forEach(id => next.add(id))
+        return next
+      })
+    }
+  }
+
   // ── Batch Approve ────────────────────────────────────────────────────────
   const approvableDelegations = delegations.filter(
     d => d.status === 'pending' && d.contract.requiresApproval && d.contract.riskClass !== 'C'
@@ -309,6 +346,36 @@ function DelegationsContent() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     })
+  }
+
+  const handleSelectionBatchApprove = async () => {
+    if (selectedIds.size === 0) return
+    const ids = Array.from(selectedIds)
+
+    // Optimistic update
+    const now = new Date().toISOString()
+    ids.forEach(id => {
+      const del = delegations.find(d => d.id === id)
+      if (!del || del.status !== 'pending' || del.contract.riskClass === 'C') return
+      applyUpdate({
+        ...del,
+        status: 'approved',
+        contract: { ...del.contract, requiresApproval: false },
+        logs: [...(del.logs ?? []), { timestamp: now, type: 'success', message: 'Batch-freigegeben (Auswahl).' }],
+        updatedAt: now,
+      })
+    })
+
+    // Persist via batch-approve route
+    await fetch('/api/delegations/batch-approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    })
+
+    // Clear selection and refresh
+    setSelectedIds(new Set())
+    loadDelegations()
   }
 
   // ── Drag & Drop ─────────────────────────────────────────────────────────
@@ -714,7 +781,27 @@ function DelegationsContent() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-gray-950 border-b border-gray-800 text-xs uppercase text-gray-500">
-                      <th className="p-3 font-medium w-10 text-center">#</th>
+                      <th className="p-3 font-medium w-10 text-center">
+                        {pendingDelegations.length > 0 && (() => {
+                          const visiblePendingIds = sortedDelegations
+                            .filter(d => d.status === 'pending')
+                            .map(d => d.id)
+                          const allChecked = visiblePendingIds.length > 0 && visiblePendingIds.every(id => selectedIds.has(id))
+                          const someChecked = visiblePendingIds.some(id => selectedIds.has(id))
+                          return (
+                            <input
+                              type="checkbox"
+                              checked={allChecked}
+                              ref={el => {
+                                if (el) el.indeterminate = someChecked && !allChecked
+                              }}
+                              onChange={toggleSelectAll}
+                              className="cursor-pointer accent-green-500"
+                              title="Alle pending auswählen"
+                            />
+                          )
+                        })()}
+                      </th>
                       <th
                         className="p-3 font-medium cursor-pointer hover:text-gray-300 select-none"
                         onClick={() => handleSort('goal')}
@@ -755,9 +842,26 @@ function DelegationsContent() {
                           onDragEnd={draggedIndex !== null ? handleDrop : undefined}
                           onClick={() => setSelectedDelegation(del)}
                         >
-                          {/* Priority / drag handle — draggable only on this cell */}
+                          {/* Priority / drag handle / checkbox — draggable only on this cell */}
                           <td className="p-3 text-center" onClick={e => e.stopPropagation()}>
-                            {!isDone ? (
+                            {del.status === 'pending' ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIds.has(del.id)}
+                                  onChange={() => toggleSelect(del.id)}
+                                  className="cursor-pointer accent-green-500"
+                                  title="Auswählen"
+                                />
+                                <span
+                                  draggable
+                                  onDragStart={() => handleDragStart(index)}
+                                  className="text-xs text-gray-600 cursor-grab group-hover:text-gray-400 transition-colors select-none px-1"
+                                >
+                                  ⋮⋮
+                                </span>
+                              </div>
+                            ) : !isDone ? (
                               <span
                                 draggable
                                 onDragStart={() => handleDragStart(index)}
@@ -1023,6 +1127,28 @@ function DelegationsContent() {
           </div>
         )}
       </div>
+
+      {/* ── Floating Batch-Approve Bar ─────────────────────────────────── */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 rounded-xl border border-gray-700 bg-gray-900/95 px-5 py-3 shadow-2xl shadow-black/60 backdrop-blur">
+          <span className="text-sm text-gray-300">
+            <span className="font-semibold text-white">{selectedIds.size}</span> ausgewählt
+          </span>
+          <button
+            onClick={handleSelectionBatchApprove}
+            className="flex items-center gap-1.5 rounded-lg bg-green-700 px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-green-600"
+          >
+            Alle freigeben ▶
+          </button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="rounded px-2 py-1 text-sm text-gray-500 transition-colors hover:text-white"
+            title="Auswahl aufheben"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* ── Delegation Drawer ──────────────────────────────────────────── */}
       {selectedDelegation && (
