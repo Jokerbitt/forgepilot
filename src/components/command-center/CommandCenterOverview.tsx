@@ -299,6 +299,12 @@ export function CommandCenterOverview() {
         </div>
       </Panel>
 
+      <FirstStepsWidget
+        hasProvider={!!dashboardStats && dashboardStats.system.activeProviders > 0}
+        hasIdea={ideaHistory.length > 0}
+        hasBrief={ideaHistory.length > 0}
+        hasDelegation={!!dashboardStats && dashboardStats.delegations.total > 0}
+      />
       <SystemStatsWidget stats={dashboardStats} />
       <AgentActivityWidget stats={dashboardStats} />
       <PMAgentWidget plan={pmPlan} />
@@ -766,6 +772,98 @@ function SystemStatsWidget({ stats }: { stats: DashboardStats | null }) {
           <p className="text-xs text-slate-500 uppercase tracking-wide">Tests grün</p>
           <p className="text-[10px] text-slate-600">Vitest — alle bestanden</p>
         </div>
+      </div>
+    </Panel>
+  )
+}
+
+// ─── First Steps Onboarding Widget ──────────────────────────────────────────
+
+const FIRST_STEPS_DISMISSED_KEY = 'forgepilot:first-steps-dismissed'
+
+interface FirstStepsWidgetProps {
+  hasProvider: boolean
+  hasIdea: boolean
+  hasBrief: boolean
+  hasDelegation: boolean
+}
+
+function FirstStepsWidget({ hasProvider, hasIdea, hasBrief, hasDelegation }: FirstStepsWidgetProps) {
+  const [dismissed, setDismissed] = useState(false)
+
+  // Read localStorage only on client after mount
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(FIRST_STEPS_DISMISSED_KEY) === 'true') {
+        setDismissed(true)
+      }
+    } catch {
+      // localStorage not available
+    }
+  }, [])
+
+  const steps = [
+    { label: 'App gestartet', done: true, href: null },
+    { label: 'AI Provider einrichten', done: hasProvider, href: '/settings/providers' },
+    { label: 'Erste Idee eingeben', done: hasIdea, href: '/idea' },
+    { label: 'Project Brief erstellen', done: hasBrief, href: '/project-briefs/new' },
+    { label: 'Delegation starten', done: hasDelegation, href: '/delegations' },
+  ]
+
+  const allUserStepsDone = hasProvider && hasIdea && hasBrief && hasDelegation
+
+  const handleDismiss = () => {
+    try {
+      localStorage.setItem(FIRST_STEPS_DISMISSED_KEY, 'true')
+    } catch {
+      // localStorage not available
+    }
+    setDismissed(true)
+  }
+
+  if (dismissed || allUserStepsDone) return null
+
+  return (
+    <Panel className="p-5 border border-violet-500/20">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-violet-400">Erste Schritte</p>
+          <h2 className="mt-1 text-lg font-semibold text-white">Erste Schritte mit ForgePilot</h2>
+        </div>
+        <button
+          onClick={handleDismiss}
+          className="text-xs text-slate-600 hover:text-slate-400 transition-colors px-2 py-1 rounded"
+          title="Widget ausblenden"
+        >
+          Ausblenden
+        </button>
+      </div>
+      <div className="space-y-2">
+        {steps.map((step) => (
+          <div key={step.label} className="flex items-center gap-3">
+            <span className={cx(
+              'flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold',
+              step.done
+                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                : 'bg-slate-800 text-slate-600 border border-slate-700',
+            )}>
+              {step.done ? '✓' : '○'}
+            </span>
+            {step.href && !step.done ? (
+              <a
+                href={step.href}
+                className="text-sm text-slate-300 hover:text-violet-300 transition-colors"
+              >
+                {step.label}
+                <span className="ml-1 text-xs text-slate-600">→</span>
+              </a>
+            ) : (
+              <span className={cx('text-sm', step.done ? 'text-slate-500 line-through' : 'text-slate-400')}>
+                {step.label}
+              </span>
+            )}
+          </div>
+        ))}
       </div>
     </Panel>
   )
