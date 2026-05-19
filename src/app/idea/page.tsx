@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { cx } from '@/components/ui/primitives'
+import type { IdeaHistoryEntry } from '@/lib/pilot/idea-history-store'
 
 interface PipelineResult {
   briefId: string
@@ -82,8 +83,19 @@ export default function IdeaPage() {
   const [result, setResult] = useState<PipelineResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [liveRun, setLiveRun] = useState<LiveRunState | null>(null)
+  const [history, setHistory] = useState<IdeaHistoryEntry[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Load recent submissions on mount
+  useEffect(() => {
+    fetch('/api/pilot/idea-history?limit=5')
+      .then(r => r.json())
+      .then((data: unknown) => {
+        if (Array.isArray(data)) setHistory(data as IdeaHistoryEntry[])
+      })
+      .catch(() => { /* non-critical */ })
+  }, [])
 
   const isRunning = stage !== 'idle' && stage !== 'done' && stage !== 'error'
 
@@ -178,6 +190,12 @@ export default function IdeaPage() {
       const data = await res.json() as PipelineResult
       setResult(data)
       setStage('done')
+
+      // Refresh history to show the new entry
+      fetch('/api/pilot/idea-history?limit=5')
+        .then(r => r.json())
+        .then((d: unknown) => { if (Array.isArray(d)) setHistory(d as IdeaHistoryEntry[]) })
+        .catch(() => { /* non-critical */ })
 
       // Auto-execute the run, then start polling
       void fetch(`/api/agents/orchestrate/${data.run.id}/execute`, { method: 'POST' })
@@ -303,6 +321,47 @@ export default function IdeaPage() {
                 ))}
               </div>
             </div>
+
+            {/* Recent Submissions */}
+            {history.length > 0 && (
+              <div>
+                <p className="text-xs text-slate-600 mb-2 px-1">Zuletzt eingereicht:</p>
+                <div className="space-y-2">
+                  {history.map(entry => {
+                    const statusCx =
+                      entry.status === 'done'    ? 'text-emerald-400'
+                      : entry.status === 'failed'  ? 'text-rose-400'
+                      : entry.status === 'running' ? 'text-violet-400'
+                      : 'text-slate-600'
+                    const statusLabel =
+                      entry.status === 'done'    ? '✓ Fertig'
+                      : entry.status === 'failed'  ? '✗ Fehler'
+                      : entry.status === 'running' ? '⚙ Läuft'
+                      : '… Wird gebaut'
+                    return (
+                      <div
+                        key={entry.id}
+                        className="flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-slate-300 truncate">{entry.briefTitle}</p>
+                          <p className="text-xs text-slate-600 truncate">{entry.idea.slice(0, 55)}{entry.idea.length > 55 ? '…' : ''}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={cx('text-xs font-medium', statusCx)}>
+                            {entry.status === 'running' && <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />}
+                            {statusLabel}
+                          </span>
+                          <a href="/orchestrations" className="text-xs text-slate-600 hover:text-violet-400 transition-colors">
+                            →
+                          </a>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         ) : null}
 
