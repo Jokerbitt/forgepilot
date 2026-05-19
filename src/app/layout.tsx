@@ -3,6 +3,7 @@ import './globals.css'
 import { ToastProvider } from '@/components/shared/ToastProvider'
 import { AppNav } from '@/components/shared/AppNav'
 import { GlobalKeyboardHandler } from '@/components/shared/GlobalKeyboardHandler'
+import { GlobalSearch } from '@/components/search/GlobalSearch'
 
 export const metadata: Metadata = {
   title: 'ForgePilot',
@@ -20,6 +21,7 @@ export default function RootLayout({
         <ToastProvider>
           <AppNav />
           <GlobalKeyboardHandler />
+          <GlobalSearch />
           <div className="lg:pl-64">
             {children}
           </div>
