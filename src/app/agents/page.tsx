@@ -128,6 +128,12 @@ export default function AgentsPage() {
               <h1 className="mt-2 text-3xl font-semibold tracking-tight">Agent Control Plane</h1>
               <p className="mt-2 text-sm text-slate-400">Agentenprofile, Skills, Performance und Orchestrierung.</p>
             </div>
+            <a
+              href="/agents/skills"
+              className="rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs font-semibold text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+            >
+              📚 Skill Library
+            </a>
             <div className="flex gap-4 text-right text-xs">
               <div>
                 <p className="text-slate-500">Gesamt</p>
