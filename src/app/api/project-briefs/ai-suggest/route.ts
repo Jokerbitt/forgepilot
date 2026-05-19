@@ -58,15 +58,21 @@ Antworte mit folgendem JSON-Objekt:
 }`
 
     const result = await generateText({
-      anthropicModel: 'claude-haiku-4-5',
-      maxTokens: 512,
+      maxTokens: 1024,
       system: SYSTEM_PROMPT,
       prompt: userPrompt,
       purpose: 'fast',
     })
 
     const cleaned = stripJsonCodeFence(result.text)
-    const parsed = JSON.parse(cleaned) as AISuggestResponse
+    let parsed: AISuggestResponse
+    try {
+      parsed = JSON.parse(cleaned) as AISuggestResponse
+    } catch {
+      const match = result.text.match(/\{[\s\S]*\}/)
+      if (!match) throw new Error('KI-Antwort enthält kein gültiges JSON')
+      parsed = JSON.parse(match[0]) as AISuggestResponse
+    }
 
     // Validate required fields
     if (!parsed.title || !parsed.problemStatement || !parsed.desiredOutcome || !parsed.targetAudience) {

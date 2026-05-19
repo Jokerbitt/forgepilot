@@ -79,15 +79,22 @@ Antwort-Format:
 }`
 
     const result = await generateText({
-      anthropicModel: model,
-      maxTokens: 2048,
+      maxTokens: 4096,
       system: SYSTEM_PROMPT,
       prompt: userPrompt,
       purpose: brief.scope === 'minimal' ? 'fast' : 'coding',
     })
 
     const cleaned = stripJsonCodeFence(result.text)
-    const parsed = JSON.parse(cleaned) as {
+    let rawParsed: string
+    try {
+      JSON.parse(cleaned)
+      rawParsed = cleaned
+    } catch {
+      const match = result.text.match(/\{[\s\S]*\}/)
+      rawParsed = match ? match[0] : cleaned
+    }
+    const parsed = JSON.parse(rawParsed) as {
       requirements: Array<{ title: string; description: string; type: string; priority: string }>
       useCases: Array<{ title: string; actor: string; trigger: string; mainFlow: string[] }>
       risks: Array<{ title: string; description: string; probability: string; impact: string; mitigationIdea?: string; isOpenAssumption: boolean }>
