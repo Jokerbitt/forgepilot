@@ -15,6 +15,7 @@ import { scoreWork } from '@/lib/agents/work-quality'
 import { recordOutcome } from '@/lib/agents/skill-evolver'
 import { upsertCard } from '@/lib/knowledge/store'
 import { saveNotification } from '@/lib/notifications/notification-store'
+import { updateIdeaHistoryStatus } from '@/lib/pilot/idea-history-store'
 import crypto from 'crypto'
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
@@ -141,9 +142,10 @@ async function executeRunAsync(runId: string, skipFailed: boolean): Promise<void
     }
   }
 
-  // All tasks processed — write summary knowledge card + inbox notification
+  // All tasks processed — write summary knowledge card + inbox notification + history status
   writeRunKnowledgeCard(runId)
   notifyRunComplete(runId)
+  syncIdeaHistoryStatus(runId)
 }
 
 /** Write a MemoryCard summarising this run's outcomes to the Knowledge Store */
@@ -235,6 +237,21 @@ async function pollDelegationCompletion(
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/** Sync idea-history entry status when a run completes */
+function syncIdeaHistoryStatus(runId: string): void {
+  try {
+    const run = getRun(runId)
+    if (!run) return
+    if (run.status === 'done') {
+      updateIdeaHistoryStatus(runId, 'done')
+    } else if (run.status === 'failed' || run.status === 'aborted') {
+      updateIdeaHistoryStatus(runId, 'failed')
+    }
+  } catch {
+    // Non-critical
+  }
 }
 
 /** Fire an inbox notification when a run reaches a terminal state */
