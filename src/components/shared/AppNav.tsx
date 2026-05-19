@@ -27,6 +27,7 @@ import {
   Brain,
   Network,
   Lightbulb,
+  FolderOpen,
 } from 'lucide-react'
 import type { Delegation } from '@/lib/models/delegation'
 import type { AttentionItem } from '@/lib/models/attention'
@@ -60,6 +61,7 @@ const navItems: NavItem[] = [
   { href: '/model-router', label: 'Model Router', shortLabel: 'Router', icon: GitBranch, section: 'System' },
   { href: '/governance', label: 'Governance Hub', shortLabel: 'Gov', icon: Shield, section: 'System' },
   { href: '/analytics', label: 'Cost Analytics', shortLabel: 'Analytics', icon: BarChart3, section: 'System' },
+  { href: '/projects', label: 'My Projects', shortLabel: 'Projects', icon: FolderOpen, section: 'Plan', isNew: true },
   { href: '/idea', label: 'Idea → Production', shortLabel: 'Idea', icon: Lightbulb, section: 'System', isNew: true },
   { href: '/pilot', label: 'E2E Pilot', shortLabel: 'Pilot', icon: FlaskConical, section: 'System' },
   { href: '/settings', label: 'Settings', shortLabel: 'Settings', icon: Settings, section: 'System' },
