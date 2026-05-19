@@ -45,11 +45,11 @@ const STAGE_LABELS: Record<Stage, string> = {
 }
 
 const EXAMPLES = [
-  'Ein Slack-Bot der täglich einen Fortschrittsbericht aus Linear-Tickets erstellt',
-  'Ein Dashboard das alle GitHub PRs nach Alter und Reviewer sortiert anzeigt',
-  'Eine CLI die lokale Markdown-Dateien auf tote Links überprüft',
-  'Ein API-Endpoint der Wetterdaten von OpenMeteo abruft und cacht',
-  'Eine React-Komponente für ein interaktives Gantt-Diagramm',
+  'Ein KI-Assistent der meine E-Mails zusammenfasst',
+  'Automatische Rechnungsverwaltung mit Kategorien',
+  'Ein Dashboard für meine Fitnessdaten',
+  'KI-gestützte Code-Review-Automatisierung',
+  'Kundensupport-Chatbot für meinen Online-Shop',
 ]
 
 const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
@@ -337,9 +337,9 @@ export default function IdeaPage() {
                   <button
                     key={ex}
                     onClick={() => handleExample(ex)}
-                    className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 text-xs text-slate-500 hover:border-violet-500/30 hover:text-slate-300 transition-colors text-left"
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs px-3 py-1 rounded-full cursor-pointer border border-slate-700 transition-colors"
                   >
-                    {ex.slice(0, 50)}…
+                    {ex}
                   </button>
                 ))}
               </div>
@@ -448,13 +448,45 @@ export default function IdeaPage() {
         {/* Result */}
         {stage === 'done' && result && (
           <div className="w-full space-y-4">
-            {/* Success header */}
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/20 p-5 text-center">
-              <p className="text-3xl mb-2">🎉</p>
-              <h2 className="text-lg font-bold text-white">{result.briefTitle}</h2>
-              <p className="text-sm text-emerald-400 mt-1">
-                {result.workItemCount} Work Items erstellt · {result.taskCount} Agenten-Tasks orchestriert
-              </p>
+            {/* Success card */}
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-6">
+              <div className="flex items-start gap-4">
+                <span className="text-3xl shrink-0">✅</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-emerald-400/70 font-semibold uppercase tracking-wide mb-1">Pipeline abgeschlossen</p>
+                  <h2 className="text-xl font-bold text-white leading-tight">{result.briefTitle}</h2>
+                  <div className="flex flex-wrap gap-4 mt-3">
+                    <span className="flex items-center gap-1.5 text-sm text-slate-400">
+                      <span>📋</span>
+                      <span>{result.workItemCount} Work Items</span>
+                    </span>
+                    <span className="flex items-center gap-1.5 text-sm text-slate-400">
+                      <span>🎯</span>
+                      <span className="truncate max-w-[200px]">{result.topItem.title}</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <a
+                  href={`/project-briefs/${result.briefId}`}
+                  className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium bg-violet-600 text-white hover:bg-violet-500 transition-colors"
+                >
+                  <span>📋</span> Brief ansehen
+                </a>
+                <a
+                  href={`/orchestrations`}
+                  className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium border border-white/[0.08] bg-white/[0.02] text-slate-300 hover:border-violet-500/30 hover:text-white transition-colors"
+                >
+                  <span>🔗</span> Run ansehen
+                </a>
+                <button
+                  onClick={handleReset}
+                  className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium border border-white/[0.06] bg-transparent text-slate-500 hover:text-slate-300 hover:border-slate-600 transition-colors"
+                >
+                  + Weitere Idee eingeben
+                </button>
+              </div>
             </div>
 
             {/* Pipeline summary */}
@@ -597,12 +629,6 @@ export default function IdeaPage() {
               <p className="text-xs text-slate-500 mt-1">~{result.topItem.estimatedMinutes} Minuten geschätzt</p>
             </div>
 
-            <button
-              onClick={handleReset}
-              className="w-full rounded-xl border border-white/[0.06] py-3 text-sm text-slate-500 hover:text-slate-300 hover:border-slate-600 transition-colors"
-            >
-              + Neue Idee eingeben
-            </button>
           </div>
         )}
       </div>
