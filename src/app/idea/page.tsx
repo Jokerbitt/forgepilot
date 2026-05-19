@@ -86,9 +86,9 @@ export default function IdeaPage() {
   const [history, setHistory] = useState<IdeaHistoryEntry[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const historyPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Load recent submissions on mount
-  useEffect(() => {
+  const refreshHistory = useCallback(() => {
     fetch('/api/pilot/idea-history?limit=5')
       .then(r => r.json())
       .then((data: unknown) => {
@@ -96,6 +96,22 @@ export default function IdeaPage() {
       })
       .catch(() => { /* non-critical */ })
   }, [])
+
+  // Load on mount, then poll every 5s while any entry is active
+  useEffect(() => {
+    refreshHistory()
+  }, [refreshHistory])
+
+  // Adaptive history polling: faster when entries are in-flight
+  useEffect(() => {
+    if (historyPollRef.current) clearInterval(historyPollRef.current)
+    const hasActive = history.some(e => e.status === 'building' || e.status === 'running')
+    if (!hasActive) return
+    historyPollRef.current = setInterval(refreshHistory, 5000)
+    return () => {
+      if (historyPollRef.current) clearInterval(historyPollRef.current)
+    }
+  }, [history, refreshHistory])
 
   const isRunning = stage !== 'idle' && stage !== 'done' && stage !== 'error'
 
@@ -192,10 +208,7 @@ export default function IdeaPage() {
       setStage('done')
 
       // Refresh history to show the new entry
-      fetch('/api/pilot/idea-history?limit=5')
-        .then(r => r.json())
-        .then((d: unknown) => { if (Array.isArray(d)) setHistory(d as IdeaHistoryEntry[]) })
-        .catch(() => { /* non-critical */ })
+      refreshHistory()
 
       // Auto-execute the run, then start polling
       void fetch(`/api/agents/orchestrate/${data.run.id}/execute`, { method: 'POST' })
