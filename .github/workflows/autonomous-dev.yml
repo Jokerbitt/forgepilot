@@ -176,9 +176,10 @@ jobs:
             "
             ```
 
-            FORBIDDEN — do NOT edit:
+            FORBIDDEN — do NOT edit (merge conflict risk):
             - config/*.json  (runtime state, not in git)
             - .env.local
+            - BACKLOG.md  ← NEVER touch — CI marks it done after merge automatically
             - src/app/settings/providers/page.tsx  (conflict-prone)
 
             Steps:
@@ -186,7 +187,7 @@ jobs:
             2. Implement feature
             3. `npm run type-check` — fix ALL errors
             4. `npm run test:run` — ALL tests pass + add ≥3 new tests
-            5. Update BACKLOG.md: `[ ]` → `[x]` (do this LAST)
+            5. Do NOT touch BACKLOG.md — the pipeline marks it done after merge
             6. Commit + push + `gh pr create` (ok if gh not authenticated — push is enough)
 
             Quality: TypeScript strict, no `any`, dark theme slate colors, no hardcoded secrets.
@@ -280,6 +281,32 @@ jobs:
           gh pr merge "$PR_URL" --squash \
             --body "🤖 Auto-merged: quality gate ✅ | Cost: ~\$0.00–\$0.04"
           echo "✅ Merged: $PR_URL"
+
+      # ── Mark BACKLOG done (after merge — zero conflict risk) ──────────────
+      - name: Mark task done in BACKLOG.md
+        if: |
+          steps.pick-task.outputs.task != '' &&
+          (steps.quality-gate.outputs.tests == 'pass' || steps.quality-gate-2.outputs.tests == 'pass')
+        run: |
+          git checkout main && git pull origin main --ff-only 2>/dev/null || true
+          TASK="${{ steps.pick-task.outputs.task }}"
+          python3 -c "
+import sys, pathlib
+pattern = '$TASK'[:40].lower()
+p = pathlib.Path('BACKLOG.md')
+lines = p.read_text().splitlines(keepends=True)
+changed = 0
+for i, line in enumerate(lines):
+    if line.startswith('- [ ]') and pattern[:28] in line.lower():
+        lines[i] = line.replace('- [ ]', '- [x]', 1)
+        changed += 1
+p.write_text(''.join(lines))
+print(f'Marked {changed} item(s) done')
+"
+          git add BACKLOG.md
+          git diff --cached --quiet || \
+            git commit -m "chore(backlog): ✅ ${{ steps.pick-task.outputs.task }}" && \
+            git push origin main
 
       # ── Failure alert ─────────────────────────────────────────────────────
       - name: Create issue on repeated failure
