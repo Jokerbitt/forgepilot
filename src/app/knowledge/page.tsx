@@ -44,13 +44,13 @@ function cardTypeBadgeColor(t: MemoryCardType): string {
 
 function sourceTypeLabel(t: SourceType): string {
   const map: Record<SourceType, string> = {
-    nas:         'NAS',
-    markdown:    'Markdown',
-    linear:      'Linear',
-    github:      'GitHub',
+    nas:        'NAS',
+    markdown:   'Markdown',
+    linear:     'Linear',
+    github:     'GitHub',
     'agent-run': 'Agent Run',
-    obsidian:    'Obsidian',
-    manual:      'Manual',
+    obsidian:   'Obsidian',
+    manual:     'Manual',
   }
   return map[t] ?? t
 }
@@ -81,7 +81,10 @@ function truncate(text: string, max: number): string {
 
 /** Derive a short source label from a MemoryCard's projectId / sourceIds count */
 function sourceBadgeLabel(card: MemoryCard): string {
-  if (card.projectId) return `#${card.projectId.slice(-8)}`
+  if (card.projectId) {
+    // e.g. "proj-abc123" → show last 8 chars prefixed with #
+    return `#${card.projectId.slice(-8)}`
+  }
   if (card.sourceIds.length > 0) return `${card.sourceIds.length} Quelle${card.sourceIds.length > 1 ? 'n' : ''}`
   return 'manual'
 }
@@ -148,7 +151,7 @@ export default function KnowledgeCenterPage() {
     }
   }
 
-  // All unique tags across all cards, sorted
+  // All unique tags across all cards
   const allTags = Array.from(new Set(cards.flatMap(c => c.tags))).sort()
 
   const searchLower = debouncedSearch.toLowerCase().trim()
@@ -196,11 +199,11 @@ export default function KnowledgeCenterPage() {
               </button>
               <div className="flex items-center gap-3 text-xs text-slate-500">
                 <span>{cards.length} Cards</span>
-                <span>&middot;</span>
+                <span>·</span>
                 <span>{sources.length} Quellen</span>
                 {staleCount > 0 && (
                   <>
-                    <span>&middot;</span>
+                    <span>·</span>
                     <span className="text-amber-400">{staleCount} veraltet</span>
                   </>
                 )}
@@ -331,13 +334,13 @@ function CardsTab({
       <EmptyState
         title="Noch keine Knowledge Cards"
         description="Knowledge Cards werden automatisch nach jedem Orchestration-Run erstellt."
-        icon={<span className="text-2xl" aria-hidden="true">&#x1F4DA;</span>}
+        icon={<span className="text-2xl" aria-hidden="true">📚</span>}
         action={
           <Link
             href="/delegations"
             className="inline-flex items-center gap-1.5 rounded-lg border border-sky-700/50 bg-sky-900/20 px-4 py-2 text-sm font-semibold text-sky-300 transition-colors hover:bg-sky-900/40 hover:text-sky-200"
           >
-            Erste Orchestration starten &rarr;
+            Erste Orchestration starten →
           </Link>
         }
       />
@@ -410,14 +413,14 @@ function CardsTab({
               onClick={clearTags}
               className="ml-1 text-xs text-slate-600 underline hover:text-slate-400"
             >
-              zur&uuml;cksetzen
+              zurücksetzen
             </button>
           )}
         </div>
       )}
 
       {cards.length === 0 && (
-        <p className="py-8 text-center text-sm text-slate-500">Keine Cards f&uuml;r diese Suche.</p>
+        <p className="py-8 text-center text-sm text-slate-500">Keine Cards für diese Suche.</p>
       )}
 
       {/* Card grid */}
@@ -490,7 +493,7 @@ function KnowledgeCard({
 
       {/* Row 4 (expanded only): metadata */}
       {expanded && (
-        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 border-t border-slate-800 pt-3 text-xs">
+        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs border-t border-slate-800 pt-3">
           <div>
             <dt className="text-slate-600">Privacy</dt>
             <dd className="text-slate-300">{card.privacyClass}</dd>

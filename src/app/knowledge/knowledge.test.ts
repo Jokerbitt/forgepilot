@@ -117,7 +117,7 @@ describe('Knowledge Center — truncate helper', () => {
   it('truncates and appends ellipsis when longer than max', () => {
     const long = 'a'.repeat(130)
     const result = truncate(long, 120)
-    expect(result).toHaveLength(121) // 120 chars + '…' (single char)
+    expect(result).toHaveLength(121) // 120 chars + '…'
     expect(result.endsWith('…')).toBe(true)
   })
 
@@ -130,7 +130,7 @@ describe('Knowledge Center — truncate helper', () => {
 describe('Knowledge Center — sourceBadgeLabel', () => {
   it('returns last 8 chars of projectId prefixed with #', () => {
     const card = makeCard({ projectId: 'proj-abc12345' })
-    expect(sourceBadgeLabel(card)).toBe('#abc12345')
+    expect(sourceBadgeLabel(card)).toBe('#abc12345') // last 8 of 'proj-abc12345'
   })
 
   it('returns singular "Quelle" for 1 sourceId', () => {

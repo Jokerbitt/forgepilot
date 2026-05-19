@@ -9,6 +9,7 @@ import type { PMAgentResult } from '@/lib/agent-runner/pm-agent'
 import type { DashboardStats } from '@/app/api/dashboard/stats/route'
 import type { IdeaHistoryEntry } from '@/lib/pilot/idea-history-store'
 import { Badge, Panel, StatusDot, buttonClassName, cx } from '@/components/ui/primitives'
+import { AgentMonitorWidget } from '@/components/monitor/AgentMonitorWidget'
 
 interface RecommendationsResponse {
   recommendations?: WorkItem[]
@@ -306,6 +307,7 @@ export function CommandCenterOverview() {
         hasDelegation={!!dashboardStats && dashboardStats.delegations.total > 0}
       />
       <SystemStatsWidget stats={dashboardStats} />
+      <AgentMonitorWidget />
       <AgentActivityWidget stats={dashboardStats} />
       <PMAgentWidget plan={pmPlan} />
       <QuickActionsPanel activeRunCount={dashboardStats?.orchestrations.running ?? 0} />
