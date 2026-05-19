@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import type { WorkItem, WorkItemSource } from '@/lib/models/work-item'
 import { Badge, StatusDot, cx } from '@/components/ui/primitives'
+import { BlockedByBadge } from '@/components/work-items/BlockedByBadge'
 
 // ─── helpers ─────────────────────────────────────────────────────
 
@@ -272,6 +273,11 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
                       <div className="min-w-0">
                         <p className="truncate font-medium text-white max-w-xs">{item.title}</p>
                         <p className="mt-0.5 font-mono text-xs text-slate-600">{item.id}</p>
+                        {item.blockedBy && item.blockedBy.length > 0 && (
+                          <div className="mt-2">
+                            <BlockedByBadge itemId={item.id} blockedBy={item.blockedBy} />
+                          </div>
+                        )}
                       </div>
                     </div>
                   </td>
