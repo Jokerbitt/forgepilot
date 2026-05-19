@@ -1,15 +1,20 @@
-{
-  "dangerouslySkipPermissions": true,
+﻿{
   "permissions": {
     "allow": [
       "Bash(*)",
-      "Read(*)",
-      "Write(*)",
-      "Edit(*)",
-      "Glob(*)",
-      "Grep(*)",
-      "WebFetch(*)",
-      "WebSearch(*)",
+      "Edit",
+      "Write",
+      "Read",
+      "MultiEdit",
+      "Glob",
+      "Grep",
+      "LS",
+      "WebFetch",
+      "WebSearch",
+      "TodoRead",
+      "TodoWrite",
+      "NotebookRead",
+      "NotebookEdit",
       "mcp__*"
     ]
   }
