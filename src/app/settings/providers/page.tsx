@@ -4,6 +4,99 @@ import { useEffect, useState, useCallback } from 'react'
 import { cx } from '@/components/ui/primitives'
 import type { AIProviderConfig, AIModelSelection } from '@/lib/ai/providers/types'
 
+function GeminiQuickSetupBanner({ onActivated }: { onActivated: () => void }) {
+  const [apiKey, setApiKey]     = useState('')
+  const [saving, setSaving]     = useState(false)
+  const [error, setError]       = useState<string | null>(null)
+
+  const handleActivate = async () => {
+    if (!apiKey.trim()) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/settings/env', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'GOOGLE_API_KEY', value: apiKey.trim() }),
+      })
+      const data = await res.json() as { ok: boolean; error?: string }
+      if (!data.ok) {
+        setError(data.error ?? 'Fehler beim Speichern')
+      } else {
+        onActivated()
+      }
+    } catch {
+      setError('Netzwerkfehler — bitte erneut versuchen')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="relative rounded-xl p-px overflow-hidden"
+      style={{ background: 'linear-gradient(135deg, #3b82f655 0%, #2563eb80 50%, #1d4ed855 100%)' }}
+    >
+      <div className="rounded-[11px] bg-[#080f1a] px-5 py-4 space-y-3">
+        <div className="flex items-start gap-3">
+          <span className="text-lg leading-none mt-0.5">&#10024;</span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-blue-300">
+              Google Gemini — Kostenlos, kein Kreditkarte, kein Abo
+            </p>
+            <p className="text-xs text-blue-400/80 mt-0.5">
+              Einfach mit deinem Google-Account einloggen.
+            </p>
+          </div>
+        </div>
+        <ol className="text-xs text-blue-300/70 space-y-0.5 pl-1 list-none">
+          <li>1. Öffne{' '}
+            <a
+              href="https://aistudio.google.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:text-blue-200 transition-colors"
+            >
+              aistudio.google.com
+            </a>
+          </li>
+          <li>2. „Get API key" → „Create API key" → kopieren</li>
+          <li>3. Key hier einfügen:</li>
+        </ol>
+        <div className="flex items-center gap-2">
+          <input
+            type="password"
+            value={apiKey}
+            onChange={e => setApiKey(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { void handleActivate() } }}
+            placeholder="AIza..."
+            className="flex-1 rounded-lg bg-black/40 border border-blue-700/40 px-3 py-1.5 text-xs text-white placeholder-blue-900 font-mono focus:outline-none focus:border-blue-500/60 transition-colors"
+          />
+          <button
+            onClick={() => { void handleActivate() }}
+            disabled={saving || !apiKey.trim()}
+            className="rounded-lg bg-blue-700 hover:bg-blue-600 disabled:opacity-40 px-4 py-1.5 text-xs font-semibold text-white transition-colors whitespace-nowrap"
+          >
+            {saving ? 'Speichern…' : 'Aktivieren'}
+          </button>
+        </div>
+        {error && (
+          <p className="text-xs text-rose-400">{error}</p>
+        )}
+        <p className="text-[10px] text-blue-500/60">
+          <a
+            href="https://aistudio.google.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:text-blue-300 transition-colors"
+          >
+            Zur AI Studio Docs
+          </a>
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function GroqQuickSetupBanner({ onActivated }: { onActivated: () => void }) {
   const [apiKey, setApiKey]     = useState('')
   const [saving, setSaving]     = useState(false)
@@ -82,6 +175,160 @@ function GroqQuickSetupBanner({ onActivated }: { onActivated: () => void }) {
   )
 }
 
+function TogetherQuickSetupBanner({ onActivated }: { onActivated: () => void }) {
+  const [apiKey, setApiKey] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState<string | null>(null)
+
+  const handleActivate = async () => {
+    if (!apiKey.trim()) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/settings/env', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'TOGETHER_API_KEY', value: apiKey.trim() }),
+      })
+      const data = await res.json() as { ok: boolean; error?: string }
+      if (!data.ok) {
+        setError(data.error ?? 'Fehler beim Speichern')
+      } else {
+        onActivated()
+      }
+    } catch {
+      setError('Netzwerkfehler — bitte erneut versuchen')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="relative rounded-xl p-px overflow-hidden"
+      style={{ background: 'linear-gradient(135deg, #4f46e555 0%, #7c3aed80 50%, #2563eb55 100%)' }}
+    >
+      <div className="rounded-[11px] bg-[#0d0a1f] px-5 py-4 space-y-3">
+        <div className="flex items-start gap-3">
+          <span className="text-lg leading-none mt-0.5">&#127381;</span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-violet-300">
+              Together.ai — $25 Gratis-Credits
+            </p>
+            <p className="text-xs text-violet-400/80 mt-0.5">
+              Funktioniert mit GMX-E-Mail · Llama 3, Mistral &amp; mehr · Registrierung unter{' '}
+              <a
+                href="https://api.together.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-violet-300 transition-colors"
+              >
+                api.together.ai
+              </a>
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="password"
+            value={apiKey}
+            onChange={e => setApiKey(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { void handleActivate() } }}
+            placeholder="together_…"
+            className="flex-1 rounded-lg bg-black/40 border border-violet-700/40 px-3 py-1.5 text-xs text-white placeholder-violet-900 font-mono focus:outline-none focus:border-violet-500/60 transition-colors"
+          />
+          <button
+            onClick={() => { void handleActivate() }}
+            disabled={saving || !apiKey.trim()}
+            className="rounded-lg bg-violet-700 hover:bg-violet-600 disabled:opacity-40 px-4 py-1.5 text-xs font-semibold text-white transition-colors whitespace-nowrap"
+          >
+            {saving ? 'Speichern…' : 'Aktivieren'}
+          </button>
+        </div>
+        {error && (
+          <p className="text-xs text-rose-400">{error}</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function OpenRouterQuickSetupBanner({ onActivated }: { onActivated: () => void }) {
+  const [apiKey, setApiKey] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState<string | null>(null)
+
+  const handleActivate = async () => {
+    if (!apiKey.trim()) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/settings/env', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'OPENROUTER_API_KEY', value: apiKey.trim() }),
+      })
+      const data = await res.json() as { ok: boolean; error?: string }
+      if (!data.ok) {
+        setError(data.error ?? 'Fehler beim Speichern')
+      } else {
+        onActivated()
+      }
+    } catch {
+      setError('Netzwerkfehler — bitte erneut versuchen')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="relative rounded-xl p-px overflow-hidden"
+      style={{ background: 'linear-gradient(135deg, #d9770655 0%, #b4550080 50%, #92400e55 100%)' }}
+    >
+      <div className="rounded-[11px] bg-[#1a0f00] px-5 py-4 space-y-3">
+        <div className="flex items-start gap-3">
+          <span className="text-lg leading-none mt-0.5">&#127760;</span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-amber-300">
+              OpenRouter — Kostenlose Modelle, keine Kreditkarte
+            </p>
+            <p className="text-xs text-amber-400/80 mt-0.5">
+              Llama 3.1, Mistral 7B &amp; mehr gratis · Registrierung unter{' '}
+              <a
+                href="https://openrouter.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-amber-300 transition-colors"
+              >
+                openrouter.ai
+              </a>
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="password"
+            value={apiKey}
+            onChange={e => setApiKey(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { void handleActivate() } }}
+            placeholder="sk-or-…"
+            className="flex-1 rounded-lg bg-black/40 border border-amber-700/40 px-3 py-1.5 text-xs text-white placeholder-amber-900 font-mono focus:outline-none focus:border-amber-500/60 transition-colors"
+          />
+          <button
+            onClick={() => { void handleActivate() }}
+            disabled={saving || !apiKey.trim()}
+            className="rounded-lg bg-amber-700 hover:bg-amber-600 disabled:opacity-40 px-4 py-1.5 text-xs font-semibold text-white transition-colors whitespace-nowrap"
+          >
+            {saving ? 'Speichern…' : 'Aktivieren'}
+          </button>
+        </div>
+        {error && (
+          <p className="text-xs text-rose-400">{error}</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 interface ProviderWithStatus extends AIProviderConfig {
   hasApiKey: boolean
 }
@@ -103,14 +350,15 @@ const RESIDENCY_LABEL: Record<string, string> = {
 }
 
 const KEY_LABELS: Record<string, string> = {
-  ANTHROPIC_API_KEY: 'Anthropic API Key',
-  OPENAI_API_KEY:    'OpenAI API Key',
-  GROQ_API_KEY:      'Groq API Key',
-  MISTRAL_API_KEY:   'Mistral API Key',
-  GOOGLE_API_KEY:    'Google API Key',
-  TOGETHER_API_KEY:  'Together AI Key',
-  SUPABASE_URL:      'Supabase URL',
-  SUPABASE_ANON_KEY: 'Supabase Anon Key',
+  ANTHROPIC_API_KEY:  'Anthropic API Key',
+  OPENAI_API_KEY:     'OpenAI API Key',
+  GROQ_API_KEY:       'Groq API Key',
+  MISTRAL_API_KEY:    'Mistral API Key',
+  GOOGLE_API_KEY:     'Google API Key',
+  TOGETHER_API_KEY:   'Together AI Key',
+  OPENROUTER_API_KEY: 'OpenRouter API Key',
+  SUPABASE_URL:       'Supabase URL',
+  SUPABASE_ANON_KEY:  'Supabase Anon Key',
 }
 
 function ProviderCard({
@@ -262,6 +510,15 @@ function ProviderCard({
         </div>
       )}
 
+      {/* Gemini recommendation hint — shown when Gemini becomes enabled */}
+      {provider.id === 'google-gemini' && provider.enabled && (
+        <div className="mt-3 rounded-lg border border-blue-500/20 bg-blue-950/20 px-3 py-2">
+          <p className="text-[11px] text-blue-300/80">
+            Empfohlen: <span className="font-semibold text-blue-200">Gemini 2.0 Flash</span> als Fast-Modell — 1.500 kostenlose Requests/Tag
+          </p>
+        </div>
+      )}
+
       {/* Test button */}
       {provider.enabled && (
         <div className="mt-3 flex items-center gap-3">
@@ -406,6 +663,9 @@ export default function ProvidersPage() {
   const groqProvider     = data.providers.find(p => p.id === 'groq')
   const showGroqBanner   = groqProvider != null && !groqProvider.hasApiKey
 
+  const geminiProvider   = data.providers.find(p => p.id === 'google-gemini')
+  const showGeminiBanner = geminiProvider != null && !geminiProvider.hasApiKey
+
   return (
     <main className="min-h-screen bg-[#08080d]">
       {/* Header */}
@@ -422,6 +682,11 @@ export default function ProvidersPage() {
       </div>
 
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
+        {/* Gemini Quick-Setup Banner — shown first (easiest free option) */}
+        {showGeminiBanner && (
+          <GeminiQuickSetupBanner onActivated={() => { window.location.reload() }} />
+        )}
+
         {/* Groq Quick-Setup Banner — shown when Groq has no API key */}
         {showGroqBanner && (
           <GroqQuickSetupBanner onActivated={() => { window.location.reload() }} />

@@ -67,6 +67,20 @@ export async function POST(request: Request) {
     )
   }
 
+  if (!key.trim()) {
+    return NextResponse.json(
+      { ok: false, error: 'Key must not be empty' },
+      { status: 400 },
+    )
+  }
+
+  if (!value.trim()) {
+    return NextResponse.json(
+      { ok: false, error: 'Value must not be empty' },
+      { status: 400 },
+    )
+  }
+
   if (!ALLOWED_KEYS.has(key)) {
     return NextResponse.json(
       { ok: false, error: `Key "${key}" is not in the allowlist` },
