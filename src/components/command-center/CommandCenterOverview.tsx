@@ -6,8 +6,7 @@ import type { OperatorReadiness, ReadinessStatus } from '@/lib/operator/readines
 import type { WorkItem } from '@/lib/models/work-item'
 import type { ResearchDocument } from '@/lib/models/research'
 import type { PMAgentResult } from '@/lib/agent-runner/pm-agent'
-import type { OrchestratedRun } from '@/lib/agents/orchestrated-run'
-import type { SkillPerformanceSummary } from '@/lib/agents/skill-evolver'
+import type { DashboardStats } from '@/app/api/dashboard/stats/route'
 import { Badge, Panel, StatusDot, buttonClassName, cx } from '@/components/ui/primitives'
 
 interface RecommendationsResponse {
@@ -27,32 +26,25 @@ interface NextAction {
   tone: ActionTone
 }
 
-interface PerformanceResponse {
-  summaries: SkillPerformanceSummary[]
-  warnings: { agentType: string; skillCategory: string; message: string }[]
-}
-
 export function CommandCenterOverview() {
   const [readiness, setReadiness] = useState<OperatorReadiness | null>(null)
   const [delegations, setDelegations] = useState<Delegation[]>([])
   const [recommendations, setRecommendations] = useState<WorkItem[]>([])
   const [researchDocs, setResearchDocs] = useState<ResearchDocument[]>([])
   const [pmPlan, setPmPlan] = useState<PMAgentResult | null | undefined>(undefined)
-  const [activeRuns, setActiveRuns] = useState<OrchestratedRun[]>([])
-  const [performance, setPerformance] = useState<PerformanceResponse | null>(null)
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null)
 
   useEffect(() => {
     let cancelled = false
 
     async function load() {
-      const [readinessRes, delegationsRes, recommendationsRes, researchRes, pmRes, runsRes, perfRes] = await Promise.allSettled([
+      const [readinessRes, delegationsRes, recommendationsRes, researchRes, pmRes, statsRes] = await Promise.allSettled([
         fetch('/api/operator/readiness').then(res => res.json() as Promise<OperatorReadiness>),
         fetch('/api/delegations').then(res => res.json() as Promise<Delegation[]>),
         fetch('/api/recommendations').then(res => res.json() as Promise<RecommendationsResponse>),
         fetch('/api/knowledge/research').then(res => res.json() as Promise<ResearchDocument[]>),
         fetch('/api/pm-agent').then(res => res.json() as Promise<{ plan: PMAgentResult | null }>),
-        fetch('/api/agents/orchestrate').then(res => res.json() as Promise<{ runs: OrchestratedRun[] }>),
-        fetch('/api/agents/performance').then(res => res.json() as Promise<PerformanceResponse>),
+        fetch('/api/dashboard/stats').then(res => res.json() as Promise<DashboardStats>),
       ])
 
       if (cancelled) return
@@ -62,8 +54,7 @@ export function CommandCenterOverview() {
       if (recommendationsRes.status === 'fulfilled') setRecommendations(recommendationsRes.value.recommendations ?? [])
       if (researchRes.status === 'fulfilled' && Array.isArray(researchRes.value)) setResearchDocs(researchRes.value)
       if (pmRes.status === 'fulfilled') setPmPlan(pmRes.value.plan)
-      if (runsRes.status === 'fulfilled') setActiveRuns(runsRes.value.runs ?? [])
-      if (perfRes.status === 'fulfilled') setPerformance(perfRes.value)
+      if (statsRes.status === 'fulfilled') setDashboardStats(statsRes.value)
     }
 
     load()
@@ -304,32 +295,21 @@ export function CommandCenterOverview() {
         </div>
       </Panel>
 
-      <AgentActivityWidget runs={activeRuns} performance={performance} />
+      <AgentActivityWidget stats={dashboardStats} />
       <PMAgentWidget plan={pmPlan} />
-      <QuickActionsPanel activeRunCount={activeRuns.filter(r => r.status === 'running').length} />
+      <QuickActionsPanel activeRunCount={dashboardStats?.orchestrations.running ?? 0} />
     </div>
   )
 }
 
-// ─── Agent Activity Widget (M62) ────────────────────────────────────────────
+// ─── Agent Activity Widget (M62 / M66) ──────────────────────────────────────
 
-function AgentActivityWidget({
-  runs,
-  performance,
-}: {
-  runs: OrchestratedRun[]
-  performance: PerformanceResponse | null
-}) {
-  const running = runs.filter(r => r.status === 'running')
-  const recent = runs.filter(r => r.status === 'done' || r.status === 'failed').slice(0, 3)
-  const avgScore = performance?.summaries.length
-    ? Math.round(performance.summaries.reduce((a, s) => a + s.averageScore, 0) / performance.summaries.length)
-    : null
-  const improving = performance?.summaries.filter(s => s.trend === 'improving').length ?? 0
-  const declining = performance?.summaries.filter(s => s.trend === 'declining').length ?? 0
-  const topWarning = performance?.warnings[0] ?? null
+function AgentActivityWidget({ stats }: { stats: DashboardStats | null }) {
+  if (!stats) return null
 
-  if (runs.length === 0 && !performance) return null
+  const { orchestrations, quality, knowledge } = stats
+  const runningRuns = orchestrations.recent.filter(r => r.status === 'running')
+  const recentFinished = orchestrations.recent.filter(r => r.status === 'done' || r.status === 'failed')
 
   return (
     <Panel className="p-5">
@@ -338,43 +318,44 @@ function AgentActivityWidget({
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">KI-Agenten</p>
           <h2 className="mt-1 text-lg font-semibold text-white">Live Agent Activity</h2>
         </div>
-        <a href="/orchestrations" className={buttonClassName('ghost', 'text-xs')}>Alle Runs →</a>
+        <div className="flex items-center gap-3">
+          {knowledge.recentCards > 0 && (
+            <a href="/knowledge" className="text-xs text-violet-400 hover:text-violet-300">
+              +{knowledge.recentCards} neue Cards
+            </a>
+          )}
+          <a href="/orchestrations" className={buttonClassName('ghost', 'text-xs')}>Alle Runs →</a>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
         {/* Orchestration runs */}
         <div className="space-y-2">
-          {running.length > 0 ? (
-            running.map(run => {
-              const total = run.tasks.length
-              const done = run.tasks.filter(t => t.status === 'done' || t.status === 'failed').length
-              const pct = total > 0 ? Math.round((done / total) * 100) : 0
+          {runningRuns.length > 0 ? (
+            runningRuns.map(run => {
+              const pct = run.taskCount > 0 ? Math.round(((run.doneTasks + run.failedTasks) / run.taskCount) * 100) : 0
               return (
-                <a
-                  key={run.id}
-                  href="/orchestrations"
+                <a key={run.id} href="/orchestrations"
                   className="flex items-center gap-3 rounded-lg border border-sky-800/40 bg-sky-950/20 px-3 py-2.5 transition-colors hover:border-sky-700/50"
                 >
                   <span className="h-2 w-2 rounded-full bg-sky-400 animate-pulse shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-sky-300 truncate">{run.delegationTitle}</p>
+                    <p className="text-xs font-medium text-sky-300 truncate">{run.title}</p>
                     <div className="mt-1 h-1 w-full rounded-full bg-slate-800">
                       <div className="h-1 rounded-full bg-sky-500 transition-all" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
-                  <span className="shrink-0 text-xs text-slate-500 tabular-nums">{done}/{total}</span>
+                  <span className="shrink-0 text-xs text-slate-500 tabular-nums">{run.doneTasks}/{run.taskCount}</span>
                 </a>
               )
             })
-          ) : recent.length > 0 ? (
-            recent.map(run => (
-              <a
-                key={run.id}
-                href="/orchestrations"
+          ) : recentFinished.length > 0 ? (
+            recentFinished.map(run => (
+              <a key={run.id} href="/orchestrations"
                 className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 transition-colors hover:border-slate-700"
               >
                 <span className={cx('h-2 w-2 rounded-full shrink-0', run.status === 'done' ? 'bg-emerald-400' : 'bg-red-400')} />
-                <p className="flex-1 text-xs text-slate-400 truncate">{run.delegationTitle}</p>
+                <p className="flex-1 text-xs text-slate-400 truncate">{run.title}</p>
                 <span className="text-xs text-slate-600 capitalize">{run.status}</span>
               </a>
             ))
@@ -390,34 +371,34 @@ function AgentActivityWidget({
         <div className="space-y-2">
           <div className="grid grid-cols-3 gap-2">
             <div className="rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-center">
-              <p className={cx('text-xl font-bold tabular-nums', avgScore !== null ? (avgScore >= 80 ? 'text-emerald-400' : avgScore >= 60 ? 'text-amber-400' : 'text-red-400') : 'text-slate-500')}>
-                {avgScore ?? '—'}
+              <p className={cx('text-xl font-bold tabular-nums', quality.avgScore !== null ? (quality.avgScore >= 80 ? 'text-emerald-400' : quality.avgScore >= 60 ? 'text-amber-400' : 'text-red-400') : 'text-slate-500')}>
+                {quality.avgScore ?? '—'}
               </p>
               <p className="text-[10px] text-slate-600 mt-0.5">Ø Score</p>
             </div>
             <div className="rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-center">
-              <p className={cx('text-xl font-bold tabular-nums', improving > 0 ? 'text-emerald-400' : 'text-slate-500')}>{improving}</p>
+              <p className={cx('text-xl font-bold tabular-nums', quality.improving > 0 ? 'text-emerald-400' : 'text-slate-500')}>{quality.improving}</p>
               <p className="text-[10px] text-slate-600 mt-0.5">↑ Besser</p>
             </div>
             <div className="rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-center">
-              <p className={cx('text-xl font-bold tabular-nums', declining > 0 ? 'text-red-400' : 'text-slate-500')}>{declining}</p>
+              <p className={cx('text-xl font-bold tabular-nums', quality.declining > 0 ? 'text-red-400' : 'text-slate-500')}>{quality.declining}</p>
               <p className="text-[10px] text-slate-600 mt-0.5">↓ Drift</p>
             </div>
           </div>
 
-          {topWarning ? (
+          {quality.topWarning ? (
             <div className="flex items-start gap-2 rounded-lg border border-red-900/40 bg-red-950/20 px-3 py-2">
               <span className="text-red-400 text-xs mt-0.5 shrink-0">⚠</span>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-red-300 capitalize">{topWarning.agentType} · {topWarning.skillCategory}</p>
-                <p className="text-[10px] text-red-400/70 mt-0.5 truncate">{topWarning.message}</p>
+                <p className="text-xs font-semibold text-red-300 capitalize">{quality.topWarning.agentType} · {quality.topWarning.skillCategory}</p>
+                <p className="text-[10px] text-red-400/70 mt-0.5 truncate">{quality.topWarning.message}</p>
               </div>
               <a href="/agents?tab=performance" className="shrink-0 text-[10px] text-red-500 hover:text-red-400">Review →</a>
             </div>
-          ) : performance && (
+          ) : (
             <div className="flex items-center gap-2 rounded-lg border border-emerald-900/20 bg-emerald-950/10 px-3 py-2">
               <span className="text-emerald-400 text-xs">✓</span>
-              <p className="text-xs text-emerald-400/80">Alle Agenten stabil</p>
+              <p className="text-xs text-emerald-400/80">Alle Agenten stabil — {knowledge.cardCount} Knowledge Cards</p>
             </div>
           )}
 
