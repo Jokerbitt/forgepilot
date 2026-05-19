@@ -462,6 +462,8 @@ function PerformanceTab() {
   const [warnings, setWarnings] = useState<{ agentType: string; skillCategory: string; message: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
+  const [applying, setApplying] = useState(false)
+  const [applyResult, setApplyResult] = useState<{ applied: number; skipped: number } | null>(null)
 
   useEffect(() => {
     fetch('/api/agents/performance')
@@ -473,6 +475,17 @@ function PerformanceTab() {
       })
       .catch(() => setLoading(false))
   }, [])
+
+  const handleApply = async () => {
+    setApplying(true)
+    try {
+      const res = await fetch('/api/agents/apply-recommendations', { method: 'POST' })
+      const data = await res.json() as { applied: number; skipped: number }
+      setApplyResult(data)
+    } finally {
+      setApplying(false)
+    }
+  }
 
   if (loading) return <p className="py-8 text-center text-sm text-slate-500">Lade Performance-Daten…</p>
 
@@ -516,6 +529,28 @@ function PerformanceTab() {
             <p className={cx('mt-0.5 text-2xl font-bold tabular-nums', kpi.color)}>{kpi.value}</p>
           </div>
         ))}
+      </div>
+
+      {/* Apply Recommendations action row */}
+      <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900 px-4 py-2.5">
+        <div>
+          <p className="text-xs font-medium text-slate-300">Skill-Konfidenz aktualisieren</p>
+          <p className="text-xs text-slate-500 mt-0.5">Übernimmt Empfehlungen aus beobachteten Outcomes in das Agent-Profil</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {applyResult && (
+            <span className="text-xs text-emerald-400">
+              ✓ {applyResult.applied} angewendet, {applyResult.skipped} übersprungen
+            </span>
+          )}
+          <button
+            onClick={() => { void handleApply() }}
+            disabled={applying}
+            className="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-600 disabled:opacity-50 transition-colors"
+          >
+            {applying ? 'Wird angewendet…' : 'Empfehlungen anwenden'}
+          </button>
+        </div>
       </div>
 
       {/* Drift warnings — prominent */}

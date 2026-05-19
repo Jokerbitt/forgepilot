@@ -13,6 +13,82 @@ import { AGENT_PROFILES } from './agent-skills'
 import type { TaskResult } from './orchestrated-run'
 
 const HISTORY_PATH = path.join(process.cwd(), 'config', 'skill-history.json')
+const CONFIDENCE_PATH = path.join(process.cwd(), 'config', 'agent-confidence.json')
+
+// ─── Learned confidence store ─────────────────────────────────────────────────
+
+interface ConfidenceOverride {
+  agentType: AgentType
+  skillCategory: SkillCategory
+  confidence: number
+  appliedAt: string
+}
+
+interface ConfidenceStore {
+  overrides: ConfidenceOverride[]
+  lastAppliedAt?: string
+}
+
+function readConfidence(): ConfidenceStore {
+  try {
+    if (!fs.existsSync(CONFIDENCE_PATH)) return { overrides: [] }
+    return JSON.parse(fs.readFileSync(CONFIDENCE_PATH, 'utf-8')) as ConfidenceStore
+  } catch {
+    return { overrides: [] }
+  }
+}
+
+function writeConfidence(store: ConfidenceStore): void {
+  const dir = path.dirname(CONFIDENCE_PATH)
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  const tmp = CONFIDENCE_PATH + '.tmp'
+  fs.writeFileSync(tmp, JSON.stringify(store, null, 2))
+  fs.renameSync(tmp, CONFIDENCE_PATH)
+}
+
+/** Get learned confidence for an agent+skill combo (falls back to undefined if not learned) */
+export function getLearnedConfidence(agentType: AgentType, skillCategory: SkillCategory): number | undefined {
+  const store = readConfidence()
+  const override = store.overrides.find(o => o.agentType === agentType && o.skillCategory === skillCategory)
+  return override?.confidence
+}
+
+/** Apply recommendedConfidence values from current performance summaries to the confidence store */
+export function applyRecommendations(): { applied: number; skipped: number } {
+  const summaries = getPerformanceSummaries()
+  const store = readConfidence()
+  let applied = 0
+  let skipped = 0
+
+  for (const s of summaries) {
+    if (s.taskCount < 3) { skipped++; continue } // Need at least 3 data points
+    const existing = store.overrides.find(o => o.agentType === s.agentType && o.skillCategory === s.skillCategory)
+    const newConf = s.recommendedConfidence
+
+    if (existing) {
+      if (Math.abs(existing.confidence - newConf) < 2) { skipped++; continue } // No meaningful change
+      existing.confidence = newConf
+      existing.appliedAt = new Date().toISOString()
+    } else {
+      store.overrides.push({
+        agentType: s.agentType,
+        skillCategory: s.skillCategory,
+        confidence: newConf,
+        appliedAt: new Date().toISOString(),
+      })
+    }
+    applied++
+  }
+
+  store.lastAppliedAt = new Date().toISOString()
+  writeConfidence(store)
+  return { applied, skipped }
+}
+
+/** List all current confidence overrides */
+export function getConfidenceOverrides(): ConfidenceOverride[] {
+  return readConfidence().overrides
+}
 
 export interface SkillOutcome {
   agentType: AgentType
@@ -129,17 +205,34 @@ export function getBestAgentForCategoryWithHistory(
   category: SkillCategory,
 ): AgentType {
   const summaries = getPerformanceSummaries().filter(s => s.skillCategory === category)
+  const overrides = getConfidenceOverrides().filter(o => o.skillCategory === category)
 
-  if (summaries.length === 0) {
+  if (summaries.length === 0 && overrides.length === 0) {
     // Fall back to static registry
     const { getBestAgentForCategory } = require('./agent-skills')
     return getBestAgentForCategory(category) as AgentType
   }
 
-  // Pick agent with highest effective score (blend of static + observed)
-  const best = summaries.reduce((a, b) =>
-    (a.recommendedConfidence > b.recommendedConfidence ? a : b),
-  )
+  // Merge: learned overrides take precedence over observed summaries
+  type AgentScore = { agentType: AgentType; score: number }
+  const scores: AgentScore[] = []
+
+  for (const s of summaries) {
+    const learned = overrides.find(o => o.agentType === s.agentType)
+    scores.push({
+      agentType: s.agentType,
+      score: learned ? learned.confidence : s.recommendedConfidence,
+    })
+  }
+
+  // Add agents that have overrides but no recent summary
+  for (const o of overrides) {
+    if (!scores.find(s => s.agentType === o.agentType)) {
+      scores.push({ agentType: o.agentType, score: o.confidence })
+    }
+  }
+
+  const best = scores.reduce((a, b) => (a.score > b.score ? a : b))
   return best.agentType
 }
 
