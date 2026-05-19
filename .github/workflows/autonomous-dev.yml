@@ -1,0 +1,95 @@
+name: 🤖 Autonomous Daily Development
+
+on:
+  schedule:
+    # Runs every day at 09:03 CET (08:03 UTC)
+    - cron: '3 8 * * *'
+  workflow_dispatch:
+    inputs:
+      task_override:
+        description: 'Optional: override which task to work on (leave empty to auto-pick from BACKLOG.md)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  autonomous-dev:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests (baseline check)
+        run: npm run test:run
+        env:
+          CI: true
+
+      - name: Pick next task from BACKLOG.md
+        id: pick-task
+        run: |
+          if [ -n "${{ github.event.inputs.task_override }}" ]; then
+            echo "task=${{ github.event.inputs.task_override }}" >> $GITHUB_OUTPUT
+          else
+            # Find first unchecked item in BACKLOG.md
+            TASK=$(grep -m1 '^\- \[ \]' BACKLOG.md | sed 's/^- \[ \] //')
+            if [ -z "$TASK" ]; then
+              echo "No more tasks in backlog!"
+              echo "task=" >> $GITHUB_OUTPUT
+            else
+              echo "task=$TASK" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Run Claude Code autonomous agent
+        if: steps.pick-task.outputs.task != ''
+        uses: anthropics/claude-code-action@beta
+        with:
+          prompt: |
+            You are working on the ForgePilot project (Next.js 14, TypeScript strict, Tailwind, Vitest).
+
+            Your task: **${{ steps.pick-task.outputs.task }}**
+
+            Steps:
+            1. Create a feature branch: `git checkout -b feature/auto-$(date +%Y%m%d)-<short-slug>`
+            2. Implement the feature completely
+            3. Run `npm run type-check` — fix all errors
+            4. Run `npm run test:run` — all tests must pass, add new tests for your feature
+            5. Update BACKLOG.md: change `[ ]` to `[x]` for this task
+            6. Commit all changes with a conventional commit message
+            7. Push the branch
+            8. Create a PR with a clear description
+
+            Rules:
+            - TypeScript strict — no `any` types
+            - Keep existing tests green
+            - Add at least 3 tests for new functionality
+            - Follow existing code patterns (dark theme, slate colors, same component style)
+            - Do NOT modify .env.local or config/*.json
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_tools: 'Bash,Read,Write,Edit'
+
+      - name: Report status
+        if: always()
+        run: |
+          echo "## 🤖 Autonomous Dev Report" >> $GITHUB_STEP_SUMMARY
+          echo "- **Date:** $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Task:** ${{ steps.pick-task.outputs.task }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tests:** $(npm run test:run 2>&1 | grep 'Tests ' | tail -1)" >> $GITHUB_STEP_SUMMARY
