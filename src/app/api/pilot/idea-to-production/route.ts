@@ -87,9 +87,10 @@ Generiere ein JSON-Objekt mit diesen Feldern:
 }`
 
   try {
-    const result = await generateText({ system, prompt, maxTokens: 800, anthropicModel: 'claude-haiku-4-5' })
+    const result = await generateText({ system, prompt, maxTokens: 1200, purpose: 'fast' })
     const json = stripJsonCodeFence(result.text)
-    return JSON.parse(json) as IdeaIntakeInput
+    const match = result.text.match(/\{[\s\S]*\}/)
+    return JSON.parse(json || (match?.[0] ?? '{}')) as IdeaIntakeInput
   } catch {
     // Fallback: build a minimal IdeaIntakeInput from the raw idea
     const words = idea.split(' ').slice(0, 6).join(' ')
@@ -139,9 +140,10 @@ Regeln:
   ]
 
   try {
-    const result = await generateText({ system, prompt, maxTokens: 1000, anthropicModel: 'claude-haiku-4-5' })
+    const result = await generateText({ system, prompt, maxTokens: 1500, purpose: 'fast' })
     const json = stripJsonCodeFence(result.text)
-    const parsed = JSON.parse(json) as Array<{ title: string; type: string; priority: number; estimatedMinutes: number; risk: string }>
+    const match = result.text.match(/\[[\s\S]*\]/)
+    const parsed = JSON.parse(json || (match?.[0] ?? '[]')) as Array<{ title: string; type: string; priority: number; estimatedMinutes: number; risk: string }>
 
     return parsed.map(item => ({
       id: crypto.randomUUID(),
