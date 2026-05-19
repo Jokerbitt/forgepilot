@@ -124,6 +124,11 @@ export function getAgentProfile(type: AgentType): AgentProfile {
   return AGENT_PROFILES[type]
 }
 
+/**
+ * Find the agent with the best fit for a skill category.
+ * @param category - The skill category to find the best agent for
+ * @returns The AgentType with the highest score for the category
+ */
 export function getBestAgentForCategory(category: SkillCategory): AgentType {
   const scored = Object.entries(AGENT_PROFILES).map(([type, profile]) => ({
     type: type as AgentType,

@@ -44,6 +44,12 @@ function splitCSVLine(line: string): string[] {
   return fields
 }
 
+/**
+ * Parse CSV-formatted work items with validation and defaults.
+ * Expects headers: title (required), type, priority, description.
+ * @param input - CSV input string with headers on first line
+ * @returns Array of parsed and validated work items
+ */
 export function parseCSV(input: string): ParsedWorkItem[] {
   const lines = input.split(/\r?\n/).filter(line => line.trim().length > 0)
   if (lines.length < 2) return []
