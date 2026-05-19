@@ -28,11 +28,13 @@ import {
   Network,
   Lightbulb,
   FolderOpen,
+  Bell,
 } from 'lucide-react'
 import type { Delegation } from '@/lib/models/delegation'
 import type { AttentionItem } from '@/lib/models/attention'
 import type { Notification } from '@/lib/models/notification'
 import { cx } from '@/components/ui/primitives'
+import { NotificationBell } from '@/components/shared/NotificationBell'
 
 interface NavItem {
   href: string
@@ -46,6 +48,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/', label: 'Command Center', shortLabel: 'Command', icon: LayoutDashboard, section: 'Operate' },
   { href: '/inbox', label: 'Inbox', shortLabel: 'Inbox', icon: Inbox, section: 'Operate' },
+  { href: '/notifications', label: 'Notifications', shortLabel: 'Notifs', icon: Bell, section: 'Operate' },
   { href: '/project-briefs', label: 'Project Briefs', shortLabel: 'Briefs', icon: FileText, section: 'Plan' },
   { href: '/work-items', label: 'Work Items', shortLabel: 'Items', icon: CheckSquare, section: 'Plan' },
   { href: '/board', label: 'Agent Board', shortLabel: 'Board', icon: Kanban, section: 'Execute' },
@@ -153,7 +156,8 @@ export function AppNav() {
                 const count =
                   item.href === '/delegations' ? totalActive
                     : item.href === '/active' ? running
-                    : item.href === '/inbox' ? attentionCount + unreadNotificationCount
+                    : item.href === '/inbox' ? attentionCount
+                    : item.href === '/notifications' ? unreadNotificationCount
                     : undefined
                 const isLive = (item.href === '/delegations' || item.href === '/active') && running > 0
                 return (
@@ -175,18 +179,21 @@ export function AppNav() {
 
         {/* Footer */}
         <div className="border-t border-white/[0.06] p-3 space-y-2">
-          <button
-            onClick={() => {
-              window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }))
-            }}
-            className="group flex w-full items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-xs text-slate-500 transition-all hover:border-violet-500/30 hover:bg-violet-500/5 hover:text-slate-300"
-          >
-            <span className="flex items-center gap-2">
-              <Command className="h-3 w-3" />
-              <span>Quick search</span>
-            </span>
-            <kbd className="rounded border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-slate-500">⌘K</kbd>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }))
+              }}
+              className="group flex flex-1 items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-xs text-slate-500 transition-all hover:border-violet-500/30 hover:bg-violet-500/5 hover:text-slate-300"
+            >
+              <span className="flex items-center gap-2">
+                <Command className="h-3 w-3" />
+                <span>Quick search</span>
+              </span>
+              <kbd className="rounded border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-slate-500">⌘K</kbd>
+            </button>
+            <NotificationBell initialUnreadCount={unreadNotificationCount} />
+          </div>
 
           {running > 0 && (
             <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.07] px-3 py-2">
@@ -233,6 +240,7 @@ export function AppNav() {
               {totalActive}
             </span>
           )}
+          <NotificationBell initialUnreadCount={unreadNotificationCount} />
         </div>
       </nav>
     </>

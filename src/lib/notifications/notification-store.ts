@@ -50,6 +50,12 @@ export function markAsRead(id: string): boolean {
   return true
 }
 
+export function markAllAsRead(): void {
+  const notifications = read()
+  const updated = notifications.map(n => ({ ...n, read: true }))
+  write(updated)
+}
+
 export function getUnreadCount(): number {
   return read().filter(n => !n.read).length
 }
