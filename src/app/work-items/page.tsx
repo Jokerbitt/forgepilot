@@ -86,6 +86,8 @@ function WorkItemsTab() {
   const [sourceFilter, setSourceFilter] = useState<WorkItemSource | ''>('')
   const [creating, setCreating] = useState<string | null>(null)
   const [created, setCreated] = useState<Set<string>>(new Set())
+  const [orchestrating, setOrchestrating] = useState<string | null>(null)
+  const [orchestrated, setOrchestrated] = useState<Map<string, string>>(new Map()) // itemId → runId
 
   const load = useCallback((isSyncClick = false) => {
     if (isSyncClick) setSyncing(true)
@@ -102,29 +104,37 @@ function WorkItemsTab() {
 
   useEffect(() => { load() }, [load])
 
+  const buildDelegationPayload = (item: WorkItem) => ({
+    id: `wi-${item.id}-${Date.now()}`,
+    title: item.title,
+    status: 'approved',
+    contract: {
+      id: `tc-wi-${item.id}`,
+      workItemId: item.id,
+      goal: item.title,
+      context: `Source: ${item.source}${item.url ? `, URL: ${item.url}` : ''}`,
+      definitionOfDone: ['Implementiert', 'Tests grün', 'PR erstellt'],
+      riskClass: item.risk,
+      maxBudgetUsd: item.costEstimateUsd ?? 5,
+      allowedTools: ['Bash', 'Read', 'Write', 'Edit'],
+      branchStrategy: 'feature',
+      requiresApproval: item.risk === 'C',
+      privacyMode: 'local',
+      createdAt: new Date().toISOString(),
+    },
+    executionRoute: 'local-agent',
+    costEstimateUsd: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+
   const createDelegation = async (item: WorkItem) => {
     setCreating(item.id)
     try {
       const res = await fetch('/api/delegations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: item.title,
-          contract: {
-            workItemId: item.id,
-            goal: item.title,
-            context: `Source: ${item.source}, URL: ${item.url}`,
-            definitionOfDone: ['Implementiert', 'Tests grün', 'PR erstellt'],
-            riskClass: item.risk,
-            maxBudgetUsd: item.costEstimateUsd ?? 5,
-            allowedTools: ['Bash', 'Read', 'Write', 'Edit'],
-            branchStrategy: 'feature',
-            requiresApproval: item.risk === 'C',
-            privacyMode: 'local',
-          },
-          executionRoute: 'local-agent',
-          privacyMode: 'local',
-        }),
+        body: JSON.stringify(buildDelegationPayload(item)),
       })
       if (res.ok) {
         setCreated(prev => new Set(Array.from(prev).concat(item.id)))
@@ -133,6 +143,39 @@ function WorkItemsTab() {
       // silent
     } finally {
       setCreating(null)
+    }
+  }
+
+  const createAndOrchestrate = async (item: WorkItem) => {
+    setOrchestrating(item.id)
+    try {
+      // 1. Create delegation
+      const delPayload = buildDelegationPayload(item)
+      await fetch('/api/delegations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(delPayload),
+      })
+      // 2. Decompose with AI → create orchestrated run
+      const orchRes = await fetch('/api/agents/orchestrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          delegationId: delPayload.id,
+          delegationTitle: item.title,
+          goal: item.title,
+          context: delPayload.contract.context,
+        }),
+      })
+      if (orchRes.ok) {
+        const { run } = await orchRes.json() as { run: { id: string } }
+        setOrchestrated(prev => new Map(Array.from(prev).concat([[item.id, run.id]])))
+        setCreated(prev => new Set(Array.from(prev).concat(item.id)))
+      }
+    } catch {
+      // silent
+    } finally {
+      setOrchestrating(null)
     }
   }
 
@@ -243,7 +286,14 @@ function WorkItemsTab() {
                   </td>
                   <td className="hidden px-4 py-3 text-xs text-slate-500 lg:table-cell">{formatDate(item.updatedAt)}</td>
                   <td className="px-4 py-3">
-                    {created.has(item.id) ? (
+                    {orchestrated.has(item.id) ? (
+                      <a
+                        href={`/orchestrations`}
+                        className="text-xs font-medium text-violet-400 hover:underline"
+                      >
+                        ⚙ Orchestriert ✓
+                      </a>
+                    ) : created.has(item.id) ? (
                       <a
                         href="/delegations"
                         className="text-xs font-medium text-emerald-400 hover:underline"
@@ -251,18 +301,34 @@ function WorkItemsTab() {
                         Angelegt ✓
                       </a>
                     ) : (
-                      <button
-                        onClick={() => createDelegation(item)}
-                        disabled={creating === item.id}
-                        className={cx(
-                          'rounded px-2.5 py-1 text-xs font-semibold transition-colors',
-                          creating === item.id
-                            ? 'bg-slate-700 text-slate-400'
-                            : 'bg-slate-700 text-white hover:bg-slate-600'
-                        )}
-                      >
-                        {creating === item.id ? '…' : '→ Delegation'}
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => createDelegation(item)}
+                          disabled={creating === item.id || orchestrating === item.id}
+                          className={cx(
+                            'rounded px-2 py-1 text-xs font-semibold transition-colors',
+                            creating === item.id
+                              ? 'bg-slate-700 text-slate-400'
+                              : 'bg-slate-700 text-white hover:bg-slate-600'
+                          )}
+                          title="Delegation erstellen"
+                        >
+                          {creating === item.id ? '…' : '→ Del'}
+                        </button>
+                        <button
+                          onClick={() => createAndOrchestrate(item)}
+                          disabled={creating === item.id || orchestrating === item.id}
+                          className={cx(
+                            'rounded px-2 py-1 text-xs font-semibold transition-colors',
+                            orchestrating === item.id
+                              ? 'bg-violet-900 text-violet-400'
+                              : 'bg-violet-800 text-white hover:bg-violet-700'
+                          )}
+                          title="Delegation erstellen + sofort in Sub-Tasks zerlegen"
+                        >
+                          {orchestrating === item.id ? '⚙…' : '⚙ Auto'}
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
