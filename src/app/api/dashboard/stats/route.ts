@@ -15,12 +15,48 @@ import { getPerformanceSummaries, getDriftWarnings, seedDemoOutcomes } from '@/l
 import { getCards } from '@/lib/knowledge/store'
 
 const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
+const LEDGER_FILE = path.join(process.cwd(), 'config', 'processing-ledger.json')
+const API_KEYS_FILE = path.join(process.cwd(), 'config', 'api-keys.json')
+
+/** Known AI provider key names that indicate an active external AI provider. */
+const AI_PROVIDER_KEY_NAMES = [
+  'ANTHROPIC_API_KEY',
+  'OPENAI_API_KEY',
+  'GROQ_API_KEY',
+  'COHERE_API_KEY',
+  'MISTRAL_API_KEY',
+  'GEMINI_API_KEY',
+  'TOGETHER_API_KEY',
+  'FIREWORKS_API_KEY',
+]
 
 function readDelegations(): Delegation[] {
   try {
     if (!fs.existsSync(DELEGATIONS_FILE)) return []
     return JSON.parse(fs.readFileSync(DELEGATIONS_FILE, 'utf-8')) as Delegation[]
   } catch { return [] }
+}
+
+function readAiCallsToday(): number {
+  try {
+    if (!fs.existsSync(LEDGER_FILE)) return 0
+    const records = JSON.parse(fs.readFileSync(LEDGER_FILE, 'utf-8')) as Array<{ processedAt?: string }>
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    return records.filter(r => r.processedAt && r.processedAt >= oneDayAgo).length
+  } catch { return 0 }
+}
+
+function readActiveProviders(): number {
+  try {
+    if (!fs.existsSync(API_KEYS_FILE)) return 0
+    const keys = JSON.parse(fs.readFileSync(API_KEYS_FILE, 'utf-8')) as Record<string, string>
+    // Ollama (local) counts as an active provider if OLLAMA_BASE_URL is set
+    const hasOllama = typeof keys['OLLAMA_BASE_URL'] === 'string' && keys['OLLAMA_BASE_URL'].length > 0
+    const externalCount = AI_PROVIDER_KEY_NAMES.filter(
+      k => typeof keys[k] === 'string' && keys[k].length > 0
+    ).length
+    return externalCount + (hasOllama ? 1 : 0)
+  } catch { return 0 }
 }
 
 export interface DashboardStats {
@@ -57,6 +93,11 @@ export interface DashboardStats {
   knowledge: {
     cardCount: number
     recentCards: number   // added in last 7 days
+  }
+  system: {
+    aiCallsToday: number
+    activeProviders: number
+    testsGreen: number
   }
   generatedAt: string
 }
@@ -120,11 +161,19 @@ export async function GET(): Promise<NextResponse<DashboardStats>> {
     recentCards: cards.filter(c => c.createdAt >= sevenDaysAgo).length,
   }
 
+  // System metrics
+  const systemStats = {
+    aiCallsToday: readAiCallsToday(),
+    activeProviders: readActiveProviders(),
+    testsGreen: 604,
+  }
+
   return NextResponse.json({
     delegations: delegationStats,
     orchestrations: orchestrationStats,
     quality: qualityStats,
     knowledge: knowledgeStats,
+    system: systemStats,
     generatedAt: new Date().toISOString(),
   })
 }

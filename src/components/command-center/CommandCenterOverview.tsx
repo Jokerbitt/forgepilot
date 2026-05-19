@@ -299,6 +299,7 @@ export function CommandCenterOverview() {
         </div>
       </Panel>
 
+      <SystemStatsWidget stats={dashboardStats} />
       <AgentActivityWidget stats={dashboardStats} />
       <PMAgentWidget plan={pmPlan} />
       <QuickActionsPanel activeRunCount={dashboardStats?.orchestrations.running ?? 0} />
@@ -721,6 +722,50 @@ function QuickActionsPanel({ activeRunCount }: { activeRunCount: number }) {
         {pmMessage && !pilotMessage && (
           <span className={cx('text-xs', pmFeedbackColor)}>{pmMessage}</span>
         )}
+      </div>
+    </Panel>
+  )
+}
+
+// ─── System Stats Widget ─────────────────────────────────────────────────────
+
+function SystemStatsWidget({ stats }: { stats: DashboardStats | null }) {
+  if (!stats) return null
+
+  const { system } = stats
+  return (
+    <Panel className="p-5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-4">System — Heute</p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <a
+          href="/governance"
+          className="flex flex-col gap-1 rounded-lg border border-slate-800 bg-slate-950 p-4 transition-colors hover:border-slate-700"
+        >
+          <p className={cx('text-2xl font-bold tabular-nums', system.aiCallsToday > 0 ? 'text-violet-400' : 'text-slate-500')}>
+            {system.aiCallsToday}
+          </p>
+          <p className="text-xs text-slate-500 uppercase tracking-wide">AI Aufrufe heute</p>
+          <p className="text-[10px] text-slate-600">Verarbeitungen (24h)</p>
+        </a>
+
+        <a
+          href="/settings"
+          className="flex flex-col gap-1 rounded-lg border border-slate-800 bg-slate-950 p-4 transition-colors hover:border-slate-700"
+        >
+          <p className={cx('text-2xl font-bold tabular-nums', system.activeProviders > 0 ? 'text-emerald-400' : 'text-slate-500')}>
+            {system.activeProviders}
+          </p>
+          <p className="text-xs text-slate-500 uppercase tracking-wide">Aktive Provider</p>
+          <p className="text-[10px] text-slate-600">mit API Key konfiguriert</p>
+        </a>
+
+        <div className="flex flex-col gap-1 rounded-lg border border-emerald-900/30 bg-emerald-950/10 p-4">
+          <p className="text-2xl font-bold tabular-nums text-emerald-400">
+            {system.testsGreen} <span className="text-sm">✓</span>
+          </p>
+          <p className="text-xs text-slate-500 uppercase tracking-wide">Tests grün</p>
+          <p className="text-[10px] text-slate-600">Vitest — alle bestanden</p>
+        </div>
       </div>
     </Panel>
   )

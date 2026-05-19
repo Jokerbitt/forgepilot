@@ -552,16 +552,26 @@ function DelegationsContent() {
         ) : delegations.length === 0 ? (
           <div className="bg-gray-900 p-10 rounded-xl border border-gray-800 text-center">
             <div className="text-4xl mb-3">🤖</div>
-            <h3 className="text-lg text-gray-400 mb-2">Noch keine Delegationen</h3>
-            <p className="text-gray-600 text-sm mb-5">
-              Delegiere Aufgaben vom Dashboard oder erstelle direkt eine neue Delegation.
+            <h3 className="text-lg text-gray-400 mb-2">Noch keine Delegations</h3>
+            <p className="text-gray-600 text-sm mb-6">
+              Noch keine Delegations — starte eine Idee unter{' '}
+              <Link href="/idea" className="text-violet-400 hover:text-violet-300 underline underline-offset-2">/idea</Link>{' '}
+              oder erstelle direkt eine neue Delegation.
             </p>
-            <button
-              onClick={() => setShowNewDialog(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors"
-            >
-              + Erste Delegation erstellen
-            </button>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Link
+                href="/idea"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold rounded-lg transition-colors"
+              >
+                💡 Idee starten
+              </Link>
+              <button
+                onClick={() => setShowNewDialog(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors"
+              >
+                + Delegation erstellen
+              </button>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
