@@ -660,11 +660,15 @@ export default function ProvidersPage() {
   const cloudProviders   = data.providers.filter(p => p.dataResidency !== 'local')
   const activeSelection  = data.selection
 
-  const groqProvider     = data.providers.find(p => p.id === 'groq')
-  const showGroqBanner   = groqProvider != null && !groqProvider.hasApiKey
-
-  const geminiProvider   = data.providers.find(p => p.id === 'google-gemini')
-  const showGeminiBanner = geminiProvider != null && !geminiProvider.hasApiKey
+  const groqProvider       = data.providers.find(p => p.id === 'groq')
+  const geminiProvider     = data.providers.find(p => p.id === 'google-gemini')
+  const togetherProvider   = data.providers.find(p => p.id === 'together')
+  const openrouterProvider = data.providers.find(p => p.id === 'openrouter')
+  const showGroqBanner       = groqProvider != null && !groqProvider.hasApiKey
+  const showGeminiBanner     = geminiProvider != null && !geminiProvider.hasApiKey
+  const showTogetherBanner   = togetherProvider != null && !togetherProvider.hasApiKey
+  const showOpenRouterBanner = openrouterProvider != null && !openrouterProvider.hasApiKey
+  const showAnyBanner        = showGeminiBanner || showGroqBanner || showTogetherBanner || showOpenRouterBanner
 
   return (
     <main className="min-h-screen bg-[#08080d]">
@@ -682,14 +686,25 @@ export default function ProvidersPage() {
       </div>
 
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
-        {/* Gemini Quick-Setup Banner — shown first (easiest free option) */}
-        {showGeminiBanner && (
-          <GeminiQuickSetupBanner onActivated={() => { window.location.reload() }} />
-        )}
-
-        {/* Groq Quick-Setup Banner — shown when Groq has no API key */}
-        {showGroqBanner && (
-          <GroqQuickSetupBanner onActivated={() => { window.location.reload() }} />
+        {/* Quick-Setup Banners — shown when a free provider has no API key yet */}
+        {showAnyBanner && (
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Schnellstart — Kostenlose Provider
+            </p>
+            {showGeminiBanner && (
+              <GeminiQuickSetupBanner onActivated={() => { window.location.reload() }} />
+            )}
+            {showGroqBanner && (
+              <GroqQuickSetupBanner onActivated={() => { window.location.reload() }} />
+            )}
+            {showTogetherBanner && (
+              <TogetherQuickSetupBanner onActivated={() => { window.location.reload() }} />
+            )}
+            {showOpenRouterBanner && (
+              <OpenRouterQuickSetupBanner onActivated={() => { window.location.reload() }} />
+            )}
+          </div>
         )}
 
         {/* Active selection summary */}
@@ -763,7 +778,7 @@ export default function ProvidersPage() {
           <p className="font-medium text-slate-400">Wie füge ich einen neuen Provider hinzu?</p>
           <p>Jeder OpenAI-kompatible Endpunkt funktioniert — einfach Name + Base URL eintragen.</p>
           <p>API-Keys werden in Settings → API Keys gespeichert (verschlüsselt, nur lokal).</p>
-          <p>Env-Vars: <span className="font-mono text-violet-400">OPENAI_API_KEY</span>, <span className="font-mono text-violet-400">GROQ_API_KEY</span>, <span className="font-mono text-violet-400">MISTRAL_API_KEY</span>, <span className="font-mono text-violet-400">GOOGLE_API_KEY</span>, <span className="font-mono text-violet-400">TOGETHER_API_KEY</span></p>
+          <p>Env-Vars: <span className="font-mono text-violet-400">OPENAI_API_KEY</span>, <span className="font-mono text-violet-400">GROQ_API_KEY</span>, <span className="font-mono text-violet-400">MISTRAL_API_KEY</span>, <span className="font-mono text-violet-400">GOOGLE_API_KEY</span>, <span className="font-mono text-violet-400">TOGETHER_API_KEY</span>, <span className="font-mono text-violet-400">OPENROUTER_API_KEY</span></p>
           <p>Datenresidenz: EU-Provider (Mistral) bevorzugen wenn DSGVO-kritisch.</p>
         </div>
       </div>

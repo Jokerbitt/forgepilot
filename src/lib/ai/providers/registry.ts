@@ -68,6 +68,12 @@ const TOGETHER_MODELS: AIModelDef[] = [
   { id: 'meta-llama/Llama-3-70b-chat-hf', name: 'Llama 3 70B', purpose: 'coding', costPer1kInput: 0.0009, costPer1kOutput: 0.0009 },
 ]
 
+const OPENROUTER_MODELS: AIModelDef[] = [
+  { id: 'meta-llama/llama-3.1-8b-instruct:free', name: 'Llama 3.1 8B (Free)',  purpose: 'fast',   costPer1kInput: 0, costPer1kOutput: 0 },
+  { id: 'mistralai/mistral-7b-instruct:free',    name: 'Mistral 7B (Free)',    purpose: 'fast',   costPer1kInput: 0, costPer1kOutput: 0 },
+  { id: 'google/gemma-2-9b-it:free',             name: 'Gemma 2 9B (Free)',    purpose: 'coding', costPer1kInput: 0, costPer1kOutput: 0 },
+]
+
 export const BUILT_IN_PROVIDER_CONFIGS: AIProviderConfig[] = [
   {
     id: 'anthropic',
@@ -135,6 +141,17 @@ export const BUILT_IN_PROVIDER_CONFIGS: AIProviderConfig[] = [
     dataResidency: 'us',
   },
   {
+    id: 'openrouter',
+    type: 'openai-compatible',
+    name: 'OpenRouter',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    apiKeyRef: 'OPENROUTER_API_KEY',
+    models: OPENROUTER_MODELS,
+    enabled: false,
+    isBuiltIn: true,
+    dataResidency: 'us',
+  },
+  {
     id: 'lm-studio',
     type: 'openai-compatible',
     name: 'LM Studio (Local)',
@@ -171,8 +188,9 @@ getOrCreate('openai',    () => new OpenAICompatibleProvider('openai', 'OpenAI'))
 getOrCreate('groq',      () => new OpenAICompatibleProvider('groq', 'Groq', false))
 getOrCreate('mistral',   () => new OpenAICompatibleProvider('mistral', 'Mistral AI', false))
 getOrCreate('google-gemini', () => new OpenAICompatibleProvider('google-gemini', 'Google Gemini'))
-getOrCreate('together',  () => new OpenAICompatibleProvider('together', 'Together AI', false))
-getOrCreate('lm-studio', () => new OpenAICompatibleProvider('lm-studio', 'LM Studio', false))
+getOrCreate('together',    () => new OpenAICompatibleProvider('together', 'Together AI', false))
+getOrCreate('openrouter', () => new OpenAICompatibleProvider('openrouter', 'OpenRouter', false))
+getOrCreate('lm-studio',  () => new OpenAICompatibleProvider('lm-studio', 'LM Studio', false))
 getOrCreate('ollama',    () => new OllamaProvider())
 
 /** Register a user-defined custom provider at runtime */
