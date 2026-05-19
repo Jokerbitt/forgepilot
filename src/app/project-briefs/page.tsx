@@ -14,6 +14,7 @@ import {
   buttonClassName,
   cx,
 } from '@/components/ui/primitives'
+import { TemplatePicker } from '@/components/project-briefs/TemplatePicker'
 
 export const dynamic = 'force-dynamic'
 
@@ -80,10 +81,14 @@ export default function ProjectBriefsPage() {
           </div>
         )}
 
+        <div className="mb-6">
+          <TemplatePicker />
+        </div>
+
         {briefs.length === 0 ? (
           <EmptyState
             title="Noch keine Projektbriefs"
-            description="Starte mit einer Idee. ForgePilot fuehrt sie danach in Requirements, Risiken, Research und konkrete Arbeitspakete."
+            description="Starte mit einer Idee oder wähle ein Template oben. ForgePilot fuehrt sie danach in Requirements, Risiken, Research und konkrete Arbeitspakete."
             action={(
               <Link href="/project-briefs/new" className={buttonClassName('primary')}>
                 Erste Idee erfassen
