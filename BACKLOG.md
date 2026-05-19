@@ -35,11 +35,11 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 ## 🟢 Lower Priority
 
 - [x] feat: Dark/Light mode toggle (persist in localStorage, default dark)
-- [ ] feat: Project Brief PDF export (use puppeteer or jsPDF)
-- [ ] feat: Agent skill library page — show all available agent skills with descriptions
+- [x] feat: Project Brief PDF export (use puppeteer or jsPDF)
+- [x] feat: Agent skill library page — show all available agent skills with descriptions
 - [x] feat: Delegation contract versioning — track changes to contracts over time
 - [x] feat: Work item dependencies — mark item B as "blocked by" item A
-- [ ] chore: Add Playwright E2E tests for critical flows (idea → brief → delegation)
+- [x] chore: Add Playwright E2E tests for critical flows (idea → brief → delegation)
 - [ ] chore: Upgrade dependencies (next, typescript, tailwind) to latest versions
 - [ ] docs: Add JSDoc comments to all public lib functions
 
