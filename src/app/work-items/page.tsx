@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import type { WorkItem, WorkItemSource } from '@/lib/models/work-item'
 import { Badge, StatusDot, cx } from '@/components/ui/primitives'
 
@@ -76,7 +77,7 @@ interface WorkPackagesData {
 
 // ─── Work Items Tab ─────────────────────────────────────────────────
 
-function WorkItemsTab() {
+function WorkItemsTab({ projectId }: { projectId: string | null }) {
   const [items, setItems] = useState<WorkItem[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
@@ -91,7 +92,8 @@ function WorkItemsTab() {
 
   const load = useCallback((isSyncClick = false) => {
     if (isSyncClick) setSyncing(true)
-    fetch('/api/work-items')
+    const url = projectId ? `/api/work-items?projectId=${encodeURIComponent(projectId)}` : '/api/work-items'
+    fetch(url)
       .then(r => r.json())
       .then((data: { items: WorkItem[]; errors?: string[] }) => {
         setItems(Array.isArray(data.items) ? data.items : [])
@@ -100,7 +102,7 @@ function WorkItemsTab() {
       })
       .catch(() => setItems([]))
       .finally(() => { setLoading(false); setSyncing(false) })
-  }, [])
+  }, [projectId])
 
   useEffect(() => { load() }, [load])
 
@@ -538,8 +540,10 @@ function WorkPackagesTab() {
 
 type ActiveTab = 'work-items' | 'work-packages'
 
-export default function WorkItemsPage() {
+function WorkItemsPageInner() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('work-items')
+  const searchParams = useSearchParams()
+  const projectId = searchParams.get('projectId')
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -551,7 +555,22 @@ export default function WorkItemsPage() {
               <h1 className="mt-2 text-3xl font-semibold tracking-tight">Work Items</h1>
               <p className="mt-2 text-sm text-slate-400">Linear, GitHub und lokale Tickets — oder AI-generierte Work Packages.</p>
             </div>
+            {projectId && (
+              <a
+                href="/work-items"
+                className="text-xs text-violet-400 hover:underline"
+              >
+                ✕ Projektfilter entfernen
+              </a>
+            )}
           </div>
+          {projectId && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-violet-500/20 bg-violet-500/[0.07] px-3 py-2">
+              <span className="text-xs text-violet-300">
+                Gefiltert nach Projekt: <span className="font-mono text-violet-200">{projectId}</span>
+              </span>
+            </div>
+          )}
         </header>
 
         {/* Tabs */}
@@ -580,8 +599,16 @@ export default function WorkItemsPage() {
           </button>
         </div>
 
-        {activeTab === 'work-items' ? <WorkItemsTab /> : <WorkPackagesTab />}
+        {activeTab === 'work-items' ? <WorkItemsTab projectId={projectId} /> : <WorkPackagesTab />}
       </div>
     </main>
+  )
+}
+
+export default function WorkItemsPage() {
+  return (
+    <Suspense fallback={null}>
+      <WorkItemsPageInner />
+    </Suspense>
   )
 }

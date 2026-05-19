@@ -1,7 +1,19 @@
-import Anthropic from '@anthropic-ai/sdk'
+/**
+ * text-generation.ts — Unified AI generation entry point.
+ *
+ * Routes requests to the active provider based on user configuration.
+ * Supports Anthropic, OpenAI, Groq, Mistral, Gemini, Ollama, LM Studio,
+ * Together AI, and any custom OpenAI-compatible endpoint.
+ *
+ * Backward-compatible: existing callers pass the same options as before.
+ */
+
 import * as Sentry from '@sentry/nextjs'
 import { readStoredApiKeys } from '@/lib/connectors/config'
-import { getNBAConfig } from '@/lib/nba-engine/nba-config'
+import { getModelSelection, getAllProviderConfigs } from '@/lib/ai/providers/config-store'
+import { getProviderInstance } from '@/lib/ai/providers/registry'
+import type { AIProviderConfig } from '@/lib/ai/providers/types'
+import { logProcessing } from '@/lib/dsgvo/processing-ledger'
 import { aiLogger } from '@/lib/logger'
 
 type ModelPurpose = 'fast' | 'coding'
@@ -11,12 +23,15 @@ interface GenerateTextOptions {
   prompt: string
   maxTokens: number
   purpose?: ModelPurpose
+  /** Override the resolved model (e.g. 'claude-haiku-4-5') */
   anthropicModel?: string
+  /** Override provider id entirely */
+  providerId?: string
 }
 
 export interface GenerateTextResult {
   text: string
-  provider: 'anthropic' | 'ollama'
+  provider: string
   model: string
   inputTokens?: number
   outputTokens?: number
@@ -29,132 +44,127 @@ export class AIProviderConfigurationError extends Error {
   }
 }
 
-interface OllamaChatResponse {
-  message?: {
-    content?: string
-  }
-  prompt_eval_count?: number
-  eval_count?: number
-  error?: string
-}
-
 export async function generateText(options: GenerateTextOptions): Promise<GenerateTextResult> {
-  const config = getNBAConfig()
+  const selection = getModelSelection()
+  const purpose   = options.purpose ?? 'fast'
 
-  if (config.aiProvider === 'ollama') {
-    return generateWithOllama(options, options.purpose === 'fast' ? config.localFastModel : config.localCodingModel)
+  // Resolve which provider + model to use
+  const providerId = options.providerId
+    ?? (purpose === 'coding' ? selection.codingProvider : selection.fastProvider)
+
+  const modelId = options.anthropicModel
+    ?? (purpose === 'coding' ? selection.codingModel : selection.fastModel)
+
+  // Look up provider config for API key + base URL
+  const allConfigs = getAllProviderConfigs()
+  const config     = allConfigs.find(c => c.id === providerId)
+
+  if (!config) {
+    throw new AIProviderConfigurationError(
+      `AI provider "${providerId}" not found. Configure it in Settings → AI Providers.`
+    )
   }
 
-  return generateWithAnthropic(options, options.anthropicModel ?? 'claude-haiku-4-5')
-}
+  const apiKey  = resolveApiKey(config)
+  const baseUrl = config.baseUrl
 
-async function generateWithAnthropic(
-  options: GenerateTextOptions,
-  model: string,
-): Promise<GenerateTextResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY ?? readStoredApiKeys().ANTHROPIC_API_KEY
-  if (!apiKey) {
-    throw new AIProviderConfigurationError('ANTHROPIC_API_KEY not configured')
+  // Get provider instance
+  const provider = getProviderInstance(providerId)
+  if (!provider) {
+    throw new AIProviderConfigurationError(`Provider instance for "${providerId}" not registered.`)
   }
 
   return Sentry.startSpan(
-    { name: 'ai.generate', op: 'ai', attributes: { provider: 'anthropic', model } },
+    { name: 'ai.generate', op: 'ai', attributes: { provider: providerId, model: modelId } },
     async () => {
       const t0 = Date.now()
-      const client = new Anthropic({ apiKey })
-      const message = await client.messages.create({
-        model,
-        max_tokens: options.maxTokens,
+
+      const result = await provider.generateText({
         system: options.system,
-        messages: [{ role: 'user', content: options.prompt }],
+        prompt: options.prompt,
+        maxTokens: options.maxTokens,
+        model: modelId,
+        apiKey,
+        baseUrl,
       })
 
-      const text = message.content[0]?.type === 'text' ? message.content[0].text.trim() : ''
       const durationMs = Date.now() - t0
-
       aiLogger.info({
         event: 'ai.generate',
-        provider: 'anthropic',
-        model,
-        inputTokens: message.usage.input_tokens,
-        outputTokens: message.usage.output_tokens,
+        provider: providerId,
+        model: modelId,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
         durationMs,
       })
 
+      // DSGVO Art. 30 — log every AI processing event (fire-and-forget)
+      void logProcessing({
+        purpose:      `generateText:${purpose}`,
+        dataTypes:    ['user-prompt', 'system-prompt'],
+        providerId,
+        modelId,
+        legalBasis:   'legitimate-interest',
+        inputTokens:  result.inputTokens,
+        piiRedacted:  false,  // PII scrubbing happens upstream in context-engineer
+      })
+
       return {
-        text,
-        provider: 'anthropic' as const,
-        model,
-        inputTokens: message.usage.input_tokens,
-        outputTokens: message.usage.output_tokens,
+        text: result.text,
+        provider: result.providerId,
+        model: result.model,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
       }
     },
   )
 }
 
-async function generateWithOllama(
-  options: GenerateTextOptions,
-  model: string,
-): Promise<GenerateTextResult> {
-  return Sentry.startSpan(
-    { name: 'ai.generate', op: 'ai', attributes: { provider: 'ollama', model } },
-    async () => {
-      const t0 = Date.now()
-      const baseUrl = normalizeBaseUrl(process.env.OLLAMA_BASE_URL ?? readStoredApiKeys().OLLAMA_BASE_URL ?? 'http://localhost:11434')
-      const response = await fetch(`${baseUrl}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model,
-          stream: false,
-          messages: [
-            { role: 'system', content: options.system },
-            { role: 'user', content: options.prompt },
-          ],
-          options: {
-            num_predict: options.maxTokens,
-            temperature: 0.2,
-          },
-        }),
-      })
+export async function generateEmbedding(
+  text: string,
+  options?: { providerId?: string; model?: string }
+): Promise<number[]> {
+  const selection   = getModelSelection()
+  const providerId  = options?.providerId ?? selection.embeddingProvider ?? 'openai'
+  const allConfigs  = getAllProviderConfigs()
+  const config      = allConfigs.find(c => c.id === providerId)
 
-      if (!response.ok) {
-        throw new Error(`Ollama request failed with HTTP ${response.status}`)
-      }
+  if (!config) {
+    throw new AIProviderConfigurationError(
+      `Embedding provider "${providerId}" not found. Configure it in Settings → AI Providers.`
+    )
+  }
 
-      const data = await response.json() as OllamaChatResponse
-      if (data.error) {
-        throw new Error(data.error)
-      }
+  const provider = getProviderInstance(providerId)
+  if (!provider || !provider.supportsEmbeddings || !provider.generateEmbedding) {
+    throw new AIProviderConfigurationError(
+      `Provider "${providerId}" does not support embeddings.`
+    )
+  }
 
-      const text = data.message?.content?.trim()
-      if (!text) {
-        throw new Error('Ollama returned an empty response')
-      }
+  const model  = options?.model ?? config.models.find(m => m.purpose === 'embedding')?.id ?? 'text-embedding-3-small'
+  const apiKey = resolveApiKey(config)
 
-      const durationMs = Date.now() - t0
-      aiLogger.info({
-        event: 'ai.generate',
-        provider: 'ollama',
-        model,
-        inputTokens: data.prompt_eval_count,
-        outputTokens: data.eval_count,
-        durationMs,
-      })
+  const result = await provider.generateEmbedding(text, {
+    system: '',
+    prompt: text,
+    maxTokens: 0,
+    model,
+    apiKey,
+    baseUrl: config.baseUrl,
+  })
 
-      return {
-        text,
-        provider: 'ollama' as const,
-        model,
-        inputTokens: data.prompt_eval_count,
-        outputTokens: data.eval_count,
-      }
-    },
-  )
+  return result.embedding
 }
 
-function normalizeBaseUrl(value: string): string {
-  return value.replace(/\/+$/, '')
+function resolveApiKey(config: AIProviderConfig): string {
+  if (!config.apiKeyRef) return ''   // local providers (Ollama, LM Studio)
+  const stored = readStoredApiKeys()
+  return (
+    process.env[config.apiKeyRef]
+    ?? (stored as Record<string, string | undefined>)[config.apiKeyRef]
+    ?? ''
+  )
 }
 
 export function stripJsonCodeFence(value: string): string {

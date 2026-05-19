@@ -84,11 +84,12 @@ export default function IdeaPage() {
   const [error, setError] = useState<string | null>(null)
   const [liveRun, setLiveRun] = useState<LiveRunState | null>(null)
   const [history, setHistory] = useState<IdeaHistoryEntry[]>([])
+  const [aborting, setAborting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const historyPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Load recent submissions on mount
-  useEffect(() => {
+  const refreshHistory = useCallback(() => {
     fetch('/api/pilot/idea-history?limit=5')
       .then(r => r.json())
       .then((data: unknown) => {
@@ -96,6 +97,22 @@ export default function IdeaPage() {
       })
       .catch(() => { /* non-critical */ })
   }, [])
+
+  // Load on mount, then poll every 5s while any entry is active
+  useEffect(() => {
+    refreshHistory()
+  }, [refreshHistory])
+
+  // Adaptive history polling: faster when entries are in-flight
+  useEffect(() => {
+    if (historyPollRef.current) clearInterval(historyPollRef.current)
+    const hasActive = history.some(e => e.status === 'building' || e.status === 'running')
+    if (!hasActive) return
+    historyPollRef.current = setInterval(refreshHistory, 5000)
+    return () => {
+      if (historyPollRef.current) clearInterval(historyPollRef.current)
+    }
+  }, [history, refreshHistory])
 
   const isRunning = stage !== 'idle' && stage !== 'done' && stage !== 'error'
 
@@ -156,6 +173,15 @@ export default function IdeaPage() {
   // Cleanup on unmount
   useEffect(() => () => stopPolling(), [stopPolling])
 
+  const handleAbort = useCallback(async () => {
+    if (!result?.run.id) return
+    setAborting(true)
+    await fetch(`/api/agents/orchestrate/${result.run.id}/abort`, { method: 'POST' }).catch(() => {})
+    setLiveRun(r => r ? { ...r, status: 'aborted' } : r)
+    stopPolling()
+    setAborting(false)
+  }, [result, stopPolling])
+
   // ─── Pipeline execution ────────────────────────────────────────────────────
 
   const handleBuild = async () => {
@@ -192,10 +218,7 @@ export default function IdeaPage() {
       setStage('done')
 
       // Refresh history to show the new entry
-      fetch('/api/pilot/idea-history?limit=5')
-        .then(r => r.json())
-        .then((d: unknown) => { if (Array.isArray(d)) setHistory(d as IdeaHistoryEntry[]) })
-        .catch(() => { /* non-critical */ })
+      refreshHistory()
 
       // Auto-execute the run, then start polling
       void fetch(`/api/agents/orchestrate/${data.run.id}/execute`, { method: 'POST' })
@@ -508,6 +531,15 @@ export default function IdeaPage() {
                     >
                       Details →
                     </a>
+                    {runIsLive && (
+                      <button
+                        onClick={handleAbort}
+                        disabled={aborting}
+                        className="text-xs text-rose-400 hover:text-rose-300 disabled:opacity-40 transition-colors"
+                      >
+                        {aborting ? 'Abbrechend…' : '■ Abbrechen'}
+                      </button>
+                    )}
                   </div>
                 </div>
 

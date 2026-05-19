@@ -86,6 +86,20 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Store rotation: cap at 200, dropping oldest terminal-status entries first
+    const MAX_DELEGATIONS = 200
+    if (delegations.length > MAX_DELEGATIONS) {
+      const terminalStatuses = ['completed', 'failed', 'cancelled']
+      const terminal = delegations.filter(d => terminalStatuses.includes(d.status))
+      const active = delegations.filter(d => !terminalStatuses.includes(d.status))
+      const keep = MAX_DELEGATIONS - active.length
+      const trimmedTerminal = terminal
+        .sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime())
+        .slice(-Math.max(keep, 0))
+      delegations.length = 0
+      delegations.push(...active, ...trimmedTerminal)
+    }
+
     writeDelegations(delegations)
     return NextResponse.json(autoApproved)
   } catch (e) {

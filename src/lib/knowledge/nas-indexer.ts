@@ -14,7 +14,9 @@ export interface IndexResult {
   errors: string[]
 }
 
-const NAS_ROOT = '/Volumes/Sven/NAS/Codex/KI Betriebssystem'
+// Use FORGEPILOT_DOCS_DIR env var for portability (any drive, any OS)
+// Falls back to the legacy NAS path for backward compatibility
+const NAS_ROOT = process.env.FORGEPILOT_DOCS_DIR ?? '/Volumes/Sven/NAS/Codex/KI Betriebssystem'
 
 const NAS_SUBDIRS = ['Standards', 'ADRs', 'Agent_Skills', 'Screen_Specs']
 

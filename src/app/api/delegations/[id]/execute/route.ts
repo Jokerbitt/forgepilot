@@ -19,6 +19,7 @@ import { OllamaAgentRunner, isOllamaReachable } from '@/lib/agent-runner/ollama-
 import { budgetToMaxTurns } from '@/lib/budget-utils'
 import { scoreWork } from '@/lib/agents/work-quality'
 import { recordOutcome } from '@/lib/agents/skill-evolver'
+import { generateText } from '@/lib/ai/text-generation'
 
 const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
 
@@ -452,6 +453,96 @@ async function runWithOllamaAgent(
   }
 }
 
+/**
+ * Run via Claude API (generateText) when the claude CLI binary is unavailable.
+ * Calls the real API to produce an execution plan + summary.
+ * Not fully agentic (no tool-use loop), but produces genuine AI output
+ * instead of a canned simulation.
+ */
+async function runWithClaudeAPI(id: string, delegation: Delegation, startTime: Date) {
+  const goal = delegation.contract.goal
+  const dod = (delegation.contract.definitionOfDone ?? []).map(d => `- ${d}`).join('\n') || '- Task erfolgreich abgeschlossen'
+
+  const startLogEntry: AgentLog = {
+    timestamp: new Date().toISOString(),
+    type: 'info',
+    message: '🤖 Claude API-Runner gestartet (kein CLI verfügbar — API-Modus)',
+  }
+  appendLogs(id, [startLogEntry])
+
+  try {
+    const result = await generateText({
+      system: `You are an expert software engineering agent working on ForgePilot — a Next.js 14, TypeScript strict, Tailwind CSS project.
+Analyse the task, produce a concrete implementation plan with specific file changes, commands, and validation steps.
+Be specific: name exact files, functions, and TypeScript types. Identify any risks or blockers.
+End with a one-line DONE: <summary> statement.`,
+      prompt: `## Task\n${goal}\n\n## Definition of Done\n${dod}\n\n## Context\n${delegation.contract.context ?? '(none)'}`,
+      maxTokens: 1200,
+      purpose: 'coding',
+    })
+
+    const elapsed = Math.round((Date.now() - startTime.getTime()) / 60000)
+    const planLines = result.text.split('\n')
+
+    // Log plan line-by-line for live visibility in the UI
+    const planLogs: AgentLog[] = planLines
+      .filter(l => l.trim())
+      .map(line => ({
+        timestamp: new Date().toISOString(),
+        type: (line.startsWith('#') ? 'thought' : line.startsWith('$') ? 'command' : 'info') as AgentLog['type'],
+        message: line.substring(0, 500),
+      }))
+
+    const doneLine = planLines.find(l => l.startsWith('DONE:'))
+    const summaryText = doneLine ? doneLine.replace('DONE:', '').trim() : result.text.slice(0, 200)
+
+    const finalLog: AgentLog = {
+      timestamp: new Date().toISOString(),
+      type: 'success',
+      message: `✅ Claude API-Analyse abgeschlossen (${result.provider}/${result.model}${result.outputTokens ? `, ${result.outputTokens} Tokens` : ''})`,
+    }
+
+    const report: DelegationReport = {
+      keyPoints: [summaryText, `Analysiert via ${result.provider}/${result.model}`],
+      changes: [],
+      timeTakenMinutes: elapsed,
+    }
+
+    appendLogs(id, [...planLogs, finalLog], 'completed', report)
+
+    const finished = readDelegations().find(d => d.id === id)
+    const label = finished?.title || goal.slice(0, 60)
+    upsertAttentionItem({
+      id: `completion:${id}`,
+      type: 'delegation_completed',
+      severity: 'info',
+      title: `✅ Analysiert: ${label}`,
+      body: `Claude API Plan erstellt (${result.provider}) — kein CLI verfügbar, Implementierung manuell starten`,
+      delegationId: id,
+      actionUrl: `/delegations/${id}`,
+      createdAt: new Date().toISOString(),
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    const errLog: AgentLog = {
+      timestamp: new Date().toISOString(),
+      type: 'error',
+      message: `❌ Claude API-Runner-Fehler: ${msg}`,
+    }
+    appendLogs(id, [errLog], 'failed')
+    upsertAttentionItem({
+      id: `completion:${id}`,
+      type: 'delegation_failed',
+      severity: 'critical',
+      title: `❌ API-Runner fehlgeschlagen`,
+      body: msg.slice(0, 200),
+      delegationId: id,
+      actionUrl: `/delegations/${id}`,
+      createdAt: new Date().toISOString(),
+    })
+  }
+}
+
 function runSimulation(id: string, delegation: Delegation) {
   const goal = delegation.contract.goal
   const budgetLog = buildSimulationBudgetLog(delegation)
@@ -564,8 +655,17 @@ export async function POST(
   if (isClaudeAvailable()) {
     runWithClaudeCLI(id, prompt, startTime, delegation.contract.maxBudgetUsd)
     return NextResponse.json({ started: true, mode: 'claude-cli', delegationId: id })
-  } else {
-    runSimulation(id, delegation)
-    return NextResponse.json({ started: true, mode: 'simulation', delegationId: id })
   }
+
+  // Fallback 1: Claude API (generateText) — real AI output, no tool-use loop
+  const storedKeys = readStoredApiKeys()
+  const hasApiKey = !!storedKeys.ANTHROPIC_API_KEY?.trim()
+  if (hasApiKey) {
+    void runWithClaudeAPI(id, delegation, startTime)
+    return NextResponse.json({ started: true, mode: 'claude-api', delegationId: id })
+  }
+
+  // Fallback 2: pure simulation (no API key, no CLI)
+  runSimulation(id, delegation)
+  return NextResponse.json({ started: true, mode: 'simulation', delegationId: id })
 }

@@ -1,9 +1,31 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import type { Delegation } from '@/lib/models/delegation'
+import type { ProcessingRecord } from '@/lib/dsgvo/processing-ledger'
 import { StatusDot, cx } from '@/components/ui/primitives'
+
+// ─── DSGVO helpers ────────────────────────────────────────────────────────────
+
+interface LedgerStats {
+  total: number
+  piiDetected: number
+  piiRedacted: number
+  byProvider: Record<string, number>
+  byResidency: Record<string, number>
+  last24h: number
+}
+
+const RESIDENCY_BADGE: Record<string, string> = {
+  eu:      'bg-emerald-900/30 text-emerald-400 border-emerald-800/40',
+  local:   'bg-sky-900/30 text-sky-400 border-sky-800/40',
+  us:      'bg-amber-900/30 text-amber-400 border-amber-800/40',
+  unknown: 'bg-slate-800 text-slate-500 border-slate-700',
+}
+const RESIDENCY_LABEL: Record<string, string> = {
+  eu: '🇪🇺 EU', local: '💻 Lokal', us: '🇺🇸 US', unknown: '?',
+}
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -49,9 +71,19 @@ function formatDate(iso: string): string {
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 
+type Tab = 'overview' | 'dsgvo'
+
 export default function GovernancePage() {
-  const [delegations, setDelegations] = useState<Delegation[]>([])
-  const [loading, setLoading] = useState(true)
+  const [delegations, setDelegations]   = useState<Delegation[]>([])
+  const [loading, setLoading]           = useState(true)
+  const [activeTab, setActiveTab]       = useState<Tab>('overview')
+
+  // DSGVO state
+  const [ledgerStats, setLedgerStats]   = useState<LedgerStats | null>(null)
+  const [ledgerRecs, setLedgerRecs]     = useState<ProcessingRecord[]>([])
+  const [ledgerLoading, setLedgerLoading] = useState(false)
+  const [cleaning, setCleaning]         = useState(false)
+  const [cleanMsg, setCleanMsg]         = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/delegations')
@@ -62,6 +94,32 @@ export default function GovernancePage() {
       })
       .catch(() => setLoading(false))
   }, [])
+
+  const loadLedger = useCallback(async () => {
+    setLedgerLoading(true)
+    try {
+      const res  = await fetch('/api/dsgvo/stats')
+      const data = await res.json() as { stats: LedgerStats; records: ProcessingRecord[] }
+      setLedgerStats(data.stats)
+      setLedgerRecs(data.records)
+    } finally {
+      setLedgerLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (activeTab === 'dsgvo') void loadLedger()
+  }, [activeTab, loadLedger])
+
+  const handleCleanup = async () => {
+    setCleaning(true)
+    setCleanMsg(null)
+    const res  = await fetch('/api/dsgvo/cleanup', { method: 'POST' })
+    const data = await res.json() as { deleted: number }
+    setCleanMsg(`✅ ${data.deleted} abgelaufene Einträge gelöscht.`)
+    setCleaning(false)
+    void loadLedger()
+  }
 
   // Derived views
   const approvalQueue = delegations.filter(d => d.status === 'pending' || (d.status === 'approved' && d.contract.requiresApproval))
@@ -83,10 +141,37 @@ export default function GovernancePage() {
         <header className="mb-8 mt-2 border-b border-slate-800 pb-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">System</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">Governance Hub</h1>
-          <p className="mt-2 text-sm text-slate-400">Approval-Queue, Risikoprofil, Privacy-Monitor und Audit-Übersicht.</p>
+          <p className="mt-2 text-sm text-slate-400">Approval-Queue, Risikoprofil, Privacy-Monitor, DSGVO-Verarbeitungsverzeichnis.</p>
         </header>
 
-        {loading ? (
+        {/* Tab nav */}
+        <div className="mb-6 flex gap-1 border-b border-slate-800">
+          {(['overview', 'dsgvo'] as Tab[]).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={cx(
+                'px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+                activeTab === tab
+                  ? 'border-sky-500 text-sky-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-300'
+              )}
+            >
+              {tab === 'overview' ? 'Governance' : 'DSGVO · Art. 30'}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'dsgvo' ? (
+          <DSGVOTab
+            stats={ledgerStats}
+            records={ledgerRecs}
+            loading={ledgerLoading}
+            cleaning={cleaning}
+            cleanMsg={cleanMsg}
+            onCleanup={() => void handleCleanup()}
+          />
+        ) : loading ? (
           <p className="py-8 text-center text-sm text-slate-500">Lade Daten…</p>
         ) : (
           <div className="space-y-8">
@@ -229,6 +314,124 @@ export default function GovernancePage() {
         )}
       </div>
     </main>
+  )
+}
+
+// ─── DSGVO Tab ────────────────────────────────────────────────────────────────
+
+function DSGVOTab({
+  stats, records, loading, cleaning, cleanMsg, onCleanup,
+}: {
+  stats: LedgerStats | null
+  records: ProcessingRecord[]
+  loading: boolean
+  cleaning: boolean
+  cleanMsg: string | null
+  onCleanup: () => void
+}) {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-slate-200">Verarbeitungsverzeichnis</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Gemäß Art. 30 DSGVO · Aufbewahrung 5 Jahre</p>
+        </div>
+        <button
+          onClick={onCleanup}
+          disabled={cleaning}
+          className="px-3 py-1.5 bg-red-600/80 hover:bg-red-600 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+        >
+          {cleaning ? 'Bereinige…' : '🗑 Retention Cleanup'}
+        </button>
+      </div>
+
+      {cleanMsg && (
+        <div className="bg-emerald-900/30 border border-emerald-800/40 text-emerald-400 px-4 py-3 rounded-lg text-xs">
+          {cleanMsg}
+        </div>
+      )}
+
+      {loading && <p className="text-slate-500 text-sm py-4 text-center">Lade Ledger…</p>}
+
+      {stats && (
+        <>
+          {/* Stats */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <KpiCard label="Einträge gesamt" value={stats.total} tone="neutral" />
+            <KpiCard label="Letzte 24h" value={stats.last24h} tone="neutral" />
+            <KpiCard label="PII erkannt" value={stats.piiDetected} tone={stats.piiDetected > 0 ? 'warning' : 'neutral'} />
+            <KpiCard label="PII bereinigt" value={stats.piiRedacted} tone={stats.piiRedacted > 0 ? 'success' : 'neutral'} />
+          </div>
+
+          {/* Residency */}
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Datenresidenz</p>
+            <div className="flex flex-wrap gap-2">
+              {(Object.entries(stats.byResidency) as [string, number][]).map(([key, count]) => (
+                <span key={key} className={cx('px-3 py-1 rounded-full text-xs font-medium border', RESIDENCY_BADGE[key] ?? RESIDENCY_BADGE.unknown)}>
+                  {RESIDENCY_LABEL[key] ?? key}: {count}
+                </span>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Ledger table */}
+      <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+        <div className="px-4 py-3 border-b border-slate-800 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Letzte 50 Verarbeitungen
+        </div>
+        {records.length === 0 && !loading ? (
+          <p className="px-4 py-6 text-center text-sm text-slate-600">Noch keine Verarbeitungen protokolliert.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-800 text-left text-slate-500">
+                  <th className="px-4 py-2.5 font-medium">Zweck</th>
+                  <th className="px-4 py-2.5 font-medium">Anbieter</th>
+                  <th className="px-4 py-2.5 font-medium">Residenz</th>
+                  <th className="px-4 py-2.5 font-medium">Rechtsgrundlage</th>
+                  <th className="px-4 py-2.5 font-medium">PII</th>
+                  <th className="px-4 py-2.5 font-medium">Tokens</th>
+                  <th className="px-4 py-2.5 font-medium">Zeit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {records.map(r => (
+                  <tr key={r.id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                    <td className="px-4 py-2.5 text-slate-300 max-w-[180px] truncate">{r.purpose}</td>
+                    <td className="px-4 py-2.5 text-slate-400">{r.providerId ?? r.processor}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={cx('px-2 py-0.5 rounded-full text-xs border font-medium', RESIDENCY_BADGE[r.dataResidency] ?? RESIDENCY_BADGE.unknown)}>
+                        {RESIDENCY_LABEL[r.dataResidency] ?? r.dataResidency}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-500">{r.legalBasis}</td>
+                    <td className="px-4 py-2.5">
+                      {r.piiDetected ? (
+                        <span className={cx('px-1.5 py-0.5 rounded text-xs font-medium', r.piiRedacted ? 'bg-emerald-900/30 text-emerald-400' : 'bg-amber-900/30 text-amber-400')}>
+                          {r.piiRedacted ? `✓ ${r.piiCount}` : `⚠ ${r.piiCount}`}
+                        </span>
+                      ) : <span className="text-slate-700">—</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-500">{r.inputTokens != null ? r.inputTokens.toLocaleString() : '—'}</td>
+                    <td className="px-4 py-2.5 text-slate-500">
+                      {new Date(r.processedAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <p className="text-xs text-slate-700 text-center">
+        Aufbewahrung gemäß Art. 30 DSGVO · 5 Jahre (1825 Tage) · Automatische Bereinigung via Retention-Cleanup
+      </p>
+    </div>
   )
 }
 

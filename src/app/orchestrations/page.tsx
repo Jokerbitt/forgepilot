@@ -112,6 +112,7 @@ function RunCard({ run: initialRun }: { run: OrchestratedRun }) {
   const [run, setRun] = useState(initialRun)
   const [expanded, setExpanded] = useState(false)
   const [executing, setExecuting] = useState(false)
+  const [aborting, setAborting] = useState(false)
 
   // Auto-poll when running
   useEffect(() => {
@@ -142,6 +143,13 @@ function RunCard({ run: initialRun }: { run: OrchestratedRun }) {
     await fetch(`/api/agents/orchestrate/${run.id}/tasks/${taskId}/retry`, { method: 'POST' })
     const res = await fetch(`/api/agents/orchestrate/${run.id}`)
     setRun(await res.json() as OrchestratedRun)
+  }
+
+  const handleAbort = async () => {
+    setAborting(true)
+    await fetch(`/api/agents/orchestrate/${run.id}/abort`, { method: 'POST' })
+    setRun(r => ({ ...r, status: 'aborted' }))
+    setAborting(false)
   }
 
   const done  = run.tasks.filter(t => t.status === 'done').length
@@ -191,6 +199,15 @@ function RunCard({ run: initialRun }: { run: OrchestratedRun }) {
               className="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-600 disabled:opacity-40 transition-colors"
             >
               {executing ? 'Startet…' : '▶ Ausführen'}
+            </button>
+          )}
+          {run.status === 'running' && (
+            <button
+              onClick={handleAbort}
+              disabled={aborting}
+              className="rounded-lg border border-rose-700/50 bg-rose-950/30 px-3 py-1.5 text-xs font-semibold text-rose-400 hover:bg-rose-900/40 disabled:opacity-40 transition-colors"
+            >
+              {aborting ? 'Abbrechend…' : '■ Abbrechen'}
             </button>
           )}
           <Link

@@ -1,27 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { generateText, stripJsonCodeFence } from './text-generation'
 
-const mockConfig = {
-  aiProvider: 'ollama' as const,
-  localCodingModel: 'qwen2.5-coder:14b',
-  localFastModel: 'llama3.2:3b',
-  approvalMode: 'balanced' as const,
-  autopilotMaxRiskClass: 'A' as const,
-  autopilotMinScore: 85,
-  ignoreStatuses: [],
-  penalizeOldBacklogs: false,
-  backlogPenaltyAgeDays: 90,
-  backlogPenaltyScore: 20,
-  showTriageJoker: false,
-  maxRecommendations: 5,
-  pinnedItems: [],
-  customLlmModels: [],
-  projects: [],
-  milestones: [],
-}
+// Mock provider config-store: Ollama as fast provider
+vi.mock('@/lib/ai/providers/config-store', () => ({
+  getModelSelection: vi.fn(() => ({
+    fastProvider:      'ollama',
+    fastModel:         'llama3.2:3b',
+    codingProvider:    'ollama',
+    codingModel:       'qwen2.5-coder:14b',
+    embeddingProvider: 'ollama',
+  })),
+  getAllProviderConfigs: vi.fn(() => [{
+    id:       'ollama',
+    name:     'Ollama',
+    type:     'local',
+    apiKeyRef: '',
+    baseUrl:  'http://ollama.local:11434',
+    models:   [{ id: 'llama3.2:3b', name: 'LLaMA 3.2 3B', purpose: 'fast', costPer1kIn: 0, costPer1kOut: 0 }],
+    dataResidency: 'local',
+    enabled: true,
+  }]),
+}))
 
-vi.mock('@/lib/nba-engine/nba-config', () => ({
-  getNBAConfig: vi.fn(() => mockConfig),
+// Mock DSGVO ledger — fire-and-forget, no-op in tests
+vi.mock('@/lib/dsgvo/processing-ledger', () => ({
+  logProcessing: vi.fn(() => Promise.resolve()),
 }))
 
 vi.mock('@/lib/connectors/config', () => ({

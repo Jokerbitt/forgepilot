@@ -38,8 +38,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({
       ok: true,
-      deletedCount: result.deletedCount,
-      retainedCount: result.retainedCount,
+      deletedCount: result.deleted,
       ranAt: new Date().toISOString(),
     })
   } catch (err) {
