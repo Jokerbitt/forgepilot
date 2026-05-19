@@ -14,7 +14,7 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 
 ## 🔴 High Priority
 
-- [ ] feat: Ollama model auto-detection — list available local models in `/settings/providers` via GET `http://localhost:11434/api/tags`
+- [x] feat: Ollama model auto-detection — list available local models in `/settings/providers` via GET `http://localhost:11434/api/tags`
 - [ ] feat: Settings — separate model picker for fast vs coding purpose (currently only changeable via config file)
 - [ ] feat: Agent execution live-stream via SSE (replace 3s polling in `/orchestrations` with Server-Sent Events)
 - [ ] feat: Global search — search across all Briefs, Delegations, Work Items, Knowledge Cards (`/search` page + `Cmd+K` shortcut)
