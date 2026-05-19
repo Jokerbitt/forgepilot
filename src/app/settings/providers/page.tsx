@@ -4,6 +4,84 @@ import { useEffect, useState, useCallback } from 'react'
 import { cx } from '@/components/ui/primitives'
 import type { AIProviderConfig, AIModelSelection } from '@/lib/ai/providers/types'
 
+function GroqQuickSetupBanner({ onActivated }: { onActivated: () => void }) {
+  const [apiKey, setApiKey]     = useState('')
+  const [saving, setSaving]     = useState(false)
+  const [error, setError]       = useState<string | null>(null)
+
+  const handleActivate = async () => {
+    if (!apiKey.trim()) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/settings/env', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'GROQ_API_KEY', value: apiKey.trim() }),
+      })
+      const data = await res.json() as { ok: boolean; error?: string }
+      if (!data.ok) {
+        setError(data.error ?? 'Fehler beim Speichern')
+      } else {
+        onActivated()
+      }
+    } catch {
+      setError('Netzwerkfehler — bitte erneut versuchen')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="relative rounded-xl p-px overflow-hidden"
+      style={{ background: 'linear-gradient(135deg, #16a34a55 0%, #15803d80 50%, #14532d55 100%)' }}
+    >
+      <div className="rounded-[11px] bg-[#0a1a0f] px-5 py-4 space-y-3">
+        <div className="flex items-start gap-3">
+          <span className="text-lg leading-none mt-0.5">&#9889;</span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-emerald-300">
+              Groq: Kostenlos &amp; 10x schneller als Ollama
+            </p>
+            <p className="text-xs text-emerald-500/80 mt-0.5">
+              Kein Credit Card nötig — einfach unter{' '}
+              <a
+                href="https://console.groq.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-emerald-300 transition-colors"
+              >
+                console.groq.com
+              </a>{' '}
+              registrieren und API Key hier einfügen.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="password"
+            value={apiKey}
+            onChange={e => setApiKey(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { void handleActivate() } }}
+            placeholder="gsk_..."
+            className="flex-1 rounded-lg bg-black/40 border border-emerald-700/40 px-3 py-1.5 text-xs text-white placeholder-emerald-900 font-mono focus:outline-none focus:border-emerald-500/60 transition-colors"
+          />
+          <button
+            onClick={() => { void handleActivate() }}
+            disabled={saving || !apiKey.trim()}
+            className="rounded-lg bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 px-4 py-1.5 text-xs font-semibold text-white transition-colors whitespace-nowrap"
+          >
+            {saving ? 'Speichern…' : 'Aktivieren'}
+          </button>
+        </div>
+        {error && (
+          <p className="text-xs text-rose-400">{error}</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 interface ProviderWithStatus extends AIProviderConfig {
   hasApiKey: boolean
 }
@@ -325,6 +403,9 @@ export default function ProvidersPage() {
   const cloudProviders   = data.providers.filter(p => p.dataResidency !== 'local')
   const activeSelection  = data.selection
 
+  const groqProvider     = data.providers.find(p => p.id === 'groq')
+  const showGroqBanner   = groqProvider != null && !groqProvider.hasApiKey
+
   return (
     <main className="min-h-screen bg-[#08080d]">
       {/* Header */}
@@ -341,6 +422,11 @@ export default function ProvidersPage() {
       </div>
 
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
+        {/* Groq Quick-Setup Banner — shown when Groq has no API key */}
+        {showGroqBanner && (
+          <GroqQuickSetupBanner onActivated={() => { window.location.reload() }} />
+        )}
+
         {/* Active selection summary */}
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Aktive Konfiguration</p>
