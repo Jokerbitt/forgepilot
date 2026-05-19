@@ -34,6 +34,7 @@ import {
 import type { Delegation } from '@/lib/models/delegation'
 import type { AttentionItem } from '@/lib/models/attention'
 import type { Notification } from '@/lib/models/notification'
+import type { AutonomousConfig } from '@/lib/config/autonomous-config'
 import { cx } from '@/components/ui/primitives'
 import { NotificationBell } from '@/components/shared/NotificationBell'
 
@@ -88,14 +89,16 @@ export function AppNav() {
   const [pending, setPending] = useState(0)
   const [attentionCount, setAttentionCount] = useState(0)
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
+  const [autonomousModeActive, setAutonomousModeActive] = useState(false)
 
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const [delRes, attRes, notifRes] = await Promise.all([
+        const [delRes, attRes, notifRes, autoRes] = await Promise.all([
           fetch('/api/delegations'),
           fetch('/api/attention'),
           fetch('/api/notifications?unread=true'),
+          fetch('/api/settings/autonomous'),
         ])
         const data = await delRes.json() as Delegation[]
         if (Array.isArray(data)) {
@@ -109,6 +112,10 @@ export function AppNav() {
         const notifs = await notifRes.json() as Notification[]
         if (Array.isArray(notifs)) {
           setUnreadNotificationCount(notifs.length)
+        }
+        const autoData = await autoRes.json() as AutonomousConfig
+        if (autoData && typeof autoData.enabled === 'boolean') {
+          setAutonomousModeActive(autoData.enabled)
         }
       } catch {
         // nav badge is non-critical
@@ -162,6 +169,7 @@ export function AppNav() {
                     : item.href === '/notifications' ? unreadNotificationCount
                     : undefined
                 const isLive = (item.href === '/delegations' || item.href === '/active') && running > 0
+                const isAutonomousSettings = item.href === '/settings' && autonomousModeActive
                 return (
                   <SidebarLink
                     key={item.href}
@@ -172,6 +180,7 @@ export function AppNav() {
                     count={count}
                     isLive={isLive}
                     isNew={item.isNew}
+                    autonomousActive={isAutonomousSettings}
                   />
                 )
               })}
@@ -257,6 +266,7 @@ function SidebarLink({
   count,
   isLive,
   isNew,
+  autonomousActive,
 }: {
   href: string
   label: string
@@ -265,6 +275,7 @@ function SidebarLink({
   count?: number
   isLive?: boolean
   isNew?: boolean
+  autonomousActive?: boolean
 }) {
   return (
     <Link
@@ -301,6 +312,11 @@ function SidebarLink({
           )}
         >
           {count}
+        </span>
+      ) : autonomousActive ? (
+        <span className="relative ml-2 flex h-2 w-2 shrink-0" title="Autonomer Modus aktiv">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
         </span>
       ) : isNew ? (
         <span className="ml-auto rounded bg-violet-500/20 px-1 py-0.5 text-[9px] font-bold text-violet-400">NEU</span>

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import type { NBAConfig } from '@/lib/nba-engine/nba-config'
 import { describeApprovalMode } from '@/lib/nba-engine/approval-policy'
 import type { PMAgentResult } from '@/lib/agent-runner/pm-agent'
+import type { AutonomousConfig } from '@/lib/config/autonomous-config'
 
 interface ApiKeyField {
   key: 'GITHUB_TOKEN' | 'LINEAR_API_KEY' | 'LINEAR_TEAM_ID' | 'ANTHROPIC_API_KEY'
@@ -59,6 +60,10 @@ export default function SettingsPage() {
   const [pmHistory, setPmHistory] = useState<PMAgentResult[]>([])
   const [expandedRun, setExpandedRun] = useState<string | null>(null)
 
+  // Autonomous mode state
+  const [autonomousConfig, setAutonomousConfig] = useState<AutonomousConfig | null>(null)
+  const [autonomousSaving, setAutonomousSaving] = useState(false)
+
   // API Keys state
   const [apiKeySet, setApiKeySet] = useState<Record<string, boolean>>({})
   const [apiKeyDraft, setApiKeyDraft] = useState<Record<string, string>>({
@@ -98,7 +103,26 @@ export default function SettingsPage() {
       .then(res => res.json())
       .then((data: PMAgentResult[]) => setPmHistory(data))
       .catch(() => null)
+    fetch('/api/settings/autonomous')
+      .then(res => res.json())
+      .then((data: AutonomousConfig) => setAutonomousConfig(data))
+      .catch(() => null)
   }, [])
+
+  const handleAutonomousUpdate = async (update: Partial<AutonomousConfig>) => {
+    setAutonomousSaving(true)
+    try {
+      const res = await fetch('/api/settings/autonomous', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(update),
+      })
+      const data = await res.json() as AutonomousConfig
+      setAutonomousConfig(data)
+    } finally {
+      setAutonomousSaving(false)
+    }
+  }
 
   const handleAutoPmToggle = async (enabled: boolean) => {
     setAutoPmSaving(true)
@@ -735,6 +759,122 @@ export default function SettingsPage() {
             )}
           </div>
         </section>
+
+        {/* Autonomous Mode Section */}
+        {autonomousConfig !== null && (
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-300">Autonomer Modus</h2>
+              {autonomousConfig.enabled ? (
+                <span className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-emerald-900/40 text-emerald-400 font-medium">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                  </span>
+                  AUTONOM AKTIV
+                </span>
+              ) : (
+                <span className="text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-500 font-medium">MANUELL</span>
+              )}
+            </div>
+            <div className={`bg-gray-900 p-5 rounded-lg border space-y-5 transition-colors ${
+              autonomousConfig.enabled ? 'border-emerald-800/50' : 'border-gray-800'
+            }`}>
+              <p className="text-sm text-gray-400">
+                Im autonomen Modus führt ForgePilot Delegations selbständig aus — ohne manuelle Freigabe.
+              </p>
+
+              {/* Main toggle */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-gray-200">Autonomer Modus</p>
+                  {autonomousConfig.enabled && autonomousConfig.lastEnabledAt && (
+                    <p className="text-xs text-emerald-400 mt-0.5">
+                      Aktiviert um {new Date(autonomousConfig.lastEnabledAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => handleAutonomousUpdate({ enabled: !autonomousConfig.enabled })}
+                  disabled={autonomousSaving}
+                  className={`relative inline-flex h-7 w-14 shrink-0 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${
+                    autonomousConfig.enabled ? 'bg-emerald-500' : 'bg-slate-600'
+                  }`}
+                  aria-label="Autonomen Modus umschalten"
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform ${
+                      autonomousConfig.enabled ? 'translate-x-8' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Sub-settings — dimmed when mode is off */}
+              <div className={`space-y-4 transition-opacity ${autonomousConfig.enabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Einstellungen</p>
+
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autonomousConfig.autoApproveDelegations}
+                    onChange={e => handleAutonomousUpdate({ autoApproveDelegations: e.target.checked })}
+                    className="form-checkbox h-4 w-4 mt-0.5 text-emerald-500 rounded bg-gray-800 border-gray-700"
+                  />
+                  <div>
+                    <span className="block text-sm font-medium text-gray-300">Delegations auto-freigeben</span>
+                    <span className="text-xs text-gray-500">Delegations werden automatisch genehmigt wenn das Risiko passt</span>
+                  </div>
+                </label>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-2">Risiko-Schwelle</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { value: 'low'   , label: 'Niedrig', desc: 'Nur RiskClass A' },
+                      { value: 'medium', label: 'Mittel',  desc: 'RiskClass A + B' },
+                      { value: 'high'  , label: 'Hoch',    desc: 'A + B (kein C)' },
+                      { value: 'all'   , label: 'Alles',   desc: 'Vollständig autonom' },
+                    ] as const).map(opt => (
+                      <button key={opt.value} type="button"
+                        onClick={() => handleAutonomousUpdate({ riskThreshold: opt.value })}
+                        className={`px-3 py-2 rounded-lg border text-left transition-colors ${
+                          autonomousConfig.riskThreshold === opt.value
+                            ? (opt.value === 'all' ? 'bg-emerald-700 border-emerald-500 text-white' : 'bg-gray-700 border-emerald-500 text-white')
+                            : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                        }`}>
+                        <span className="block text-sm font-medium">{opt.label}</span>
+                        <span className="block text-xs opacity-70">{opt.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {autonomousConfig.riskThreshold === 'all' && (
+                    <p className="mt-2 text-xs text-emerald-400">✓ Vollständig autonom — alle Delegations laufen ohne Rückfrage durch</p>
+                  )}
+                </div>
+
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autonomousConfig.autoExecuteOnApproval}
+                    onChange={e => handleAutonomousUpdate({ autoExecuteOnApproval: e.target.checked })}
+                    className="form-checkbox h-4 w-4 mt-0.5 text-emerald-500 rounded bg-gray-800 border-gray-700"
+                  />
+                  <div>
+                    <span className="block text-sm font-medium text-gray-300">Nach Freigabe sofort ausführen</span>
+                    <span className="text-xs text-gray-500">Delegation startet automatisch nach der Genehmigung</span>
+                  </div>
+                </label>
+              </div>
+
+              {/* Warning — always visible */}
+              <div className="flex items-start gap-2 rounded-lg bg-amber-950/30 border border-amber-800/40 px-3 py-2.5 text-xs text-amber-300">
+                <span className="shrink-0 mt-0.5">⚠️</span>
+                <span>High-Risk Delegations (RiskClass C) benötigen <strong>immer</strong> deine manuelle Freigabe — unabhängig von dieser Einstellung.</span>
+              </div>
+            </div>
+          </section>
+        )}
 
         <div className="pt-4 border-t border-gray-800">
           <button
