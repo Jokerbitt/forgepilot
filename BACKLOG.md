@@ -27,18 +27,18 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [x] feat: Export Project Brief as Markdown file (download button on brief detail page)
 - [x] feat: Rate-limit / quota tracker — show Gemini free tier usage (calls today vs 1500 limit) in dashboard
 - [x] feat: Keyboard shortcuts — `g i` = go to /idea, `g d` = /delegations, `g k` = /knowledge, `/` = search
-- [ ] feat: Work Items bulk-import via CSV (paste or upload, auto-parse title/priority/type columns)
-- [ ] feat: DSGVO data export — download all processing records as ZIP (Art. 20 right to portability)
-- [ ] feat: Mobile responsive improvements — fix layout on screens < 768px (navigation, tables, modals)
+- [x] feat: Work Items bulk-import via CSV (paste or upload, auto-parse title/priority/type columns)
+- [x] feat: DSGVO data export — download all processing records as ZIP (Art. 20 right to portability)
+- [x] feat: Mobile responsive improvements — fix layout on screens < 768px (navigation, tables, modals)
 - [x] feat: Webhook endpoint for external triggers — `POST /api/webhooks/intake` for n8n/Zapier
 
 ## 🟢 Lower Priority
 
-- [ ] feat: Dark/Light mode toggle (persist in localStorage, default dark)
+- [x] feat: Dark/Light mode toggle (persist in localStorage, default dark)
 - [ ] feat: Project Brief PDF export (use puppeteer or jsPDF)
 - [ ] feat: Agent skill library page — show all available agent skills with descriptions
-- [ ] feat: Delegation contract versioning — track changes to contracts over time
-- [ ] feat: Work item dependencies — mark item B as "blocked by" item A
+- [x] feat: Delegation contract versioning — track changes to contracts over time
+- [x] feat: Work item dependencies — mark item B as "blocked by" item A
 - [ ] chore: Add Playwright E2E tests for critical flows (idea → brief → delegation)
 - [ ] chore: Upgrade dependencies (next, typescript, tailwind) to latest versions
 - [ ] docs: Add JSDoc comments to all public lib functions
