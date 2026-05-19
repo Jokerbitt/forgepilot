@@ -40,8 +40,8 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [x] feat: Delegation contract versioning — track changes to contracts over time
 - [x] feat: Work item dependencies — mark item B as "blocked by" item A
 - [x] chore: Add Playwright E2E tests for critical flows (idea → brief → delegation)
-- [ ] chore: Upgrade dependencies (next, typescript, tailwind) to latest versions
-- [ ] docs: Add JSDoc comments to all public lib functions
+- [x] chore: Upgrade dependencies (next, typescript, tailwind) to latest versions
+- [x] docs: Add JSDoc comments to all public lib functions
 
 ---
 
