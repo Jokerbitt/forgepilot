@@ -14,6 +14,8 @@ import { getRun, updateTaskStatus, updateRunStatus, retryTask, canRetry } from '
 import { scoreWork } from '@/lib/agents/work-quality'
 import { recordOutcome } from '@/lib/agents/skill-evolver'
 import { upsertCard } from '@/lib/knowledge/store'
+import { saveNotification } from '@/lib/notifications/notification-store'
+import crypto from 'crypto'
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
 
@@ -139,8 +141,9 @@ async function executeRunAsync(runId: string, skipFailed: boolean): Promise<void
     }
   }
 
-  // All tasks processed — write summary knowledge card
+  // All tasks processed — write summary knowledge card + inbox notification
   writeRunKnowledgeCard(runId)
+  notifyRunComplete(runId)
 }
 
 /** Write a MemoryCard summarising this run's outcomes to the Knowledge Store */
@@ -232,4 +235,45 @@ async function pollDelegationCompletion(
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/** Fire an inbox notification when a run reaches a terminal state */
+function notifyRunComplete(runId: string): void {
+  try {
+    const run = getRun(runId)
+    if (!run) return
+
+    const isDone = run.status === 'done'
+    const isFailed = run.status === 'failed' || run.status === 'aborted'
+    if (!isDone && !isFailed) return
+
+    const doneTasks  = run.tasks.filter(t => t.status === 'done').length
+    const totalTasks = run.tasks.length
+    const scores     = run.tasks.map(t => t.result?.qualityScore ?? 0).filter(s => s > 0)
+    const avgScore   = scores.length > 0
+      ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+      : null
+
+    const title = isDone
+      ? `Run abgeschlossen: ${run.delegationTitle}`
+      : `Run fehlgeschlagen: ${run.delegationTitle}`
+
+    const body = isDone
+      ? `${doneTasks}/${totalTasks} Tasks erledigt${avgScore !== null ? ` · Ø ${avgScore} Punkte` : ''}`
+      : `${doneTasks}/${totalTasks} Tasks erfolgreich — Run abgebrochen`
+
+    saveNotification({
+      id: crypto.randomUUID(),
+      type: isDone ? 'orchestration-complete' : 'orchestration-failed',
+      severity: isDone ? 'info' : 'warning',
+      title,
+      body,
+      link: '/orchestrations',
+      sourceId: runId,
+      read: false,
+      createdAt: new Date().toISOString(),
+    })
+  } catch {
+    // Non-critical — never throw from notification logic
+  }
 }

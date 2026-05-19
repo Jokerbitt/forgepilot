@@ -1,4 +1,4 @@
-export type NotificationType = 'pm-alert' | 'research-complete' | 'delegation-blocked' | 'milestone-at-risk'
+export type NotificationType = 'pm-alert' | 'research-complete' | 'delegation-blocked' | 'milestone-at-risk' | 'orchestration-complete' | 'orchestration-failed'
 export type NotificationSeverity = 'info' | 'warning' | 'critical'
 
 export interface Notification {
