@@ -11,6 +11,8 @@ import {
   buildExecutionStartLog,
   buildSimulationBudgetLog,
   getExecutionStartBlocker,
+  buildSubTaskPrompt,
+  buildSkillBlock,
 } from '@/lib/delegation-execution'
 import { OllamaAgentRunner, isOllamaReachable } from '@/lib/agent-runner/ollama-runner'
 import { budgetToMaxTurns } from '@/lib/budget-utils'
@@ -115,26 +117,9 @@ ${skillBlock}
 Start now.`
 }
 
+// buildSubTaskPrompt and buildSkillBlock are imported from @/lib/delegation-execution
+
 type SkillCategory = NonNullable<import('@/lib/models/delegation').TaskContract['skillCategory']>
-
-function buildSkillBlock(skill?: SkillCategory, filePatterns?: string[]): string {
-  const patternNote = filePatterns && filePatterns.length > 0
-    ? `\n## Allowed file patterns (scope constraint)\nOnly touch files matching: ${filePatterns.join(', ')}\nAny changes outside these patterns = scope drift → ESCALATE.\n`
-    : ''
-
-  const skillGuides: Record<SkillCategory, string> = {
-    'api-route': `\n## Skill: API Route\n- Only export HTTP handlers (GET, POST, etc.) from route files — no types, no helpers\n- Move shared types to src/lib/ before use\n- Return NextResponse.json() with proper status codes\n- Handle missing/invalid input with 400/404\n`,
-    'ui-component': `\n## Skill: UI Component\n- Tailwind CSS only — no inline styles, no external CSS\n- Handle: loading state, empty state, error state\n- No direct fetch() in components — use effect hooks\n- No imports from @/app/api/ in client components\n- useSearchParams() needs <Suspense> wrapper\n`,
-    'data-model': `\n## Skill: Data Model\n- Place types in src/lib/models/ or src/lib/[feature]/\n- No 'any' types — use unknown + type guards at boundaries\n- File-based stores: always atomic write (tmp → rename)\n- Export types, not classes\n`,
-    'test': `\n## Skill: Testing\n- Cover: happy path, error path, edge case (at minimum)\n- Mock filesystem and external services — don't hit real APIs\n- Use vi.mock() + vi.mocked() for consistent mocking\n- Test behavior, not implementation details\n`,
-    'refactor': `\n## Skill: Refactor\n- Zero behavior change — existing tests must still pass\n- TypeScript 0 errors before and after\n- Move one thing at a time — don't combine rename + restructure\n- Update all imports when moving files\n`,
-    'infrastructure': `\n## Skill: Infrastructure\n- Atomic file writes (write to .tmp, rename to target)\n- Handle missing config files gracefully (return defaults)\n- No hardcoded paths — use process.cwd() or path.join()\n`,
-    'documentation': `\n## Skill: Documentation\n- Update existing docs, don't create new files unless needed\n- Keep NAS SSOT in sync (00a_CURRENT_BASELINE.md log entry)\n- No code changes — only docs\n`,
-  }
-
-  if (!skill) return patternNote
-  return patternNote + (skillGuides[skill] ?? '')
-}
 
 /**
  * Detect credit/auth errors in claude CLI output.
@@ -562,7 +547,10 @@ export async function POST(
   appendLogs(id, [startLog], 'running')
 
   const startTime = new Date()
-  const prompt = buildPrompt(delegation)
+  // Use focused sub-task prompt when this is part of an orchestrated run
+  const prompt = delegation.contract.orchestratedRunId
+    ? buildSubTaskPrompt(delegation)
+    : buildPrompt(delegation)
 
   if (delegation.executionRoute === 'ollama-agent') {
     const model = delegation.contract.llmModel?.trim() || 'qwen2.5-coder:14b'
