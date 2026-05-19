@@ -1,0 +1,123 @@
+name: ⚡ Gemini Quick Tasks (Free)
+
+# Runs for truly trivial tasks — uses ONLY Gemini Flash (completely free)
+# Triggered manually or when main autonomous-dev marks a task as "trivial"
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Simple task to implement (e.g. "add loading spinner to /search page")'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  gemini-task:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Implement with Gemini Flash (free)
+        id: gemini
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TASK="${{ github.event.inputs.task }}"
+          SLUG=$(echo "$TASK" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | sed 's/[^a-z0-9-]//g' | cut -c1-25)
+          BRANCH="feature/gemini-$(date +%Y%m%d)-$SLUG"
+          git checkout -b "$BRANCH"
+
+          # Read relevant files for context
+          CONTEXT=$(find src -name "*.tsx" -o -name "*.ts" | head -20 | xargs ls -la 2>/dev/null | head -50)
+
+          # Generate implementation with Gemini
+          IMPLEMENTATION=$(curl -s -X POST \
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$GOOGLE_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$(python3 -c "
+          import json
+          task = '$TASK'
+          payload = {
+            'contents': [{'parts': [{'text': f'''You are a Next.js 14 TypeScript developer working on ForgePilot.
+
+          Task: {task}
+
+          Rules:
+          - TypeScript strict, no any types
+          - Dark theme with slate colors (slate-800/900 backgrounds, slate-300 text)
+          - Tailwind CSS only
+          - Write the implementation as a series of file operations
+
+          Return a bash script that:
+          1. Creates/edits the necessary files using cat heredocs
+          2. Does NOT modify config/*.json or .env.local
+          3. Keeps changes minimal and focused
+
+          IMPORTANT: Return ONLY valid bash, no markdown code blocks.'''}]}],
+            'generationConfig': {'maxOutputTokens': 2048, 'temperature': 0.1}
+          }
+          print(json.dumps(payload))
+          ")" | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)
+          print(d['candidates'][0]['content']['parts'][0]['text'])
+          " 2>/dev/null)
+
+          if [ -z "$IMPLEMENTATION" ]; then
+            echo "❌ Gemini returned empty response"
+            exit 1
+          fi
+
+          # Execute the implementation
+          echo "$IMPLEMENTATION" > /tmp/gemini-impl.sh
+          chmod +x /tmp/gemini-impl.sh
+          bash /tmp/gemini-impl.sh || true
+
+          # Quality gate
+          npm run type-check || exit 1
+          npm run test:run || exit 1
+
+          # Commit and PR
+          git add -A
+          git commit -m "feat(gemini): $TASK
+
+          🤖 Implemented by Gemini 2.0 Flash — cost: \$0.00
+          Co-Authored-By: Gemini Flash <gemini@google.com>"
+          git push origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --title "feat(gemini): $TASK" \
+            --body "⚡ **Gemini Flash** (free tier) implemented this task.
+
+          **Cost: \$0.00**
+
+          Quality gate: ✅ type-check + tests passed" \
+            --head "$BRANCH" --base main)
+
+          gh pr merge "$PR_URL" --squash
+          echo "✅ Done: $PR_URL"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## ⚡ Gemini Quick Task" >> $GITHUB_STEP_SUMMARY
+          echo "**Task:** ${{ github.event.inputs.task }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Cost: \$0.00** (Gemini 2.0 Flash free tier)" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ steps.gemini.outcome }}" >> $GITHUB_STEP_SUMMARY
