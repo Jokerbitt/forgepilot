@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 import type { AgentLog, Delegation } from '@/lib/models/delegation'
+import { getAutonomousConfig, riskClassFitsThreshold } from '@/lib/config/autonomous-config'
 
 const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
 
@@ -48,11 +49,20 @@ export async function POST(
     )
   }
 
+  // Autonomous mode: determine source based on config
+  const autonomousConfig = getAutonomousConfig()
+  const isAutoApprove =
+    autonomousConfig.enabled &&
+    autonomousConfig.autoApproveDelegations &&
+    riskClassFitsThreshold(delegation.contract.riskClass, autonomousConfig.riskThreshold)
+
   const body = await safeReadBody(request)
   const now = new Date().toISOString()
-  const source = typeof body.source === 'string' && body.source.trim()
-    ? body.source.trim()
-    : 'api'
+  const source = isAutoApprove
+    ? 'autonomous-mode'
+    : typeof body.source === 'string' && body.source.trim()
+      ? body.source.trim()
+      : 'api'
   const note = typeof body.note === 'string' && body.note.trim()
     ? ` (${body.note.trim()})`
     : ''
