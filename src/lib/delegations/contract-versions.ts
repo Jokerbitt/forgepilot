@@ -91,7 +91,12 @@ function calculateDiff(
 }
 
 /**
- * Save a new contract version
+ * Save a new contract version with change tracking.
+ * @param delegationId - The delegation ID to save the version for
+ * @param contract - The task contract to save
+ * @param delegation - The delegation object for context
+ * @param reason - Optional reason for the version change
+ * @returns The saved ContractVersion record
  */
 export async function saveVersion(
   delegationId: string,
@@ -136,7 +141,9 @@ export async function saveVersion(
 }
 
 /**
- * Get version history for a delegation
+ * Get version history for a delegation.
+ * @param delegationId - The delegation ID to fetch history for
+ * @returns Array of ContractVersion records in chronological order
  */
 export async function getVersionHistory(delegationId: string): Promise<ContractVersion[]> {
   const store = await loadVersionStore()
@@ -144,7 +151,10 @@ export async function getVersionHistory(delegationId: string): Promise<ContractV
 }
 
 /**
- * Get a specific version
+ * Get a specific version by version number.
+ * @param delegationId - The delegation ID
+ * @param versionNumber - The version number to retrieve
+ * @returns The ContractVersion if found, null otherwise
  */
 export async function getVersion(
   delegationId: string,
@@ -155,7 +165,9 @@ export async function getVersion(
 }
 
 /**
- * Get the current/latest version
+ * Get the current/latest version of a delegation contract.
+ * @param delegationId - The delegation ID
+ * @returns The latest ContractVersion if available, null otherwise
  */
 export async function getLatestVersion(delegationId: string): Promise<ContractVersion | null> {
   const history = await getVersionHistory(delegationId)

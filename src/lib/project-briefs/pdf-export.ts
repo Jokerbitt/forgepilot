@@ -35,6 +35,8 @@ function slugify(title: string): string {
 
 /**
  * Generate a filename for the PDF download.
+ * @param brief - The ProjectBrief to generate filename for
+ * @returns Filename slug suitable for download
  */
 export function briefPdfFilename(brief: ProjectBrief): string {
   return `brief-${slugify(brief.title)}.pdf`
@@ -42,7 +44,8 @@ export function briefPdfFilename(brief: ProjectBrief): string {
 
 /**
  * Convert a ProjectBrief to a PDF Buffer.
- * Returns a Buffer ready for HTTP response as application/pdf.
+ * @param brief - The ProjectBrief to convert
+ * @returns Buffer ready for HTTP response as application/pdf
  */
 export function generateBriefPdf(brief: ProjectBrief): Buffer {
   const doc = new jsPDF({
