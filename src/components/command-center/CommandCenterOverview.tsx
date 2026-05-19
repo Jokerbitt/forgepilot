@@ -619,6 +619,14 @@ function QuickActionsPanel({ activeRunCount }: { activeRunCount: number }) {
         )}
       </div>
       <div className="flex flex-wrap gap-3 items-center">
+        {/* M67: Idea → Production Entry Point */}
+        <a
+          href="/idea"
+          className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-bold bg-violet-600 text-white hover:bg-violet-500 shadow-lg shadow-violet-500/20 transition-colors"
+        >
+          <span>💡</span> Idee → Produktion
+        </a>
+
         {/* M63: Autonomous Pilot Button */}
         <button
           onClick={() => { void handleAutoPilot() }}
@@ -626,8 +634,8 @@ function QuickActionsPanel({ activeRunCount }: { activeRunCount: number }) {
           className={cx(
             'flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
             pilotStatus === 'loading'
-              ? 'bg-violet-900/40 text-violet-400 cursor-not-allowed'
-              : 'bg-violet-700 text-white hover:bg-violet-600',
+              ? 'bg-slate-700/40 text-slate-400 cursor-not-allowed'
+              : 'bg-slate-700 text-slate-200 hover:bg-slate-600',
           )}
         >
           {pilotStatus === 'loading' ? (
