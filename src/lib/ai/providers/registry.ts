@@ -64,8 +64,9 @@ const GEMINI_MODELS: AIModelDef[] = [
 ]
 
 const TOGETHER_MODELS: AIModelDef[] = [
-  { id: 'meta-llama/Llama-3-8b-chat-hf',  name: 'Llama 3 8B',  purpose: 'fast',   costPer1kInput: 0.0002, costPer1kOutput: 0.0002 },
-  { id: 'meta-llama/Llama-3-70b-chat-hf', name: 'Llama 3 70B', purpose: 'coding', costPer1kInput: 0.0009, costPer1kOutput: 0.0009 },
+  { id: 'meta-llama/Llama-3.2-3B-Instruct-Turbo',  name: 'Llama 3.2 3B Turbo',   purpose: 'fast',   costPer1kInput: 0.00006, costPer1kOutput: 0.00006 },
+  { id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', name: 'Llama 3.3 70B Turbo',  purpose: 'coding', costPer1kInput: 0.00088, costPer1kOutput: 0.00088 },
+  { id: 'mistralai/Mistral-7B-Instruct-v0.3',      name: 'Mistral 7B Instruct',   purpose: 'fast',   costPer1kInput: 0.0002,  costPer1kOutput: 0.0002 },
 ]
 
 const OPENROUTER_MODELS: AIModelDef[] = [
