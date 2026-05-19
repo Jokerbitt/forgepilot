@@ -7,6 +7,7 @@ import type { WorkItem } from '@/lib/models/work-item'
 import type { ResearchDocument } from '@/lib/models/research'
 import type { PMAgentResult } from '@/lib/agent-runner/pm-agent'
 import type { DashboardStats } from '@/app/api/dashboard/stats/route'
+import type { IdeaHistoryEntry } from '@/lib/pilot/idea-history-store'
 import { Badge, Panel, StatusDot, buttonClassName, cx } from '@/components/ui/primitives'
 
 interface RecommendationsResponse {
@@ -33,18 +34,20 @@ export function CommandCenterOverview() {
   const [researchDocs, setResearchDocs] = useState<ResearchDocument[]>([])
   const [pmPlan, setPmPlan] = useState<PMAgentResult | null | undefined>(undefined)
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null)
+  const [ideaHistory, setIdeaHistory] = useState<IdeaHistoryEntry[]>([])
 
   useEffect(() => {
     let cancelled = false
 
     async function load() {
-      const [readinessRes, delegationsRes, recommendationsRes, researchRes, pmRes, statsRes] = await Promise.allSettled([
+      const [readinessRes, delegationsRes, recommendationsRes, researchRes, pmRes, statsRes, ideaHistoryRes] = await Promise.allSettled([
         fetch('/api/operator/readiness').then(res => res.json() as Promise<OperatorReadiness>),
         fetch('/api/delegations').then(res => res.json() as Promise<Delegation[]>),
         fetch('/api/recommendations').then(res => res.json() as Promise<RecommendationsResponse>),
         fetch('/api/knowledge/research').then(res => res.json() as Promise<ResearchDocument[]>),
         fetch('/api/pm-agent').then(res => res.json() as Promise<{ plan: PMAgentResult | null }>),
         fetch('/api/dashboard/stats').then(res => res.json() as Promise<DashboardStats>),
+        fetch('/api/pilot/idea-history?limit=5').then(res => res.json() as Promise<IdeaHistoryEntry[]>),
       ])
 
       if (cancelled) return
@@ -55,6 +58,7 @@ export function CommandCenterOverview() {
       if (researchRes.status === 'fulfilled' && Array.isArray(researchRes.value)) setResearchDocs(researchRes.value)
       if (pmRes.status === 'fulfilled') setPmPlan(pmRes.value.plan)
       if (statsRes.status === 'fulfilled') setDashboardStats(statsRes.value)
+      if (ideaHistoryRes.status === 'fulfilled' && Array.isArray(ideaHistoryRes.value)) setIdeaHistory(ideaHistoryRes.value)
     }
 
     load()
@@ -298,6 +302,7 @@ export function CommandCenterOverview() {
       <AgentActivityWidget stats={dashboardStats} />
       <PMAgentWidget plan={pmPlan} />
       <QuickActionsPanel activeRunCount={dashboardStats?.orchestrations.running ?? 0} />
+      {ideaHistory.length > 0 && <RecentBuildsWidget entries={ideaHistory} />}
     </div>
   )
 }
@@ -525,6 +530,57 @@ function toneBorder(tone: ActionTone): string {
   if (tone === 'blocked') return 'border-rose-500/40'
   if (tone === 'attention') return 'border-amber-500/40'
   return 'border-sky-500/30'
+}
+
+function RecentBuildsWidget({ entries }: { entries: IdeaHistoryEntry[] }) {
+  const statusColor: Record<IdeaHistoryEntry['status'], string> = {
+    building:  'text-slate-500 border-slate-700',
+    running:   'text-violet-400 border-violet-500/30',
+    done:      'text-emerald-400 border-emerald-500/20',
+    failed:    'text-rose-400 border-rose-500/20',
+  }
+  const statusLabel: Record<IdeaHistoryEntry['status'], string> = {
+    building: 'Wird gebaut',
+    running:  'Läuft',
+    done:     'Fertig',
+    failed:   'Fehler',
+  }
+
+  return (
+    <Panel className="p-5">
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recent Builds</p>
+        <a href="/idea" className="text-xs text-violet-400 hover:text-violet-300 transition-colors">
+          + Neue Idee →
+        </a>
+      </div>
+      <div className="space-y-2">
+        {entries.map(entry => (
+          <div key={entry.id} className={cx('flex items-start gap-3 rounded-lg border px-3 py-2.5', statusColor[entry.status])}>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-white truncate">{entry.briefTitle}</p>
+              <p className="text-xs text-slate-600 truncate mt-0.5">{entry.idea.slice(0, 60)}{entry.idea.length > 60 ? '…' : ''}</p>
+              <div className="flex items-center gap-3 mt-1">
+                <span className="text-xs text-slate-600">{entry.workItemCount} Items · {entry.taskCount} Tasks</span>
+              </div>
+            </div>
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <span className={cx('text-xs font-medium', statusColor[entry.status].split(' ')[0])}>
+                {entry.status === 'running' && <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />}
+                {statusLabel[entry.status]}
+              </span>
+              <a
+                href="/orchestrations"
+                className="text-xs text-slate-600 hover:text-violet-400 transition-colors"
+              >
+                Run →
+              </a>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  )
 }
 
 function QuickActionsPanel({ activeRunCount }: { activeRunCount: number }) {
