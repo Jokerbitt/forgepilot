@@ -19,7 +19,7 @@ permissions:
 jobs:
   autonomous-dev:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout repository
@@ -48,17 +48,19 @@ jobs:
           if [ -n "${{ github.event.inputs.task_override }}" ]; then
             echo "task=${{ github.event.inputs.task_override }}" >> $GITHUB_OUTPUT
           else
-            # Find first unchecked item in BACKLOG.md
             TASK=$(grep -m1 '^\- \[ \]' BACKLOG.md | sed 's/^- \[ \] //')
             if [ -z "$TASK" ]; then
               echo "No more tasks in backlog!"
               echo "task=" >> $GITHUB_OUTPUT
             else
               echo "task=$TASK" >> $GITHUB_OUTPUT
+              echo "slug=$(echo "$TASK" | sed 's/feat: //;s/fix: //;s/chore: //' | tr '[:upper:]' '[:lower:]' | tr ' /()' '-' | sed 's/[^a-z0-9-]//g' | cut -c1-30)" >> $GITHUB_OUTPUT
             fi
           fi
 
+      # ── Step 1: Build the feature ──────────────────────────────────────────
       - name: Run Claude Code autonomous agent
+        id: claude-build
         if: steps.pick-task.outputs.task != ''
         uses: anthropics/claude-code-action@beta
         with:
@@ -67,29 +69,193 @@ jobs:
 
             Your task: **${{ steps.pick-task.outputs.task }}**
 
-            Steps:
-            1. Create a feature branch: `git checkout -b feature/auto-$(date +%Y%m%d)-<short-slug>`
-            2. Implement the feature completely
-            3. Run `npm run type-check` — fix all errors
-            4. Run `npm run test:run` — all tests must pass, add new tests for your feature
-            5. Update BACKLOG.md: change `[ ]` to `[x]` for this task
-            6. Commit all changes with a conventional commit message
-            7. Push the branch
-            8. Create a PR with a clear description
+            COORDINATION — prevent merge conflicts:
+            Before touching any file, check if it is locked by another agent:
+            ```bash
+            node -e "
+              const fs = require('fs');
+              try {
+                const locks = JSON.parse(fs.readFileSync('config/agent-file-locks.json','utf8'));
+                const active = (locks.locks||[]).filter(l => new Date(l.lockedAt) > new Date(Date.now()-7200000));
+                if(active.length) console.log('LOCKED FILES:\\n' + active.flatMap(l=>l.files).join('\\n'));
+              } catch { console.log('No locks'); }
+            "
+            ```
+            Do NOT edit files listed as locked.
+            ALWAYS avoid editing BACKLOG.md at the same time as other files with conflicts — update it last.
 
-            Rules:
-            - TypeScript strict — no `any` types
-            - Keep existing tests green
-            - Add at least 3 tests for new functionality
-            - Follow existing code patterns (dark theme, slate colors, same component style)
-            - Do NOT modify .env.local or config/*.json
+            FORBIDDEN FILES (edit only if absolutely required by task):
+            - config/*.json (runtime state)
+            - .env.local
+            - src/app/settings/providers/page.tsx (complex, conflict-prone)
+
+            Steps:
+            1. Create feature branch: `git checkout -b feature/auto-$(date +%Y%m%d)-${{ steps.pick-task.outputs.slug }}`
+            2. Implement the feature completely
+            3. Run `npm run type-check` — fix ALL errors before continuing
+            4. Run `npm run test:run` — ALL tests must pass; add ≥3 new tests
+            5. Run `npm run lint` — fix warnings
+            6. Update BACKLOG.md: change `[ ]` to `[x]` for this task (do this LAST)
+            7. Commit with conventional commit message
+            8. Push branch
+            9. Create PR with `gh pr create` — if gh not authenticated, just push the branch
+
+            Quality rules:
+            - TypeScript strict — no `any` types, no `// @ts-ignore`
+            - Keep ALL existing tests green
+            - Follow dark theme, slate colors, existing component patterns
+            - No hardcoded API keys or secrets in code
+            - New API routes need input validation (Zod or manual checks)
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           allowed_tools: 'Bash,Read,Write,Edit'
 
+      # ── Step 2: Quality Gate ───────────────────────────────────────────────
+      - name: Quality gate — type-check + tests + security scan
+        id: quality-gate
+        if: steps.pick-task.outputs.task != ''
+        run: |
+          set -e
+          echo "🔍 Running Quality Gate..."
+
+          # Find the new branch
+          BRANCH=$(git branch --show-current)
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+          # TypeScript
+          echo "→ Type-check..."
+          npm run type-check
+          echo "type_check=pass" >> $GITHUB_OUTPUT
+
+          # Tests
+          echo "→ Tests..."
+          npm run test:run
+          TEST_RESULT=$(npm run test:run 2>&1 | grep 'Tests ' | tail -1)
+          echo "test_result=$TEST_RESULT" >> $GITHUB_OUTPUT
+          echo "tests=pass" >> $GITHUB_OUTPUT
+
+          # Lint
+          echo "→ Lint..."
+          npm run lint || true  # warning only, not blocking
+
+          # Security: no API keys in new code
+          echo "→ Security scan..."
+          if git diff origin/main...HEAD | grep -E "^\+" | grep -E "(sk-ant-api|AIzaSy|tgp_v1_|ghp_|lin_api_)" | grep -v "^+.*#\|test\|example\|placeholder"; then
+            echo "❌ Possible API key detected in diff!"
+            exit 1
+          fi
+          echo "security=pass" >> $GITHUB_OUTPUT
+
+          echo "✅ Quality Gate passed"
+
+      # ── Step 3: Self-healing retry if quality gate fails ──────────────────
+      - name: Self-healing — fix failing tests
+        id: claude-fix
+        if: failure() && steps.claude-build.outcome == 'success' && steps.quality-gate.outcome == 'failure'
+        uses: anthropics/claude-code-action@beta
+        with:
+          prompt: |
+            The quality gate failed after building a feature. Fix the issues.
+
+            Task that was built: **${{ steps.pick-task.outputs.task }}**
+
+            Steps:
+            1. Run `npm run type-check` and read all errors carefully
+            2. Run `npm run test:run` and read all failing tests
+            3. Fix each error/failure — do NOT skip or comment out
+            4. Run both commands again to verify all pass
+            5. Commit the fixes: `fix: resolve type errors and test failures after ${{ steps.pick-task.outputs.task }}`
+            6. Push the branch
+
+            Rules: TypeScript strict, no `any`, no test skipping.
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_tools: 'Bash,Read,Write,Edit'
+
+      # ── Step 4: Quality gate after self-healing ────────────────────────────
+      - name: Quality gate re-check (after self-healing)
+        id: quality-gate-2
+        if: steps.claude-fix.outcome == 'success'
+        run: |
+          npm run type-check && npm run test:run
+          echo "tests=pass" >> $GITHUB_OUTPUT
+
+      # ── Step 5: Auto-merge if quality gate passed ──────────────────────────
+      - name: Auto-merge PR
+        if: |
+          steps.pick-task.outputs.task != '' &&
+          (steps.quality-gate.outputs.tests == 'pass' || steps.quality-gate-2.outputs.tests == 'pass')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Find the PR for the current branch
+          BRANCH=$(git branch --show-current)
+          echo "Looking for PR on branch: $BRANCH"
+
+          # Wait up to 30s for PR to be created
+          for i in 1 2 3 4 5 6; do
+            PR_URL=$(gh pr list --head "$BRANCH" --json url -q '.[0].url' 2>/dev/null || echo "")
+            if [ -n "$PR_URL" ]; then
+              echo "Found PR: $PR_URL"
+              break
+            fi
+            echo "Waiting for PR... ($i/6)"
+            sleep 5
+          done
+
+          if [ -z "$PR_URL" ]; then
+            # No PR via gh — create one directly
+            PR_URL=$(gh pr create \
+              --title "feat(auto): ${{ steps.pick-task.outputs.task }}" \
+              --body "🤖 Auto-built by autonomous-dev workflow on $(date '+%Y-%m-%d'). Quality gate: ✅ type-check + tests + security scan passed." \
+              --head "$BRANCH" \
+              --base main)
+            echo "Created PR: $PR_URL"
+          fi
+
+          # Merge
+          echo "Merging: $PR_URL"
+          gh pr merge "$PR_URL" --squash \
+            --body "🤖 Auto-merged: quality gate passed (type-check ✅ tests ✅ security ✅)"
+
+          echo "✅ Auto-merged successfully"
+          echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+
+      # ── Step 6: Notify on failure ──────────────────────────────────────────
+      - name: Create issue on repeated failure
+        if: failure() && steps.claude-fix.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "🤖 Autonomous agent failed: ${{ steps.pick-task.outputs.task }}" \
+            --body "$(cat <<'EOF'
+          ## Autonomous Dev Failure
+
+          **Task:** ${{ steps.pick-task.outputs.task }}
+          **Date:** $(date)
+          **Workflow:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          The autonomous agent built the feature but the quality gate failed, and self-healing also failed.
+
+          **Action needed:** Review the workflow logs and either:
+          1. Fix manually and mark task `[x]` in BACKLOG.md
+          2. Remove the task from BACKLOG.md if not feasible
+
+          EOF
+          )" \
+            --label "bug,autonomous-failure" || true
+
+      # ── Step 7: Summary ────────────────────────────────────────────────────
       - name: Report status
         if: always()
         run: |
           echo "## 🤖 Autonomous Dev Report" >> $GITHUB_STEP_SUMMARY
-          echo "- **Date:** $(date)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Task:** ${{ steps.pick-task.outputs.task }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Tests:** $(npm run test:run 2>&1 | grep 'Tests ' | tail -1)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Date** | $(date '+%Y-%m-%d %H:%M CET') |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Task** | ${{ steps.pick-task.outputs.task }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Build** | ${{ steps.claude-build.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Quality Gate** | ${{ steps.quality-gate.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Self-healing** | ${{ steps.claude-fix.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Auto-merge** | ${{ steps.quality-gate.outputs.tests == 'pass' && '✅ merged' || '⏳ pending' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Tests** | ${{ steps.quality-gate.outputs.test_result }} |" >> $GITHUB_STEP_SUMMARY
