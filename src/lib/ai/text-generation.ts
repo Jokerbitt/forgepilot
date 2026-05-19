@@ -12,6 +12,7 @@ import { readStoredApiKeys } from '@/lib/connectors/config'
 import { getModelSelection, getAllProviderConfigs } from '@/lib/ai/providers/config-store'
 import { getProviderInstance } from '@/lib/ai/providers/registry'
 import type { AIProviderConfig } from '@/lib/ai/providers/types'
+import { logProcessing } from '@/lib/dsgvo/processing-ledger'
 
 type ModelPurpose = 'fast' | 'coding'
 
@@ -78,6 +79,17 @@ export async function generateText(options: GenerateTextOptions): Promise<Genera
     model: modelId,
     apiKey,
     baseUrl,
+  })
+
+  // DSGVO Art. 30 — log every AI processing event (fire-and-forget)
+  void logProcessing({
+    purpose:      `generateText:${purpose}`,
+    dataTypes:    ['user-prompt', 'system-prompt'],
+    providerId,
+    modelId,
+    legalBasis:   'legitimate-interest',
+    inputTokens:  result.inputTokens,
+    piiRedacted:  false,  // PII scrubbing happens upstream in context-engineer
   })
 
   return {
