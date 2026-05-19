@@ -37,6 +37,7 @@ import type { Notification } from '@/lib/models/notification'
 import type { AutonomousConfig } from '@/lib/config/autonomous-config'
 import { cx } from '@/components/ui/primitives'
 import { NotificationBell } from '@/components/shared/NotificationBell'
+import { ThemeToggle } from '@/components/ui/ThemeToggle'
 
 interface NavItem {
   href: string
@@ -203,6 +204,7 @@ export function AppNav() {
               </span>
               <kbd className="rounded border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-slate-500">⌘K</kbd>
             </button>
+            <ThemeToggle />
             <NotificationBell initialUnreadCount={unreadNotificationCount} />
           </div>
 
@@ -251,6 +253,7 @@ export function AppNav() {
               {totalActive}
             </span>
           )}
+          <ThemeToggle />
           <NotificationBell initialUnreadCount={unreadNotificationCount} />
         </div>
       </nav>

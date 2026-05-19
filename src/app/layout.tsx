@@ -4,6 +4,7 @@ import { ToastProvider } from '@/components/shared/ToastProvider'
 import { AppNav } from '@/components/shared/AppNav'
 import { GlobalKeyboardHandler } from '@/components/shared/GlobalKeyboardHandler'
 import { GlobalSearch } from '@/components/search/GlobalSearch'
+import { themeScriptContent } from '@/lib/theme/theme-store'
 
 export const metadata: Metadata = {
   title: 'ForgePilot',
@@ -16,8 +17,13 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="de" className="dark">
-      <body className="bg-[#07070c] text-white min-h-screen">
+    <html lang="de">
+      {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+      <head>
+        {/* Blocking theme script — prevents flash of wrong theme */}
+        <script dangerouslySetInnerHTML={{ __html: themeScriptContent }} />
+      </head>
+      <body className="bg-[#07070c] text-white min-h-screen dark:bg-[#07070c] dark:text-white">
         <ToastProvider>
           <AppNav />
           <GlobalKeyboardHandler />
