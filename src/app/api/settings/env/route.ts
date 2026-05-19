@@ -19,6 +19,7 @@ import { getDataDir } from '@/lib/config/paths'
 const ALLOWED_KEYS = new Set([
   'GROQ_API_KEY',
   'TOGETHER_API_KEY',
+  'OPENROUTER_API_KEY',
   'MISTRAL_API_KEY',
   'GOOGLE_API_KEY',
 ])
