@@ -101,49 +101,17 @@ jobs:
           echo "complexity=$COMPLEXITY" >> $GITHUB_OUTPUT
           echo "📊 Task complexity: $COMPLEXITY (classified by Gemini Flash — $0)"
 
-      # ── Tier 1: Gemini Flash handles SIMPLE tasks (free) ─────────────────
-      - name: Build feature — Gemini Flash (free, simple tasks)
+      # ── Tier 1: Gemini Flash — complexity hint for Haiku (free) ─────────
+      # Note: Gemini generates a bash plan but Haiku often ignores it.
+      # Keeping Gemini only for the complexity classification result above.
+      # The "gemini-build" step is now a no-op placeholder to preserve step IDs.
+      - name: Gemini hint (no-op — classification already done above)
         id: gemini-build
-        if: |
-          steps.pick-task.outputs.task != '' &&
-          steps.classify.outputs.complexity == 'simple' &&
-          env.GOOGLE_API_KEY != ''
-        env:
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: steps.pick-task.outputs.task != ''
         run: |
-          TASK="${{ steps.pick-task.outputs.task }}"
-          BRANCH="feature/auto-$(date +%Y%m%d)-${{ steps.pick-task.outputs.slug }}"
-
-          git checkout -b "$BRANCH"
-          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
-
-          # Use Gemini to generate implementation plan + code
-          PLAN=$(curl -s -X POST \
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=$GOOGLE_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"contents\": [{
-                \"parts\": [{
-                  \"text\": \"You are a Next.js 14 TypeScript developer. Generate a step-by-step bash implementation plan for this task in ForgePilot (dark theme, slate colors, Vitest tests).\n\nTask: $TASK\n\nProject structure:\n- src/app/ (Next.js App Router pages)\n- src/lib/ (business logic)\n- src/components/ (React components)\n- config/*.json (runtime state, do not commit)\n\nReturn ONLY a bash script that implements the feature. Include: file creation/editing, npm run type-check, npm run test:run. No explanations.\"
-                }]
-              }],
-              \"generationConfig\": { \"maxOutputTokens\": 4096, \"temperature\": 0.2 }
-            }" 2>/dev/null | python3 -c "
-          import json,sys
-          try:
-              d = json.load(sys.stdin)
-              print(d['candidates'][0]['content']['parts'][0]['text'])
-          except Exception as e:
-              print(f'# Gemini failed: {e}')
-              sys.exit(1)
-          ")
-
-          echo "Gemini plan generated. Handing off to Claude Haiku for execution."
-          echo "gemini_plan<<EOF" >> $GITHUB_OUTPUT
-          echo "$PLAN" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          echo "attempted=true" >> $GITHUB_OUTPUT
+          echo "gemini_plan=" >> $GITHUB_OUTPUT
+          echo "attempted=false" >> $GITHUB_OUTPUT
+          echo "ℹ️  Gemini used only for classification. Haiku builds directly."
 
       # ── Tier 2: Claude Haiku — primary executor (cheap, reliable) ─────────
       - name: Build feature — Claude Haiku 4.5 (~$0.04)
@@ -157,7 +125,7 @@ jobs:
 
             Your task: **${{ steps.pick-task.outputs.task }}**
 
-            ${{ steps.gemini-build.outputs.gemini_plan != '' && format('Gemini Flash pre-analyzed this task and suggested:\n{0}\n\nUse this as a starting point, but verify and improve it.', steps.gemini-build.outputs.gemini_plan) || '' }}
+            Task complexity: **${{ steps.classify.outputs.complexity }}** (classified by Gemini Flash)
 
             COST OPTIMIZATION — use the cheapest approach:
             - Prefer editing existing files over creating new ones
@@ -180,11 +148,20 @@ jobs:
             - config/*.json  (runtime state, not in git)
             - .env.local
             - BACKLOG.md  ← NEVER touch — CI marks it done after merge automatically
+            - package.json / package-lock.json  ← no npm installs; use existing deps only
             - src/app/settings/providers/page.tsx  (conflict-prone)
 
+            WORKTREE — work in isolation to avoid branch chaos:
+            ```bash
+            BRANCH="feature/auto-$(date +%Y%m%d)-${{ steps.pick-task.outputs.slug }}"
+            git worktree add /tmp/agent-work origin/main -b "$BRANCH" || \
+              git checkout -b "$BRANCH"  # fallback if worktree fails
+            cd /tmp/agent-work 2>/dev/null || true  # use worktree if available
+            ```
+
             Steps:
-            1. `git checkout -b feature/auto-$(date +%Y%m%d)-${{ steps.pick-task.outputs.slug }}`
-            2. Implement feature
+            1. Create worktree (as above)
+            2. Implement feature — use ONLY existing npm packages (no npm install)
             3. `npm run type-check` — fix ALL errors
             4. `npm run test:run` — ALL tests pass + add ≥3 new tests
             5. Do NOT touch BACKLOG.md — the pipeline marks it done after merge
