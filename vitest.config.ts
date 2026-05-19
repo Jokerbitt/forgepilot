@@ -9,6 +9,7 @@ export default defineConfig({
       '**/node_modules/**',
       '**/.claude/worktrees/**',
       '**/forgepilot-agent-worktree/**',
+      'e2e/**',
     ],
   },
   resolve: {
