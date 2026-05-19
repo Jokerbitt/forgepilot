@@ -876,6 +876,40 @@ export default function SettingsPage() {
           </section>
         )}
 
+        {/* Datenschutz Section — Art. 20 DSGVO */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-gray-300">Datenschutz</h2>
+            <span className="text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-500">DSGVO</span>
+          </div>
+          <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 space-y-3">
+            <p className="text-sm text-gray-400">
+              Gemäß Art. 20 DSGVO können Sie alle über Sie gespeicherten Verarbeitungsprotokolle als ZIP-Archiv herunterladen.
+              Das Archiv enthält alle KI-Verarbeitungsrecords, Delegations und Projektbriefs.
+            </p>
+            <div className="flex items-center gap-3 pt-1">
+              <button
+                onClick={() => {
+                  const date = new Date().toISOString().slice(0, 10)
+                  const a = document.createElement('a')
+                  a.href = '/api/dsgvo/export'
+                  a.download = `forgepilot-export-${date}.zip`
+                  document.body.appendChild(a)
+                  a.click()
+                  document.body.removeChild(a)
+                }}
+                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex items-center gap-2"
+              >
+                <span>⬇</span>
+                <span>Daten exportieren (DSGVO Art. 20)</span>
+              </button>
+            </div>
+            <p className="text-xs text-gray-600">
+              Das ZIP enthält: processing-ledger.json, delegations.json, project-briefs.json, metadata.json + README.
+            </p>
+          </div>
+        </section>
+
         <div className="pt-4 border-t border-gray-800">
           <button
             onClick={handleSave}
