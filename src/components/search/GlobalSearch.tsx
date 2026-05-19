@@ -48,7 +48,7 @@ export function GlobalSearch() {
 
   const debouncedQuery = useDebounced(query, 300)
 
-  // Cmd+K / Ctrl+K listener
+  // Cmd+K / Ctrl+K listener + custom 'forgepilot:open-search' event
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -59,8 +59,13 @@ export function GlobalSearch() {
         setOpen(false)
       }
     }
+    const onOpenSearch = () => setOpen(true)
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('forgepilot:open-search', onOpenSearch)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('forgepilot:open-search', onOpenSearch)
+    }
   }, [open])
 
   // Focus input when opened

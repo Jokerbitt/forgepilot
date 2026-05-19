@@ -6,10 +6,12 @@ import { CommandPalette } from './CommandPalette'
 import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp'
 
 const GO_SHORTCUTS: Record<string, string> = {
-  i: '/inbox',
-  b: '/board',
+  i: '/idea',
+  b: '/project-briefs',
   a: '/active',
   d: '/delegations',
+  k: '/knowledge',
+  m: '/monitor',
   h: '/',
   s: '/settings',
 }
@@ -28,7 +30,11 @@ export function GlobalKeyboardHandler() {
     const handler = (e: KeyboardEvent) => {
       // Ignore when focused in an input/textarea/select
       const tag = (e.target as HTMLElement).tagName
-      const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement).isContentEditable
+      const isInput =
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        (e.target as HTMLElement).isContentEditable
 
       // Cmd+K / Ctrl+K — command palette
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -52,6 +58,13 @@ export function GlobalKeyboardHandler() {
       if (e.key === '?' && !e.metaKey && !e.ctrlKey) {
         setHelpOpen(h => !h)
         setPaletteOpen(false)
+        return
+      }
+
+      // / — open global search modal
+      if (e.key === '/' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        window.dispatchEvent(new Event('forgepilot:open-search'))
         return
       }
 
@@ -83,7 +96,7 @@ export function GlobalKeyboardHandler() {
       {gMode && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 rounded border border-slate-700 bg-slate-900/90 px-3 py-1.5 text-xs text-slate-300 backdrop-blur">
           <kbd className="font-mono font-bold text-sky-400">G</kbd>
-          <span className="ml-1.5 text-slate-500">+ i/b/a/d/h/s</span>
+          <span className="ml-1.5 text-slate-500">{'→ i·d·k·b·m·h·s'}</span>
         </div>
       )}
       <CommandPalette open={paletteOpen} onClose={closePalette} />
