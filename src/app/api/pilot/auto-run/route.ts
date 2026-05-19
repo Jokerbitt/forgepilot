@@ -43,7 +43,12 @@ export async function POST() {
   const items = readLocalItems()
   const candidates = items
     .filter(i => i.aiDelegable && !i.blocked && i.status !== 'done' && i.status !== 'cancelled')
-    .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99))
+    .sort((a, b) => {
+      // Idea-pipeline items (have a projectId) get priority boost: treated as priority - 0.5
+      const aPrio = (a.priority ?? 99) - (a.projectId ? 0.5 : 0)
+      const bPrio = (b.priority ?? 99) - (b.projectId ? 0.5 : 0)
+      return aPrio - bPrio
+    })
 
   if (candidates.length === 0) {
     return NextResponse.json(
