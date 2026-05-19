@@ -1,7 +1,29 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 import type { Delegation } from '@/lib/models/delegation'
+import { z } from 'zod'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+
+// Zod schema for creating/updating a delegation via POST
+const DelegationInputSchema = z.object({
+  id:              z.string().optional(),
+  title:           z.string().max(200).optional(),
+  status:          z.enum(['pending', 'approved', 'running', 'completed', 'failed', 'cancelled']).optional(),
+  contract: z.object({
+    goal:             z.string().min(5, 'Goal required'),
+    riskClass:        z.enum(['A', 'B', 'C']).default('A'),
+    privacyMode:      z.enum(['local', 'private-cloud', 'public']).default('local'),
+    requiresApproval: z.boolean().default(false),
+    maxBudgetUsd:     z.number().min(0).optional(),
+    filePatterns:     z.array(z.string()).optional(),
+    skillCategory:    z.string().optional(),
+    acceptanceCriteria: z.array(z.string()).optional(),
+    context:          z.string().optional(),
+  }),
+  autoOrchestrate: z.boolean().optional(),
+  dataSubjectId:   z.string().optional(),
+}).passthrough()  // allow extra fields from existing clients
 
 const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
 
@@ -31,9 +53,11 @@ export async function GET() {
   return NextResponse.json(readDelegations().map(backfillTitle))
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const delegation = await request.json() as Delegation
+    const body = await parseBody(request, DelegationInputSchema)
+    if (isValidationError(body)) return body
+    const delegation = body as unknown as Delegation
     const delegations = readDelegations()
 
     // Ensure title is set

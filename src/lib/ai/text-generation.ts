@@ -8,11 +8,13 @@
  * Backward-compatible: existing callers pass the same options as before.
  */
 
+import * as Sentry from '@sentry/nextjs'
 import { readStoredApiKeys } from '@/lib/connectors/config'
 import { getModelSelection, getAllProviderConfigs } from '@/lib/ai/providers/config-store'
 import { getProviderInstance } from '@/lib/ai/providers/registry'
 import type { AIProviderConfig } from '@/lib/ai/providers/types'
 import { logProcessing } from '@/lib/dsgvo/processing-ledger'
+import { aiLogger } from '@/lib/logger'
 
 type ModelPurpose = 'fast' | 'coding'
 
@@ -72,33 +74,50 @@ export async function generateText(options: GenerateTextOptions): Promise<Genera
     throw new AIProviderConfigurationError(`Provider instance for "${providerId}" not registered.`)
   }
 
-  const result = await provider.generateText({
-    system: options.system,
-    prompt: options.prompt,
-    maxTokens: options.maxTokens,
-    model: modelId,
-    apiKey,
-    baseUrl,
-  })
+  return Sentry.startSpan(
+    { name: 'ai.generate', op: 'ai', attributes: { provider: providerId, model: modelId } },
+    async () => {
+      const t0 = Date.now()
 
-  // DSGVO Art. 30 — log every AI processing event (fire-and-forget)
-  void logProcessing({
-    purpose:      `generateText:${purpose}`,
-    dataTypes:    ['user-prompt', 'system-prompt'],
-    providerId,
-    modelId,
-    legalBasis:   'legitimate-interest',
-    inputTokens:  result.inputTokens,
-    piiRedacted:  false,  // PII scrubbing happens upstream in context-engineer
-  })
+      const result = await provider.generateText({
+        system: options.system,
+        prompt: options.prompt,
+        maxTokens: options.maxTokens,
+        model: modelId,
+        apiKey,
+        baseUrl,
+      })
 
-  return {
-    text: result.text,
-    provider: result.providerId,
-    model: result.model,
-    inputTokens: result.inputTokens,
-    outputTokens: result.outputTokens,
-  }
+      const durationMs = Date.now() - t0
+      aiLogger.info({
+        event: 'ai.generate',
+        provider: providerId,
+        model: modelId,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        durationMs,
+      })
+
+      // DSGVO Art. 30 — log every AI processing event (fire-and-forget)
+      void logProcessing({
+        purpose:      `generateText:${purpose}`,
+        dataTypes:    ['user-prompt', 'system-prompt'],
+        providerId,
+        modelId,
+        legalBasis:   'legitimate-interest',
+        inputTokens:  result.inputTokens,
+        piiRedacted:  false,  // PII scrubbing happens upstream in context-engineer
+      })
+
+      return {
+        text: result.text,
+        provider: result.providerId,
+        model: result.model,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+      }
+    },
+  )
 }
 
 export async function generateEmbedding(

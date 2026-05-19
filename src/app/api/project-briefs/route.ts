@@ -1,12 +1,24 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import {
   buildProjectBrief,
-  hasIdeaIntakeErrors,
   readProjectBriefs,
   saveProjectBrief,
-  validateIdeaIntakeInput,
 } from '@/lib/project-briefs'
-import type { IdeaIntakeInput } from '@/lib/models/project-brief'
+import { z } from 'zod'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+
+// Zod schema aligned with IdeaIntakeInput — replaces validateIdeaIntakeInput()
+const IdeaIntakeSchema = z.object({
+  title:            z.string().min(3, 'Titel mindestens 3 Zeichen').max(200),
+  rawIdea:          z.string().min(10, 'Idee mindestens 10 Zeichen'),
+  problemStatement: z.string().min(10, 'Problem-Statement fehlt'),
+  targetAudience:   z.string().min(3, 'Zielgruppe fehlt'),
+  desiredOutcome:   z.string().min(5, 'Gewünschtes Ergebnis fehlt'),
+  constraints:      z.array(z.string()).default([]),
+  scope:            z.enum(['minimal', 'standard', 'full']).default('standard'),
+  researchMode:     z.enum(['quick', 'standard', 'deep']).default('standard'),
+  privacyMode:      z.enum(['local', 'hybrid', 'cloud']).default('local'),
+})
 
 export async function GET() {
   try {
@@ -16,14 +28,10 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const input = await request.json() as IdeaIntakeInput
-    const errors = validateIdeaIntakeInput(input)
-
-    if (hasIdeaIntakeErrors(errors)) {
-      return NextResponse.json({ errors }, { status: 400 })
-    }
+    const input = await parseBody(request, IdeaIntakeSchema)
+    if (isValidationError(input)) return input
 
     const brief = buildProjectBrief(input)
     const saved = saveProjectBrief(brief)

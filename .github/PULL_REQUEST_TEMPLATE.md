@@ -1,15 +1,33 @@
-## Was wurde geÃ¤ndert?
-<!-- Kurze Beschreibung der Ã„nderungen -->
+## Summary
 
-## Warum?
-<!-- Motivation / Ticket-Link -->
-Ticket: <!-- LINEAR-XXX oder GitHub Issue # -->
+<!-- What does this PR do? 2-3 sentences. -->
 
-## Wie testen?
-- [ ] 
-- [ ] 
+Closes # <!-- issue number, if applicable -->
 
-## Checkliste
-- [ ] Tests geschrieben / aktualisiert
-- [ ] Keine neuen ESLint-Fehler
-- [ ] CLAUDE.md aktuell falls Architektur geÃ¤ndert
+## Type of Change
+
+- [ ] Bug fix
+- [ ] New feature
+- [ ] New AI provider
+- [ ] New connector
+- [ ] Documentation
+- [ ] Refactoring / maintenance
+- [ ] Other: <!-- describe -->
+
+## How to Test
+
+<!-- Steps to verify this works. Be specific. -->
+
+1. 
+2. 
+3. 
+
+## Checklist
+
+- [ ] `npm run type-check` — 0 errors
+- [ ] `npm run lint` — 0 warnings
+- [ ] `npm run test:run` — all tests pass
+- [ ] New behavior has a test
+- [ ] No `console.log` in library/API code (use `logger` from `@/lib/logger`)
+- [ ] No `any` types introduced
+- [ ] `.env.example` updated if new env vars were added

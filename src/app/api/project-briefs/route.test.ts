@@ -1,3 +1,4 @@
+import { NextRequest } from 'next/server'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { GET, POST } from './route'
 
@@ -38,6 +39,14 @@ vi.mock('@/lib/project-briefs', () => ({
   hasIdeaIntakeErrors: vi.fn(() => false),
 }))
 
+function makeReq(body: unknown): NextRequest {
+  return new NextRequest('http://localhost/api/project-briefs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
 const validInput = {
   title: 'Test Project',
   rawIdea: 'This is a raw idea that is long enough to pass validation',
@@ -65,31 +74,19 @@ describe('POST /api/project-briefs', () => {
   })
 
   it('creates a brief with valid input', async () => {
-    const req = new Request('http://localhost/api/project-briefs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(validInput),
-    })
-    const res = await POST(req)
+    const res = await POST(makeReq(validInput))
     expect(res.status).toBe(201)
     const data = await res.json()
     expect(data).toHaveProperty('id')
     expect(data).toHaveProperty('title')
   })
 
-  it('returns 400 when validation fails', async () => {
-    const { hasIdeaIntakeErrors, validateIdeaIntakeInput } = await import('@/lib/project-briefs')
-    vi.mocked(validateIdeaIntakeInput).mockReturnValueOnce({ title: 'Pflichtfeld' })
-    vi.mocked(hasIdeaIntakeErrors).mockReturnValueOnce(true)
-
-    const req = new Request('http://localhost/api/project-briefs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...validInput, title: '' }),
-    })
-    const res = await POST(req)
+  it('returns 400 when validation fails (Zod)', async () => {
+    // title too short, rawIdea missing → Zod rejects
+    const res = await POST(makeReq({ ...validInput, title: '', rawIdea: '' }))
     expect(res.status).toBe(400)
     const data = await res.json()
-    expect(data).toHaveProperty('errors')
+    expect(data).toHaveProperty('error', 'Validation failed')
+    expect(data).toHaveProperty('fields')
   })
 })

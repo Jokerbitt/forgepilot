@@ -2,8 +2,9 @@ node_modules/
 .env
 .env.local
 .env*.local
-# All config/*.json are runtime state — never commit (may contain secrets)
-config/*.json
+# All config/*.json are runtime state — NEVER commit (may contain API keys and personal data)
+config/
+!config/.gitkeep
 dist/
 build/
 .next/
