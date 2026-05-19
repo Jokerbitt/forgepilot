@@ -77,7 +77,7 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
 
       {hasPipeline && p && (
         <>
-          <p className="text-xs text-slate-600 mb-3 italic line-clamp-1">"{p.idea}"</p>
+          <p className="text-xs text-slate-600 mb-3 italic line-clamp-1">&quot;{p.idea}&quot;</p>
 
           <ProgressBar done={p.doneTasks} total={p.taskCount} status={status} />
 

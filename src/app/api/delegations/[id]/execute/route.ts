@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { delegationLogger } from '@/lib/logger'
 import { spawn, execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
@@ -537,7 +538,9 @@ export async function POST(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
-    }).catch(console.error)
+    }).catch((err: unknown) => {
+      delegationLogger.error({ event: 'delegation.orchestrate_error', delegationId: id, error: String(err) }, 'Orchestration trigger failed')
+    })
 
     return NextResponse.json({ started: true, mode: 'orchestrated', delegationId: id, runId: run.id })
   }

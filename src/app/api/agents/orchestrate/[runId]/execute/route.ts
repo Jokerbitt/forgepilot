@@ -16,6 +16,7 @@ import { recordOutcome } from '@/lib/agents/skill-evolver'
 import { upsertCard } from '@/lib/knowledge/store'
 import { saveNotification } from '@/lib/notifications/notification-store'
 import { updateIdeaHistoryStatus } from '@/lib/pilot/idea-history-store'
+import { orchestrationLogger } from '@/lib/logger'
 import crypto from 'crypto'
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
@@ -32,7 +33,9 @@ export async function POST(req: Request, { params }: { params: { runId: string }
   updateRunStatus(params.runId, 'running')
 
   // Fire-and-forget — respond immediately, execution happens async
-  executeRunAsync(params.runId, skipFailed).catch(console.error)
+  executeRunAsync(params.runId, skipFailed).catch((err: unknown) => {
+    orchestrationLogger.error({ event: 'orchestration.error', runId: params.runId, error: String(err) }, 'Async run failed')
+  })
 
   return NextResponse.json({ started: true, runId: params.runId })
 }

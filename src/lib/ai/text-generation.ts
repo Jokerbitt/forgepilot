@@ -1,6 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk'
+import * as Sentry from '@sentry/nextjs'
 import { readStoredApiKeys } from '@/lib/connectors/config'
 import { getNBAConfig } from '@/lib/nba-engine/nba-config'
+import { aiLogger } from '@/lib/logger'
 
 type ModelPurpose = 'fast' | 'coding'
 
@@ -55,68 +57,100 @@ async function generateWithAnthropic(
     throw new AIProviderConfigurationError('ANTHROPIC_API_KEY not configured')
   }
 
-  const client = new Anthropic({ apiKey })
-  const message = await client.messages.create({
-    model,
-    max_tokens: options.maxTokens,
-    system: options.system,
-    messages: [{ role: 'user', content: options.prompt }],
-  })
+  return Sentry.startSpan(
+    { name: 'ai.generate', op: 'ai', attributes: { provider: 'anthropic', model } },
+    async () => {
+      const t0 = Date.now()
+      const client = new Anthropic({ apiKey })
+      const message = await client.messages.create({
+        model,
+        max_tokens: options.maxTokens,
+        system: options.system,
+        messages: [{ role: 'user', content: options.prompt }],
+      })
 
-  const text = message.content[0]?.type === 'text' ? message.content[0].text.trim() : ''
+      const text = message.content[0]?.type === 'text' ? message.content[0].text.trim() : ''
+      const durationMs = Date.now() - t0
 
-  return {
-    text,
-    provider: 'anthropic',
-    model,
-    inputTokens: message.usage.input_tokens,
-    outputTokens: message.usage.output_tokens,
-  }
+      aiLogger.info({
+        event: 'ai.generate',
+        provider: 'anthropic',
+        model,
+        inputTokens: message.usage.input_tokens,
+        outputTokens: message.usage.output_tokens,
+        durationMs,
+      })
+
+      return {
+        text,
+        provider: 'anthropic' as const,
+        model,
+        inputTokens: message.usage.input_tokens,
+        outputTokens: message.usage.output_tokens,
+      }
+    },
+  )
 }
 
 async function generateWithOllama(
   options: GenerateTextOptions,
   model: string,
 ): Promise<GenerateTextResult> {
-  const baseUrl = normalizeBaseUrl(process.env.OLLAMA_BASE_URL ?? readStoredApiKeys().OLLAMA_BASE_URL ?? 'http://localhost:11434')
-  const response = await fetch(`${baseUrl}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      stream: false,
-      messages: [
-        { role: 'system', content: options.system },
-        { role: 'user', content: options.prompt },
-      ],
-      options: {
-        num_predict: options.maxTokens,
-        temperature: 0.2,
-      },
-    }),
-  })
+  return Sentry.startSpan(
+    { name: 'ai.generate', op: 'ai', attributes: { provider: 'ollama', model } },
+    async () => {
+      const t0 = Date.now()
+      const baseUrl = normalizeBaseUrl(process.env.OLLAMA_BASE_URL ?? readStoredApiKeys().OLLAMA_BASE_URL ?? 'http://localhost:11434')
+      const response = await fetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          stream: false,
+          messages: [
+            { role: 'system', content: options.system },
+            { role: 'user', content: options.prompt },
+          ],
+          options: {
+            num_predict: options.maxTokens,
+            temperature: 0.2,
+          },
+        }),
+      })
 
-  if (!response.ok) {
-    throw new Error(`Ollama request failed with HTTP ${response.status}`)
-  }
+      if (!response.ok) {
+        throw new Error(`Ollama request failed with HTTP ${response.status}`)
+      }
 
-  const data = await response.json() as OllamaChatResponse
-  if (data.error) {
-    throw new Error(data.error)
-  }
+      const data = await response.json() as OllamaChatResponse
+      if (data.error) {
+        throw new Error(data.error)
+      }
 
-  const text = data.message?.content?.trim()
-  if (!text) {
-    throw new Error('Ollama returned an empty response')
-  }
+      const text = data.message?.content?.trim()
+      if (!text) {
+        throw new Error('Ollama returned an empty response')
+      }
 
-  return {
-    text,
-    provider: 'ollama',
-    model,
-    inputTokens: data.prompt_eval_count,
-    outputTokens: data.eval_count,
-  }
+      const durationMs = Date.now() - t0
+      aiLogger.info({
+        event: 'ai.generate',
+        provider: 'ollama',
+        model,
+        inputTokens: data.prompt_eval_count,
+        outputTokens: data.eval_count,
+        durationMs,
+      })
+
+      return {
+        text,
+        provider: 'ollama' as const,
+        model,
+        inputTokens: data.prompt_eval_count,
+        outputTokens: data.eval_count,
+      }
+    },
+  )
 }
 
 function normalizeBaseUrl(value: string): string {
