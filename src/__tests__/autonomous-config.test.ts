@@ -31,9 +31,9 @@ describe('autonomous-config', () => {
   it('getAutonomousConfig returns DEFAULT_CONFIG when no config file exists', () => {
     const config = getAutonomousConfig()
     expect(config.enabled).toBe(false)
-    expect(config.autoApproveDelegations).toBe(false)
+    expect(config.autoApproveDelegations).toBe(true)
     expect(config.autoExecuteOnApproval).toBe(true)
-    expect(config.riskThreshold).toBe('low')
+    expect(config.riskThreshold).toBe('all')
     expect(config.lastEnabledAt).toBeUndefined()
     expect(config.lastDisabledAt).toBeUndefined()
   })

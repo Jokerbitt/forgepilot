@@ -828,16 +828,29 @@ export default function SettingsPage() {
                 </label>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">Risiko-Schwelle für Auto-Freigabe</label>
-                  <select
-                    value={autonomousConfig.riskThreshold}
-                    onChange={e => handleAutonomousUpdate({ riskThreshold: e.target.value as AutonomousConfig['riskThreshold'] })}
-                    className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 text-sm focus:border-emerald-500 focus:outline-none"
-                  >
-                    <option value="low">Niedrig — nur RiskClass A (sicher, additiv)</option>
-                    <option value="medium">Mittel — RiskClass A + B</option>
-                    <option value="high">Hoch — RiskClass A + B (niemals C)</option>
-                  </select>
+                  <label className="block text-xs font-medium text-gray-400 mb-2">Risiko-Schwelle</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { value: 'low'   , label: 'Niedrig', desc: 'Nur RiskClass A' },
+                      { value: 'medium', label: 'Mittel',  desc: 'RiskClass A + B' },
+                      { value: 'high'  , label: 'Hoch',    desc: 'A + B (kein C)' },
+                      { value: 'all'   , label: 'Alles',   desc: 'Vollständig autonom' },
+                    ] as const).map(opt => (
+                      <button key={opt.value} type="button"
+                        onClick={() => handleAutonomousUpdate({ riskThreshold: opt.value })}
+                        className={`px-3 py-2 rounded-lg border text-left transition-colors ${
+                          autonomousConfig.riskThreshold === opt.value
+                            ? (opt.value === 'all' ? 'bg-emerald-700 border-emerald-500 text-white' : 'bg-gray-700 border-emerald-500 text-white')
+                            : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                        }`}>
+                        <span className="block text-sm font-medium">{opt.label}</span>
+                        <span className="block text-xs opacity-70">{opt.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {autonomousConfig.riskThreshold === 'all' && (
+                    <p className="mt-2 text-xs text-emerald-400">✓ Vollständig autonom — alle Delegations laufen ohne Rückfrage durch</p>
+                  )}
                 </div>
 
                 <label className="flex items-start gap-3 cursor-pointer">

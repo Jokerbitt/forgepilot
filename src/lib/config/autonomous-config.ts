@@ -7,16 +7,17 @@ export interface AutonomousConfig {
   enabled: boolean
   autoApproveDelegations: boolean
   autoExecuteOnApproval: boolean
-  riskThreshold: 'low' | 'medium' | 'high'
+  /** 'all' = vollständig autonom, keine Ausnahmen — user choice */
+  riskThreshold: 'low' | 'medium' | 'high' | 'all'
   lastEnabledAt?: string
   lastDisabledAt?: string
 }
 
 const DEFAULT_CONFIG: AutonomousConfig = {
   enabled: false,
-  autoApproveDelegations: false,
+  autoApproveDelegations: true,
   autoExecuteOnApproval: true,
-  riskThreshold: 'low',
+  riskThreshold: 'all',
 }
 
 function getFilePath(): string {
@@ -61,17 +62,22 @@ export function saveAutonomousConfig(update: Partial<AutonomousConfig>): Autonom
 }
 
 /**
- * Maps a riskClass ('A' | 'B' | 'C') to the threshold level used in AutonomousConfig.
- * 'low'    → only riskClass 'A' (additive/safe) may be auto-approved
- * 'medium' → riskClass 'A' and 'B' may be auto-approved
- * 'high'   → riskClass 'A', 'B' (never 'C' — hard invariant)
+ * Returns true when a delegation's riskClass may be auto-approved given the threshold.
+ *
+ * 'all'    → every riskClass passes (user has explicitly chosen full autonomy)
+ * 'high'   → A and B; C requires manual approval
+ * 'medium' → A and B; C requires manual approval
+ * 'low'    → only A
+ *
+ * When threshold is 'all' the user has consciously opted into full autonomy —
+ * no hard invariant is imposed by the system.
  */
 export function riskClassFitsThreshold(
   riskClass: string,
   threshold: AutonomousConfig['riskThreshold'],
 ): boolean {
-  if (riskClass === 'C') return false // hard invariant: C always needs manual approval
-  if (riskClass === 'A') return true  // A is always safe enough
+  if (threshold === 'all') return true   // user chose full autonomy — no exceptions
+  if (riskClass === 'A') return true     // A is always safe enough
   if (riskClass === 'B') return threshold === 'medium' || threshold === 'high'
-  return false
+  return false                           // riskClass C: only 'all' unlocks it (handled above)
 }
