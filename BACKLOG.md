@@ -19,7 +19,7 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [x] feat: Agent execution live-stream via SSE (replace 3s polling in `/orchestrations` with Server-Sent Events)
 - [x] feat: Global search — search across all Briefs, Delegations, Work Items, Knowledge Cards (`/search` page + `Cmd+K` shortcut)
 - [x] feat: GitHub PR auto-creation after delegation execution completes (uses existing GITHUB_TOKEN)
-- [ ] feat: Project Brief templates — 3 presets: SaaS Product, Mobile App, REST API (one-click populate)
+- [x] feat: Project Brief templates — 3 presets: SaaS Product, Mobile App, REST API (one-click populate)
 
 ## 🟡 Medium Priority
 
