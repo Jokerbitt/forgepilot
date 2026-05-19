@@ -26,6 +26,7 @@ function readLocalWorkItems(): WorkItem[] {
 
 export async function GET(request: NextRequest) {
   const source = (request.nextUrl.searchParams.get('source') ?? 'all') as Source
+  const projectId = request.nextUrl.searchParams.get('projectId') ?? null
   const configs = readConnectorConfigs()
 
   try {
@@ -59,9 +60,12 @@ export async function GET(request: NextRequest) {
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     })
 
+    // Filter by projectId if provided
+    const filtered = projectId ? items.filter(i => i.projectId === projectId) : items
+
     return NextResponse.json({
-      items,
-      total: items.length,
+      items: filtered,
+      total: filtered.length,
       ...(errors.length > 0 ? { errors } : {}),
     })
   } catch (error) {

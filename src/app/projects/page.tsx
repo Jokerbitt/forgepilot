@@ -83,7 +83,12 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
 
           <div className="flex items-center justify-between mt-2">
             <div className="flex items-center gap-4 text-xs text-slate-500">
-              <span>{p.workItemCount} Work Items</span>
+              <a
+                href={`/work-items?projectId=${project.id}`}
+                className="hover:text-violet-400 transition-colors"
+              >
+                {p.workItemCount} Work Items
+              </a>
               <span>{p.doneTasks}/{p.taskCount} Tasks</span>
             </div>
             <a
