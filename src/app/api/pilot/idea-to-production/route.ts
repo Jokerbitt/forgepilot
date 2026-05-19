@@ -27,6 +27,7 @@ import type { Delegation } from '@/lib/models/delegation'
 import { decomposeWithAI } from '@/lib/agents/ai-decomposer'
 import { createRun } from '@/lib/agents/orchestrated-run'
 import { generateText, stripJsonCodeFence } from '@/lib/ai/text-generation'
+import { appendIdeaHistory } from '@/lib/pilot/idea-history-store'
 
 const LOCAL_ITEMS_FILE = path.join(process.cwd(), 'config', 'local-items.json')
 const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
@@ -221,6 +222,19 @@ export async function POST(req: Request) {
   // Step 7: Decompose → Orchestrated Run
   const tasks = await decomposeWithAI(delegation.contract.goal, brief.problemStatement)
   const run = createRun(delegation.id, delegation.title, delegation.contract.goal, tasks)
+
+  // Step 8: Append to Idea History
+  appendIdeaHistory({
+    id: crypto.randomUUID(),
+    idea: idea.trim(),
+    briefId: brief.id,
+    briefTitle: brief.title,
+    runId: run.id,
+    workItemCount: newItems.length,
+    taskCount: tasks.length,
+    status: 'building',
+    createdAt: now,
+  })
 
   return NextResponse.json({
     briefId: brief.id,
