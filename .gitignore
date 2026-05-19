@@ -2,11 +2,16 @@ node_modules/
 .env
 .env.local
 .env*.local
-config/api-keys.json
-config/running-processes.json
+# All config/*.json are runtime state — NEVER commit (may contain API keys and personal data)
+config/
+!config/.gitkeep
 dist/
 build/
 .next/
 tsconfig.tsbuildinfo
 *.log
 .DS_Store
+start-preview.sh
+
+# Agent worktrees
+.claude/worktrees/

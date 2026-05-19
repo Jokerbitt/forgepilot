@@ -1,15 +1,26 @@
 ---
 name: Feature Request
-about: Neue Funktion vorschlagen
-labels: feature
+about: Suggest a new feature or improvement
+labels: enhancement
 ---
 
-## Beschreibung
-<!-- Was soll gebaut werden? -->
+## Problem
 
-## Akzeptanzkriterien
+<!-- What problem does this solve? Who has this problem? -->
+
+## Proposed Solution
+
+<!-- What should ForgePilot do differently? -->
+
+## Alternatives Considered
+
+<!-- What else did you consider? Why is your proposal better? -->
+
+## Acceptance Criteria
+
 - [ ] 
 - [ ] 
 
-## Tech-Notizen
-<!-- Optional: Implementierungshinweise -->
+## Additional Context
+
+<!-- Screenshots, links, references — anything helpful. -->

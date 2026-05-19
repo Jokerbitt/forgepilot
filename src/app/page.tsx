@@ -1,39 +1,37 @@
 import { ConnectorHealthBar } from '@/components/command-center/ConnectorHealthBar'
-import { NBAPanel } from '@/components/command-center/NBAPanel'
-import { ActiveAgentsPanel } from '@/components/delegation/ActiveAgentsPanel'
-import { MagicCreate } from '@/components/command-center/MagicCreate'
+import { AutopilotRunner } from '@/components/command-center/AutopilotRunner'
+import { ApiKeysBanner } from '@/components/shared/ApiKeysBanner'
+import { CommandCenterOverview } from '@/components/command-center/CommandCenterOverview'
+import { OnboardingBanner } from '@/components/command-center/OnboardingBanner'
+import { buttonClassName } from '@/components/ui/primitives'
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-gray-950 text-white">
+    <main className="min-h-screen text-white">
       <ConnectorHealthBar />
-      <div className="max-w-4xl mx-auto p-6">
-        <header className="mb-8 mt-4 flex justify-between items-center">
+      <AutopilotRunner />
+      <ApiKeysBanner />
+      <OnboardingBanner />
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <header className="page-header">
           <div>
-            <h1 className="text-3xl font-bold">ForgePilot</h1>
-            <p className="text-gray-400 mt-1 text-sm">AI Workflow OS — Command Center</p>
+            <p className="page-eyebrow">Daily Operations</p>
+            <h1 className="page-title">Command Center</h1>
+            <p className="page-description">
+              Fokussierte Tagessteuerung — nächster Schritt, Aufmerksamkeitspunkte, Systembereitschaft.
+            </p>
           </div>
-          <div className="flex items-center gap-3">
-            <a
-              href="/delegations"
-              className="text-sm text-gray-400 hover:text-white flex items-center gap-2 bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition-colors border border-gray-700"
-            >
-              <span>📋</span>
-              <span>Delegationen</span>
+          <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+            <a href="/project-briefs" className={buttonClassName('secondary')}>
+              Neue Idee
             </a>
-            <a
-              href="/settings"
-              className="text-sm text-gray-400 hover:text-white flex items-center gap-2 bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg transition-colors border border-gray-700"
-            >
-              <span>⚙️</span>
-              <span>Einstellungen</span>
+            <a href="/delegations?new=1" className={buttonClassName('primary')}>
+              Neue Delegation
             </a>
           </div>
         </header>
 
-        <MagicCreate />
-        <ActiveAgentsPanel />
-        <NBAPanel />
+        <CommandCenterOverview />
       </div>
     </main>
   )

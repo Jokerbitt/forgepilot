@@ -138,6 +138,7 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
   const handleManualTask = () => {
     const newDelegation: Delegation = {
       id: `DEL-${Date.now().toString().slice(-4)}`,
+      title: workItem.title.slice(0, 80),
       status: 'pending',
       executionRoute: 'local-agent',
       costEstimateUsd: 0.1,
@@ -299,12 +300,21 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
       
       {sortedTasks.length > 0 && (
         <div className="mb-4 space-y-2">
-          <button 
-            onClick={() => setIsTasksExpanded(!isTasksExpanded)}
-            className="flex items-center text-xs font-bold text-gray-500 uppercase tracking-wider hover:text-white transition-colors"
-          >
-            Erstellte AI Tasks ({sortedTasks.length}) {isTasksExpanded ? '▼' : '▶'}
-          </button>
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setIsTasksExpanded(!isTasksExpanded)}
+              className="flex items-center text-xs font-bold text-gray-500 uppercase tracking-wider hover:text-white transition-colors"
+            >
+              Erstellte AI Tasks ({sortedTasks.length}) {isTasksExpanded ? '▼' : '▶'}
+            </button>
+            <a
+              href={`/delegations?q=${encodeURIComponent(workItem.id)}`}
+              className="text-xs text-blue-500 hover:text-blue-400 transition-colors"
+              title="Alle Delegationen für dieses Ticket anzeigen"
+            >
+              Alle →
+            </a>
+          </div>
           {isTasksExpanded && (
             <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
               {sortedTasks.map((task, index) => (

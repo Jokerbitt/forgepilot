@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
-import { readConnectorConfigsFromEnv } from '@/lib/connectors/config'
+import { readConnectorConfigs } from '@/lib/connectors/config'
 import { fetchLinearWorkItems } from '@/lib/connectors/linear-items'
 import { fetchGitHubWorkItems } from '@/lib/connectors/github-items'
 import type { WorkItem } from '@/lib/models/work-item'
@@ -26,7 +26,8 @@ function readLocalWorkItems(): WorkItem[] {
 
 export async function GET(request: NextRequest) {
   const source = (request.nextUrl.searchParams.get('source') ?? 'all') as Source
-  const configs = readConnectorConfigsFromEnv(process.env)
+  const projectId = request.nextUrl.searchParams.get('projectId') ?? null
+  const configs = readConnectorConfigs()
 
   try {
     const fetchers: Promise<WorkItem[]>[] = []
@@ -59,9 +60,12 @@ export async function GET(request: NextRequest) {
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     })
 
+    // Filter by projectId if provided
+    const filtered = projectId ? items.filter(i => i.projectId === projectId) : items
+
     return NextResponse.json({
-      items,
-      total: items.length,
+      items: filtered,
+      total: filtered.length,
       ...(errors.length > 0 ? { errors } : {}),
     })
   } catch (error) {

@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
-import { readConnectorConfigsFromEnv } from '@/lib/connectors/config'
+import { readConnectorConfigs } from '@/lib/connectors/config'
 import { getAllConnectorHealth } from '@/lib/connectors/registry'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const connectors = await getAllConnectorHealth(readConnectorConfigsFromEnv(process.env))
+    const connectors = await getAllConnectorHealth(readConnectorConfigs())
     return NextResponse.json({ connectors })
   } catch (error) {
     return NextResponse.json(

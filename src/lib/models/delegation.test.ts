@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { TaskContract, Delegation, DelegationStatus, ExecutionRoute } from './delegation'
+import type { TaskContract, Delegation, DelegationStatus, ExecutionRoute, OutputMode } from './delegation'
 
 describe('TaskContract type', () => {
   it('accepts a valid TaskContract', () => {
@@ -61,6 +61,7 @@ describe('Delegation type', () => {
 
     const delegation: Delegation = {
       id: 'del-1',
+      title: 'Test delegation',
       contract,
       status: 'pending',
       executionRoute: 'runner',
@@ -80,5 +81,18 @@ describe('Delegation type', () => {
   it('covers all ExecutionRoute values', () => {
     const routes: ExecutionRoute[] = ['direct-chat', 'local-agent', 'runner', 'n8n', 'manual']
     expect(routes).toHaveLength(5)
+  })
+
+  it('covers all OutputMode values', () => {
+    const modes: OutputMode[] = ['text', 'json', 'stream']
+    expect(modes).toHaveLength(3)
+  })
+
+  it('bulk-delete filter: keeps active, removes terminal statuses', () => {
+    const terminalStatuses: DelegationStatus[] = ['completed', 'failed', 'cancelled']
+    const allStatuses: DelegationStatus[] = ['pending', 'approved', 'running', 'completed', 'failed', 'cancelled']
+    const remaining = allStatuses.filter(s => !terminalStatuses.includes(s))
+    expect(remaining).toEqual(['pending', 'approved', 'running'])
+    expect(remaining).toHaveLength(3)
   })
 })

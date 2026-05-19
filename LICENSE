@@ -1,0 +1,40 @@
+MIT License
+
+Copyright (c) 2026 Sven Bittl
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## Additional Terms for Commercial Use
+
+The core of ForgePilot (everything in this repository) is MIT licensed and free
+for any use, including commercial self-hosting.
+
+The following components are NOT covered by this MIT license and require a
+separate commercial license:
+
+- ForgePilot Cloud (managed hosting service at forgepilot.app)
+- ForgePilot Teams (multi-tenancy, RBAC, admin panel)
+- ForgePilot Enterprise (SSO, audit log, SLA, on-premise support)
+
+If you want to offer ForgePilot as a hosted service to third parties,
+please contact: sven.bittl@gmx.de
+
+Everything you build on top of ForgePilot for your own use is yours.

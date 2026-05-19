@@ -1,11 +1,16 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import type { Delegation } from '@/lib/models/delegation'
+import { useEffect, useRef, useState, useCallback, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
+import { Download } from 'lucide-react'
+import type { Delegation, TaskContract } from '@/lib/models/delegation'
+import { formatAge, isCreatedToday } from '@/lib/utils/delegation-age'
 import { DelegationDrawer } from '@/components/delegation/DelegationDrawer'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
 import { NewDelegationDialog } from '@/components/delegation/NewDelegationDialog'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
+import { AutopilotReadinessPill } from '@/components/delegation/AutopilotReadinessBadge'
 
 type ApprovalFilter = 'Alle' | 'approval-required' | 'auto-approved' | 'risk-blocked'
 
@@ -43,22 +48,81 @@ const APPROVAL_FILTER_LABELS: Record<ApprovalFilter, string> = {
   'risk-blocked': 'RiskClass C',
 }
 
-export default function DelegationsPage() {
+const TASK_TYPE_ICONS: Record<string, string> = {
+  feature:  '✨',
+  bugfix:   '🐛',
+  docs:     '📝',
+  refactor: '♻️',
+  research: '🔍',
+}
+
+function DelegationsContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
   const [delegations, setDelegations] = useState<Delegation[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDelegation, setSelectedDelegation] = useState<Delegation | null>(null)
-  const [showNewDialog, setShowNewDialog] = useState(false)
+  // ?new=1 or ?template=<id> auto-opens the dialog on mount
+  const [showNewDialog, setShowNewDialog] = useState(
+    searchParams.get('new') === '1' || !!searchParams.get('template')
+  )
+  // Template contract pre-fill — loaded when ?template=<id> is in URL
+  const [templateContract, setTemplateContract] = useState<Partial<TaskContract> | undefined>(undefined)
 
-  // Filters
-  const [statusFilter, setStatusFilter] = useState<string>('Alle')
-  const [projectFilter, setProjectFilter] = useState<string>('Alle')
-  const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>('Alle')
+  // Load template contract once on mount if ?template=<id> present
+  useEffect(() => {
+    const templateId = searchParams.get('template')
+    if (!templateId) return
+    fetch(`/api/delegations/${templateId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((d: Delegation | null) => {
+        if (d?.contract) setTemplateContract(d.contract)
+      })
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Filters — initialised from URL params
+  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') ?? 'Alle')
+  const [projectFilter, setProjectFilter] = useState<string>(searchParams.get('project') ?? 'Alle')
+  const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>((searchParams.get('approval') as ApprovalFilter) ?? 'Alle')
+  const [searchQuery, setSearchQuery] = useState<string>(searchParams.get('q') ?? '')
+  const [todayOnly, setTodayOnly] = useState(searchParams.get('today') === '1')
+
+  // Sync filters → URL (replace, no history entry)
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (statusFilter !== 'Alle')   params.set('status',   statusFilter)
+    if (projectFilter !== 'Alle')  params.set('project',  projectFilter)
+    if (approvalFilter !== 'Alle') params.set('approval', approvalFilter)
+    if (searchQuery)               params.set('q',        searchQuery)
+    if (todayOnly)                 params.set('today',    '1')
+    const qs = params.toString()
+    router.replace(qs ? `/delegations?${qs}` : '/delegations', { scroll: false })
+  }, [statusFilter, projectFilter, approvalFilter, searchQuery, todayOnly, router])
+
+  // Sort
+  type SortKey = 'goal' | 'status' | 'time' | 'cost'
+  const [sortKey, setSortKey] = useState<SortKey | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
 
   // Drag & Drop
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
 
   // Inline delete confirm in table row
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
+  // Refs for keyboard shortcut targets
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
 
   const loadDelegations = useCallback(() => {
     fetch('/api/delegations')
@@ -91,6 +155,28 @@ export default function DelegationsPage() {
     const interval = setInterval(loadDelegations, 5000)
     return () => clearInterval(interval)
   }, [delegations, loadDelegations])
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const active = document.activeElement
+      const isInputFocused = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement
+      if (isInputFocused) return
+
+      if (e.key === 'Escape') {
+        if (selectedDelegation) { setSelectedDelegation(null); return }
+        if (showNewDialog) { setShowNewDialog(false); return }
+      } else if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault()
+        setShowNewDialog(true)
+      } else if (e.key === '/') {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [selectedDelegation, showNewDialog])
 
   // ── Optimistic helpers ──────────────────────────────────────────────────
   const applyUpdate = useCallback((updated: Delegation) => {
@@ -185,6 +271,46 @@ export default function DelegationsPage() {
     setConfirmDeleteId(null)
   }
 
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const handleBulkDeleteCompleted = async () => {
+    const terminalIds = delegations
+      .filter(d => d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled')
+      .map(d => d.id)
+    await fetch('/api/delegations?statuses=completed,failed,cancelled', { method: 'DELETE' })
+    setDelegations(prev => prev.filter(d => !terminalIds.includes(d.id)))
+    setConfirmBulkDelete(false)
+  }
+
+  const terminalCount = delegations.filter(
+    d => d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled'
+  ).length
+
+  // ── Batch Approve ────────────────────────────────────────────────────────
+  const approvableDelegations = delegations.filter(
+    d => d.status === 'pending' && d.contract.requiresApproval && d.contract.riskClass !== 'C'
+  )
+  const approvableCount = approvableDelegations.length
+
+  const handleBatchApprove = async () => {
+    if (approvableCount === 0) return
+    const now = new Date().toISOString()
+    const updates = approvableDelegations.map(d => ({
+      ...d,
+      status: 'approved' as const,
+      contract: { ...d.contract, requiresApproval: false },
+      logs: [...(d.logs ?? []), { timestamp: now, type: 'success' as const, message: 'Batch-freigegeben.' }],
+      updatedAt: now,
+    }))
+    // Optimistic update
+    updates.forEach(applyUpdate)
+    // Bulk persist
+    await fetch('/api/delegations', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    })
+  }
+
   // ── Drag & Drop ─────────────────────────────────────────────────────────
   const handleDragStart = (index: number) => setDraggedIndex(index)
 
@@ -201,6 +327,22 @@ export default function DelegationsPage() {
 
   const handleDrop = () => setDraggedIndex(null)
 
+  // ── Export Dropdown ─────────────────────────────────────────────────────────
+  const [showExportDropdown, setShowExportDropdown] = useState(false)
+  const exportDropdownRef = useRef<HTMLDivElement | null>(null)
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showExportDropdown) return
+    const handler = (e: MouseEvent) => {
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(e.target as Node)) {
+        setShowExportDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showExportDropdown])
+
   // ── Filters ─────────────────────────────────────────────────────────────
   const uniqueProjects = Array.from(
     new Set(delegations.map(d => d.contract.workItemId.split('-')[0] || 'Unknown'))
@@ -214,15 +356,53 @@ export default function DelegationsPage() {
       (approvalFilter === 'approval-required' && d.contract.requiresApproval) ||
       (approvalFilter === 'auto-approved' && !d.contract.requiresApproval) ||
       (approvalFilter === 'risk-blocked' && d.contract.riskClass === 'C')
+    const q = searchQuery.toLowerCase().trim()
+    const matchSearch = !q ||
+      (d.title || '').toLowerCase().includes(q) ||
+      d.contract.goal.toLowerCase().includes(q) ||
+      d.contract.workItemId.toLowerCase().includes(q) ||
+      (d.contract.context || '').toLowerCase().includes(q) ||
+      (d.briefTitle || '').toLowerCase().includes(q)
+    const matchToday = !todayOnly || isCreatedToday(d.createdAt)
 
-    return matchStatus && matchProject && matchApproval
+    return matchStatus && matchProject && matchApproval && matchSearch && matchToday
   })
+
+  const STATUS_SORT_WEIGHT: Record<string, number> = {
+    running: 0, approved: 1, pending: 2, completed: 3, failed: 4, cancelled: 5,
+  }
+
+  const sortedDelegations = sortKey
+    ? [...filteredDelegations].sort((a, b) => {
+        let cmp = 0
+        if (sortKey === 'goal') {
+          cmp = a.contract.goal.localeCompare(b.contract.goal, 'de')
+        } else if (sortKey === 'status') {
+          cmp = (STATUS_SORT_WEIGHT[a.status] ?? 9) - (STATUS_SORT_WEIGHT[b.status] ?? 9)
+        } else if (sortKey === 'time') {
+          cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        } else if (sortKey === 'cost') {
+          const ca = a.actualCostUsd ?? a.costEstimateUsd ?? 0
+          const cb = b.actualCostUsd ?? b.costEstimateUsd ?? 0
+          cmp = ca - cb
+        }
+        return sortDir === 'asc' ? cmp : -cmp
+      })
+    : filteredDelegations
 
   const runningCount = delegations.filter(d => d.status === 'running').length
   const pendingCount = delegations.filter(d => d.status === 'pending').length
+  const completedCount = delegations.filter(d => d.status === 'completed').length
   const approvalRequiredCount = delegations.filter(d => d.contract.requiresApproval).length
   const autoApprovedCount = delegations.filter(d => !d.contract.requiresApproval).length
   const riskBlockedCount = delegations.filter(d => d.contract.riskClass === 'C').length
+
+  // Cost stats
+  const totalEstimated = delegations.reduce((sum, d) => sum + (d.costEstimateUsd || 0), 0)
+  const totalActual = delegations
+    .filter(d => d.actualCostUsd != null)
+    .reduce((sum, d) => sum + (d.actualCostUsd ?? 0), 0)
+  const hasActualCosts = delegations.some(d => d.actualCostUsd != null)
 
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6 md:p-8">
@@ -248,17 +428,120 @@ export default function DelegationsPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <a href="/" className="text-sm text-gray-500 hover:text-gray-300 transition-colors">
-              ← Dashboard
-            </a>
+            {/* Bulk delete confirm */}
+            {terminalCount > 0 && (
+              confirmBulkDelete ? (
+                <div className="flex items-center gap-2 bg-red-950/60 border border-red-900 rounded-lg px-3 py-1.5">
+                  <span className="text-xs text-red-300">{terminalCount} löschen?</span>
+                  <button
+                    onClick={handleBulkDeleteCompleted}
+                    className="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded font-bold transition-colors"
+                  >
+                    Ja
+                  </button>
+                  <button
+                    onClick={() => setConfirmBulkDelete(false)}
+                    className="text-xs text-gray-400 hover:text-white px-1 transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmBulkDelete(true)}
+                  className="text-xs text-gray-500 hover:text-red-400 border border-gray-800 hover:border-red-900/50 px-3 py-2 rounded-lg transition-colors"
+                  title={`${terminalCount} abgeschlossene Delegationen löschen`}
+                >
+                  🗑 Aufräumen ({terminalCount})
+                </button>
+              )
+            )}
+            {/* Batch Approve — all approvable pending delegations */}
+            {approvableCount > 0 && (
+              <button
+                onClick={handleBatchApprove}
+                className="text-xs text-green-400 hover:text-green-300 border border-green-900/60 hover:border-green-700 hover:bg-green-900/20 px-3 py-2 rounded-lg transition-colors"
+                title={`${approvableCount} Delegation${approvableCount !== 1 ? 'en' : ''} auf einmal freigeben`}
+              >
+                ✔ Alle freigeben ({approvableCount})
+              </button>
+            )}
+            {delegations.length > 0 && (
+              <div className="relative" ref={exportDropdownRef}>
+                <button
+                  onClick={() => setShowExportDropdown(v => !v)}
+                  className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-700 px-3 py-2 rounded-lg transition-colors"
+                  title="Delegationen exportieren"
+                >
+                  <Download size={13} />
+                  Export
+                </button>
+                {showExportDropdown && (
+                  <div className="absolute right-0 top-full mt-1 w-48 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                    <button
+                      onClick={() => {
+                        window.location.href = '/api/delegations/export?format=csv'
+                        setShowExportDropdown(false)
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs text-gray-300 hover:bg-gray-800 hover:text-white transition-colors flex items-center gap-2"
+                    >
+                      <Download size={12} className="text-gray-500" />
+                      Als CSV exportieren
+                    </button>
+                    <button
+                      onClick={() => {
+                        window.location.href = '/api/delegations/export?format=json'
+                        setShowExportDropdown(false)
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs text-gray-300 hover:bg-gray-800 hover:text-white transition-colors flex items-center gap-2"
+                    >
+                      <Download size={12} className="text-gray-500" />
+                      Als JSON exportieren
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             <button
               onClick={() => setShowNewDialog(true)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors"
+              title="Neue Delegation erstellen [N]"
             >
               <span>+</span> Neue Delegation
+              <kbd className="hidden sm:inline text-[10px] bg-blue-800/60 px-1 py-0.5 rounded font-mono leading-none">N</kbd>
             </button>
           </div>
         </header>
+
+        {/* ── Cost / Stats Summary ──────────────────────────────────── */}
+        {!loading && delegations.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+              <div className="text-2xl font-bold text-white">{delegations.length}</div>
+              <div className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Gesamt</div>
+            </div>
+            <div className={`bg-gray-900 border rounded-xl p-4 text-center ${runningCount > 0 ? 'border-green-800/60' : 'border-gray-800'}`}>
+              <div className={`text-2xl font-bold ${runningCount > 0 ? 'text-green-400' : 'text-gray-500'}`}>
+                {runningCount > 0 ? runningCount : completedCount}
+              </div>
+              <div className="text-xs text-gray-500 mt-1 uppercase tracking-wide">
+                {runningCount > 0 ? 'Laufend' : 'Abgeschlossen'}
+              </div>
+            </div>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+              <div className="text-2xl font-bold text-white font-mono">
+                ${totalEstimated.toFixed(2)}
+              </div>
+              <div className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Geschätzt</div>
+            </div>
+            <div className={`bg-gray-900 border rounded-xl p-4 text-center ${hasActualCosts ? 'border-yellow-900/50' : 'border-gray-800'}`}>
+              <div className={`text-2xl font-bold font-mono ${hasActualCosts ? 'text-yellow-400' : 'text-gray-600'}`}>
+                {hasActualCosts ? `$${totalActual.toFixed(4)}` : '–'}
+              </div>
+              <div className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Tatsächlich</div>
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div className="space-y-3">
@@ -327,6 +610,42 @@ export default function DelegationsPage() {
                 })}
               </div>
 
+              {/* Today filter toggle */}
+              <div className="flex items-center gap-1.5 pl-4 border-l border-gray-800">
+                <button
+                  onClick={() => setTodayOnly(v => !v)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    todayOnly
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700'
+                  }`}
+                  title="Nur Delegationen von heute anzeigen"
+                >
+                  📅 Heute
+                </button>
+              </div>
+
+              {/* Search input */}
+              <div className="flex items-center gap-2 pl-4 border-l border-gray-800 ml-auto">
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Suchen… [/]"
+                  className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 w-44 transition-colors"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                    title="Suche leeren"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
               {uniqueProjects.length > 1 && (
                 <div className="flex flex-wrap items-center gap-1.5 pl-4 border-l border-gray-800">
                   <span className="text-xs text-gray-500 mr-1 uppercase tracking-wide">Projekt</span>
@@ -357,6 +676,28 @@ export default function DelegationsPage() {
               )}
             </div>
 
+            {/* ── Filter result count ─────────────────────────────────── */}
+            {sortedDelegations.length !== delegations.length && (
+              <div className="flex items-center justify-between px-1 text-xs text-gray-500">
+                <span>
+                  <span className="text-white font-medium">{sortedDelegations.length}</span>
+                  {' '}von {delegations.length} Delegationen
+                </span>
+                <button
+                  onClick={() => {
+                    setStatusFilter('Alle')
+                    setProjectFilter('Alle')
+                    setApprovalFilter('Alle')
+                    setSearchQuery('')
+                    setTodayOnly(false)
+                  }}
+                  className="text-blue-500 hover:text-blue-400 transition-colors"
+                >
+                  Filter zurücksetzen ✕
+                </button>
+              </div>
+            )}
+
             {/* ── Table ───────────────────────────────────────────────── */}
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
               <div className="overflow-x-auto">
@@ -364,15 +705,30 @@ export default function DelegationsPage() {
                   <thead>
                     <tr className="bg-gray-950 border-b border-gray-800 text-xs uppercase text-gray-500">
                       <th className="p-3 font-medium w-10 text-center">#</th>
-                      <th className="p-3 font-medium">Ticket / Ziel</th>
+                      <th
+                        className="p-3 font-medium cursor-pointer hover:text-gray-300 select-none"
+                        onClick={() => handleSort('goal')}
+                      >
+                        Ticket / Ziel {sortKey === 'goal' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="opacity-30">⇅</span>}
+                      </th>
                       <th className="p-3 font-medium hidden md:table-cell">Agent</th>
-                      <th className="p-3 font-medium">Status</th>
-                      <th className="p-3 font-medium hidden sm:table-cell">Zeit</th>
+                      <th
+                        className="p-3 font-medium cursor-pointer hover:text-gray-300 select-none"
+                        onClick={() => handleSort('status')}
+                      >
+                        Status {sortKey === 'status' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="opacity-30">⇅</span>}
+                      </th>
+                      <th
+                        className="p-3 font-medium hidden sm:table-cell cursor-pointer hover:text-gray-300 select-none"
+                        onClick={() => handleSort('time')}
+                      >
+                        Zeit {sortKey === 'time' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="opacity-30">⇅</span>}
+                      </th>
                       <th className="p-3 font-medium text-right">Aktionen</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-800/70">
-                    {filteredDelegations.map((del, index) => {
+                    {sortedDelegations.map((del, index) => {
                       const isDone = del.status === 'completed' || del.status === 'failed' || del.status === 'cancelled'
                       const canCancel = del.status === 'pending' || del.status === 'approved'
                       const canDelete = isDone
@@ -408,6 +764,24 @@ export default function DelegationsPage() {
                           <td className="p-3">
                             <div className="mb-1 flex flex-wrap items-center gap-2">
                               <span className="text-xs text-gray-600 font-mono">{del.contract.workItemId}</span>
+                              {del.briefId && (
+                                <Link
+                                  href={`/project-briefs/${del.briefId}`}
+                                  onClick={e => e.stopPropagation()}
+                                  className="text-xs px-1.5 py-0.5 rounded bg-indigo-950/50 border border-indigo-900/50 text-indigo-400 hover:text-indigo-200 hover:bg-indigo-900/40 transition-colors truncate max-w-[140px]"
+                                  title={del.briefTitle ?? 'Projektbrief'}
+                                >
+                                  ◇ {del.briefTitle ?? 'Brief'}
+                                </Link>
+                              )}
+                              {del.contract.branchStrategy && TASK_TYPE_ICONS[del.contract.branchStrategy] && (
+                                <span
+                                  className="text-xs px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-400"
+                                  title={del.contract.branchStrategy}
+                                >
+                                  {TASK_TYPE_ICONS[del.contract.branchStrategy]} {del.contract.branchStrategy}
+                                </span>
+                              )}
                               <ApprovalBadge
                                 requiresApproval={del.contract.requiresApproval}
                                 riskClass={del.contract.riskClass}
@@ -426,7 +800,10 @@ export default function DelegationsPage() {
 
                           {/* Agent */}
                           <td className="p-3 hidden md:table-cell">
-                            <div className="text-xs text-gray-400">{del.executionRoute}</div>
+                            <div className="flex items-center gap-2">
+                              <div className="text-xs text-gray-400">{del.executionRoute}</div>
+                              <AutopilotReadinessPill contract={del.contract} />
+                            </div>
                             {del.contract.llmModel && (
                               <div className="text-xs text-gray-600 mt-0.5">🧠 {del.contract.llmModel}</div>
                             )}
@@ -465,7 +842,19 @@ export default function DelegationsPage() {
                                   </div>
                                 )}
                               </div>
-                            ) : (
+                            ) : (del.status === 'pending' || del.status === 'approved') ? (() => {
+                              const age = formatAge(del.createdAt)
+                              return (
+                                <div>
+                                  <div className={`text-xs font-mono font-medium ${age.colorClass}`} title="Wartezeit seit Erstellung">
+                                    ⏳ {age.text}
+                                  </div>
+                                  <div className="text-xs text-gray-700 mt-0.5">
+                                    {new Date(del.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                  </div>
+                                </div>
+                              )
+                            })() : (
                               <div className="text-xs text-gray-600">
                                 {new Date(del.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                               </div>
@@ -572,6 +961,19 @@ export default function DelegationsPage() {
                                     </button>
                                   )}
 
+                                  {/* Clone — open new dialog pre-filled with this contract */}
+                                  <button
+                                    onClick={e => {
+                                      e.stopPropagation()
+                                      setTemplateContract(del.contract)
+                                      setShowNewDialog(true)
+                                    }}
+                                    className="text-xs text-gray-700 hover:text-purple-400 px-2 py-1 rounded hover:bg-purple-950/30 transition-colors"
+                                    title="Klonen — neues Dialog vorausgefüllt mit diesem Contract"
+                                  >
+                                    🔁
+                                  </button>
+
                                   {/* Open drawer — stopPropagation then open */}
                                   <button
                                     onClick={e => { e.stopPropagation(); setSelectedDelegation(del) }}
@@ -580,6 +982,16 @@ export default function DelegationsPage() {
                                   >
                                     →
                                   </button>
+
+                                  {/* Permalink */}
+                                  <Link
+                                    href={`/delegations/${del.id}`}
+                                    onClick={e => e.stopPropagation()}
+                                    className="text-xs text-gray-700 hover:text-blue-400 px-2 py-1 rounded hover:bg-blue-950/30 transition-colors"
+                                    title="Permalink öffnen"
+                                  >
+                                    ⊞
+                                  </Link>
                                 </>
                               )}
                             </div>
@@ -591,7 +1003,7 @@ export default function DelegationsPage() {
                 </table>
               </div>
 
-              {filteredDelegations.length === 0 && (
+              {sortedDelegations.length === 0 && (
                 <div className="text-center py-12 text-gray-600">
                   <div className="text-3xl mb-2">🔍</div>
                   <p className="text-sm">Keine Delegationen für diesen Filter</p>
@@ -615,13 +1027,31 @@ export default function DelegationsPage() {
       {/* ── New Delegation Dialog ─────────────────────────────────────── */}
       {showNewDialog && (
         <NewDelegationDialog
-          onClose={() => setShowNewDialog(false)}
+          onClose={() => { setShowNewDialog(false); setTemplateContract(undefined) }}
           onCreate={newDel => {
             applyAdd(newDel)
             setShowNewDialog(false)
+            setTemplateContract(undefined)
           }}
+          prefillContract={templateContract}
         />
       )}
     </main>
+  )
+}
+
+export default function DelegationsPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-gray-950 text-white p-6 md:p-8">
+        <div className="max-w-6xl mx-auto space-y-4">
+          {[1,2,3].map(i => (
+            <div key={i} className="h-14 bg-gray-900 rounded-xl border border-gray-800 animate-pulse" />
+          ))}
+        </div>
+      </main>
+    }>
+      <DelegationsContent />
+    </Suspense>
   )
 }

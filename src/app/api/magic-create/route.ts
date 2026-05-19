@@ -96,6 +96,7 @@ export async function POST(request: NextRequest) {
 
       const newDelegation: Delegation = {
         id: `DEL-${Date.now().toString().slice(-4)}`,
+        title: prompt.slice(0, 80),
         status: requiresApproval ? 'pending' : 'approved',
         executionRoute: 'local-agent',
         costEstimateUsd: estimateCostFromText(prompt),
@@ -121,13 +122,17 @@ export async function POST(request: NextRequest) {
       }
 
       let delegations: Delegation[] = []
-      
+
       if (fs.existsSync(DELEGATIONS_FILE)) {
         delegations = JSON.parse(fs.readFileSync(DELEGATIONS_FILE, 'utf8')) as Delegation[]
       }
-      
+
       delegations.push(newDelegation)
-      fs.writeFileSync(DELEGATIONS_FILE, JSON.stringify(delegations, null, 2))
+      const dir = path.dirname(DELEGATIONS_FILE)
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+      const tmpDel = DELEGATIONS_FILE + '.tmp'
+      fs.writeFileSync(tmpDel, JSON.stringify(delegations, null, 2))
+      fs.renameSync(tmpDel, DELEGATIONS_FILE)
 
       return NextResponse.json({ success: true, item: newDelegation })
     } else {
@@ -161,13 +166,17 @@ export async function POST(request: NextRequest) {
     }
 
     let localItems: WorkItem[] = []
-    
+
     if (fs.existsSync(LOCAL_ITEMS_FILE)) {
       localItems = JSON.parse(fs.readFileSync(LOCAL_ITEMS_FILE, 'utf8')) as WorkItem[]
     }
-    
+
     localItems.push(newItem)
-    fs.writeFileSync(LOCAL_ITEMS_FILE, JSON.stringify(localItems, null, 2))
+    const itemsDir = path.dirname(LOCAL_ITEMS_FILE)
+    if (!fs.existsSync(itemsDir)) fs.mkdirSync(itemsDir, { recursive: true })
+    const tmpItems = LOCAL_ITEMS_FILE + '.tmp'
+    fs.writeFileSync(tmpItems, JSON.stringify(localItems, null, 2))
+    fs.renameSync(tmpItems, LOCAL_ITEMS_FILE)
 
     return NextResponse.json({ success: true, item: newItem })
   } catch (error) {

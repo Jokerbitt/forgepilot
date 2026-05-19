@@ -1,10 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import type { AgentLog, Delegation, DelegationStatus, ExecutionRoute, PrivacyMode, TaskType, DelegationNote } from '@/lib/models/delegation'
+import Link from 'next/link'
+import type { AgentLog, Delegation, DelegationStatus, ExecutionRoute, OutputMode, PrivacyMode, TaskType, DelegationNote } from '@/lib/models/delegation'
 import type { RiskClass } from '@/lib/models/work-item'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 import { PreFlightModal } from '@/components/delegation/PreFlightModal'
+import { PolicyVerdictPanel } from '@/components/delegation/PolicyVerdictPanel'
+import { ContextPackageBuilder } from '@/components/delegation/ContextPackageBuilder'
+import { PipelineRunner } from '@/components/delegation/PipelineRunner'
 
 type Tab = 'details' | 'logs' | 'report' | 'notes'
 
@@ -57,6 +61,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
 
   // Details fields
   const [goal, setGoal] = useState('')
+  const [context, setContext] = useState('')
   const [status, setStatus] = useState<DelegationStatus>('pending')
   const [executionRoute, setExecutionRoute] = useState<ExecutionRoute>('local-agent')
   const [llmModel, setLlmModel] = useState('')
@@ -66,6 +71,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
   const [maxBudgetUsd, setMaxBudgetUsd] = useState(1.0)
   const [branchStrategy, setBranchStrategy] = useState<'feature' | 'fix' | 'chore'>('feature')
   const [privacyMode, setPrivacyMode] = useState<PrivacyMode>('local')
+  const [outputMode, setOutputMode] = useState<OutputMode>('text')
   const [allowedTools, setAllowedTools] = useState<string[]>(['read_file', 'write_file'])
   const [errorMessage, setErrorMessage] = useState('')
   const [failureFeedback, setFailureFeedback] = useState('')
@@ -85,6 +91,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
     if (delegation) {
       setTab('details')
       setGoal(delegation.contract.goal)
+      setContext(delegation.contract.context || '')
       setStatus(delegation.status)
       setExecutionRoute(delegation.executionRoute)
       setLlmModel(delegation.contract.llmModel || '')
@@ -94,6 +101,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
       setMaxBudgetUsd(delegation.contract.maxBudgetUsd)
       setBranchStrategy(delegation.contract.branchStrategy)
       setPrivacyMode(delegation.contract.privacyMode)
+      setOutputMode(delegation.contract.outputMode ?? 'text')
       setAllowedTools((delegation.contract.allowedTools ?? []).length > 0 ? delegation.contract.allowedTools : ['read_file', 'write_file'])
       setErrorMessage(delegation.errorMessage || '')
       setFailureFeedback('')
@@ -169,6 +177,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
       contract: {
         ...delegation.contract,
         goal,
+        context: context.trim(),
         llmModel: llmModel || undefined,
         taskType: taskType ? (taskType as TaskType) : undefined,
         riskClass,
@@ -176,6 +185,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
         maxBudgetUsd,
         branchStrategy,
         privacyMode,
+        outputMode,
         allowedTools,
       },
     }
@@ -326,6 +336,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
     setCreatingSuggestion(suggestion)
     const newDelegation: Delegation = {
       id: `del-${Date.now()}`,
+      title: suggestion.slice(0, 80),
       status: 'pending',
       executionRoute: delegation.executionRoute,
       costEstimateUsd: 0.5,
@@ -389,6 +400,18 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
           <div className="min-w-0">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <span className="text-xs text-gray-500 font-mono">{delegation.contract.workItemId}</span>
+              {delegation.briefId && (
+                <Link
+                  href={`/project-briefs/${delegation.briefId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  className="text-xs px-1.5 py-0.5 rounded bg-indigo-950/50 border border-indigo-900/50 text-indigo-400 hover:text-indigo-200 transition-colors truncate max-w-[160px]"
+                  title={delegation.briefTitle ?? 'Projektbrief öffnen'}
+                >
+                  ◇ {delegation.briefTitle ?? 'Brief'}
+                </Link>
+              )}
               <ApprovalBadge
                 requiresApproval={delegation.contract.requiresApproval}
                 riskClass={delegation.contract.riskClass}
@@ -412,9 +435,21 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
               {delegation.contract.goal}
             </h2>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors flex-shrink-0 mt-1">
-            ✕
-          </button>
+          <div className="flex items-center gap-1 flex-shrink-0 mt-1">
+            <Link
+              href={`/delegations/${delegation.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-600 hover:text-blue-400 transition-colors px-1.5 py-1 rounded hover:bg-blue-950/30"
+              title="In Vollansicht öffnen"
+              onClick={e => e.stopPropagation()}
+            >
+              ⊞
+            </Link>
+            <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors px-1.5 py-1">
+              ✕
+            </button>
+          </div>
         </header>
 
         {/* Tabs */}
@@ -474,6 +509,19 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
                 />
               </div>
 
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                  Kontext <span className="text-gray-600 normal-case font-normal">(für den Agenten)</span>
+                </label>
+                <textarea
+                  value={context}
+                  onChange={e => setContext(e.target.value)}
+                  disabled={isRunning}
+                  placeholder="Betroffene Dateien, bekannte Abhängigkeiten, Hintergrundinfos..."
+                  className="w-full bg-gray-900 border border-gray-800 rounded p-3 text-white text-sm resize-none h-16 focus:border-blue-500 focus:outline-none disabled:opacity-60 placeholder-gray-600"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2 rounded-lg border border-gray-800 bg-gray-900 p-3">
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Freigabe</label>
@@ -506,6 +554,48 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
                     </div>
                   )}
                 </div>
+
+                <div className="col-span-2">
+                  <PolicyVerdictPanel contract={delegation.contract} />
+                </div>
+
+                <ContextPackageBuilder
+                  workItemId={delegation.contract.workItemId ?? delegation.id}
+                  title={delegation.title || delegation.contract.goal.slice(0, 80)}
+                  objective={delegation.contract.goal}
+                  privacyMode={
+                    delegation.contract.privacyMode === 'local' ? 'local-only'
+                    : delegation.contract.privacyMode === 'private-cloud' ? 'hybrid'
+                    : 'hybrid'
+                  }
+                />
+
+                <PipelineRunner
+                  workItemId={delegation.contract.workItemId ?? delegation.id}
+                  title={delegation.title || delegation.contract.goal.slice(0, 80)}
+                  goal={delegation.contract.goal}
+                  privacyMode={
+                    delegation.contract.privacyMode === 'local' ? 'local-only'
+                    : delegation.contract.privacyMode === 'private-cloud' ? 'hybrid'
+                    : 'hybrid'
+                  }
+                  riskClass={delegation.contract.riskClass}
+                  maxBudgetUsd={delegation.contract.maxBudgetUsd}
+                  delegationId={delegation.id}
+                />
+
+                {delegation.agentRunId && (
+                  <div className="col-span-2 flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
+                    <p className="text-xs text-slate-500">Agent Run verknüpft</p>
+                    <a
+                      href={`/agent-runs/${delegation.agentRunId}`}
+                      className="text-xs font-medium text-sky-400 hover:underline"
+                    >
+                      Run ansehen →
+                    </a>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status</label>
                   <select
@@ -581,15 +671,43 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
                     <option value="chore">chore/</option>
                   </select>
                 </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Output-Mode</label>
+                  <select
+                    value={outputMode}
+                    onChange={e => setOutputMode(e.target.value as OutputMode)}
+                    disabled={isRunning}
+                    className="w-full bg-gray-900 border border-gray-800 rounded p-2 text-sm text-white focus:border-blue-500 focus:outline-none disabled:opacity-60"
+                  >
+                    <option value="text">text</option>
+                    <option value="json">json</option>
+                    <option value="stream">stream</option>
+                  </select>
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Definition of Done</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                  Definition of Done
+                </label>
+                {delegation.contract.definitionOfDone && delegation.contract.definitionOfDone.filter(Boolean).length > 0 ? (
+                  <ul className="space-y-1 mb-2">
+                    {delegation.contract.definitionOfDone.filter(Boolean).map((item, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
+                        <span className={`mt-0.5 flex-shrink-0 text-xs ${isCompleted ? 'text-green-500' : 'text-gray-600'}`}>
+                          {isCompleted ? '✓' : '◻'}
+                        </span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 <textarea
                   value={definitionOfDone}
                   onChange={e => setDefinitionOfDone(e.target.value)}
-                  placeholder="Eine Zeile pro Kriterium..."
-                  className="w-full bg-gray-900 border border-gray-800 rounded p-3 text-white text-sm resize-none h-24 focus:border-blue-500 focus:outline-none"
+                  disabled={isRunning}
+                  placeholder="Eine Zeile pro Kriterium (editierbar)..."
+                  className="w-full bg-gray-900 border border-gray-800 rounded p-3 text-white text-sm resize-none h-20 focus:border-blue-500 focus:outline-none disabled:opacity-60 placeholder-gray-600"
                 />
               </div>
 

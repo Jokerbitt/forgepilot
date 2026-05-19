@@ -3,6 +3,8 @@ import path from 'path'
 import type { RiskClass } from '@/lib/models/work-item'
 import type { ApprovalMode } from './approval-policy'
 
+export type AIProvider = 'anthropic' | 'ollama'
+
 export interface NBAConfig {
   ignoreStatuses: string[]
   penalizeOldBacklogs: boolean
@@ -17,6 +19,12 @@ export interface NBAConfig {
   approvalMode: ApprovalMode
   autopilotMinScore: number
   autopilotMaxRiskClass: RiskClass
+  aiProvider: AIProvider
+  localCodingModel: string
+  localFastModel: string
+  maxConcurrentAgents: number
+  autoStartApproved: boolean
+  autoPmAgent?: boolean
 }
 
 const CONFIG_PATH = path.join(process.cwd(), 'config', 'nba-settings.json')
@@ -35,6 +43,11 @@ const DEFAULT_CONFIG: NBAConfig = {
   approvalMode: 'balanced',
   autopilotMinScore: 85,
   autopilotMaxRiskClass: 'A',
+  aiProvider: 'anthropic',
+  localCodingModel: 'qwen2.5-coder:14b',
+  localFastModel: 'llama3.2:3b',
+  maxConcurrentAgents: 2,
+  autoStartApproved: false,
 }
 
 export function getNBAConfig(): NBAConfig {
@@ -52,6 +65,11 @@ export function getNBAConfig(): NBAConfig {
       approvalMode: parsed.approvalMode ?? DEFAULT_CONFIG.approvalMode,
       autopilotMinScore: parsed.autopilotMinScore ?? DEFAULT_CONFIG.autopilotMinScore,
       autopilotMaxRiskClass: parsed.autopilotMaxRiskClass ?? DEFAULT_CONFIG.autopilotMaxRiskClass,
+      aiProvider: parsed.aiProvider ?? DEFAULT_CONFIG.aiProvider,
+      localCodingModel: parsed.localCodingModel ?? DEFAULT_CONFIG.localCodingModel,
+      localFastModel: parsed.localFastModel ?? DEFAULT_CONFIG.localFastModel,
+      maxConcurrentAgents: parsed.maxConcurrentAgents ?? DEFAULT_CONFIG.maxConcurrentAgents,
+      autoStartApproved: parsed.autoStartApproved ?? DEFAULT_CONFIG.autoStartApproved,
     }
   } catch (error) {
     return DEFAULT_CONFIG

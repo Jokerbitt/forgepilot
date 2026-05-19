@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
-import { readConnectorConfigsFromEnv } from '@/lib/connectors/config'
+import { readConnectorConfigs } from '@/lib/connectors/config'
 import { fetchLinearWorkItems } from '@/lib/connectors/linear-items'
 import { fetchGitHubWorkItems } from '@/lib/connectors/github-items'
 import { prioritizeItems } from '@/lib/nba-engine/prioritizer'
@@ -24,7 +24,7 @@ function readLocalWorkItems(): WorkItem[] {
 }
 
 export async function GET(request: NextRequest) {
-  const configs = readConnectorConfigsFromEnv(process.env)
+  const configs = readConnectorConfigs()
 
   try {
     const fetchers: Promise<WorkItem[]>[] = [

@@ -31,11 +31,13 @@ interface DelegationModalProps {
   onClose: () => void
 }
 
+const LINEAR_ID_RE = /^[A-Z]+-\d+$/i
+
 export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) {
   const router = useRouter()
   const [isExpertMode, setIsExpertMode] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  
+
   // Expert mode states
   const [maxBudgetUsd, setMaxBudgetUsd] = useState(1.0)
   const [branchStrategy, setBranchStrategy] = useState<BranchStrategy>('feature')
@@ -47,7 +49,13 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
   const [autopilotMinScore, setAutopilotMinScore] = useState(85)
   const [autopilotMaxRiskClass, setAutopilotMaxRiskClass] = useState<NBAConfig['autopilotMaxRiskClass']>('A')
   const [customContext, setCustomContext] = useState<string>('')
-  
+
+  // Linear auto-fill state (M17)
+  const [workItemId, setWorkItemId] = useState<string>('')
+  const [autofillGoal, setAutofillGoal] = useState<string>('')
+  const [autofillDoD, setAutofillDoD] = useState<string[]>([])
+  const [isFetchingDetails, setIsFetchingDetails] = useState(false)
+
   // Fetch custom models
   useEffect(() => {
     fetch('/api/settings').then(res => res.json()).then(data => {
@@ -61,6 +69,38 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
       }
     }).catch(console.error)
   }, [])
+
+  // Seed workItemId from the recommendation when opening the modal so a user
+  // can blur to auto-fill, or edit before triggering a fetch.
+  useEffect(() => {
+    if (rec) {
+      setWorkItemId(rec.workItem.id)
+      setAutofillGoal('')
+      setAutofillDoD([])
+    }
+  }, [rec])
+
+  async function handleWorkItemIdBlur() {
+    const id = workItemId.trim()
+    if (!id || !LINEAR_ID_RE.test(id)) return
+    setIsFetchingDetails(true)
+    try {
+      const res = await fetch(`/api/work-items/${encodeURIComponent(id)}/details`)
+      if (!res.ok) return
+      const data = (await res.json()) as { title?: string; description?: string }
+      if (data.title) {
+        setAutofillGoal(data.title)
+        setAutofillDoD([`Implement: ${data.title}`])
+        if (data.description) {
+          setCustomContext((data.description ?? '').slice(0, 500))
+        }
+      }
+    } catch {
+      // Silent: per spec, fetch failures must not surface UI errors.
+    } finally {
+      setIsFetchingDetails(false)
+    }
+  }
 
   if (!isOpen || !rec) return null
 
@@ -76,14 +116,23 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
       autopilotMinScore,
       autopilotMaxRiskClass,
     })
+    const effectiveWorkItemId = workItemId.trim() || rec.workItem.id
+    const goal = autofillGoal
+      ? autofillGoal
+      : `Erledige Aufgabe: ${rec.workItem.title}`
+    const definitionOfDone = autofillDoD.length > 0
+      ? autofillDoD
+      : ['Code kompiliert', 'Tests grün', 'Keine Linter-Fehler']
+
     const delegation: Delegation = {
       id: delegationId,
+      title: rec.workItem.title.slice(0, 80),
       contract: {
         id: `tc-${Date.now()}`,
-        workItemId: rec.workItem.id,
-        goal: `Erledige Aufgabe: ${rec.workItem.title}`,
+        workItemId: effectiveWorkItemId,
+        goal,
         context: customContext,
-        definitionOfDone: ['Code kompiliert', 'Tests grün', 'Keine Linter-Fehler'],
+        definitionOfDone,
         riskClass: rec.riskClass,
         maxBudgetUsd: isExpertMode ? maxBudgetUsd : 1.0,
         allowedTools: ['all'],
@@ -138,6 +187,37 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
             <div className="text-xs text-gray-500 font-mono mb-1">{rec.workItem.id}</div>
             <h3 className="text-lg font-medium text-white">{rec.workItem.title}</h3>
             <p className="text-sm text-gray-400 mt-2">Risiko-Klasse: <span className="text-white">{rec.riskClass}</span></p>
+          </div>
+
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-400 mb-1">
+              Work-Item-ID (Linear: z.B. ENG-42)
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={workItemId}
+                onChange={e => setWorkItemId(e.target.value)}
+                onBlur={handleWorkItemIdBlur}
+                placeholder="z.B. ENG-42"
+                aria-label="Work Item ID"
+                data-testid="delegation-work-item-id"
+                className="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2 pr-10 text-white"
+              />
+              {isFetchingDetails && (
+                <span
+                  role="status"
+                  aria-label="Lade Linear-Details"
+                  data-testid="delegation-autofill-spinner"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 inline-block h-4 w-4 rounded-full border-2 border-gray-600 border-t-blue-400 animate-spin"
+                />
+              )}
+            </div>
+            {autofillGoal && (
+              <p className="text-xs text-blue-300 mt-2" data-testid="delegation-autofill-preview">
+                ✓ Aus Linear vorausgefüllt: <span className="text-white">{autofillGoal}</span>
+              </p>
+            )}
           </div>
 
           <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-800">

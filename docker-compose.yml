@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  forgepilot:
+    image: ghcr.io/jokerbitt/forgepilot:latest
+    container_name: forgepilot
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - LINEAR_API_KEY=${LINEAR_API_KEY:-}
+      - LINEAR_TEAM_ID=${LINEAR_TEAM_ID:-}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - GITHUB_OWNER=${GITHUB_OWNER:-Jokerbitt}
+      - GITHUB_REPOSITORIES=${GITHUB_REPOSITORIES:-forgepilot}
+      - NODE_ENV=production
+    volumes:
+      - forgepilot-config:/app/config
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: forgepilot-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - LINEAR_API_KEY=${LINEAR_API_KEY:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://192.168.0.136:5678
+      - N8N_EDITOR_BASE_URL=http://192.168.0.136:5678
+      # Cookie auf unsecure setzen damit Login über HTTP funktioniert (kein HTTPS im LAN)
+      - N8N_SECURE_COOKIE=false
+      # Interne URL damit n8n ForgePilot erreicht (Docker-Netzwerk)
+      - FORGEPILOT_INTERNAL_URL=http://forgepilot:3000
+      # Telemetrie deaktivieren
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_VERSION_NOTIFICATIONS_ENABLED=false
+    volumes:
+      - n8n-data:/home/node/.n8n
+    depends_on:
+      - forgepilot
+
+volumes:
+  forgepilot-config:
+    driver: local
+  n8n-data:
+    driver: local
