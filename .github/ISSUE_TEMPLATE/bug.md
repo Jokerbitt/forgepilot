@@ -1,20 +1,39 @@
 ---
 name: Bug Report
-about: Fehler melden
+about: Something is broken — help us fix it
 labels: bug
 ---
 
-## Beschreibung
-<!-- Was passiert? Was sollte passieren? -->
+## What happened?
 
-## Schritte zum Reproduzieren
+<!-- Clear description of the bug. -->
+
+## Steps to Reproduce
+
 1. 
 2. 
+3. 
 
-## Erwartetes Verhalten
+## Expected Behavior
 
-## TatsÃ¤chliches Verhalten
+<!-- What should happen? -->
 
-## Umgebung
-- OS: 
-- Browser/Node: 
+## Actual Behavior
+
+<!-- What actually happens? Include error messages, screenshots if helpful. -->
+
+## Environment
+
+- OS: <!-- e.g. macOS 14, Ubuntu 22.04, Windows 11 -->
+- Node.js version: <!-- e.g. 20.11.0 -->
+- ForgePilot version / commit: <!-- e.g. main@abc1234 -->
+- AI Provider: <!-- e.g. Anthropic, Ollama -->
+- Deployment: <!-- local dev / Docker / Vercel -->
+
+## Logs
+
+<!-- Paste relevant log output from the terminal or Sentry. Remove any API keys. -->
+
+```
+paste logs here
+```
