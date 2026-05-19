@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { cx } from '@/components/ui/primitives'
 import type { ProjectSummary } from '@/app/api/projects/route'
 
@@ -83,7 +83,12 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
 
           <div className="flex items-center justify-between mt-2">
             <div className="flex items-center gap-4 text-xs text-slate-500">
-              <span>{p.workItemCount} Work Items</span>
+              <a
+                href={`/work-items?projectId=${project.id}`}
+                className="hover:text-violet-400 transition-colors"
+              >
+                {p.workItemCount} Work Items
+              </a>
               <span>{p.doneTasks}/{p.taskCount} Tasks</span>
             </div>
             <a
@@ -116,22 +121,31 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [loading, setLoading] = useState(true)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  useEffect(() => {
-    const load = () => {
-      fetch('/api/projects')
-        .then(r => r.json())
-        .then((data: unknown) => {
-          if (Array.isArray(data)) setProjects(data as ProjectSummary[])
-          setLoading(false)
-        })
-        .catch(() => setLoading(false))
-    }
-
-    load()
-    const iv = setInterval(load, 10_000)
-    return () => clearInterval(iv)
+  const loadProjects = useCallback(() => {
+    fetch('/api/projects')
+      .then(r => r.json())
+      .then((data: unknown) => {
+        if (Array.isArray(data)) setProjects(data as ProjectSummary[])
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
   }, [])
+
+  // Initial load
+  useEffect(() => { loadProjects() }, [loadProjects])
+
+  // Adaptive polling: fast (3s) when runs are active, slow (15s) otherwise
+  useEffect(() => {
+    if (pollRef.current) clearInterval(pollRef.current)
+    const hasActive = projects.some(
+      p => p.pipeline?.runStatus === 'running' || p.pipeline?.runStatus === 'building'
+    )
+    const interval = hasActive ? 3_000 : 15_000
+    pollRef.current = setInterval(loadProjects, interval)
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  }, [projects, loadProjects])
 
   const pipelineProjects = projects.filter(p => p.pipeline)
   const manualProjects = projects.filter(p => !p.pipeline)
