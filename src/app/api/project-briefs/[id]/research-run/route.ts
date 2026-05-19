@@ -136,8 +136,8 @@ ${researchQuestionsText}`
 
   try {
     const generated = await generateText({
-      anthropicModel: model,
-      maxTokens: brief.researchMode === 'deep' ? 2048 : 1024,
+      // maxTokens: generous limit so JSON is never truncated by smaller models (Ollama etc.)
+      maxTokens: brief.researchMode === 'deep' ? 4096 : 2048,
       system: systemPrompt,
       prompt: userPrompt,
       purpose: brief.researchMode === 'quick' ? 'fast' : 'coding',
@@ -147,13 +147,27 @@ ${researchQuestionsText}`
 
     let result: ClaudeResearchResult
     try {
+      // stripJsonCodeFence handles ```json ... ``` wrappers from Ollama/Groq
       const cleaned = stripJsonCodeFence(rawText)
       result = JSON.parse(cleaned) as ClaudeResearchResult
     } catch {
-      return NextResponse.json(
-        { error: 'KI-Antwort konnte nicht verarbeitet werden', rawText },
-        { status: 502 },
-      )
+      // Robust fallback: extract first {...} block even if text is partially truncated
+      const match = rawText.match(/\{[\s\S]*\}/)
+      if (match) {
+        try {
+          result = JSON.parse(match[0]) as ClaudeResearchResult
+        } catch {
+          return NextResponse.json(
+            { error: 'KI-Antwort konnte nicht verarbeitet werden', rawText },
+            { status: 502 },
+          )
+        }
+      } else {
+        return NextResponse.json(
+          { error: 'KI-Antwort konnte nicht verarbeitet werden', rawText },
+          { status: 502 },
+        )
+      }
     }
 
     // ── Build ResearchRun from Claude's result ─────────────────────────────
