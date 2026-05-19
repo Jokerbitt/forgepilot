@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import type { WorkItem, WorkItemSource } from '@/lib/models/work-item'
 import { Badge, StatusDot, cx } from '@/components/ui/primitives'
 import { BlockedByBadge } from '@/components/work-items/BlockedByBadge'
+import { CSVImport } from '@/components/work-items/CSVImport'
 
 // ─── helpers ─────────────────────────────────────────────────────
 
@@ -192,6 +193,12 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
 
   return (
     <div>
+      {csvImportOpen && (
+        <CSVImport
+          onClose={() => setCsvImportOpen(false)}
+          onImported={(newItems) => { setItems(prev => [...prev, ...newItems]) }}
+        />
+      )}
       <div className="mb-5 flex flex-wrap gap-3">
         <input
           type="text"
@@ -223,6 +230,12 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
               Sync {lastSync.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
             </p>
           )}
+          <button
+            onClick={() => setCsvImportOpen(true)}
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+          >
+            ↑ CSV Import
+          </button>
           <button
             onClick={() => load(true)}
             disabled={syncing}
