@@ -32,10 +32,11 @@ function mapPrivacyMode(mode: ResearchPrivacyMode): PrivacyMode {
   return 'local'
 }
 
-type RouteParams = { params: { id: string } }
+type RouteParams = { params: Promise<{ id: string }> }
 
 export async function POST(_request: Request, { params }: RouteParams) {
-  const brief = findProjectBriefById(params.id)
+  const { id } = await params
+  const brief = findProjectBriefById(id)
   if (!brief) {
     return NextResponse.json({ error: 'Brief nicht gefunden' }, { status: 404 })
   }

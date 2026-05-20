@@ -34,7 +34,7 @@ vi.mock('@/lib/connectors/linear', () => ({
 }))
 
 function makeParams(id: string) {
-  return { params: { id } }
+  return { params: Promise.resolve({ id }) }
 }
 
 describe('POST /api/project-briefs/[id]/create-linear-ticket', () => {

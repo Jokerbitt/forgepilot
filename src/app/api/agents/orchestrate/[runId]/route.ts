@@ -4,13 +4,15 @@ import { getRun, updateTaskStatus, updateRunStatus } from '@/lib/agents/orchestr
 import type { TaskResult, RunStatus } from '@/lib/agents/orchestrated-run'
 import type { AtomicTaskStatus } from '@/lib/agents/atomic-task'
 
-export async function GET(_req: Request, { params }: { params: { runId: string } }) {
-  const run = getRun(params.runId)
+export async function GET(_req: Request, { params }: { params: Promise<{ runId: string }> }) {
+  const { runId } = await params
+  const run = getRun(runId)
   if (!run) return NextResponse.json({ error: 'Run not found' }, { status: 404 })
   return NextResponse.json(run)
 }
 
-export async function PATCH(req: Request, { params }: { params: { runId: string } }) {
+export async function PATCH(req: Request, { params }: { params: Promise<{ runId: string }> }) {
+  const { runId } = await params
   const body = await req.json() as {
     taskId?: string
     status?: AtomicTaskStatus
@@ -19,7 +21,7 @@ export async function PATCH(req: Request, { params }: { params: { runId: string 
   }
 
   if (body.runStatus) {
-    updateRunStatus(params.runId, body.runStatus as RunStatus)
+    updateRunStatus(runId, body.runStatus as RunStatus)
     return NextResponse.json({ ok: true })
   }
 
@@ -27,7 +29,7 @@ export async function PATCH(req: Request, { params }: { params: { runId: string 
     return NextResponse.json({ error: 'taskId and status required' }, { status: 400 })
   }
 
-  const updated = updateTaskStatus(params.runId, body.taskId, body.status, body.result)
+  const updated = updateTaskStatus(runId, body.taskId, body.status, body.result)
   if (!updated) return NextResponse.json({ error: 'Run or task not found' }, { status: 404 })
   return NextResponse.json(updated)
 }

@@ -5,9 +5,10 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const details = await fetchLinearIssueDetails(params.id)
+  const { id } = await params
+  const details = await fetchLinearIssueDetails(id)
   if (!details) {
     return NextResponse.json({ error: 'Issue not available' }, { status: 404 })
   }

@@ -38,7 +38,7 @@ vi.mock('fs', async () => {
   }
 })
 
-const makeParams = (id: string) => ({ params: { id } })
+const makeParams = (id: string) => ({ params: Promise.resolve({ id }) })
 
 describe('POST /api/work-packages/[id]/create-delegation', () => {
   it('creates a delegation from a valid work package', async () => {

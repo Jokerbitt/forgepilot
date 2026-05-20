@@ -60,7 +60,7 @@ describe('PDF Export Route', () => {
       vi.mocked(briefPdfFilename).mockReturnValue('brief-test-brief.pdf')
 
       const request = new Request('http://localhost:3000/api/project-briefs/brief-123/export/pdf')
-      const response = await GET(request, { params: { id: 'brief-123' } })
+      const response = await GET(request, { params: Promise.resolve({ id: 'brief-123' }) })
 
       expect(response.status).toBe(200)
       expect(response.headers.get('Content-Type')).toBe('application/pdf')
@@ -73,7 +73,7 @@ describe('PDF Export Route', () => {
       vi.mocked(findProjectBriefById).mockReturnValue(undefined)
 
       const request = new Request('http://localhost:3000/api/project-briefs/nonexistent/export/pdf')
-      const response = await GET(request, { params: { id: 'nonexistent' } })
+      const response = await GET(request, { params: Promise.resolve({ id: 'nonexistent' }) })
 
       expect(response.status).toBe(404)
       const data = await response.json() as { error: string }
@@ -87,7 +87,7 @@ describe('PDF Export Route', () => {
       vi.mocked(briefPdfFilename).mockReturnValue('test.pdf')
 
       const request = new Request('http://localhost:3000/api/project-briefs/brief-123/export/pdf')
-      await GET(request, { params: { id: 'brief-123' } })
+      await GET(request, { params: Promise.resolve({ id: 'brief-123' }) })
 
       expect(generateBriefPdf).toHaveBeenCalledWith(mockBrief)
     })
@@ -100,7 +100,7 @@ describe('PDF Export Route', () => {
       vi.mocked(briefPdfFilename).mockReturnValue('test.pdf')
 
       const request = new Request('http://localhost:3000/api/project-briefs/brief-123/export/pdf')
-      const response = await GET(request, { params: { id: 'brief-123' } })
+      const response = await GET(request, { params: Promise.resolve({ id: 'brief-123' }) })
 
       const buffer = await response.arrayBuffer()
       expect(Buffer.from(buffer).toString()).toBe(testContent)

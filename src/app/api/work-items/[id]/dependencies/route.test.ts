@@ -73,7 +73,7 @@ describe('/api/work-items/[id]/dependencies', () => {
       vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(items))
 
       const req = new Request('http://localhost/api/work-items/item-2/dependencies')
-      const response = await GET(req as any, { params: { id: 'item-2' } })
+      const response = await GET(req as any, { params: Promise.resolve({ id: 'item-2' }) })
       const data = await response.json() as { id: string; blockedBy: string[]; blocks: string[] }
 
       expect(response.status).toBe(200)
@@ -87,7 +87,7 @@ describe('/api/work-items/[id]/dependencies', () => {
       vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(mockWorkItems))
 
       const req = new Request('http://localhost/api/work-items/nonexistent/dependencies')
-      const response = await GET(req as any, { params: { id: 'nonexistent' } })
+      const response = await GET(req as any, { params: Promise.resolve({ id: 'nonexistent' }) })
 
       expect(response.status).toBe(404)
     })
@@ -103,7 +103,7 @@ describe('/api/work-items/[id]/dependencies', () => {
       vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(items))
 
       const req = new Request('http://localhost/api/work-items/item-1/dependencies')
-      const response = await GET(req as any, { params: { id: 'item-1' } })
+      const response = await GET(req as any, { params: Promise.resolve({ id: 'item-1' }) })
       const data = await response.json() as { id: string; blockedBy: string[]; blocks: string[] }
 
       expect(response.status).toBe(200)
@@ -126,7 +126,7 @@ describe('/api/work-items/[id]/dependencies', () => {
         body,
       })
 
-      const response = await POST(req as any, { params: { id: 'item-2' } })
+      const response = await POST(req as any, { params: Promise.resolve({ id: 'item-2' }) })
       const data = await response.json() as { id: string; blockedBy: string[] }
 
       expect(response.status).toBe(200)
@@ -148,7 +148,7 @@ describe('/api/work-items/[id]/dependencies', () => {
         body,
       })
 
-      const response = await POST(req as any, { params: { id: 'item-2' } })
+      const response = await POST(req as any, { params: Promise.resolve({ id: 'item-2' }) })
 
       expect(response.status).toBe(400)
       const data = await response.json() as { error: string }
@@ -165,7 +165,7 @@ describe('/api/work-items/[id]/dependencies', () => {
         body,
       })
 
-      const response = await POST(req as any, { params: { id: 'item-1' } })
+      const response = await POST(req as any, { params: Promise.resolve({ id: 'item-1' }) })
 
       expect(response.status).toBe(400)
       const data = await response.json() as { error: string }
@@ -189,7 +189,7 @@ describe('/api/work-items/[id]/dependencies', () => {
         body,
       })
 
-      const response = await DELETE(req as any, { params: { id: 'item-2' } })
+      const response = await DELETE(req as any, { params: Promise.resolve({ id: 'item-2' }) })
       const data = await response.json() as { id: string; blockedBy: string[] }
 
       expect(response.status).toBe(200)
@@ -208,7 +208,7 @@ describe('/api/work-items/[id]/dependencies', () => {
         body,
       })
 
-      const response = await DELETE(req as any, { params: { id: 'item-2' } })
+      const response = await DELETE(req as any, { params: Promise.resolve({ id: 'item-2' }) })
 
       expect(response.status).toBe(404)
     })

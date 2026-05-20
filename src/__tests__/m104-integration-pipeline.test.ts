@@ -71,7 +71,7 @@ describe('M104 — Project Brief Pipeline', () => {
 
     // Now retrieve by ID
     const { GET } = await import('@/app/api/project-briefs/[id]/route')
-    const getRes = await GET(new Request('http://localhost'), { params: { id: brief.id } })
+    const getRes = await GET(new Request('http://localhost'), { params: Promise.resolve({ id: brief.id }) })
     expect(getRes.status).toBe(200)
     const fetched = await jsonBody<{ id: string; title: string }>(getRes)
     expect(fetched.id).toBe(brief.id)
@@ -81,7 +81,7 @@ describe('M104 — Project Brief Pipeline', () => {
   it('returns 404 for unknown project brief id', async () => {
     vi.resetModules()
     const { GET } = await import('@/app/api/project-briefs/[id]/route')
-    const res = await GET(new Request('http://localhost'), { params: { id: 'non-existent-id' } })
+    const res = await GET(new Request('http://localhost'), { params: Promise.resolve({ id: 'non-existent-id' }) })
     expect(res.status).toBe(404)
   })
 
@@ -126,7 +126,7 @@ describe('M104 — Delegation Pipeline', () => {
 
     // Retrieve by ID
     const { GET } = await import('@/app/api/delegations/[id]/route')
-    const getRes = await GET(new Request('http://localhost'), { params: { id: 'del-integration-test-1' } })
+    const getRes = await GET(new Request('http://localhost'), { params: Promise.resolve({ id: 'del-integration-test-1' }) })
     expect(getRes.status).toBe(200)
     const fetched = await jsonBody<{ id: string; status: string }>(getRes)
     expect(fetched.id).toBe('del-integration-test-1')
@@ -178,7 +178,7 @@ describe('M104 — Delegation Pipeline', () => {
   it('returns 404 for unknown delegation id', async () => {
     vi.resetModules()
     const { GET } = await import('@/app/api/delegations/[id]/route')
-    const res = await GET(new Request('http://localhost'), { params: { id: 'does-not-exist' } })
+    const res = await GET(new Request('http://localhost'), { params: Promise.resolve({ id: 'does-not-exist' }) })
     expect(res.status).toBe(404)
   })
 
@@ -254,12 +254,12 @@ describe('M104 — End-to-End Brief → Delegation Flow', () => {
     // Step 3: Verify both are retrievable
     vi.resetModules()
     const { GET: getBrief } = await import('@/app/api/project-briefs/[id]/route')
-    const briefCheck = await getBrief(new Request('http://localhost'), { params: { id: briefId } })
+    const briefCheck = await getBrief(new Request('http://localhost'), { params: Promise.resolve({ id: briefId }) })
     expect(briefCheck.status).toBe(200)
 
     vi.resetModules()
     const { GET: getDelegation } = await import('@/app/api/delegations/[id]/route')
-    const delCheck = await getDelegation(new Request('http://localhost'), { params: { id: delegation.id } })
+    const delCheck = await getDelegation(new Request('http://localhost'), { params: Promise.resolve({ id: delegation.id }) })
     expect(delCheck.status).toBe(200)
   })
 })

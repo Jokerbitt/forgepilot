@@ -50,28 +50,28 @@ describe('POST /api/knowledge/research/[id]/rerun', () => {
 
   it('returns 404 for unknown id', async () => {
     mockGet.mockReturnValue(undefined)
-    const res = await POST(makeReq(), { params: { id: 'unknown' } })
+    const res = await POST(makeReq(), { params: Promise.resolve({ id: 'unknown' }) })
     expect(res.status).toBe(404)
   })
 
   it('returns 409 if already running', async () => {
     mockGet.mockReturnValue({ ...baseDoc, status: 'running' })
     mockKeys.mockReturnValue({ ANTHROPIC_API_KEY: 'key' })
-    const res = await POST(makeReq(), { params: { id: 'test-id' } })
+    const res = await POST(makeReq(), { params: Promise.resolve({ id: 'test-id' }) })
     expect(res.status).toBe(409)
   })
 
   it('returns 422 if no API key', async () => {
     mockGet.mockReturnValue(baseDoc)
     mockKeys.mockReturnValue({})
-    const res = await POST(makeReq(), { params: { id: 'test-id' } })
+    const res = await POST(makeReq(), { params: Promise.resolve({ id: 'test-id' }) })
     expect(res.status).toBe(422)
   })
 
   it('resets document to running and returns 202', async () => {
     mockGet.mockReturnValue(baseDoc)
     mockKeys.mockReturnValue({ ANTHROPIC_API_KEY: 'key' })
-    const res = await POST(makeReq(), { params: { id: 'test-id' } })
+    const res = await POST(makeReq(), { params: Promise.resolve({ id: 'test-id' }) })
     expect(res.status).toBe(202)
     const body = await res.json() as { id: string; status: string }
     expect(body.status).toBe('running')
@@ -88,7 +88,7 @@ describe('POST /api/knowledge/research/[id]/rerun', () => {
     }
     mockGet.mockReturnValue(docWithData)
     mockKeys.mockReturnValue({ ANTHROPIC_API_KEY: 'key' })
-    await POST(makeReq(), { params: { id: 'test-id' } })
+    await POST(makeReq(), { params: Promise.resolve({ id: 'test-id' }) })
     const upserted = mockUpsert.mock.calls[0][0] as typeof docWithData
     expect(upserted.keyFindings).toHaveLength(0)
     expect(upserted.citations).toHaveLength(0)

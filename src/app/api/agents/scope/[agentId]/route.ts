@@ -4,19 +4,21 @@ import { releaseScope, isScopeLocked } from '@/lib/agents/scope-lock'
 
 export async function DELETE(
   _req: Request,
-  { params }: { params: { agentId: string } },
+  { params }: { params: Promise<{ agentId: string }> },
 ) {
-  const released = releaseScope(params.agentId)
+  const { agentId } = await params
+  const released = releaseScope(agentId)
   if (!released) {
     return NextResponse.json({ error: 'No active scope for this agent' }, { status: 404 })
   }
-  return NextResponse.json({ released: true, agentId: params.agentId })
+  return NextResponse.json({ released: true, agentId: agentId })
 }
 
 export async function GET(
   _req: Request,
-  { params }: { params: { agentId: string } },
+  { params }: { params: Promise<{ agentId: string }> },
 ) {
-  const lock = isScopeLocked(params.agentId)
+  const { agentId } = await params
+  const lock = isScopeLocked(agentId)
   return NextResponse.json({ locked: Boolean(lock), claim: lock })
 }

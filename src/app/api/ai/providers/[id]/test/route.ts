@@ -11,13 +11,14 @@ import { readStoredApiKeys } from '@/lib/connectors/config'
 
 export async function POST(
   _req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params
   const configs  = getAllProviderConfigs()
-  const config   = configs.find(c => c.id === params.id)
+  const config   = configs.find(c => c.id === id)
   if (!config)   return NextResponse.json({ error: 'Provider not found' }, { status: 404 })
 
-  const provider = getProviderInstance(params.id)
+  const provider = getProviderInstance(id)
   if (!provider) return NextResponse.json({ error: 'Provider not registered' }, { status: 404 })
 
   const stored  = readStoredApiKeys() as Record<string, string | undefined>
@@ -32,7 +33,7 @@ export async function POST(
   return NextResponse.json({
     ok,
     latencyMs: latency,
-    providerId: params.id,
+    providerId: id,
     providerName: config.name,
   })
 }

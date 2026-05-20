@@ -39,7 +39,7 @@ vi.mock('@/lib/project-briefs', () => ({
   ),
 }))
 
-const makeParams = (id: string) => ({ params: { id } })
+const makeParams = (id: string) => ({ params: Promise.resolve({ id }) })
 
 describe('GET /api/project-briefs/[id]', () => {
   it('returns brief when found', async () => {

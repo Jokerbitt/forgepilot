@@ -4,7 +4,7 @@ import { findProjectBriefById } from '@/lib/project-briefs'
 import { createLinearIssue } from '@/lib/connectors/linear'
 import { readConnectorConfigs } from '@/lib/connectors/config'
 
-type RouteParams = { params: { id: string } }
+type RouteParams = { params: Promise<{ id: string }> }
 
 function buildLinearDescription(brief: {
   rawIdea: string
@@ -40,7 +40,8 @@ function buildLinearDescription(brief: {
 }
 
 export async function POST(_req: Request, { params }: RouteParams) {
-  const brief = findProjectBriefById(params.id)
+  const { id } = await params
+  const brief = findProjectBriefById(id)
   if (!brief) {
     return NextResponse.json({ error: 'Brief not found' }, { status: 404 })
   }

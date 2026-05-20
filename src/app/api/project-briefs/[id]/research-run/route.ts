@@ -8,7 +8,7 @@ import {
 import type { Requirement, Risk, ResearchRun, SourceRecord, Finding, BlueprintOutput } from '@/lib/models/project-brief'
 import { AIProviderConfigurationError, generateText, stripJsonCodeFence } from '@/lib/ai/text-generation'
 
-type RouteParams = { params: { id: string } }
+type RouteParams = { params: Promise<{ id: string }> }
 
 // ── Types for Claude's JSON response ─────────────────────────────────────────
 
@@ -42,7 +42,8 @@ interface ClaudeResearchResult {
 // ── GET — POC preview (no AI, instant) ───────────────────────────────────────
 
 export async function GET(_request: Request, { params }: RouteParams) {
-  const brief = findProjectBriefById(params.id)
+  const { id } = await params
+  const brief = findProjectBriefById(id)
   if (!brief) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   // Return lightweight preview: just the ResearchBrief draft
@@ -61,7 +62,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
 // ── POST — real AI research run ───────────────────────────────────────────────
 
 export async function POST(_request: Request, { params }: RouteParams) {
-  const brief = findProjectBriefById(params.id)
+  const { id } = await params
+  const brief = findProjectBriefById(id)
   if (!brief) return NextResponse.json({ error: 'Brief nicht gefunden' }, { status: 404 })
 
   const runId = randomUUID()

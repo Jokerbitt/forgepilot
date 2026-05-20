@@ -20,9 +20,10 @@ function writeDelegations(delegations: Delegation[]): void {
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const delegation = readDelegations().find(d => d.id === params.id)
+  const { id } = await params
+  const delegation = readDelegations().find(d => d.id === id)
   if (!delegation) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
@@ -31,10 +32,11 @@ export async function GET(
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params
   const delegations = readDelegations()
-  const idx = delegations.findIndex(d => d.id === params.id)
+  const idx = delegations.findIndex(d => d.id === id)
   if (idx === -1) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
