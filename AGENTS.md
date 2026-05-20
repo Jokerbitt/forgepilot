@@ -88,6 +88,31 @@ POST   /api/agents/scope/heartbeat      — renew lease
 POST   /api/agents/scope/preflight      — read-only conflict check
 ```
 
+### Pre-commit Hard Gate (recommended for autonomous agents)
+
+To stop an agent from accidentally committing files outside its claim, wire
+the scope check into git's `pre-commit` hook. It is opt-in — only enforced
+when the `AGENT_ID` env var is set, so Sven's interactive commits are never
+blocked:
+
+```bash
+# one-time wire-up in this checkout
+ln -sf ../../scripts/pre-commit-scope-check.sh .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+
+# from then on, agents export AGENT_ID before they start work:
+export AGENT_ID=claude-code-$(date +%s)
+npm run agent -- claim --agent "$AGENT_ID" --type claude-code \
+                       --milestone M130 --files "src/lib/agents/**"
+# … any commit now runs `npm run agent:check -- --agent "$AGENT_ID"` first
+```
+
+Manual run (e.g. from CI):
+
+```bash
+AGENT_ID=my-agent bash scripts/pre-commit-scope-check.sh
+```
+
 ## Engineering Rules
 
 - TypeScript strict, no `any`.

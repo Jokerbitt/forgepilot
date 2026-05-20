@@ -349,6 +349,85 @@ function cmdRelease(args) {
   return 0
 }
 
+function fileMatchesAnyPattern(file, patterns) {
+  for (const pattern of patterns) {
+    if (file === pattern) return true
+    if (!pattern.includes('*')) continue
+    const base = globBase(pattern)
+    if (!base) continue
+    const baseSegs = base.split('/')
+    const fileSegs = file.split('/')
+    if (fileSegs.length >= baseSegs.length && baseSegs.every((s, i) => s === fileSegs[i])) {
+      return true
+    }
+  }
+  return false
+}
+
+function cmdCheckStaged(args) {
+  const agentId = args.agent
+  if (!agentId) {
+    console.error(`${C.red}error:${C.reset} --agent required`)
+    return 2
+  }
+
+  let stagedRaw = ''
+  try {
+    stagedRaw = execSync('git diff --cached --name-only --diff-filter=ACMRTUX', {
+      cwd: ROOT,
+      encoding: 'utf-8',
+    })
+  } catch (err) {
+    console.error(`${C.red}error:${C.reset} git diff failed: ${err.message}`)
+    return 2
+  }
+
+  const staged = stagedRaw.split('\n').map(s => s.trim()).filter(Boolean)
+  if (staged.length === 0) {
+    console.log(`${C.dim}no staged files to check${C.reset}`)
+    return 0
+  }
+
+  const registry = reapStale(readRegistry())
+  const claim = registry.claims.find(c => c.agentId === agentId)
+
+  if (!claim) {
+    console.error(`${C.red}✗ No active claim for ${agentId}${C.reset}`)
+    console.error(`${C.yellow}   Run: npm run agent -- claim --agent ${agentId} --files "<patterns>"${C.reset}`)
+    return 1
+  }
+
+  const branch = currentBranch()
+  if (claim.branch !== branch) {
+    console.error(`${C.red}✗ Branch mismatch${C.reset}: claim is on '${claim.branch}', you are on '${branch}'`)
+    return 1
+  }
+
+  const outOfScope = staged.filter(f => !fileMatchesAnyPattern(f, claim.filePatterns))
+  if (outOfScope.length > 0) {
+    console.error(`${C.red}✗ ${outOfScope.length} staged file(s) outside your claimed scope${C.reset}:`)
+    for (const f of outOfScope) console.error(`    ${f}`)
+    console.error('')
+    console.error(`${C.yellow}Your claim covers: ${claim.filePatterns.join(', ')}${C.reset}`)
+    console.error(`${C.yellow}Either widen your claim or unstage these files (git restore --staged <file>).${C.reset}`)
+    return 1
+  }
+
+  const others = registry.claims.filter(c => c.agentId !== agentId)
+  const collides = others.filter(c => staged.some(f => fileMatchesAnyPattern(f, c.filePatterns)))
+  if (collides.length > 0) {
+    console.error(`${C.red}✗ Staged files overlap with another agent's claim${C.reset}:`)
+    for (const c of collides) {
+      const colliding = staged.filter(f => fileMatchesAnyPattern(f, c.filePatterns))
+      console.error(`  ${C.bold}${c.agentId}${C.reset} (${c.milestone}) holds: ${colliding.join(', ')}`)
+    }
+    return 1
+  }
+
+  console.log(`${C.green}✓ All ${staged.length} staged file(s) inside your claim${C.reset}`)
+  return 0
+}
+
 function help() {
   console.log(`Agent coordination CLI
 
@@ -356,8 +435,9 @@ function help() {
   preflight  --files PAT[,PAT]          Check current branch + file scope
   claim      --agent ID --files PAT[,PAT] [--milestone M] [--type TYPE]
              [--branch B] [--ttl 60] [--share-branch]
-  heartbeat  --agent ID [--ttl 30]      Renew lease
-  release    --agent ID                 Drop the lock
+  heartbeat     --agent ID [--ttl 30]      Renew lease
+  check-staged  --agent ID                 Verify all staged files are inside the claim
+  release       --agent ID                 Drop the lock
 
 Common options:
   --branch B      override current git branch
@@ -374,11 +454,12 @@ const args = parseArgs(rest)
 
 let code = 0
 switch (sub) {
-  case 'status':    code = cmdStatus(); break
-  case 'preflight': code = cmdPreflight(args); break
-  case 'claim':     code = cmdClaim(args); break
-  case 'heartbeat': code = cmdHeartbeat(args); break
-  case 'release':   code = cmdRelease(args); break
+  case 'status':       code = cmdStatus(); break
+  case 'preflight':    code = cmdPreflight(args); break
+  case 'claim':        code = cmdClaim(args); break
+  case 'heartbeat':    code = cmdHeartbeat(args); break
+  case 'check-staged': code = cmdCheckStaged(args); break
+  case 'release':      code = cmdRelease(args); break
   case 'help':
   case '--help':
   case '-h':

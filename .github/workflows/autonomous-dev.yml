@@ -48,6 +48,32 @@ jobs:
         env:
           CI: true
 
+      # ── Coordination: preflight + claim ──────────────────────────────────
+      # Stops two GitHub-Action runs (or a local Sven session) from clobbering
+      # each other. The agent works on its own isolated branch and claims a
+      # scope before any edits. Branch sharing requires explicit opt-in.
+      - name: Agent coordination — preflight + claim
+        id: claim
+        run: |
+          AGENT_ID="autonomous-dev-${GITHUB_RUN_ID}"
+          BRANCH="feature/auto-$(date +%Y%m%d-%H%M%S)-${GITHUB_RUN_ID}"
+
+          echo "AGENT_ID=$AGENT_ID"   >> "$GITHUB_ENV"
+          echo "AGENT_BRANCH=$BRANCH" >> "$GITHUB_ENV"
+
+          # Always preflight against the workspace the agent will edit.
+          # Wide pattern is fine — concrete agents narrow it before claiming.
+          node scripts/agent-coord.mjs preflight --files "src/**,scripts/**" \
+            || echo "preflight returned non-zero, continuing — branch is fresh"
+
+          node scripts/agent-coord.mjs claim \
+            --agent "$AGENT_ID" \
+            --type claude-code \
+            --milestone "autonomous-dev-${{ github.run_id }}" \
+            --branch "$BRANCH" \
+            --files "src/**,scripts/**,BACKLOG.md" \
+            --ttl 60
+
       # ── Pick task ─────────────────────────────────────────────────────────
       - name: Pick next task from BACKLOG.md
         id: pick-task
@@ -133,15 +159,16 @@ jobs:
             - Do NOT add unnecessary abstractions or over-engineer
 
             COORDINATION — prevent merge conflicts:
+            A scope claim has already been registered for this run:
+              AGENT_ID  : ${{ env.AGENT_ID }}
+              BRANCH    : ${{ env.AGENT_BRANCH }}
+            Renew the lease while you work:
             ```bash
-            node -e "
-              const fs = require('fs');
-              try {
-                const locks = JSON.parse(fs.readFileSync('config/agent-file-locks.json','utf8'));
-                const active = (locks.locks||[]).filter(l => new Date(l.lockedAt) > new Date(Date.now()-7200000));
-                if(active.length) console.log('LOCKED:\\n' + active.flatMap(l=>l.files).join('\\n'));
-              } catch { console.log('No locks'); }
-            "
+            npm run agent -- heartbeat --agent "${{ env.AGENT_ID }}"
+            ```
+            See who else is live:
+            ```bash
+            npm run agent:status
             ```
 
             FORBIDDEN — do NOT edit (merge conflict risk):
@@ -151,21 +178,22 @@ jobs:
             - package.json / package-lock.json  ← no npm installs; use existing deps only
             - src/app/settings/providers/page.tsx  (conflict-prone)
 
-            WORKTREE — work in isolation to avoid branch chaos:
+            BRANCH — use the pre-claimed dedicated branch (never touch main):
             ```bash
-            BRANCH="feature/auto-$(date +%Y%m%d)-${{ steps.pick-task.outputs.slug }}"
-            git worktree add /tmp/agent-work origin/main -b "$BRANCH" || \
-              git checkout -b "$BRANCH"  # fallback if worktree fails
-            cd /tmp/agent-work 2>/dev/null || true  # use worktree if available
+            git checkout -b "${{ env.AGENT_BRANCH }}" origin/main
             ```
 
             Steps:
-            1. Create worktree (as above)
+            1. Create the branch (as above)
             2. Implement feature — use ONLY existing npm packages (no npm install)
             3. `npm run type-check` — fix ALL errors
             4. `npm run test:run` — ALL tests pass + add ≥3 new tests
             5. Do NOT touch BACKLOG.md — the pipeline marks it done after merge
-            6. Commit + push + `gh pr create` (ok if gh not authenticated — push is enough)
+            6. Before each `git commit`: validate scope
+               ```bash
+               AGENT_ID="${{ env.AGENT_ID }}" bash scripts/pre-commit-scope-check.sh
+               ```
+            7. Commit + push + `gh pr create` (ok if gh not authenticated — push is enough)
 
             Quality: TypeScript strict, no `any`, dark theme slate colors, no hardcoded secrets.
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -303,6 +331,12 @@ print(f'Marked {changed} item(s) done')
 
           Quality gate failed even after self-healing. Manual fix needed." \
             --label "bug" || true
+
+      # ── Agent coordination cleanup ────────────────────────────────────────
+      - name: Release agent scope claim
+        if: always() && env.AGENT_ID != ''
+        run: |
+          node scripts/agent-coord.mjs release --agent "$AGENT_ID" || true
 
       # ── Cost report ───────────────────────────────────────────────────────
       - name: Cost report
