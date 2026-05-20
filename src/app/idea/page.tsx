@@ -2,8 +2,11 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { cx } from '@/components/ui/primitives'
 import type { IdeaHistoryEntry } from '@/lib/pilot/idea-history-store'
+import { IdeaRefinementWizard } from '@/components/idea/IdeaRefinementWizard'
+import type { RefinedBriefDraft } from '@/app/api/idea/refine/route'
 
 interface PipelineResult {
   briefId: string
@@ -79,6 +82,7 @@ function taskStatusIcon(s: TaskStatus): string {
 }
 
 export default function IdeaPage() {
+  const router = useRouter()
   const [idea, setIdea] = useState('')
   const [stage, setStage] = useState<Stage>('idle')
   const [result, setResult] = useState<PipelineResult | null>(null)
@@ -86,9 +90,35 @@ export default function IdeaPage() {
   const [liveRun, setLiveRun] = useState<LiveRunState | null>(null)
   const [history, setHistory] = useState<IdeaHistoryEntry[]>([])
   const [aborting, setAborting] = useState(false)
+  const [showWizard, setShowWizard] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const historyPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  /** M136: Create project brief from refined wizard output and navigate to it */
+  const handleWizardBriefReady = useCallback(async (rawIdea: string, brief: RefinedBriefDraft) => {
+    setShowWizard(false)
+    try {
+      const res = await fetch('/api/project-briefs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: brief.title,
+          rawIdea,
+          problemStatement: brief.problemStatement,
+          targetAudience: brief.targetAudience,
+          desiredOutcome: brief.desiredOutcome,
+          scope: brief.scope,
+        }),
+      })
+      const created = await res.json() as { id: string }
+      if (created.id) {
+        router.push(`/project-briefs/${created.id}`)
+      }
+    } catch {
+      setError('Fehler beim Erstellen des Project Briefs.')
+    }
+  }, [router])
 
   const refreshHistory = useCallback(() => {
     fetch('/api/pilot/idea-history?limit=5')
@@ -257,6 +287,7 @@ export default function IdeaPage() {
   const runIsFailed = liveRun?.status === 'failed' || liveRun?.status === 'aborted'
 
   return (
+    <>
     <main className="min-h-screen bg-[#08080d] flex flex-col">
       {/* Header */}
       <div className="border-b border-white/[0.06] px-6 py-4 flex items-center gap-3">
@@ -308,19 +339,28 @@ export default function IdeaPage() {
               />
               <div className="flex items-center justify-between px-4 py-3 border-t border-white/[0.05]">
                 <span className="text-xs text-slate-600">{idea.length} Zeichen</span>
-                <button
-                  onClick={() => void handleBuild()}
-                  disabled={!idea.trim()}
-                  className={cx(
-                    'flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold transition-all duration-200',
-                    idea.trim()
-                      ? 'bg-violet-600 text-white hover:bg-violet-500 shadow-lg shadow-violet-500/25 active:scale-95'
-                      : 'bg-white/[0.04] text-slate-600 cursor-not-allowed',
-                  )}
-                >
-                  <span>🚀</span>
-                  Build It
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowWizard(true)}
+                    title="Idee schrittweise verfeinern (KI-Fragen → besserer Brief)"
+                    className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-violet-400 hover:text-violet-300 border border-violet-800/50 hover:border-violet-700 bg-violet-950/20 hover:bg-violet-950/40 transition-all"
+                  >
+                    <span>✨</span> Verfeinern
+                  </button>
+                  <button
+                    onClick={() => void handleBuild()}
+                    disabled={!idea.trim()}
+                    className={cx(
+                      'flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold transition-all duration-200',
+                      idea.trim()
+                        ? 'bg-violet-600 text-white hover:bg-violet-500 shadow-lg shadow-violet-500/25 active:scale-95'
+                        : 'bg-white/[0.04] text-slate-600 cursor-not-allowed',
+                    )}
+                  >
+                    <span>🚀</span>
+                    Build It
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -634,5 +674,15 @@ export default function IdeaPage() {
         )}
       </div>
     </main>
+
+    {/* M136: Idea Refinement Wizard */}
+    {showWizard && (
+      <IdeaRefinementWizard
+        initialIdea={idea}
+        onClose={() => setShowWizard(false)}
+        onBriefReady={(rawIdea, brief) => void handleWizardBriefReady(rawIdea, brief)}
+      />
+    )}
+  </>
   )
 }
