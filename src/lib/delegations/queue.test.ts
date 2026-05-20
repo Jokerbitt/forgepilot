@@ -170,9 +170,9 @@ describe('selectNextBatch', () => {
     ])
     vi.resetModules()
     const { selectNextBatch } = await import('./queue')
-    // max=3, running=1, maxConcurrent=5 → available = 3-1 = 2
+    // max=3, running=1, maxConcurrent=5 -> four slots remain, so max batch still applies.
     const batch = selectNextBatch({ max: 3, maxConcurrent: 5 })
-    expect(batch).toHaveLength(2)
+    expect(batch).toHaveLength(3)
   })
 
   it('uses defaults: max=3, maxConcurrent=2', async () => {
