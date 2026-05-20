@@ -49,8 +49,24 @@ function backfillTitle(d: Delegation): Delegation {
   return { ...d, title: d.contract.goal.slice(0, 80) }
 }
 
-export async function GET() {
-  return NextResponse.json(readDelegations().map(backfillTitle))
+export async function GET(request: NextRequest) {
+  let delegations = readDelegations().map(backfillTitle)
+
+  // Optional status filter: ?statuses=pending,approved,running
+  const statuses = request.nextUrl.searchParams.get('statuses')
+  if (statuses) {
+    const allowedStatuses = new Set(statuses.split(',').map(s => s.trim()))
+    delegations = delegations.filter(d => allowedStatuses.has(d.status))
+  }
+
+  // Optional limit: ?limit=50
+  const limit = request.nextUrl.searchParams.get('limit')
+  if (limit) {
+    const n = parseInt(limit, 10)
+    if (!isNaN(n) && n > 0) delegations = delegations.slice(0, n)
+  }
+
+  return NextResponse.json(delegations)
 }
 
 export async function POST(request: NextRequest) {
