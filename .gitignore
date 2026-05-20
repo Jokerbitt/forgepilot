@@ -15,3 +15,6 @@ start-preview.sh
 
 # Agent worktrees
 .claude/worktrees/
+
+# Coverage reports
+coverage/

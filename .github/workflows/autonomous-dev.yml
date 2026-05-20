@@ -185,6 +185,9 @@ jobs:
           npm run type-check
           echo "type_check=pass" >> $GITHUB_OUTPUT
 
+          NEXT_TELEMETRY_DISABLED=1 ANTHROPIC_API_KEY=placeholder GOOGLE_API_KEY=placeholder npm run build 2>&1 | tail -5
+          echo "build=pass" >> $GITHUB_OUTPUT
+
           npm run test:run
           TEST_RESULT=$(npm run test:run 2>&1 | grep 'Tests ' | tail -1)
           echo "test_result=$TEST_RESULT" >> $GITHUB_OUTPUT
@@ -212,9 +215,10 @@ jobs:
             Task: **${{ steps.pick-task.outputs.task }}**
 
             1. `npm run type-check` → read errors → fix each one
-            2. `npm run test:run` → read failures → fix each one
-            3. Verify both pass
-            4. `git commit -m "fix: resolve quality gate failures"` + push
+            2. `NEXT_TELEMETRY_DISABLED=1 ANTHROPIC_API_KEY=placeholder GOOGLE_API_KEY=placeholder npm run build` → fix build errors
+            3. `npm run test:run` → read failures → fix each one
+            4. Verify all pass
+            5. `git commit -m "fix: resolve quality gate failures"` + push
 
             Rules: TypeScript strict, no `any`, no skipping tests.
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
