@@ -68,6 +68,12 @@ const PII_PATTERNS: Array<{
     regex: /\b[A-Z]{2}\d{2}[\s]?(?:\d{4}[\s]?){3,6}\d{1,4}\b/g,
     placeholder: '[IBAN_REDACTED]',
   },
+  // URLs with credentials (http://user:pass@host) — must run before email
+  {
+    type: 'url-with-credentials',
+    regex: /https?:\/\/[^@\s]+:[^@\s]+@[^\s]+/g,
+    placeholder: '[URL_WITH_CREDENTIALS_REDACTED]',
+  },
   // Email addresses
   {
     type: 'email',
@@ -79,12 +85,6 @@ const PII_PATTERNS: Array<{
     type: 'phone',
     regex: /(?:\+49|0049|\+43|0043|\+41|0041)[\s\-]?(?:\(?\d{2,5}\)?[\s\-]?\d{3,8}[\s\-]?\d{0,6})/g,
     placeholder: '[PHONE_REDACTED]',
-  },
-  // URLs with credentials (http://user:pass@host)
-  {
-    type: 'url-with-credentials',
-    regex: /https?:\/\/[^@\s]+:[^@\s]+@[^\s]+/g,
-    placeholder: '[URL_WITH_CREDENTIALS_REDACTED]',
   },
   // IP addresses (IPv4)
   {

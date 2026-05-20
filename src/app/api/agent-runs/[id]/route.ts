@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { getRun, updateRun } from '@/lib/agent-runs/store'
 import { buildRunSummary } from '@/lib/writeback/summary'

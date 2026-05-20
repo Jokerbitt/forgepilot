@@ -13,6 +13,8 @@ export type ProviderType =
 
 export type ModelPurpose = 'fast' | 'coding' | 'embedding' | 'both'
 
+export type PriceVerificationStatus = 'verified' | 'unverified'
+
 export interface AIModelDef {
   id: string           // model identifier sent to API (e.g. 'claude-haiku-4-5')
   name: string         // human-readable label (e.g. 'Claude Haiku')
@@ -20,6 +22,30 @@ export interface AIModelDef {
   contextWindow?: number
   costPer1kInput?: number   // USD
   costPer1kOutput?: number  // USD
+  /** Volatile public pricing metadata; never treat as a billing source of truth. */
+  priceVerification?: {
+    status: PriceVerificationStatus
+    verifiedAt?: string
+    sourceUrl?: string
+  }
+  /** True when this model is permanently free (cost = 0) */
+  isFree?: boolean
+}
+
+/** Free-tier information for a provider */
+export interface ProviderFreeTier {
+  /** Short human-readable limit (shown as badge), e.g. "14,400 req/day" */
+  limit: string
+  /** Link to sign-up page */
+  signupUrl: string
+  /** One-liner shown in quick-setup banner */
+  description?: string
+  /** Free-tier limits change often; unverified means UI must present them as guidance, not fact. */
+  verification?: {
+    status: PriceVerificationStatus
+    verifiedAt?: string
+    sourceUrl?: string
+  }
 }
 
 /** Config stored in nba-settings.json under `configuredProviders` */
@@ -33,6 +59,8 @@ export interface AIProviderConfig {
   enabled: boolean
   isBuiltIn: boolean     // built-in providers can't be deleted, only disabled
   dataResidency: 'eu' | 'us' | 'local' | 'unknown'
+  /** Free-tier info — shown in quick-setup banners + badges */
+  freeTier?: ProviderFreeTier
 }
 
 /** Active model selection (which provider+model to use per purpose) */

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { getVersionHistory, saveVersion } from '@/lib/delegations/contract-versions'
 import { parseBody, parseParams, isValidationError } from '@/lib/validation/api'

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { readResearchDocuments } from '@/lib/knowledge/research-store'
 import type { ResearchDocument } from '@/lib/models/research'

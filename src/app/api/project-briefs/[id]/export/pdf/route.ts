@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { findProjectBriefById } from '@/lib/project-briefs'
 import { generateBriefPdf, briefPdfFilename } from '@/lib/project-briefs/pdf-export'

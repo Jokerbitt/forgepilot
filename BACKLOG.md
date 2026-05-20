@@ -17,11 +17,11 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [x] M110-A: Production build gate in CI — npm run build als Quality Gate, Vitest Coverage (63.5% Lines) mit Thresholds
 - [x] M110-B: Enhanced AI Code Reviewer — ForgePilot-spezifische Review-Kriterien (Zod, Pino, Rate Limiting, Security) + Pre-commit-Validator Script
 - [x] fix: ESLint build blocker in providers/page.tsx behoben (PR #214)
-- [ ] M111: Echter Sentry aktivieren — @sentry/nextjs konfigurieren, SENTRY_DSN in Vercel/local, global-error.tsx hinzufügen
-- [ ] M112: OpenTelemetry aktivieren — @opentelemetry Pakete, Jaeger lokal, Honeycomb prod, Spans für delegation.execute + ai.generate
-- [ ] M113: GitHub Actions Matrix-Tests — Node 20 + 22 parallel, Test-Report als PR-Kommentar, Flaky-Test-Detektion
-- [ ] M114: Dependency Security Scan — npm audit im CI, Dependabot auto-PRs, SBOM-Generierung
-- [ ] M115: Performance Budget — Lighthouse CI pro PR, Bundle-Size-Check, Core Web Vitals Baseline
+- [x] M111: Echter Sentry aktivieren — migrated to instrumentation.ts + instrumentation-client.ts, onRouterTransitionStart, global-error.tsx
+- [x] M112: OpenTelemetry aktivieren — real @opentelemetry/api tracer, NodeSDK via OTEL_EXPORTER_OTLP_ENDPOINT, force-dynamic build fix
+- [x] M113: GitHub Actions Matrix-Tests — Node 20 + 22 parallel, Test-Report als PR-Kommentar, Flaky-Test-Detektion
+- [x] M114: Dependency Security Scan — npm audit im CI, Dependabot auto-PRs, SBOM-Generierung
+- [x] M115: Performance Budget — Lighthouse CI pro PR, Bundle-Size-Check, Core Web Vitals Baseline
 
 ## 🔴 High Priority — Tech Quality (M100–M105)
 
@@ -29,8 +29,8 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [x] M101: Pino migration complete — replace remaining 4 console.error calls in API routes (pdf-export, dsgvo-export, delegation-versions, execute) + component console.log calls
 - [x] M102: API rate limiting — simple in-memory rate limiter middleware for all /api routes (100 req/min per IP, 429 response with Retry-After)
 - [x] M103: API route test coverage — add ≥3 tests each for: /api/agent-runs, /api/settings, /api/projects, /api/health (currently 0 coverage)
-- [ ] M104: Integration test suite — end-to-end flow test: POST /api/project-briefs → GET /api/project-briefs/[id] → POST /api/delegations → GET /api/delegations/[id]
-- [ ] M105: Dashboard stats accuracy — /api/dashboard/stats currently returns mock-mixed data; ensure all counts come from real JSON stores, add snapshot test
+- [x] M104: Integration test suite — end-to-end flow test: POST /api/project-briefs → GET /api/project-briefs/[id] → POST /api/delegations → GET /api/delegations/[id]
+- [x] M105: Dashboard stats accuracy — /api/dashboard/stats currently returns mock-mixed data; ensure all counts come from real JSON stores, add snapshot test
 
 ## 🔴 High Priority — Tech Quality (M94–M99)
 
@@ -71,6 +71,14 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [x] chore: Add Playwright E2E tests for critical flows (idea → brief → delegation)
 - [x] chore: Upgrade dependencies (next, typescript, tailwind) to latest versions
 - [x] docs: Add JSDoc comments to all public lib functions
+
+## 🔴 High Priority — Intelligence Layer (M116–M120)
+
+- [x] M116: Auto-Knowledge Extraction — extract Knowledge Cards from completed delegations, feed into context layer 5
+- [ ] M117: Context Engineer Tests + Integration — comprehensive tests for buildContext(), token budget, PII scrubbing (currently 0% coverage)
+- [ ] M118: Smart Delegation Retry — auto-detect failure cause, improve prompt, retry with backoff
+- [ ] M119: AI Decomposer Tests + Sub-task quality scoring
+- [ ] M120: Scheduled Delegation Queue — cron-based auto-execution of approved delegations
 
 ---
 

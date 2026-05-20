@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { type NextRequest, NextResponse } from 'next/server'
 import { getNBAConfig, saveNBAConfig } from '@/lib/nba-engine/nba-config'
 import { parseBody } from '@/lib/validation/api'

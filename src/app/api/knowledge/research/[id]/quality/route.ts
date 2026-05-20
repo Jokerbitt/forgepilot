@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { getResearchDocument } from '@/lib/knowledge/research-store'
 import { computeQuality } from '@/lib/knowledge/quality-scorer'

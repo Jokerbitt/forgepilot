@@ -4,13 +4,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 let mockDelegations = '[]'
 let mockRuns = '{"runs":[]}'
 let mockKnowledge = '{"sources":[],"items":[],"cards":[]}'
+let mockTestResultsPresent = false
+let mockTestResultsContent = '{}'
 
 const fsMock = {
-  existsSync: () => true,
+  existsSync: (p: string) => {
+    if (p.includes('test-results.json')) return mockTestResultsPresent
+    return true
+  },
   readFileSync: (p: string) => {
     if (p.includes('delegations.json')) return mockDelegations
     if (p.includes('orchestrated-runs.json')) return mockRuns
     if (p.includes('knowledge-store.json')) return mockKnowledge
+    if (p.includes('test-results.json')) return mockTestResultsContent
     if (p.includes('skill-history.json')) return '{"outcomes":[],"updatedAt":"2026-01-01T00:00:00Z"}'
     if (p.includes('agent-confidence.json')) return '{"overrides":[]}'
     return '{}'
@@ -27,6 +33,8 @@ describe('GET /api/dashboard/stats', () => {
     mockDelegations = '[]'
     mockRuns = '{"runs":[]}'
     mockKnowledge = '{"sources":[],"items":[],"cards":[]}'
+    mockTestResultsPresent = false
+    mockTestResultsContent = '{}'
   })
 
   it('returns zero stats when stores are empty', async () => {
@@ -62,7 +70,7 @@ describe('GET /api/dashboard/stats', () => {
 
   it('counts knowledge cards and recent cards', async () => {
     const recentDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() // 2 days ago
-    const oldDate = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString() // 10 days ago
+    const oldDate = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString() // 45 days ago (outside 30d window)
 
     mockKnowledge = JSON.stringify({
       sources: [],
@@ -89,5 +97,44 @@ describe('GET /api/dashboard/stats', () => {
     const data = await res.json() as Awaited<ReturnType<typeof res.json>>
 
     expect(new Date(data.generatedAt as string).getTime()).toBeGreaterThan(0)
+  })
+
+  it('returns 0 for testsGreen when test-results.json is absent', async () => {
+    mockTestResultsPresent = false
+    vi.resetModules()
+    const { GET } = await import('./route')
+    const res = await GET()
+    const data = await res.json() as Awaited<ReturnType<typeof res.json>>
+
+    expect(data.system.testsGreen).toBe(0)
+  })
+
+  it('reads testsGreen from test-results.json when present', async () => {
+    mockTestResultsPresent = true
+    mockTestResultsContent = JSON.stringify({ numPassedTests: 893, numFailedTests: 0, success: true })
+    vi.resetModules()
+    const { GET } = await import('./route')
+    const res = await GET()
+    const data = await res.json() as Awaited<ReturnType<typeof res.json>>
+
+    expect(data.system.testsGreen).toBe(893)
+  })
+
+  it('snapshot: response shape matches DashboardStats contract', async () => {
+    vi.resetModules()
+    const { GET } = await import('./route')
+    const res = await GET()
+    const data = await res.json() as Awaited<ReturnType<typeof res.json>>
+
+    // Structural snapshot — all expected top-level keys present
+    expect(Object.keys(data).sort()).toEqual(
+      ['delegations', 'generatedAt', 'knowledge', 'orchestrations', 'quality', 'system'].sort()
+    )
+    expect(Object.keys(data.delegations).sort()).toEqual(
+      ['approved', 'completed', 'failed', 'pending', 'running', 'total'].sort()
+    )
+    expect(Object.keys(data.system).sort()).toEqual(
+      ['activeProviders', 'aiCallsToday', 'testsGreen'].sort()
+    )
   })
 })

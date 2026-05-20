@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { AGENT_PROFILES, getBestAgentForCategory } from '@/lib/agents/agent-skills'
 import type { SkillCategory } from '@/lib/agents/agent-skills'

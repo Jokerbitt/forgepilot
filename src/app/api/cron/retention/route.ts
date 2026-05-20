@@ -15,6 +15,7 @@ import { runRetentionCleanup } from '@/lib/dsgvo/processing-ledger'
 import { dsgvoLogger } from '@/lib/logger'
 
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   // Validate Vercel Cron authorization

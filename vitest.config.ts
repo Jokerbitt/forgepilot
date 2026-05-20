@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
+    reporters: ['verbose', ['json', { outputFile: 'config/test-results.json' }]],
     exclude: [
       '**/node_modules/**',
       '**/.claude/worktrees/**',

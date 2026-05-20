@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { evaluatePolicy } from '@/lib/policy/engine'
 import type { TaskContract } from '@/lib/models/delegation'

@@ -41,6 +41,7 @@ function profileScore(
   let score = 0
   if (profileSupportsWorkload(profile, workload)) score += 10
   if (profile.executionMode === 'local' && preferLocal) score += 5
+  if (profile.provider === 'ollama' && preferLocal) score += 1
   if (profile.executionMode === 'cloud' && !preferLocal) score += 3
   if (profile.costClass === 'free-local') score += 2
   if (profile.healthStatus === 'healthy') score += 4

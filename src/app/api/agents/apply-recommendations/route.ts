@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { applyRecommendations, getConfidenceOverrides } from '@/lib/agents/skill-evolver'
 

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import {
   scoreOutput,
@@ -7,20 +8,8 @@ import {
   type EvalResult,
 } from '@/lib/eval/harness'
 import crypto from 'crypto'
-
-interface ScoreBody {
-  caseId: string
-  agentOutput: string
-  tokensUsed?: number
-  costUsd?: number
-  filesChangedOutsideScope?: number
-  totalFilesChanged?: number
-  delegationId?: string
-  runId?: string
-  promptVariant?: string
-  providerId?: string
-  modelId?: string
-}
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { ScoreRequestSchema } from '@/lib/validation/schemas'
 
 /**
  * POST /api/eval/score
@@ -29,7 +18,8 @@ interface ScoreBody {
  * Saves result, checks for regression, returns grade + alert if any.
  */
 export async function POST(request: NextRequest) {
-  const body = await request.json() as ScoreBody
+  const body = await parseBody(request, ScoreRequestSchema)
+  if (isValidationError(body)) return body
 
   const evalCase = getEvalCase(body.caseId)
   if (!evalCase) {

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { getAutonomousConfig, saveAutonomousConfig } from '@/lib/config/autonomous-config'
 import type { AutonomousConfig } from '@/lib/config/autonomous-config'

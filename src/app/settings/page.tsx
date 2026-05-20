@@ -1,10 +1,129 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ElementType, type ReactNode } from 'react'
 import type { NBAConfig } from '@/lib/nba-engine/nba-config'
 import { describeApprovalMode } from '@/lib/nba-engine/approval-policy'
 import type { PMAgentResult } from '@/lib/agent-runner/pm-agent'
 import type { AutonomousConfig } from '@/lib/config/autonomous-config'
+import {
+  Activity,
+  AlertTriangle,
+  Bot,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Cpu,
+  Download,
+  Gauge,
+  Info,
+  KeyRound,
+  Lock,
+  Rocket,
+  Server,
+  Settings as SettingsIcon,
+  ShieldCheck,
+  Trash2,
+  X,
+  Zap,
+} from 'lucide-react'
+import { cx } from '@/components/ui/primitives'
+
+const panelClassName = 'rounded-lg border border-white/[0.07] bg-white/[0.035] p-4 shadow-sm shadow-black/10'
+const inputClassName = 'w-full rounded-md border border-white/[0.09] bg-[#080912] px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/25'
+const primaryButtonClassName = 'rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-40'
+const secondaryButtonClassName = 'rounded-md border border-white/[0.09] bg-white/[0.04] px-3 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-white/[0.16] hover:bg-white/[0.07]'
+
+function SectionHeading({
+  icon: Icon,
+  title,
+  badge,
+}: {
+  icon: ElementType
+  title: string
+  badge?: ReactNode
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-100">
+        <span className="flex h-8 w-8 items-center justify-center rounded-md border border-white/[0.07] bg-white/[0.04] text-violet-300">
+          <Icon className="h-4 w-4" />
+        </span>
+        {title}
+      </h2>
+      {badge}
+    </div>
+  )
+}
+
+function StatusPill({
+  children,
+  tone = 'neutral',
+}: {
+  children: ReactNode
+  tone?: 'neutral' | 'success' | 'warning' | 'danger'
+}) {
+  return (
+    <span
+      className={cx(
+        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold',
+        tone === 'success' && 'bg-emerald-500/12 text-emerald-300',
+        tone === 'warning' && 'bg-amber-500/12 text-amber-300',
+        tone === 'danger' && 'bg-red-500/12 text-red-300',
+        tone === 'neutral' && 'bg-white/[0.06] text-slate-400'
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
+// ─── Sentry DSN Input ────────────────────────────────────────────────────────
+function SentryDsnInput() {
+  const [dsn, setDsn] = useState('')
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+
+  const handleSave = async () => {
+    if (!dsn.trim()) return
+    setStatus('saving')
+    try {
+      const res = await fetch('/api/settings/env', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'NEXT_PUBLIC_SENTRY_DSN', value: dsn.trim() }),
+      })
+      setStatus(res.ok ? 'saved' : 'error')
+      if (res.ok) {
+        setDsn('')
+        setTimeout(() => setStatus('idle'), 3000)
+      }
+    } catch {
+      setStatus('error')
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row">
+      <input
+        type="text"
+        value={dsn}
+        onChange={e => setDsn(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') void handleSave() }}
+        placeholder="https://...@o0.ingest.sentry.io/..."
+        className={cx(inputClassName, 'font-mono sm:flex-1')}
+      />
+      <button
+        onClick={() => void handleSave()}
+        disabled={!dsn.trim() || status === 'saving'}
+        className={primaryButtonClassName}
+      >
+        {status === 'saving' ? '…' : status === 'saved' ? 'Gespeichert' : status === 'error' ? 'Fehler' : 'Speichern'}
+      </button>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface ApiKeyField {
   key: 'GITHUB_TOKEN' | 'LINEAR_API_KEY' | 'LINEAR_TEAM_ID' | 'ANTHROPIC_API_KEY'
@@ -186,30 +305,50 @@ export default function SettingsPage() {
     setSaving(false)
   }
 
-  if (!config) return <div className="p-8 text-white">Lade Einstellungen...</div>
+  if (!config) {
+    return (
+      <main className="min-h-screen bg-[#07070c] px-4 py-8 text-white sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-5xl">
+          <div className={cx(panelClassName, 'text-sm text-slate-400')}>Einstellungen werden geladen...</div>
+        </div>
+      </main>
+    )
+  }
 
   return (
-    <main className="min-h-screen bg-gray-950 text-white p-8">
-      <div className="max-w-2xl mx-auto space-y-8">
-        <header className="border-b border-gray-800 pb-4">
-          <h1 className="text-3xl font-bold">⚙️ Engine Einstellungen</h1>
+    <main className="min-h-screen bg-[#07070c] px-4 py-6 text-white sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-5xl space-y-7">
+        <header className="page-header">
+          <div>
+            <p className="page-eyebrow">System Setup</p>
+            <h1 className="page-title flex items-center gap-2">
+              <SettingsIcon className="h-6 w-6 text-violet-300" />
+              Engine Einstellungen
+            </h1>
+            <p className="page-description">
+              Provider, lokale KI, Agenten-Automation und Betriebssicherheit an einem Ort.
+            </p>
+          </div>
         </header>
 
         {/* Claude CLI Auth Section */}
         <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-gray-300">🤖 Claude CLI Auth</h2>
-            {authLoading ? (
-              <span className="text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-500">Lade…</span>
-            ) : isMaxActive ? (
-              <span className="text-xs px-2 py-1 rounded-full bg-green-900/40 text-green-400 font-medium">Max aktiv</span>
-            ) : authStatus?.loggedIn ? (
-              <span className="text-xs px-2 py-1 rounded-full bg-yellow-900/40 text-yellow-400 font-medium">Eingeloggt</span>
-            ) : (
-              <span className="text-xs px-2 py-1 rounded-full bg-red-900/40 text-red-400 font-medium">Nicht eingeloggt</span>
-            )}
-          </div>
-          <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 space-y-2">
+          <SectionHeading
+            icon={Bot}
+            title="Claude CLI Auth"
+            badge={
+              authLoading ? (
+                <StatusPill>Lade...</StatusPill>
+              ) : isMaxActive ? (
+                <StatusPill tone="success">Max aktiv</StatusPill>
+              ) : authStatus?.loggedIn ? (
+                <StatusPill tone="warning">Eingeloggt</StatusPill>
+              ) : (
+                <StatusPill tone="danger">Nicht eingeloggt</StatusPill>
+              )
+            }
+          />
+          <div className={cx(panelClassName, 'space-y-2')}>
             <p className="text-sm text-gray-400">
               Status der lokalen <code className="text-xs bg-gray-800 px-1 py-0.5 rounded">claude</code> CLI-Session.
               Bei aktiver Max-Subscription wird kein API Key benötigt — die CLI nutzt die OAuth-Session.
@@ -238,13 +377,12 @@ export default function SettingsPage() {
 
         {/* API Keys Section */}
         <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-gray-300">🔑 API Keys &amp; Verbindungen</h2>
-            {apiKeySaved && (
-              <span className="text-green-400 text-sm font-medium animate-pulse">✓ Gespeichert</span>
-            )}
-          </div>
-          <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 space-y-4">
+          <SectionHeading
+            icon={KeyRound}
+            title="API Keys & Verbindungen"
+            badge={apiKeySaved ? <StatusPill tone="success"><Check className="h-3 w-3" /> Gespeichert</StatusPill> : null}
+          />
+          <div className={cx(panelClassName, 'space-y-4')}>
             <p className="text-sm text-gray-400">
               Keys werden lokal in <code className="text-xs bg-gray-800 px-1 py-0.5 rounded">config/api-keys.json</code> gespeichert (nicht in Git).
             </p>
@@ -253,13 +391,7 @@ export default function SettingsPage() {
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-sm font-medium text-gray-300">{label}</label>
                   <div className="flex items-center gap-2">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      apiKeySet[key]
-                        ? 'bg-green-900/40 text-green-400'
-                        : 'bg-gray-800 text-gray-500'
-                    }`}>
-                      {apiKeySet[key] ? '✓ Gesetzt' : 'Nicht gesetzt'}
-                    </span>
+                    <StatusPill tone={apiKeySet[key] ? 'success' : 'neutral'}>{apiKeySet[key] ? 'Gesetzt' : 'Nicht gesetzt'}</StatusPill>
                     {apiKeySet[key] && (
                       confirmClearKey === key ? (
                         <div className="flex items-center gap-1">
@@ -273,8 +405,9 @@ export default function SettingsPage() {
                           <button
                             onClick={() => setConfirmClearKey(null)}
                             className="text-xs text-gray-500 hover:text-white px-1 transition-colors"
+                            aria-label="Löschen abbrechen"
                           >
-                            ✕
+                            <X className="h-3 w-3" />
                           </button>
                         </div>
                       ) : (
@@ -282,8 +415,9 @@ export default function SettingsPage() {
                           onClick={() => setConfirmClearKey(key)}
                           className="text-xs text-gray-600 hover:text-red-400 transition-colors"
                           title="Key löschen"
+                          aria-label={`${label} löschen`}
                         >
-                          🗑
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       )
                     )}
@@ -294,7 +428,7 @@ export default function SettingsPage() {
                   value={apiKeyDraft[key] ?? ''}
                   onChange={e => setApiKeyDraft(prev => ({ ...prev, [key]: e.target.value }))}
                   placeholder={apiKeySet[key] && inputType !== 'text' ? '••••••••••••••••' : placeholder}
-                  className="w-full bg-gray-950 text-white px-3 py-2 rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-mono"
+                  className={cx(inputClassName, 'font-mono')}
                 />
                 <p className="text-xs text-gray-500 mt-1">{hint}</p>
                 {key === 'ANTHROPIC_API_KEY' && isMaxActive && (
@@ -305,7 +439,7 @@ export default function SettingsPage() {
             <button
               onClick={handleSaveApiKeys}
               disabled={apiKeySaving || Object.values(apiKeyDraft).every(v => !v.trim())}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm"
+              className={cx(primaryButtonClassName, 'w-full')}
             >
               {apiKeySaving ? 'Speichere...' : 'API Keys speichern'}
             </button>
@@ -314,11 +448,8 @@ export default function SettingsPage() {
 
         {/* Ollama / Local AI Section */}
         <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-gray-300">🦙 Lokale KI (Ollama)</h2>
-            <span className="text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-500">Optional</span>
-          </div>
-          <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 space-y-3">
+          <SectionHeading icon={Server} title="Lokale KI (Ollama)" badge={<StatusPill>Optional</StatusPill>} />
+          <div className={cx(panelClassName, 'space-y-3')}>
             <p className="text-sm text-gray-400">
               Verbinde einen lokalen Ollama-Server (z.B. auf dem Mac mit M5 Pro) als kostenlose Alternative zu Anthropic.
               <span className="block mt-1 text-xs text-gray-600">Ollama läuft auf <code className="bg-gray-800 px-1 rounded">localhost:11434</code> — von außen per LAN oder Tailscale erreichbar.</span>
@@ -326,20 +457,16 @@ export default function SettingsPage() {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-sm font-medium text-gray-300">Ollama Base URL</label>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                  apiKeySet['OLLAMA_BASE_URL']
-                    ? 'bg-green-900/40 text-green-400'
-                    : 'bg-gray-800 text-gray-500'
-                }`}>
-                  {apiKeySet['OLLAMA_BASE_URL'] ? '✓ Gesetzt' : 'Nicht gesetzt'}
-                </span>
+                <StatusPill tone={apiKeySet['OLLAMA_BASE_URL'] ? 'success' : 'neutral'}>
+                  {apiKeySet['OLLAMA_BASE_URL'] ? 'Gesetzt' : 'Nicht gesetzt'}
+                </StatusPill>
               </div>
               <input
                 type="text"
                 value={apiKeyDraft['OLLAMA_BASE_URL'] ?? ''}
                 onChange={e => setApiKeyDraft(prev => ({ ...prev, OLLAMA_BASE_URL: e.target.value }))}
                 placeholder={apiKeySet['OLLAMA_BASE_URL'] ? 'URL gesetzt — neu eingeben zum Ändern' : 'http://localhost:11434'}
-                className="w-full bg-gray-950 text-white px-3 py-2 rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-mono"
+                className={cx(inputClassName, 'font-mono')}
               />
               <p className="text-xs text-gray-500 mt-1">
                 Wird für zukünftige lokale Inferenz genutzt. Noch nicht aktiv — Vorbereitung für Mac-Setup.
@@ -348,7 +475,7 @@ export default function SettingsPage() {
             <button
               onClick={handleSaveApiKeys}
               disabled={apiKeySaving || !apiKeyDraft['OLLAMA_BASE_URL']?.trim()}
-              className="w-full bg-gray-700 hover:bg-gray-600 disabled:opacity-40 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm"
+              className={cx(secondaryButtonClassName, 'w-full')}
             >
               {apiKeySaving ? 'Speichere...' : 'Ollama URL speichern'}
             </button>
@@ -356,13 +483,12 @@ export default function SettingsPage() {
         </section>
 
         <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-gray-300">AI Provider</h2>
-            <span className="text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-500">
-              {config.aiProvider === 'ollama' ? 'Lokal aktiv' : 'Anthropic aktiv'}
-            </span>
-          </div>
-          <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 space-y-4">
+          <SectionHeading
+            icon={Cpu}
+            title="AI Provider"
+            badge={<StatusPill>{config.aiProvider === 'ollama' ? 'Lokal aktiv' : 'Anthropic aktiv'}</StatusPill>}
+          />
+          <div className={cx(panelClassName, 'space-y-4')}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {(['anthropic', 'ollama'] as const).map(provider => (
                 <button
@@ -390,6 +516,22 @@ export default function SettingsPage() {
               Research Run, Requirements-Generierung und AI Suggest nutzen diese Auswahl.
             </p>
 
+            {/* Quick-links to provider management + test */}
+            <div className="flex flex-wrap gap-2 pt-1">
+              <a
+                href="/settings/providers"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-semibold text-violet-300 hover:bg-violet-500/20 transition-colors"
+              >
+                <SettingsIcon className="h-3.5 w-3.5" /> Provider & Modelle verwalten
+              </a>
+              <a
+                href="/settings/ai-test"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20 transition-colors"
+              >
+                <Zap className="h-3.5 w-3.5" /> AI direkt testen
+              </a>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Coding-/Research-Modell</label>
@@ -398,7 +540,7 @@ export default function SettingsPage() {
                   value={config.localCodingModel}
                   onChange={e => setConfig({ ...config, localCodingModel: e.target.value })}
                   placeholder="qwen2.5-coder:14b"
-                  className="w-full bg-gray-950 text-white px-3 py-2 rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-mono"
+                  className={cx(inputClassName, 'font-mono')}
                 />
               </div>
               <div>
@@ -408,29 +550,54 @@ export default function SettingsPage() {
                   value={config.localFastModel}
                   onChange={e => setConfig({ ...config, localFastModel: e.target.value })}
                   placeholder="llama3.2:3b"
-                  className="w-full bg-gray-950 text-white px-3 py-2 rounded border border-gray-700 focus:border-blue-500 focus:outline-none text-sm font-mono"
+                  className={cx(inputClassName, 'font-mono')}
                 />
               </div>
             </div>
           </div>
         </section>
 
+        {/* ─── Monitoring / Sentry ──────────────────────────────────────────── */}
         <section className="space-y-4">
-          <h2 className="text-xl font-bold text-gray-300">Anzeige Limits</h2>
-          <div className="flex justify-between items-center bg-gray-900 p-4 rounded-lg">
+          <SectionHeading icon={Activity} title="Monitoring" badge={<StatusPill>Optional</StatusPill>} />
+          <div className={cx(panelClassName, 'space-y-4')}>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">
+                Sentry DSN{' '}
+                <a
+                  href="https://sentry.io"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-violet-400 hover:underline"
+                >
+                  (kostenlos auf sentry.io)
+                </a>
+              </label>
+              <SentryDsnInput />
+            </div>
+            <p className="text-xs text-gray-600">
+              Wenn gesetzt, werden Fehler und Performance-Daten automatisch an Sentry gesendet.
+              10 % der Requests werden getrackt (Sampling). Kein DSN = kein Tracking.
+            </p>
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <SectionHeading icon={Gauge} title="Anzeige Limits" />
+          <div className={cx(panelClassName, 'flex items-center justify-between gap-4')}>
             <span>Maximal sichtbare Empfehlungen</span>
             <input
               type="number"
               value={config.maxRecommendations}
               onChange={e => setConfig({...config, maxRecommendations: parseInt(e.target.value)})}
-              className="bg-gray-800 text-white px-3 py-1 rounded w-20 text-center"
+              className={cx(inputClassName, 'w-24 text-center')}
             />
           </div>
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-xl font-bold text-gray-300">Time-Decay (Verrottende Backlogs)</h2>
-          <div className="bg-gray-900 p-4 rounded-lg space-y-4">
+          <SectionHeading icon={Clock} title="Time-Decay" />
+          <div className={cx(panelClassName, 'space-y-4')}>
             <label className="flex items-center space-x-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -447,7 +614,7 @@ export default function SettingsPage() {
                 type="number"
                 value={config.backlogPenaltyAgeDays}
                 onChange={e => setConfig({...config, backlogPenaltyAgeDays: parseInt(e.target.value)})}
-                className="bg-gray-800 text-white px-3 py-1 rounded w-20 text-center"
+                className={cx(inputClassName, 'w-24 text-center')}
               />
             </div>
 
@@ -457,15 +624,15 @@ export default function SettingsPage() {
                 type="number"
                 value={config.backlogPenaltyScore}
                 onChange={e => setConfig({...config, backlogPenaltyScore: parseInt(e.target.value)})}
-                className="bg-gray-800 text-white px-3 py-1 rounded w-20 text-center"
+                className={cx(inputClassName, 'w-24 text-center')}
               />
             </div>
           </div>
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-xl font-bold text-gray-300">Triage & Extras</h2>
-          <div className="bg-gray-900 p-4 rounded-lg">
+          <SectionHeading icon={Activity} title="Triage & Extras" />
+          <div className={panelClassName}>
             <label className="flex items-center space-x-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -482,8 +649,8 @@ export default function SettingsPage() {
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-xl font-bold text-gray-300">Freigabe & Autopilot</h2>
-          <div className="bg-gray-900 p-4 rounded-lg space-y-4">
+          <SectionHeading icon={ShieldCheck} title="Freigabe & Autopilot" />
+          <div className={cx(panelClassName, 'space-y-4')}>
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-2">Approval-Modus</label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -533,8 +700,8 @@ export default function SettingsPage() {
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-xl font-bold text-gray-300">Eigene KI-Modelle</h2>
-          <div className="bg-gray-900 p-4 rounded-lg space-y-4">
+          <SectionHeading icon={Cpu} title="Eigene KI-Modelle" />
+          <div className={cx(panelClassName, 'space-y-4')}>
             <p className="text-sm text-gray-400">Füge eigene oder lokale LLM-Modelle hinzu, die du bei der Delegation auswählen möchtest.</p>
 
             <div className="flex space-x-2">
@@ -580,11 +747,8 @@ export default function SettingsPage() {
 
         {/* PM Agent Auto-Run Section */}
         <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-gray-300">PM Agent Auto-Run</h2>
-            <span className="text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-500">Täglich</span>
-          </div>
-          <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 space-y-4">
+          <SectionHeading icon={Bot} title="PM Agent Auto-Run" badge={<StatusPill>Täglich</StatusPill>} />
+          <div className={cx(panelClassName, 'space-y-4')}>
             <p className="text-sm text-gray-400">
               Der PM Agent analysiert automatisch dein Projektportfolio — einmal pro 24 Stunden wenn aktiviert.
             </p>
@@ -655,7 +819,7 @@ export default function SettingsPage() {
                             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${healthColor}`}>
                               {run.overallHealth}
                             </span>
-                            <span className="text-gray-600">{isExpanded ? '▲' : '▼'}</span>
+                            {isExpanded ? <ChevronUp className="h-3.5 w-3.5 text-gray-600" /> : <ChevronDown className="h-3.5 w-3.5 text-gray-600" />}
                           </div>
                         </button>
                         {isExpanded && (
@@ -699,15 +863,15 @@ export default function SettingsPage() {
         </section>
 
         {/* Production Readiness Checklist */}
-        <section className="space-y-4 border border-gray-700 rounded-xl p-5 bg-gray-900/60">
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <span>🚀</span> Bereit für echten Agenten-Betrieb?
+        <section className={cx(panelClassName, 'space-y-4 p-5')}>
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
+            <Rocket className="h-5 w-5 text-violet-300" /> Bereit für echten Agenten-Betrieb?
           </h2>
           <div className="space-y-3 text-sm">
             {/* claude CLI */}
             <div className="flex items-start gap-3">
               <span className={`mt-0.5 text-base ${execStatus?.claudeCode?.status === 'healthy' ? 'text-emerald-400' : 'text-red-400'}`}>
-                {execStatus?.claudeCode?.status === 'healthy' ? '✅' : '❌'}
+                {execStatus?.claudeCode?.status === 'healthy' ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
               </span>
               <div>
                 <p className="font-medium text-white">claude CLI installiert</p>
@@ -721,7 +885,7 @@ export default function SettingsPage() {
             {/* Anthropic API Key */}
             <div className="flex items-start gap-3">
               <span className={`mt-0.5 text-base ${execStatus?.anthropic?.status === 'healthy' ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {execStatus?.anthropic?.status === 'healthy' ? '✅' : '⚠️'}
+                {execStatus?.anthropic?.status === 'healthy' ? <Check className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
               </span>
               <div>
                 <p className="font-medium text-white">Anthropic API Key</p>
@@ -734,7 +898,7 @@ export default function SettingsPage() {
             </div>
             {/* Credits */}
             <div className="flex items-start gap-3">
-              <span className="mt-0.5 text-base text-sky-400">ℹ️</span>
+              <Info className="mt-0.5 h-4 w-4 text-sky-400" />
               <div>
                 <p className="font-medium text-white">Anthropic-Guthaben</p>
                 <p className="text-gray-400 text-xs mt-0.5">
@@ -752,7 +916,7 @@ export default function SettingsPage() {
                   : 'border-amber-800/50 bg-amber-950/20 text-amber-300'
               }`}>
                 <span className="font-semibold">
-                  {execStatus.executeMode === 'real' ? '✅ Echter Agent-Modus aktiv' : '⚡ Simulation-Modus aktiv'}
+                  {execStatus.executeMode === 'real' ? 'Echter Agent-Modus aktiv' : 'Simulation-Modus aktiv'}
                 </span>
                 <p className="mt-1 text-gray-400">{execStatus.executeModeHint}</p>
               </div>
@@ -763,21 +927,24 @@ export default function SettingsPage() {
         {/* Autonomous Mode Section */}
         {autonomousConfig !== null && (
           <section className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-300">Autonomer Modus</h2>
-              {autonomousConfig.enabled ? (
-                <span className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-emerald-900/40 text-emerald-400 font-medium">
+            <SectionHeading
+              icon={Zap}
+              title="Autonomer Modus"
+              badge={
+                autonomousConfig.enabled ? (
+                  <StatusPill tone="success">
                   <span className="relative flex h-2 w-2">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                     <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
                   </span>
                   AUTONOM AKTIV
-                </span>
-              ) : (
-                <span className="text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-500 font-medium">MANUELL</span>
-              )}
-            </div>
-            <div className={`bg-gray-900 p-5 rounded-lg border space-y-5 transition-colors ${
+                  </StatusPill>
+                ) : (
+                  <StatusPill>MANUELL</StatusPill>
+                )
+              }
+            />
+            <div className={`rounded-lg border bg-white/[0.035] p-5 space-y-5 transition-colors ${
               autonomousConfig.enabled ? 'border-emerald-800/50' : 'border-gray-800'
             }`}>
               <p className="text-sm text-gray-400">
@@ -869,7 +1036,7 @@ export default function SettingsPage() {
 
               {/* Warning — always visible */}
               <div className="flex items-start gap-2 rounded-lg bg-amber-950/30 border border-amber-800/40 px-3 py-2.5 text-xs text-amber-300">
-                <span className="shrink-0 mt-0.5">⚠️</span>
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>High-Risk Delegations (RiskClass C) benötigen <strong>immer</strong> deine manuelle Freigabe — unabhängig von dieser Einstellung.</span>
               </div>
             </div>
@@ -878,11 +1045,8 @@ export default function SettingsPage() {
 
         {/* Datenschutz Section — Art. 20 DSGVO */}
         <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-gray-300">Datenschutz</h2>
-            <span className="text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-500">DSGVO</span>
-          </div>
-          <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 space-y-3">
+          <SectionHeading icon={Lock} title="Datenschutz" badge={<StatusPill>DSGVO</StatusPill>} />
+          <div className={cx(panelClassName, 'space-y-3')}>
             <p className="text-sm text-gray-400">
               Gemäß Art. 20 DSGVO können Sie alle über Sie gespeicherten Verarbeitungsprotokolle als ZIP-Archiv herunterladen.
               Das Archiv enthält alle KI-Verarbeitungsrecords, Delegations und Projektbriefs.
@@ -898,9 +1062,9 @@ export default function SettingsPage() {
                   a.click()
                   document.body.removeChild(a)
                 }}
-                className="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex items-center gap-2"
-              >
-                <span>⬇</span>
+              className="bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm flex items-center gap-2"
+            >
+                <Download className="h-4 w-4" />
                 <span>Daten exportieren (DSGVO Art. 20)</span>
               </button>
             </div>

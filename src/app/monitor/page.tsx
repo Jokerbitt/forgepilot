@@ -65,6 +65,15 @@ interface MonitorSnapshot {
 
 // ─── Mock fallback data ────────────────────────────────────────────────────────
 
+const EMPTY_SNAPSHOT: MonitorSnapshot = {
+  timestamp: new Date().toISOString(),
+  activeAgents: [],
+  recentAgents: [],
+  providerStats: [],
+  recommendations: [],
+  totals: { tokensToday: 0, costTodayUsd: 0, costThisMonthUsd: 0, callsToday: 0, avgResponseMs: 0, successRate: 1 },
+}
+
 const MOCK: MonitorSnapshot = {
   timestamp: new Date().toISOString(),
   activeAgents: [],
@@ -265,10 +274,10 @@ interface GeminiQuotaStatus {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function MonitorPage() {
-  const [snapshot, setSnapshot] = useState<MonitorSnapshot>(MOCK)
+  const [snapshot, setSnapshot] = useState<MonitorSnapshot>(EMPTY_SNAPSHOT)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [isLive, setIsLive] = useState(false)
-  const [useMock, setUseMock] = useState(true)
+  const [useMock, setUseMock] = useState(false)
   const [geminiQuota, setGeminiQuota] = useState<GeminiQuotaStatus | null>(null)
 
   const fetchGeminiQuota = useCallback(async () => {

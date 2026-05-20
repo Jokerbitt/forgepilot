@@ -1,0 +1,133 @@
+name: Performance Budget
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  bundle-size:
+    name: Bundle Size Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+          ANTHROPIC_API_KEY: placeholder
+          GOOGLE_API_KEY: placeholder
+          SENTRY_SUPPRESS_GLOBAL_ERROR_HANDLER_FILE_WARNING: 1
+
+      - name: Analyze bundle size
+        run: |
+          echo "## Bundle Size Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Route | JS Size | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|---|" >> $GITHUB_STEP_SUMMARY
+
+          # Parse .next/build-manifest.json to get page sizes
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+
+            // Read Next.js build output for size info
+            try {
+              // Get all JS chunks from .next/static/chunks
+              const chunksDir = '.next/static/chunks';
+              if (!fs.existsSync(chunksDir)) {
+                console.log('| Build output not found | - | - |');
+                process.exit(0);
+              }
+
+              const files = fs.readdirSync(chunksDir)
+                .filter(f => f.endsWith('.js'))
+                .map(f => {
+                  const stat = fs.statSync(path.join(chunksDir, f));
+                  return { name: f, size: stat.size };
+                })
+                .sort((a, b) => b.size - a.size)
+                .slice(0, 10);
+
+              let totalSize = 0;
+              for (const file of files) {
+                const sizeKb = (file.size / 1024).toFixed(1);
+                totalSize += file.size;
+                const status = file.size > 250 * 1024 ? 'WARN >250kb' : 'OK';
+                console.log('| ' + file.name.slice(0, 40) + ' | ' + sizeKb + ' KB | ' + status + ' |');
+              }
+              const totalKb = (totalSize / 1024).toFixed(0);
+              console.log('| **Total (top 10)** | **' + totalKb + ' KB** | |');
+            } catch (e) {
+              console.log('| Error reading build output: ' + e.message + ' | - | - |');
+            }
+          " >> $GITHUB_STEP_SUMMARY
+
+          # Check if any single page JS exceeds 500KB budget
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            const MAX_KB = 500;
+
+            const chunksDir = '.next/static/chunks';
+            if (!fs.existsSync(chunksDir)) process.exit(0);
+
+            const oversized = fs.readdirSync(chunksDir)
+              .filter(f => f.endsWith('.js'))
+              .map(f => ({ name: f, size: fs.statSync(path.join(chunksDir, f)).size }))
+              .filter(f => f.size > MAX_KB * 1024);
+
+            if (oversized.length > 0) {
+              console.error('Bundle size budget exceeded (>' + MAX_KB + 'KB):');
+              oversized.forEach(f => console.error(' -', f.name, Math.round(f.size/1024) + 'KB'));
+              process.exit(1);
+            }
+          "
+
+  lighthouse:
+    name: Lighthouse CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Only run when Lighthouse CI is configured (LHCI_GITHUB_APP_TOKEN secret exists)
+    # Without the token, this job is informational only (no upload)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Lighthouse CI
+        run: npm install -g @lhci/cli@0.14.x
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+          ANTHROPIC_API_KEY: placeholder
+          GOOGLE_API_KEY: placeholder
+          SENTRY_SUPPRESS_GLOBAL_ERROR_HANDLER_FILE_WARNING: 1
+
+      - name: Run Lighthouse CI
+        run: lhci autorun
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+        continue-on-error: true   # informational until budgets are tuned

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { readStoredApiKeys } from '@/lib/connectors/config'
 import { runPRReview } from '@/lib/agent-runner/pr-reviewer'

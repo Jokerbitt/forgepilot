@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { checkOllamaHealth, checkAnthropicHealth } from '@/lib/model-router/health'
 import { readStoredApiKeys } from '@/lib/connectors/config'

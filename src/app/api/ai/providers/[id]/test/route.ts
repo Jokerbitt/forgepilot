@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 /**
  * POST /api/ai/providers/[id]/test
  * Pings the provider to verify connectivity and API key validity.

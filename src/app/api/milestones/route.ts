@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { readMilestones, getWorkPackagesByMilestoneId } from '@/lib/knowledge/milestone-store'
 

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { buildResearchBriefFromProjectBrief, findProjectBriefById } from '@/lib/project-briefs'
 

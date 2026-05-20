@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { embed, classify, summarize, compressContext } from '@/lib/ai/ollama-workloads'
 

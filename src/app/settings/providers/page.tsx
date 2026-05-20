@@ -4,27 +4,40 @@ import { useEffect, useState, useCallback } from 'react'
 import { cx } from '@/components/ui/primitives'
 import type { AIProviderConfig, AIModelSelection, AIModelDef } from '@/lib/ai/providers/types'
 
-function GeminiQuickSetupBanner({ onActivated }: { onActivated: () => void }) {
-  const [apiKey, setApiKey]     = useState('')
-  const [saving, setSaving]     = useState(false)
-  const [error, setError]       = useState<string | null>(null)
+// ─── Quick-Setup Banner (generic, reusable) ───────────────────────────────────
+
+interface QuickSetupBannerProps {
+  title: string
+  subtitle: string
+  icon: string
+  bg: string             // tailwind bg hex e.g. '#0a1a0f'
+  gradient: string       // inline gradient string
+  placeholder: string
+  envKey: string
+  signupUrl: string
+  onActivated: () => void
+}
+
+function QuickSetupBanner({
+  title, subtitle, icon, bg, gradient, placeholder, envKey, signupUrl, onActivated,
+}: QuickSetupBannerProps) {
+  const [apiKey, setApiKey] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState<string | null>(null)
 
   const handleActivate = async () => {
     if (!apiKey.trim()) return
     setSaving(true)
     setError(null)
     try {
-      const res = await fetch('/api/settings/env', {
+      const res  = await fetch('/api/settings/env', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'GOOGLE_API_KEY', value: apiKey.trim() }),
+        body: JSON.stringify({ key: envKey, value: apiKey.trim() }),
       })
       const data = await res.json() as { ok: boolean; error?: string }
-      if (!data.ok) {
-        setError(data.error ?? 'Fehler beim Speichern')
-      } else {
-        onActivated()
-      }
+      if (!data.ok) setError(data.error ?? 'Fehler beim Speichern')
+      else onActivated()
     } catch {
       setError('Netzwerkfehler — bitte erneut versuchen')
     } finally {
@@ -33,302 +46,119 @@ function GeminiQuickSetupBanner({ onActivated }: { onActivated: () => void }) {
   }
 
   return (
-    <div className="relative rounded-xl p-px overflow-hidden"
-      style={{ background: 'linear-gradient(135deg, #3b82f655 0%, #2563eb80 50%, #1d4ed855 100%)' }}
-    >
-      <div className="rounded-[11px] bg-[#080f1a] px-5 py-4 space-y-3">
+    <div className="relative rounded-xl p-px overflow-hidden" style={{ background: gradient }}>
+      <div className="rounded-[11px] px-5 py-4 space-y-3" style={{ backgroundColor: bg }}>
         <div className="flex items-start gap-3">
-          <span className="text-lg leading-none mt-0.5">&#10024;</span>
+          <span className="text-lg leading-none mt-0.5">{icon}</span>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-blue-300">
-              Google Gemini — Kostenlos, kein Kreditkarte, kein Abo
-            </p>
-            <p className="text-xs text-blue-400/80 mt-0.5">
-              Einfach mit deinem Google-Account einloggen.
+            <p className="text-sm font-semibold text-white">{title}</p>
+            <p className="text-xs text-white/50 mt-0.5">
+              {subtitle}{' '}·{' '}
+              <a href={signupUrl} target="_blank" rel="noopener noreferrer"
+                className="underline underline-offset-2 hover:text-white/80 transition-colors">
+                {new URL(signupUrl).hostname}
+              </a>
             </p>
           </div>
         </div>
-        <ol className="text-xs text-blue-300/70 space-y-0.5 pl-1 list-none">
-          <li>1. Öffne{' '}
-            <a
-              href="https://aistudio.google.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-2 hover:text-blue-200 transition-colors"
+        <div className="flex items-center gap-2">
+          <input
+            type="password"
+            value={apiKey}
+            onChange={e => setApiKey(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { void handleActivate() } }}
+            placeholder={placeholder}
+            className="flex-1 rounded-lg bg-black/40 border border-white/10 px-3 py-1.5 text-xs text-white placeholder-white/20 font-mono focus:outline-none focus:border-white/30 transition-colors"
+          />
+          <button
+            onClick={() => { void handleActivate() }}
+            disabled={saving || !apiKey.trim()}
+            className="rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-40 px-4 py-1.5 text-xs font-semibold text-white transition-colors whitespace-nowrap border border-white/10"
+          >
+            {saving ? 'Speichern…' : 'Aktivieren'}
+          </button>
+        </div>
+        {error && <p className="text-xs text-rose-400">{error}</p>}
+      </div>
+    </div>
+  )
+}
+
+// ─── Ollama URL Editor ────────────────────────────────────────────────────────
+
+function OllamaUrlEditor({ currentUrl, onSaved }: { currentUrl: string; onSaved: (url: string) => void }) {
+  const [editing, setEditing]     = useState(false)
+  const [url, setUrl]             = useState(currentUrl)
+  const [saving, setSaving]       = useState(false)
+  const [saved, setSaved]         = useState(false)
+
+  const handleSave = async () => {
+    if (!url.trim()) return
+    setSaving(true)
+    try {
+      await fetch('/api/ai/providers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: { id: 'ollama', baseUrl: url.trim() } }),
+      })
+      onSaved(url.trim())
+      setEditing(false)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] text-slate-500 uppercase tracking-wide">Ollama URL</span>
+        {!editing ? (
+          <>
+            <span className="text-xs font-mono text-violet-300">{currentUrl}</span>
+            <button
+              onClick={() => { setUrl(currentUrl); setEditing(true) }}
+              className="text-[10px] text-slate-500 hover:text-slate-300 border border-white/[0.06] rounded px-1.5 py-0.5 transition-colors"
             >
-              aistudio.google.com
-            </a>
-          </li>
-          {/* eslint-disable-next-line react/no-unescaped-entities */}
-          <li>2. „Get API key" → „Create API key" → kopieren</li>
-          <li>3. Key hier einfügen:</li>
-        </ol>
-        <div className="flex items-center gap-2">
-          <input
-            type="password"
-            value={apiKey}
-            onChange={e => setApiKey(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { void handleActivate() } }}
-            placeholder="AIza..."
-            className="flex-1 rounded-lg bg-black/40 border border-blue-700/40 px-3 py-1.5 text-xs text-white placeholder-blue-900 font-mono focus:outline-none focus:border-blue-500/60 transition-colors"
-          />
-          <button
-            onClick={() => { void handleActivate() }}
-            disabled={saving || !apiKey.trim()}
-            className="rounded-lg bg-blue-700 hover:bg-blue-600 disabled:opacity-40 px-4 py-1.5 text-xs font-semibold text-white transition-colors whitespace-nowrap"
-          >
-            {saving ? 'Speichern…' : 'Aktivieren'}
-          </button>
-        </div>
-        {error && (
-          <p className="text-xs text-rose-400">{error}</p>
-        )}
-        <p className="text-[10px] text-blue-500/60">
-          <a
-            href="https://aistudio.google.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-2 hover:text-blue-300 transition-colors"
-          >
-            Zur AI Studio Docs
-          </a>
-        </p>
-      </div>
-    </div>
-  )
-}
-
-function GroqQuickSetupBanner({ onActivated }: { onActivated: () => void }) {
-  const [apiKey, setApiKey]     = useState('')
-  const [saving, setSaving]     = useState(false)
-  const [error, setError]       = useState<string | null>(null)
-
-  const handleActivate = async () => {
-    if (!apiKey.trim()) return
-    setSaving(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/settings/env', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'GROQ_API_KEY', value: apiKey.trim() }),
-      })
-      const data = await res.json() as { ok: boolean; error?: string }
-      if (!data.ok) {
-        setError(data.error ?? 'Fehler beim Speichern')
-      } else {
-        onActivated()
-      }
-    } catch {
-      setError('Netzwerkfehler — bitte erneut versuchen')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="relative rounded-xl p-px overflow-hidden"
-      style={{ background: 'linear-gradient(135deg, #16a34a55 0%, #15803d80 50%, #14532d55 100%)' }}
-    >
-      <div className="rounded-[11px] bg-[#0a1a0f] px-5 py-4 space-y-3">
-        <div className="flex items-start gap-3">
-          <span className="text-lg leading-none mt-0.5">&#9889;</span>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-emerald-300">
-              Groq: Kostenlos &amp; 10x schneller als Ollama
-            </p>
-            <p className="text-xs text-emerald-500/80 mt-0.5">
-              Kein Credit Card nötig — einfach unter{' '}
-              <a
-                href="https://console.groq.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline underline-offset-2 hover:text-emerald-300 transition-colors"
-              >
-                console.groq.com
-              </a>{' '}
-              registrieren und API Key hier einfügen.
-            </p>
+              Bearbeiten
+            </button>
+            {saved && <span className="text-[10px] text-emerald-400">✓ Gespeichert</span>}
+          </>
+        ) : (
+          <div className="flex items-center gap-2 w-full">
+            <input
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { void handleSave() } if (e.key === 'Escape') { setEditing(false) } }}
+              className="flex-1 rounded bg-black/40 border border-violet-500/30 px-2 py-1 text-xs font-mono text-white focus:outline-none focus:border-violet-400 transition-colors"
+              placeholder="http://localhost:11434"
+              autoFocus
+            />
+            <button
+              onClick={() => { void handleSave() }}
+              disabled={saving || !url.trim()}
+              className="text-xs bg-violet-700 hover:bg-violet-600 disabled:opacity-40 rounded px-2 py-1 text-white transition-colors"
+            >
+              {saving ? '…' : 'OK'}
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              className="text-xs text-slate-500 hover:text-white transition-colors"
+            >
+              Abbrechen
+            </button>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="password"
-            value={apiKey}
-            onChange={e => setApiKey(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { void handleActivate() } }}
-            placeholder="gsk_..."
-            className="flex-1 rounded-lg bg-black/40 border border-emerald-700/40 px-3 py-1.5 text-xs text-white placeholder-emerald-900 font-mono focus:outline-none focus:border-emerald-500/60 transition-colors"
-          />
-          <button
-            onClick={() => { void handleActivate() }}
-            disabled={saving || !apiKey.trim()}
-            className="rounded-lg bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 px-4 py-1.5 text-xs font-semibold text-white transition-colors whitespace-nowrap"
-          >
-            {saving ? 'Speichern…' : 'Aktivieren'}
-          </button>
-        </div>
-        {error && (
-          <p className="text-xs text-rose-400">{error}</p>
         )}
       </div>
+      <p className="text-[10px] text-slate-600 mt-1">
+        Ändere die URL wenn Ollama auf einem anderen Host läuft (z.B. NAS oder Server).
+      </p>
     </div>
   )
 }
 
-function TogetherQuickSetupBanner({ onActivated }: { onActivated: () => void }) {
-  const [apiKey, setApiKey] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError]   = useState<string | null>(null)
-
-  const handleActivate = async () => {
-    if (!apiKey.trim()) return
-    setSaving(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/settings/env', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'TOGETHER_API_KEY', value: apiKey.trim() }),
-      })
-      const data = await res.json() as { ok: boolean; error?: string }
-      if (!data.ok) {
-        setError(data.error ?? 'Fehler beim Speichern')
-      } else {
-        onActivated()
-      }
-    } catch {
-      setError('Netzwerkfehler — bitte erneut versuchen')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="relative rounded-xl p-px overflow-hidden"
-      style={{ background: 'linear-gradient(135deg, #4f46e555 0%, #7c3aed80 50%, #2563eb55 100%)' }}
-    >
-      <div className="rounded-[11px] bg-[#0d0a1f] px-5 py-4 space-y-3">
-        <div className="flex items-start gap-3">
-          <span className="text-lg leading-none mt-0.5">&#127381;</span>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-violet-300">
-              Together.ai — $25 Gratis-Credits
-            </p>
-            <p className="text-xs text-violet-400/80 mt-0.5">
-              Funktioniert mit GMX-E-Mail · Llama 3, Mistral &amp; mehr · Registrierung unter{' '}
-              <a
-                href="https://api.together.ai"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline underline-offset-2 hover:text-violet-300 transition-colors"
-              >
-                api.together.ai
-              </a>
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="password"
-            value={apiKey}
-            onChange={e => setApiKey(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { void handleActivate() } }}
-            placeholder="together_…"
-            className="flex-1 rounded-lg bg-black/40 border border-violet-700/40 px-3 py-1.5 text-xs text-white placeholder-violet-900 font-mono focus:outline-none focus:border-violet-500/60 transition-colors"
-          />
-          <button
-            onClick={() => { void handleActivate() }}
-            disabled={saving || !apiKey.trim()}
-            className="rounded-lg bg-violet-700 hover:bg-violet-600 disabled:opacity-40 px-4 py-1.5 text-xs font-semibold text-white transition-colors whitespace-nowrap"
-          >
-            {saving ? 'Speichern…' : 'Aktivieren'}
-          </button>
-        </div>
-        {error && (
-          <p className="text-xs text-rose-400">{error}</p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function OpenRouterQuickSetupBanner({ onActivated }: { onActivated: () => void }) {
-  const [apiKey, setApiKey] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError]   = useState<string | null>(null)
-
-  const handleActivate = async () => {
-    if (!apiKey.trim()) return
-    setSaving(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/settings/env', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'OPENROUTER_API_KEY', value: apiKey.trim() }),
-      })
-      const data = await res.json() as { ok: boolean; error?: string }
-      if (!data.ok) {
-        setError(data.error ?? 'Fehler beim Speichern')
-      } else {
-        onActivated()
-      }
-    } catch {
-      setError('Netzwerkfehler — bitte erneut versuchen')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="relative rounded-xl p-px overflow-hidden"
-      style={{ background: 'linear-gradient(135deg, #d9770655 0%, #b4550080 50%, #92400e55 100%)' }}
-    >
-      <div className="rounded-[11px] bg-[#1a0f00] px-5 py-4 space-y-3">
-        <div className="flex items-start gap-3">
-          <span className="text-lg leading-none mt-0.5">&#127760;</span>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-amber-300">
-              OpenRouter — Kostenlose Modelle, keine Kreditkarte
-            </p>
-            <p className="text-xs text-amber-400/80 mt-0.5">
-              Llama 3.1, Mistral 7B &amp; mehr gratis · Registrierung unter{' '}
-              <a
-                href="https://openrouter.ai"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline underline-offset-2 hover:text-amber-300 transition-colors"
-              >
-                openrouter.ai
-              </a>
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="password"
-            value={apiKey}
-            onChange={e => setApiKey(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { void handleActivate() } }}
-            placeholder="sk-or-…"
-            className="flex-1 rounded-lg bg-black/40 border border-amber-700/40 px-3 py-1.5 text-xs text-white placeholder-amber-900 font-mono focus:outline-none focus:border-amber-500/60 transition-colors"
-          />
-          <button
-            onClick={() => { void handleActivate() }}
-            disabled={saving || !apiKey.trim()}
-            className="rounded-lg bg-amber-700 hover:bg-amber-600 disabled:opacity-40 px-4 py-1.5 text-xs font-semibold text-white transition-colors whitespace-nowrap"
-          >
-            {saving ? 'Speichern…' : 'Aktivieren'}
-          </button>
-        </div>
-        {error && (
-          <p className="text-xs text-rose-400">{error}</p>
-        )}
-      </div>
-    </div>
-  )
-}
+// ─── Ollama Auto-Detect ───────────────────────────────────────────────────────
 
 interface OllamaDetectedModel {
   id: string
@@ -342,15 +172,15 @@ interface OllamaModelsApiResponse {
   error?: string
 }
 
-function OllamaAutoDetect() {
+function OllamaAutoDetect({ baseUrl }: { baseUrl: string }) {
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<OllamaModelsApiResponse | null>(null)
+  const [result, setResult]   = useState<OllamaModelsApiResponse | null>(null)
 
   const handleDetect = async () => {
     setLoading(true)
     setResult(null)
     try {
-      const res = await fetch('/api/ai/providers/ollama-models')
+      const res  = await fetch(`/api/ai/providers/ollama-models?baseUrl=${encodeURIComponent(baseUrl)}`)
       const data = await res.json() as OllamaModelsApiResponse
       setResult(data)
     } catch {
@@ -360,10 +190,7 @@ function OllamaAutoDetect() {
     }
   }
 
-  const formatSize = (bytes: number): string => {
-    const gb = bytes / 1_073_741_824
-    return `${gb.toFixed(1)} GB`
-  }
+  const formatSize = (bytes: number): string => `${(bytes / 1_073_741_824).toFixed(1)} GB`
 
   return (
     <div className="mt-3">
@@ -379,11 +206,11 @@ function OllamaAutoDetect() {
         <div className="mt-2">
           {result.error ? (
             <div className="rounded-lg border border-rose-500/20 bg-rose-950/20 px-3 py-2">
-              <p className="text-xs text-rose-400">&#9888; Ollama not running &#8212; stelle sicher, dass Ollama lokal gestartet ist.</p>
+              <p className="text-xs text-rose-400">⚠ Ollama nicht erreichbar unter <span className="font-mono">{baseUrl}</span></p>
             </div>
           ) : result.models.length === 0 ? (
             <div className="rounded-lg border border-slate-700/40 bg-slate-900/40 px-3 py-2">
-              <p className="text-xs text-slate-500">Keine Modelle gefunden &#8212; führe <span className="font-mono text-violet-400">ollama pull llama3</span> aus.</p>
+              <p className="text-xs text-slate-500">Keine Modelle gefunden — führe <span className="font-mono text-violet-400">ollama pull llama3</span> aus.</p>
             </div>
           ) : (
             <div className="rounded-lg border border-slate-700/40 bg-slate-900/40 px-3 py-2 space-y-1.5">
@@ -403,6 +230,8 @@ function OllamaAutoDetect() {
     </div>
   )
 }
+
+// ─── Provider Card ────────────────────────────────────────────────────────────
 
 interface ProviderWithStatus extends AIProviderConfig {
   hasApiKey: boolean
@@ -432,8 +261,183 @@ const KEY_LABELS: Record<string, string> = {
   GOOGLE_API_KEY:     'Google API Key',
   TOGETHER_API_KEY:   'Together AI Key',
   OPENROUTER_API_KEY: 'OpenRouter API Key',
+  DEEPSEEK_API_KEY:   'DeepSeek API Key',
+  XAI_API_KEY:        'xAI API Key',
+  CEREBRAS_API_KEY:   'Cerebras API Key',
+  SAMBANOVA_API_KEY:  'SambaNova API Key',
+  PERPLEXITY_API_KEY: 'Perplexity API Key',
+  FIREWORKS_API_KEY:  'Fireworks API Key',
+  DEEPINFRA_API_KEY:  'Deepinfra API Key',
+  COHERE_API_KEY:     'Cohere API Key',
+  NVIDIA_API_KEY:     'Nvidia NIM API Key',
   SUPABASE_URL:       'Supabase URL',
   SUPABASE_ANON_KEY:  'Supabase Anon Key',
+}
+
+function FreeTierBadge({ limit, unverified }: { limit: string; unverified?: boolean }) {
+  return (
+    <span
+      className="text-[10px] font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/20 rounded px-1.5 py-0.5 shrink-0"
+      title={unverified ? 'Free-Tier-Angabe ist ein Richtwert und muss beim Anbieter geprüft werden.' : undefined}
+    >
+      {limit}{unverified ? ' · Richtwert' : ''}
+    </span>
+  )
+}
+
+function FreeModelLabel() {
+  return <span className="text-[9px] text-emerald-400 font-medium ml-1">FREE</span>
+}
+
+// ─── Inline API Key Entry (shown inside ProviderCard when key is missing) ─────
+
+function InlineKeyEntry({
+  envKey,
+  providerName,
+  signupUrl,
+  onSaved,
+}: {
+  envKey: string
+  providerName: string
+  signupUrl?: string
+  onSaved: () => void
+}) {
+  const [open, setOpen]     = useState(false)
+  const [value, setValue]   = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState<string | null>(null)
+
+  const handleSave = async () => {
+    if (!value.trim()) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res  = await fetch('/api/settings/env', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: envKey, value: value.trim() }),
+      })
+      const data = await res.json() as { ok: boolean; error?: string }
+      if (!data.ok) setError(data.error ?? 'Fehler beim Speichern')
+      else { setValue(''); setOpen(false); onSaved() }
+    } catch {
+      setError('Netzwerkfehler')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="text-xs text-violet-400 hover:text-violet-300 border border-violet-500/20 hover:border-violet-500/40 rounded px-2 py-0.5 transition-colors"
+      >
+        + API Key eingeben
+      </button>
+    )
+  }
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      <div className="flex items-center gap-2">
+        <input
+          type="password"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { void handleSave() } if (e.key === 'Escape') { setOpen(false) } }}
+          placeholder={`${providerName} API Key…`}
+          className="flex-1 rounded bg-black/40 border border-violet-500/30 px-2 py-1 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-violet-400 transition-colors"
+          autoFocus
+        />
+        <button
+          onClick={() => { void handleSave() }}
+          disabled={saving || !value.trim()}
+          className="rounded bg-violet-700 hover:bg-violet-600 disabled:opacity-40 px-2.5 py-1 text-xs font-semibold text-white transition-colors whitespace-nowrap"
+        >
+          {saving ? '…' : 'Speichern'}
+        </button>
+        <button onClick={() => setOpen(false)} className="text-slate-600 hover:text-slate-400 text-xs">✕</button>
+      </div>
+      {error && <p className="text-[10px] text-rose-400">{error}</p>}
+      {signupUrl && (
+        <p className="text-[10px] text-slate-600">
+          Noch kein Key?{' '}
+          <a href={signupUrl} target="_blank" rel="noopener noreferrer"
+            className="text-violet-400 hover:text-violet-300 underline underline-offset-2">
+            Kostenlos holen →
+          </a>
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ─── Custom BaseUrl Editor (for any provider, not just Ollama) ────────────────
+
+function BaseUrlEditor({
+  providerId,
+  currentUrl,
+  onSaved,
+}: {
+  providerId: string
+  currentUrl: string
+  onSaved: (url: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [url, setUrl]         = useState(currentUrl)
+  const [saving, setSaving]   = useState(false)
+  const [saved, setSaved]     = useState(false)
+
+  const handleSave = async () => {
+    if (!url.trim()) return
+    setSaving(true)
+    try {
+      await fetch('/api/ai/providers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: { id: providerId, baseUrl: url.trim() } }),
+      })
+      onSaved(url.trim())
+      setEditing(false)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap mt-1">
+      {!editing ? (
+        <>
+          <span className="text-xs font-mono text-slate-600 truncate max-w-[200px]">{url}</span>
+          <button
+            onClick={() => { setUrl(currentUrl); setEditing(true) }}
+            className="text-[10px] text-slate-600 hover:text-slate-400 border border-white/[0.06] rounded px-1 py-0.5 transition-colors shrink-0"
+          >
+            ✏
+          </button>
+          {saved && <span className="text-[10px] text-emerald-400">✓</span>}
+        </>
+      ) : (
+        <div className="flex items-center gap-1.5 w-full">
+          <input
+            value={url}
+            onChange={e => setUrl(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { void handleSave() } if (e.key === 'Escape') { setEditing(false) } }}
+            className="flex-1 rounded bg-black/40 border border-violet-500/30 px-2 py-0.5 text-xs font-mono text-white focus:outline-none focus:border-violet-400 transition-colors min-w-0"
+            autoFocus
+          />
+          <button onClick={() => { void handleSave() }} disabled={saving || !url.trim()}
+            className="text-[10px] bg-violet-700 hover:bg-violet-600 disabled:opacity-40 rounded px-2 py-0.5 text-white transition-colors shrink-0">
+            {saving ? '…' : 'OK'}
+          </button>
+          <button onClick={() => setEditing(false)} className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors shrink-0">✕</button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function ProviderCard({
@@ -442,21 +446,26 @@ function ProviderCard({
   onToggle,
   onTest,
   onSelectModel,
+  onProviderUpdate,
+  onKeyAdded,
 }: {
   provider: ProviderWithStatus
   selection: AIModelSelection
   onToggle: (id: string, enabled: boolean) => void
   onTest: (id: string) => Promise<void>
   onSelectModel: (purpose: 'fast' | 'coding', providerId: string, modelId: string) => void
+  onProviderUpdate: (patch: Partial<AIProviderConfig> & { id: string }) => void
+  onKeyAdded: () => void
 }) {
-  const [testing, setTesting] = useState(false)
+  const [testing, setTesting]       = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; latencyMs: number } | null>(null)
+  const [baseUrl, setBaseUrl]       = useState(provider.baseUrl ?? '')
 
   const handleTest = async () => {
     setTesting(true)
     setTestResult(null)
     await onTest(provider.id)
-    const res = await fetch(`/api/ai/providers/${provider.id}/test`, { method: 'POST' })
+    const res  = await fetch(`/api/ai/providers/${provider.id}/test`, { method: 'POST' })
     const data = await res.json() as { ok: boolean; latencyMs: number }
     setTestResult(data)
     setTesting(false)
@@ -477,7 +486,7 @@ function ProviderCard({
     )}>
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <div className={cx(
             'h-2 w-2 rounded-full shrink-0',
             provider.enabled && provider.hasApiKey ? 'bg-emerald-400' :
@@ -486,6 +495,12 @@ function ProviderCard({
           <p className="text-sm font-semibold text-white truncate">{provider.name}</p>
           {provider.isBuiltIn && (
             <span className="shrink-0 text-[10px] text-slate-600 border border-slate-700/50 rounded px-1">built-in</span>
+          )}
+          {provider.freeTier && (
+            <FreeTierBadge
+              limit={provider.freeTier.limit}
+              unverified={provider.freeTier.verification?.status === 'unverified'}
+            />
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -507,23 +522,56 @@ function ProviderCard({
         </div>
       </div>
 
-      {/* API Key status */}
+      {/* API Key status + inline entry */}
       {provider.apiKeyRef && (
-        <div className="mt-2 flex items-center gap-1.5">
-          <span className={cx('text-xs', provider.hasApiKey ? 'text-emerald-400' : 'text-amber-400')}>
-            {provider.hasApiKey ? '✓' : '⚠'}
-          </span>
-          <span className="text-xs text-slate-500">
-            {provider.hasApiKey
-              ? `${KEY_LABELS[provider.apiKeyRef] ?? provider.apiKeyRef} konfiguriert`
-              : `${KEY_LABELS[provider.apiKeyRef] ?? provider.apiKeyRef} fehlt — in Settings → API Keys eintragen`
-            }
-          </span>
+        <div className="mt-2 space-y-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className={cx('text-xs', provider.hasApiKey ? 'text-emerald-400' : 'text-amber-400')}>
+              {provider.hasApiKey ? '✓' : '⚠'}
+            </span>
+            <span className="text-xs text-slate-500">
+              {provider.hasApiKey
+                ? `${KEY_LABELS[provider.apiKeyRef] ?? provider.apiKeyRef} konfiguriert`
+                : `${KEY_LABELS[provider.apiKeyRef] ?? provider.apiKeyRef} fehlt`
+              }
+            </span>
+          </div>
+          {/* Inline key entry — shown when key is missing */}
+          {!provider.hasApiKey && (
+            <InlineKeyEntry
+              envKey={provider.apiKeyRef}
+              providerName={provider.name}
+              signupUrl={provider.freeTier?.signupUrl}
+              onSaved={onKeyAdded}
+            />
+          )}
         </div>
       )}
 
-      {provider.baseUrl && (
-        <p className="mt-1 text-xs text-slate-600 font-mono truncate">{provider.baseUrl}</p>
+      {/* BaseUrl editor — shown for all providers with a baseUrl */}
+      {provider.baseUrl && provider.type !== 'ollama' && (
+        <div className="mt-2">
+          <span className="text-[10px] text-slate-600 uppercase tracking-wide">Base URL</span>
+          <BaseUrlEditor
+            providerId={provider.id}
+            currentUrl={baseUrl}
+            onSaved={(newUrl) => {
+              setBaseUrl(newUrl)
+              onProviderUpdate({ id: provider.id, baseUrl: newUrl })
+            }}
+          />
+        </div>
+      )}
+
+      {/* Ollama URL editor (more prominent, with helper text) */}
+      {provider.type === 'ollama' && (
+        <OllamaUrlEditor
+          currentUrl={baseUrl || 'http://localhost:11434'}
+          onSaved={(newUrl) => {
+            setBaseUrl(newUrl)
+            onProviderUpdate({ id: 'ollama', baseUrl: newUrl })
+          }}
+        />
       )}
 
       {/* Model selection (only when enabled) */}
@@ -539,7 +587,11 @@ function ProviderCard({
               >
                 {!isFastProvider && <option value="">— nicht ausgewählt —</option>}
                 {fastModels.map(m => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
+                  <option key={m.id} value={m.id}>
+                    {m.name}{m.isFree ? ' ✦FREE' : ''}
+                    {m.costPer1kInput !== undefined && m.costPer1kInput > 0
+                      ? ` ($${m.costPer1kInput}/1k)` : ''}
+                  </option>
                 ))}
               </select>
               {!isFastProvider && (
@@ -566,7 +618,11 @@ function ProviderCard({
               >
                 {!isCodingProvider && <option value="">— nicht ausgewählt —</option>}
                 {codingModels.map(m => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
+                  <option key={m.id} value={m.id}>
+                    {m.name}{m.isFree ? ' ✦FREE' : ''}
+                    {m.costPer1kInput !== undefined && m.costPer1kInput > 0
+                      ? ` ($${m.costPer1kInput}/1k)` : ''}
+                  </option>
                 ))}
               </select>
               {!isCodingProvider && (
@@ -585,12 +641,14 @@ function ProviderCard({
         </div>
       )}
 
-      {/* Gemini recommendation hint — shown when Gemini becomes enabled */}
-      {provider.id === 'google-gemini' && provider.enabled && (
-        <div className="mt-3 rounded-lg border border-blue-500/20 bg-blue-950/20 px-3 py-2">
-          <p className="text-[11px] text-blue-300/80">
-            Empfohlen: <span className="font-semibold text-blue-200">Gemini 2.0 Flash</span> als Fast-Modell — 1.500 kostenlose Requests/Tag
-          </p>
+      {/* Free-model quick labels when not enabled */}
+      {!provider.enabled && provider.models.some(m => m.isFree) && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {provider.models.filter(m => m.isFree).slice(0, 3).map(m => (
+            <span key={m.id} className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/15 rounded px-1.5 py-0.5 font-mono">
+              {m.name} <FreeModelLabel />
+            </span>
+          ))}
         </div>
       )}
 
@@ -612,16 +670,19 @@ function ProviderCard({
         </div>
       )}
 
-      {/* Ollama auto-detect — shown for Ollama provider regardless of enabled state */}
-      {provider.type === 'ollama' && <OllamaAutoDetect />}
+      {/* Ollama auto-detect */}
+      {provider.type === 'ollama' && (
+        <OllamaAutoDetect baseUrl={provider.baseUrl ?? 'http://localhost:11434'} />
+      )}
     </div>
   )
 }
 
+// ─── Add Custom Provider Form ─────────────────────────────────────────────────
+
 function AddCustomProviderForm({ onAdd }: { onAdd: (config: Partial<AIProviderConfig> & { id: string }) => void }) {
   const [name, setName]       = useState('')
   const [baseUrl, setBaseUrl] = useState('')
-  const [apiKey, setApiKey]   = useState('')
 
   const handleSubmit = () => {
     if (!name.trim() || !baseUrl.trim()) return
@@ -631,7 +692,7 @@ function AddCustomProviderForm({ onAdd }: { onAdd: (config: Partial<AIProviderCo
       type: 'openai-compatible',
       name: name.trim(),
       baseUrl: baseUrl.trim(),
-      apiKeyRef: apiKey ? `CUSTOM_${id.toUpperCase().replace(/-/g, '_')}_KEY` : '',
+      apiKeyRef: `CUSTOM_${id.toUpperCase().replace(/-/g, '_')}_KEY`,
       models: [{ id: 'default', name: 'Default', purpose: 'both' }],
       enabled: true,
       isBuiltIn: false,
@@ -639,7 +700,6 @@ function AddCustomProviderForm({ onAdd }: { onAdd: (config: Partial<AIProviderCo
     })
     setName('')
     setBaseUrl('')
-    setApiKey('')
   }
 
   return (
@@ -658,7 +718,7 @@ function AddCustomProviderForm({ onAdd }: { onAdd: (config: Partial<AIProviderCo
           placeholder="Base URL (z.B. http://192.168.1.100:8000/v1)"
           className="w-full rounded bg-white/[0.04] border border-white/[0.08] px-3 py-1.5 text-xs text-white placeholder-slate-600 font-mono"
         />
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <button
             onClick={handleSubmit}
             disabled={!name.trim() || !baseUrl.trim()}
@@ -666,7 +726,7 @@ function AddCustomProviderForm({ onAdd }: { onAdd: (config: Partial<AIProviderCo
           >
             Hinzufügen
           </button>
-          <p className="text-[10px] text-slate-600 self-center">
+          <p className="text-[10px] text-slate-600">
             Jeder OpenAI-kompatible Endpunkt funktioniert (vLLM, LocalAI, Jan, etc.)
           </p>
         </div>
@@ -675,7 +735,7 @@ function AddCustomProviderForm({ onAdd }: { onAdd: (config: Partial<AIProviderCo
   )
 }
 
-// ─── Dedicated Model Picker Section ──────────────────────────────────────────
+// ─── Model Picker ─────────────────────────────────────────────────────────────
 
 interface ModelPickerRowProps {
   label: string
@@ -688,20 +748,13 @@ interface ModelPickerRowProps {
 }
 
 function ModelPickerRow({
-  label,
-  subtitle,
-  purpose,
-  providers,
-  selectedProvider,
-  selectedModel,
-  onSave,
+  label, subtitle, purpose, providers, selectedProvider, selectedModel, onSave,
 }: ModelPickerRowProps) {
   const [localProvider, setLocalProvider] = useState(selectedProvider)
   const [localModel,    setLocalModel]    = useState(selectedModel)
   const [saving,        setSaving]        = useState(false)
   const [saved,         setSaved]         = useState(false)
 
-  // Sync when parent selection changes (e.g. after ProviderCard quick-select)
   useEffect(() => { setLocalProvider(selectedProvider) }, [selectedProvider])
   useEffect(() => { setLocalModel(selectedModel)       }, [selectedModel])
 
@@ -741,7 +794,7 @@ function ModelPickerRow({
           <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {saved && <span className="text-xs text-emerald-400">&#10003; Gespeichert</span>}
+          {saved && <span className="text-xs text-emerald-400">✓ Gespeichert</span>}
           <button
             onClick={() => { void handleSave() }}
             disabled={saving || !isDirty || !localProvider || !localModel}
@@ -758,11 +811,8 @@ function ModelPickerRow({
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3">
-        {/* Provider dropdown */}
         <div>
-          <label className="block text-[10px] font-medium text-slate-500 mb-1.5 uppercase tracking-wide">
-            Provider
-          </label>
+          <label className="block text-[10px] font-medium text-slate-500 mb-1.5 uppercase tracking-wide">Provider</label>
           <select
             value={localProvider}
             onChange={e => handleProviderChange(e.target.value)}
@@ -770,34 +820,26 @@ function ModelPickerRow({
           >
             {eligibleProviders.map(p => (
               <option key={p.id} value={p.id}>
-                {p.name}{!p.hasApiKey && p.apiKeyRef ? ' (kein API Key)' : ''}
+                {p.name}{!p.hasApiKey && p.apiKeyRef ? ' (kein Key)' : ''}
               </option>
             ))}
           </select>
         </div>
-
-        {/* Model dropdown */}
         <div>
-          <label className="block text-[10px] font-medium text-slate-500 mb-1.5 uppercase tracking-wide">
-            Modell
-          </label>
+          <label className="block text-[10px] font-medium text-slate-500 mb-1.5 uppercase tracking-wide">Modell</label>
           <select
             value={localModel}
             onChange={e => setLocalModel(e.target.value)}
             disabled={modelsForProvider.length === 0}
             className="w-full rounded-lg bg-slate-700 border border-slate-600 ring-1 ring-slate-600 hover:ring-slate-400 focus:ring-violet-500 focus:outline-none px-3 py-2 text-sm text-white transition-all disabled:opacity-40"
           >
-            {modelsForProvider.length === 0 && (
-              <option value="">&mdash; keine Modelle verfügbar &mdash;</option>
-            )}
+            {modelsForProvider.length === 0 && <option value="">— keine Modelle —</option>}
             {modelsForProvider.map(m => (
-              <option key={m.id} value={m.id}>{m.name}</option>
+              <option key={m.id} value={m.id}>{m.name}{m.isFree ? ' ✦FREE' : ''}</option>
             ))}
           </select>
         </div>
       </div>
-
-      {/* Currently active indicator */}
       {!isDirty && (
         <p className="mt-2 text-[10px] text-slate-600 font-mono">
           Aktiv: {selectedProvider} / {selectedModel}
@@ -807,50 +849,40 @@ function ModelPickerRow({
   )
 }
 
-interface ModelPickerSectionProps {
+function ModelPickerSection({
+  providers, selection, onSelectionChange,
+}: {
   providers: ProviderWithStatus[]
   selection: AIModelSelection
   onSelectionChange: (selection: AIModelSelection) => void
-}
-
-function ModelPickerSection({ providers, selection, onSelectionChange }: ModelPickerSectionProps) {
+}) {
   const handleFastSave = async (providerId: string, modelId: string) => {
-    const updated: AIModelSelection = {
-      ...selection,
-      fastProvider: providerId,
-      fastModel:    modelId,
-    }
+    const updated: AIModelSelection = { ...selection, fastProvider: providerId, fastModel: modelId }
     await fetch('/api/ai/model-selection', {
-      method:  'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ fastProvider: providerId, fastModel: modelId }),
+      body: JSON.stringify({ fastProvider: providerId, fastModel: modelId }),
     })
     onSelectionChange(updated)
   }
 
   const handleCodingSave = async (providerId: string, modelId: string) => {
-    const updated: AIModelSelection = {
-      ...selection,
-      codingProvider: providerId,
-      codingModel:    modelId,
-    }
+    const updated: AIModelSelection = { ...selection, codingProvider: providerId, codingModel: modelId }
     await fetch('/api/ai/model-selection', {
-      method:  'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ codingProvider: providerId, codingModel: modelId }),
+      body: JSON.stringify({ codingProvider: providerId, codingModel: modelId }),
     })
     onSelectionChange(updated)
   }
 
   return (
     <section>
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
-        Modell-Auswahl
-      </h2>
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Modell-Auswahl</h2>
       <div className="space-y-3">
         <ModelPickerRow
           label="Schnelle Antworten (Fast)"
-          subtitle="Für kurze Tasks, Autocomplete, Chat — Haiku-Klasse"
+          subtitle="Für kurze Tasks, Chat — Haiku-Klasse"
           purpose="fast"
           providers={providers}
           selectedProvider={selection.fastProvider}
@@ -859,7 +891,7 @@ function ModelPickerSection({ providers, selection, onSelectionChange }: ModelPi
         />
         <ModelPickerRow
           label="Komplexe Aufgaben (Coding)"
-          subtitle="Für Code-Generierung, Research, Analyse — Sonnet-Klasse"
+          subtitle="Für Code-Generierung, Research — Sonnet-Klasse"
           purpose="coding"
           providers={providers}
           selectedProvider={selection.codingProvider}
@@ -873,10 +905,77 @@ function ModelPickerSection({ providers, selection, onSelectionChange }: ModelPi
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+// Providers that should show quick-setup banners (ordered by value)
+const QUICK_SETUP_CONFIGS: Record<string, {
+  title: string; subtitle: string; icon: string; bg: string
+  gradient: string; placeholder: string; envKey: string; signupUrl: string
+}> = {
+  'google-gemini': {
+    title: 'Google Gemini — Kostenlos, kein Kreditkarte',
+    subtitle: '1.500 Requests/Tag gratis · Google-Account reicht',
+    icon: '✨',
+    bg: '#080f1a',
+    gradient: 'linear-gradient(135deg, #3b82f655 0%, #2563eb80 50%, #1d4ed855 100%)',
+    placeholder: 'AIza...',
+    envKey: 'GOOGLE_API_KEY',
+    signupUrl: 'https://aistudio.google.com',
+  },
+  groq: {
+    title: 'Groq — Kostenlos & Blitzschnell',
+    subtitle: '14.400 Requests/Tag · kein Kreditkarte nötig',
+    icon: '⚡',
+    bg: '#0a1a0f',
+    gradient: 'linear-gradient(135deg, #16a34a55 0%, #15803d80 50%, #14532d55 100%)',
+    placeholder: 'gsk_...',
+    envKey: 'GROQ_API_KEY',
+    signupUrl: 'https://console.groq.com',
+  },
+  cerebras: {
+    title: 'Cerebras — 2.000+ Tokens/Sekunde, kostenlos',
+    subtitle: 'Llama 3.1 8B gratis · schnellste Inferenz weltweit',
+    icon: '🧠',
+    bg: '#0f0a1a',
+    gradient: 'linear-gradient(135deg, #7c3aed55 0%, #6d28d980 50%, #4c1d9555 100%)',
+    placeholder: 'csk_...',
+    envKey: 'CEREBRAS_API_KEY',
+    signupUrl: 'https://cloud.cerebras.ai',
+  },
+  sambanova: {
+    title: 'SambaNova — Llama 3.3 70B kostenlos',
+    subtitle: 'DeepSeek R1 & Llama 3.3 70B dauerhaft gratis',
+    icon: '🚀',
+    bg: '#0a0f1a',
+    gradient: 'linear-gradient(135deg, #0891b255 0%, #0e749080 50%, #155e7555 100%)',
+    placeholder: 'sna_...',
+    envKey: 'SAMBANOVA_API_KEY',
+    signupUrl: 'https://cloud.sambanova.ai',
+  },
+  openrouter: {
+    title: 'OpenRouter — Kostenlose Modelle',
+    subtitle: 'Llama, Mistral, Gemma & DeepSeek R1 dauerhaft gratis',
+    icon: '🌐',
+    bg: '#1a0f00',
+    gradient: 'linear-gradient(135deg, #d9770655 0%, #b4550080 50%, #92400e55 100%)',
+    placeholder: 'sk-or-...',
+    envKey: 'OPENROUTER_API_KEY',
+    signupUrl: 'https://openrouter.ai',
+  },
+  together: {
+    title: 'Together.ai — $25 Gratis-Credits',
+    subtitle: 'Llama 3, Mistral & mehr · GMX-E-Mail reicht',
+    icon: '🎁',
+    bg: '#0d0a1f',
+    gradient: 'linear-gradient(135deg, #4f46e555 0%, #7c3aed80 50%, #2563eb55 100%)',
+    placeholder: 'together_...',
+    envKey: 'TOGETHER_API_KEY',
+    signupUrl: 'https://api.together.ai',
+  },
+}
+
 export default function ProvidersPage() {
-  const [data, setData]       = useState<ProvidersData | null>(null)
-  const [saving, setSaving]   = useState(false)
-  const [saved, setSaved]     = useState(false)
+  const [data, setData]     = useState<ProvidersData | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved]   = useState(false)
 
   const load = useCallback(() => {
     fetch('/api/ai/providers')
@@ -900,9 +999,9 @@ export default function ProvidersPage() {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const handleToggle = (id: string, enabled: boolean) => {
-    save({ provider: { id, enabled } })
-  }
+  const handleToggle   = (id: string, enabled: boolean) => { void save({ provider: { id, enabled } }) }
+  const handleAddCustom = (config: Partial<AIProviderConfig> & { id: string }) => { void save({ provider: config }) }
+  const handleProviderUpdate = (patch: Partial<AIProviderConfig> & { id: string }) => { void save({ provider: patch }) }
 
   const handleSelectModel = (purpose: 'fast' | 'coding', providerId: string, modelId: string) => {
     if (!data || !modelId) return
@@ -913,11 +1012,7 @@ export default function ProvidersPage() {
         : { codingProvider: providerId, codingModel: modelId }
       ),
     }
-    save({ selection: newSelection })
-  }
-
-  const handleAddCustom = (config: Partial<AIProviderConfig> & { id: string }) => {
-    save({ provider: config })
+    void save({ selection: newSelection })
   }
 
   if (!data) {
@@ -932,19 +1027,19 @@ export default function ProvidersPage() {
     )
   }
 
-  const localProviders   = data.providers.filter(p => p.dataResidency === 'local')
-  const cloudProviders   = data.providers.filter(p => p.dataResidency !== 'local')
-  const activeSelection  = data.selection
+  const localProviders  = data.providers.filter(p => p.dataResidency === 'local')
+  const cloudProviders  = data.providers.filter(p => p.dataResidency !== 'local')
+  const activeSelection = data.selection
 
-  const groqProvider       = data.providers.find(p => p.id === 'groq')
-  const geminiProvider     = data.providers.find(p => p.id === 'google-gemini')
-  const togetherProvider   = data.providers.find(p => p.id === 'together')
-  const openrouterProvider = data.providers.find(p => p.id === 'openrouter')
-  const showGroqBanner       = groqProvider != null && !groqProvider.hasApiKey
-  const showGeminiBanner     = geminiProvider != null && !geminiProvider.hasApiKey
-  const showTogetherBanner   = togetherProvider != null && !togetherProvider.hasApiKey
-  const showOpenRouterBanner = openrouterProvider != null && !openrouterProvider.hasApiKey
-  const showAnyBanner        = showGeminiBanner || showGroqBanner || showTogetherBanner || showOpenRouterBanner
+  // Quick-setup banners: free-tier providers without an API key yet
+  const bannersToShow = Object.entries(QUICK_SETUP_CONFIGS).filter(([id]) => {
+    const p = data.providers.find(pr => pr.id === id)
+    return p != null && !p.hasApiKey
+  })
+
+  // Provider stats
+  const freeTierProviders = data.providers.filter(p => p.freeTier)
+  const freeModelCount    = data.providers.reduce((n, p) => n + p.models.filter(m => m.isFree).length, 0)
 
   return (
     <main className="min-h-screen bg-[#08080d]">
@@ -956,30 +1051,27 @@ export default function ProvidersPage() {
           <span className="text-sm text-slate-400">AI Providers</span>
         </div>
         <div className="flex items-center gap-3">
+          <span className="text-[10px] text-slate-600">{data.providers.length} Provider · {freeTierProviders.length} mit Free Tier · {freeModelCount} kostenlose Modelle</span>
           {saved && <span className="text-xs text-emerald-400">✓ Gespeichert</span>}
           {saving && <span className="text-xs text-slate-500">Speichern…</span>}
         </div>
       </div>
 
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-8">
-        {/* Quick-Setup Banners — shown when a free provider has no API key yet */}
-        {showAnyBanner && (
+
+        {/* Quick-Setup Banners */}
+        {bannersToShow.length > 0 && (
           <div className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Schnellstart — Kostenlose Provider
+              🆓 Schnellstart — Kostenlose Provider
             </p>
-            {showGeminiBanner && (
-              <GeminiQuickSetupBanner onActivated={() => { window.location.reload() }} />
-            )}
-            {showGroqBanner && (
-              <GroqQuickSetupBanner onActivated={() => { window.location.reload() }} />
-            )}
-            {showTogetherBanner && (
-              <TogetherQuickSetupBanner onActivated={() => { window.location.reload() }} />
-            )}
-            {showOpenRouterBanner && (
-              <OpenRouterQuickSetupBanner onActivated={() => { window.location.reload() }} />
-            )}
+            {bannersToShow.map(([id, cfg]) => (
+              <QuickSetupBanner
+                key={id}
+                {...cfg}
+                onActivated={() => { window.location.reload() }}
+              />
+            ))}
           </div>
         )}
 
@@ -1003,7 +1095,7 @@ export default function ProvidersPage() {
         {/* Cloud providers */}
         <section>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
-            Cloud Provider
+            Cloud Provider ({cloudProviders.length})
           </h2>
           <div className="space-y-3">
             {cloudProviders.map(p => (
@@ -1014,6 +1106,8 @@ export default function ProvidersPage() {
                 onToggle={handleToggle}
                 onTest={async () => {}}
                 onSelectModel={handleSelectModel}
+                onProviderUpdate={handleProviderUpdate}
+                onKeyAdded={load}
               />
             ))}
           </div>
@@ -1023,7 +1117,7 @@ export default function ProvidersPage() {
         <section>
           <div className="flex items-center gap-2 mb-3">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Lokal (DSGVO-konform, kein API-Key)
+              Lokal — DSGVO-konform, kein API-Key
             </h2>
             <span className="text-[10px] border border-emerald-500/20 text-emerald-400 rounded px-1">100% privat</span>
           </div>
@@ -1036,12 +1130,14 @@ export default function ProvidersPage() {
                 onToggle={handleToggle}
                 onTest={async () => {}}
                 onSelectModel={handleSelectModel}
+                onProviderUpdate={handleProviderUpdate}
+                onKeyAdded={load}
               />
             ))}
           </div>
         </section>
 
-        {/* Dedicated model picker — fast vs coding */}
+        {/* Model Picker */}
         <ModelPickerSection
           providers={data.providers}
           selection={activeSelection}
@@ -1050,19 +1146,29 @@ export default function ProvidersPage() {
 
         {/* Add custom */}
         <section>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
-            Eigener Provider
-          </h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Eigener Provider</h2>
           <AddCustomProviderForm onAdd={handleAddCustom} />
         </section>
 
         {/* Info box */}
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-xs text-slate-500 space-y-1">
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-xs text-slate-500 space-y-2">
           <p className="font-medium text-slate-400">Wie füge ich einen neuen Provider hinzu?</p>
           <p>Jeder OpenAI-kompatible Endpunkt funktioniert — einfach Name + Base URL eintragen.</p>
-          <p>API-Keys werden in Settings → API Keys gespeichert (verschlüsselt, nur lokal).</p>
-          <p>Env-Vars: <span className="font-mono text-violet-400">OPENAI_API_KEY</span>, <span className="font-mono text-violet-400">GROQ_API_KEY</span>, <span className="font-mono text-violet-400">MISTRAL_API_KEY</span>, <span className="font-mono text-violet-400">GOOGLE_API_KEY</span>, <span className="font-mono text-violet-400">TOGETHER_API_KEY</span>, <span className="font-mono text-violet-400">OPENROUTER_API_KEY</span></p>
-          <p>Datenresidenz: EU-Provider (Mistral) bevorzugen wenn DSGVO-kritisch.</p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2">
+            <p><span className="font-mono text-violet-400">GROQ_API_KEY</span> — Groq</p>
+            <p><span className="font-mono text-violet-400">GOOGLE_API_KEY</span> — Gemini</p>
+            <p><span className="font-mono text-violet-400">CEREBRAS_API_KEY</span> — Cerebras</p>
+            <p><span className="font-mono text-violet-400">SAMBANOVA_API_KEY</span> — SambaNova</p>
+            <p><span className="font-mono text-violet-400">DEEPSEEK_API_KEY</span> — DeepSeek</p>
+            <p><span className="font-mono text-violet-400">XAI_API_KEY</span> — xAI/Grok</p>
+            <p><span className="font-mono text-violet-400">OPENROUTER_API_KEY</span> — OpenRouter</p>
+            <p><span className="font-mono text-violet-400">PERPLEXITY_API_KEY</span> — Perplexity</p>
+            <p><span className="font-mono text-violet-400">FIREWORKS_API_KEY</span> — Fireworks</p>
+            <p><span className="font-mono text-violet-400">DEEPINFRA_API_KEY</span> — Deepinfra</p>
+            <p><span className="font-mono text-violet-400">COHERE_API_KEY</span> — Cohere</p>
+            <p><span className="font-mono text-violet-400">NVIDIA_API_KEY</span> — Nvidia NIM</p>
+          </div>
+          <p className="pt-1 text-slate-600">🇪🇺 DSGVO-kritisch? Mistral AI (EU) oder Ollama/LM Studio (lokal) bevorzugen.</p>
         </div>
       </div>
     </main>

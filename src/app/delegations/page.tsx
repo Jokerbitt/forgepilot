@@ -3,7 +3,25 @@
 import { useEffect, useRef, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Download } from 'lucide-react'
+import {
+  Archive,
+  Bot,
+  CalendarDays,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  FileText,
+  ListChecks,
+  Play,
+  Plus,
+  RotateCcw,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  X,
+  Zap,
+} from 'lucide-react'
 import type { Delegation, TaskContract } from '@/lib/models/delegation'
 import { formatAge, isCreatedToday } from '@/lib/utils/delegation-age'
 import { DelegationDrawer } from '@/components/delegation/DelegationDrawer'
@@ -12,6 +30,7 @@ import { NewDelegationDialog } from '@/components/delegation/NewDelegationDialog
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 import { AutopilotReadinessPill } from '@/components/delegation/AutopilotReadinessBadge'
 import { VersionBadge } from '@/components/delegation/VersionBadge'
+import { Badge, EmptyState, Metric, Panel, buttonClassName, cx } from '@/components/ui/primitives'
 
 type ApprovalFilter = 'Alle' | 'approval-required' | 'auto-approved' | 'risk-blocked'
 
@@ -49,12 +68,37 @@ const APPROVAL_FILTER_LABELS: Record<ApprovalFilter, string> = {
   'risk-blocked': 'RiskClass C',
 }
 
+const TASK_TYPE_LABELS: Record<string, string> = {
+  feature: 'Feature',
+  fix: 'Fix',
+  chore: 'Chore',
+  bugfix: 'Bugfix',
+  docs: 'Docs',
+  refactor: 'Refactor',
+  research: 'Research',
+}
+
 const TASK_TYPE_ICONS: Record<string, string> = {
   feature:  '✨',
+  fix:      '🔧',
+  chore:    '🔩',
   bugfix:   '🐛',
-  docs:     '📝',
+  docs:     '📄',
   refactor: '♻️',
   research: '🔍',
+}
+
+function getWorkItemId(delegation: Delegation): string {
+  return delegation.contract.workItemId || delegation.contract.id || delegation.id
+}
+
+function getProjectKey(delegation: Delegation): string {
+  const workItemId = getWorkItemId(delegation)
+  return workItemId.includes('-') ? workItemId.split('-')[0] : 'Local'
+}
+
+function getDelegationGoal(delegation: Delegation): string {
+  return delegation.contract.goal || delegation.title || 'Unbenannte Delegation'
 }
 
 function DelegationsContent() {
@@ -413,12 +457,14 @@ function DelegationsContent() {
 
   // ── Filters ─────────────────────────────────────────────────────────────
   const uniqueProjects = Array.from(
-    new Set(delegations.map(d => d.contract.workItemId.split('-')[0] || 'Unknown'))
+    new Set(delegations.map(getProjectKey))
   ).sort()
 
   const filteredDelegations = delegations.filter(d => {
     const matchStatus  = statusFilter === 'Alle' || d.status === statusFilter
-    const matchProject = projectFilter === 'Alle' || d.contract.workItemId.startsWith(projectFilter)
+    const workItemId = getWorkItemId(d)
+    const goal = getDelegationGoal(d)
+    const matchProject = projectFilter === 'Alle' || getProjectKey(d) === projectFilter || workItemId.startsWith(projectFilter)
     const matchApproval =
       approvalFilter === 'Alle' ||
       (approvalFilter === 'approval-required' && d.contract.requiresApproval) ||
@@ -427,8 +473,8 @@ function DelegationsContent() {
     const q = searchQuery.toLowerCase().trim()
     const matchSearch = !q ||
       (d.title || '').toLowerCase().includes(q) ||
-      d.contract.goal.toLowerCase().includes(q) ||
-      d.contract.workItemId.toLowerCase().includes(q) ||
+      goal.toLowerCase().includes(q) ||
+      workItemId.toLowerCase().includes(q) ||
       (d.contract.context || '').toLowerCase().includes(q) ||
       (d.briefTitle || '').toLowerCase().includes(q)
     const matchToday = !todayOnly || isCreatedToday(d.createdAt)
@@ -444,7 +490,7 @@ function DelegationsContent() {
     ? [...filteredDelegations].sort((a, b) => {
         let cmp = 0
         if (sortKey === 'goal') {
-          cmp = a.contract.goal.localeCompare(b.contract.goal, 'de')
+          cmp = getDelegationGoal(a).localeCompare(getDelegationGoal(b), 'de')
         } else if (sortKey === 'status') {
           cmp = (STATUS_SORT_WEIGHT[a.status] ?? 9) - (STATUS_SORT_WEIGHT[b.status] ?? 9)
         } else if (sortKey === 'time') {

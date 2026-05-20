@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import {
   listEvalCases,
@@ -6,9 +7,16 @@ import {
   deleteEvalCase,
   listEvalAlerts,
   acknowledgeAlert,
-  type EvalCase,
 } from '@/lib/eval/harness'
 import crypto from 'crypto'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { EvalCaseSchema } from '@/lib/validation/schemas'
+import { z } from 'zod'
+
+const EvalPostSchema = z.union([
+  z.object({ action: z.literal('acknowledge'), alertId: z.string().min(1) }),
+  EvalCaseSchema,
+])
 
 // GET /api/eval — list cases + recent results + alerts
 export function GET(request: NextRequest) {
@@ -23,22 +31,23 @@ export function GET(request: NextRequest) {
 
 // POST /api/eval — create/update case OR acknowledge alert
 export async function POST(request: NextRequest) {
-  const body = await request.json() as Partial<EvalCase> & { action?: string; alertId?: string }
+  const body = await parseBody(request, EvalPostSchema)
+  if (isValidationError(body)) return body
 
-  if (body.action === 'acknowledge' && body.alertId) {
+  if ('action' in body && body.action === 'acknowledge') {
     acknowledgeAlert(body.alertId)
     return NextResponse.json({ ok: true })
   }
 
   const c = upsertEvalCase({
-    id:                 body.id ?? `case-${crypto.randomUUID()}`,
-    title:              body.title ?? 'Untitled',
-    prompt:             body.prompt ?? '',
-    skillCategory:      body.skillCategory,
-    acceptanceCriteria: body.acceptanceCriteria ?? [],
-    goldenOutput:       body.goldenOutput,
-    tags:               body.tags ?? [],
-    active:             body.active ?? true,
+    id:                 ('id' in body ? body.id : undefined) ?? `case-${crypto.randomUUID()}`,
+    title:              'title' in body ? body.title : 'Untitled',
+    prompt:             'prompt' in body ? body.prompt : '',
+    skillCategory:      'skillCategory' in body ? body.skillCategory : undefined,
+    acceptanceCriteria: 'acceptanceCriteria' in body ? body.acceptanceCriteria : [],
+    goldenOutput:       'goldenOutput' in body ? body.goldenOutput : undefined,
+    tags:               'tags' in body ? body.tags : [],
+    active:             'active' in body ? body.active : true,
   })
   return NextResponse.json(c)
 }

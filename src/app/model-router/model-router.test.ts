@@ -43,7 +43,7 @@ describe('Model Router — display logic', () => {
 })
 
 describe('DEFAULT_PROFILES', () => {
-  it('loads profiles from registry', () => {
+  it('loads profiles from provider catalog', () => {
     expect(DEFAULT_PROFILES.length).toBeGreaterThan(0)
   })
 

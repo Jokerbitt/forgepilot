@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { routeTask } from '@/lib/model-router/router'
 import { saveDecision, getDecisions } from '@/lib/model-router/store'

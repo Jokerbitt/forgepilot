@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { claimScope, releaseScope, getActiveClaims } from '@/lib/agents/scope-lock'
 import type { AgentType } from '@/lib/agents/agent-skills'

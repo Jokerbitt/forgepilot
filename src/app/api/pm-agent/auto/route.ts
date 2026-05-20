@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { readProjectBriefs } from '@/lib/project-briefs'
 import { readMilestones, readWorkPackages } from '@/lib/knowledge/milestone-store'

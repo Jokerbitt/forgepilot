@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 /**
  * GET /api/dashboard/stats
  *
@@ -17,6 +18,7 @@ import { getCards } from '@/lib/knowledge/store'
 const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
 const LEDGER_FILE = path.join(process.cwd(), 'config', 'processing-ledger.json')
 const API_KEYS_FILE = path.join(process.cwd(), 'config', 'api-keys.json')
+const TEST_RESULTS_FILE = path.join(process.cwd(), 'config', 'test-results.json')
 
 /** Known AI provider key names that indicate an active external AI provider. */
 const AI_PROVIDER_KEY_NAMES = [
@@ -59,6 +61,18 @@ function readActiveProviders(): number {
   } catch { return 0 }
 }
 
+/** Read passing test count from config/test-results.json (written by vitest after each run). */
+function readTestsGreen(): number {
+  try {
+    if (!fs.existsSync(TEST_RESULTS_FILE)) return 0
+    const data = JSON.parse(fs.readFileSync(TEST_RESULTS_FILE, 'utf-8')) as {
+      numPassedTests?: number
+      success?: boolean
+    }
+    return data.numPassedTests ?? 0
+  } catch { return 0 }
+}
+
 export interface DashboardStats {
   delegations: {
     total: number
@@ -92,7 +106,7 @@ export interface DashboardStats {
   }
   knowledge: {
     cardCount: number
-    recentCards: number   // added in last 7 days
+    recentCards: number   // added in last 30 days
   }
   system: {
     aiCallsToday: number
@@ -155,17 +169,17 @@ export async function GET(): Promise<NextResponse<DashboardStats>> {
 
   // Knowledge
   const cards = getCards()
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
   const knowledgeStats = {
     cardCount: cards.length,
-    recentCards: cards.filter(c => c.createdAt >= sevenDaysAgo).length,
+    recentCards: cards.filter(c => c.createdAt >= thirtyDaysAgo).length,
   }
 
   // System metrics
   const systemStats = {
     aiCallsToday: readAiCallsToday(),
     activeProviders: readActiveProviders(),
-    testsGreen: 604,
+    testsGreen: readTestsGreen(),
   }
 
   return NextResponse.json({

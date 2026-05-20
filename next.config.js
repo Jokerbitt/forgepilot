@@ -4,26 +4,28 @@ const { withSentryConfig } = require('@sentry/nextjs')
 const nextConfig = {
   output: 'standalone',
   experimental: {
-    // Disable parallel worker threads to prevent Windows FS race conditions
-    workerThreads: false,
-    cpus: 1,
+    instrumentationHook: true,
   },
 }
 
-module.exports = withSentryConfig(nextConfig, {
-  // Suppress source map upload logs during build
-  silent: !process.env.CI,
-
-  // Use the new webpack options instead of deprecated top-level options
-  webpack: {
-    // Auto-instrument server components and API routes
-    autoInstrumentServerFunctions: true,
-    // Treeshake Sentry SDK logger to reduce bundle size
-    treeshake: {
-      removeDebugLogging: true,
+// Skip Sentry webpack plugin in dev — it spins up source-map workers that
+// crash in Next.js 14 dev mode. Sentry still initialises at runtime via
+// instrumentation.ts when SENTRY_DSN is set.
+if (process.env.NODE_ENV === 'development') {
+  module.exports = nextConfig
+} else {
+  module.exports = withSentryConfig(nextConfig, {
+    org:     process.env.SENTRY_ORG     ?? 'privat-0p',
+    project: process.env.SENTRY_PROJECT ?? 'javascript-nextjs',
+    // authToken is read from SENTRY_AUTH_TOKEN env var automatically by the Sentry webpack plugin
+    silent: !process.env.CI,
+    widenClientFileUpload: true,
+    // Upload source maps to Sentry on every production build
+    sourcemaps: {
+      disable: false,
     },
-  },
-
-  // Widened source map upload for better stack traces (only if SENTRY_AUTH_TOKEN is set)
-  widenClientFileUpload: true,
-})
+    autoInstrumentServerFunctions: true,
+    hideSourceMaps: true,         // strip .map files from the deployed bundle
+    disableLogger: true,          // tree-shake Sentry debug logging in prod
+  })
+}

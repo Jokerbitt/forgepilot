@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { appendTraceEvent, getRun } from '@/lib/agent-runs/store'
 import type { TraceEvent } from '@/lib/models/agent-run'

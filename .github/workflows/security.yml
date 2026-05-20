@@ -1,0 +1,72 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run every Monday at 07:00 UTC
+    - cron: '0 7 * * 1'
+
+jobs:
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: npm audit (high + critical only)
+        run: npm audit --audit-level=high
+        continue-on-error: true
+        id: audit
+
+      - name: Write audit summary
+        if: always()
+        run: |
+          echo "## Security Audit" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          npm audit --json 2>/dev/null | node -e "
+            let raw = '';
+            process.stdin.on('data', d => raw += d);
+            process.stdin.on('end', () => {
+              try {
+                const r = JSON.parse(raw);
+                const vulns = r.metadata?.vulnerabilities ?? {};
+                const total = (vulns.total ?? 0);
+                const critical = vulns.critical ?? 0;
+                const high = vulns.high ?? 0;
+                const moderate = vulns.moderate ?? 0;
+                console.log('| Severity | Count |');
+                console.log('|---|---|');
+                console.log('| Critical | ' + critical + ' |');
+                console.log('| High | ' + high + ' |');
+                console.log('| Moderate | ' + moderate + ' |');
+                console.log('| Total | ' + total + ' |');
+                if (critical + high > 0) {
+                  console.log('');
+                  console.log('> Action required: ' + (critical + high) + ' high/critical vulnerabilities found.');
+                }
+              } catch {
+                console.log('Could not parse audit JSON output.');
+              }
+            });
+          " >> $GITHUB_STEP_SUMMARY || echo "Audit summary unavailable" >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail on critical vulnerabilities
+        if: steps.audit.outcome == 'failure'
+        run: |
+          echo "High or critical vulnerabilities found — review npm audit output above."
+          npm audit --audit-level=high

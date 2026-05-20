@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { getAgents, upsertAgent } from '@/lib/agents/registry'
 import type { AgentRole } from '@/lib/models/agent-profile'
