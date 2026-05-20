@@ -118,4 +118,23 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [~] M137: Delegation Bulk-Actions — mehrere Delegations gleichzeitig approve/cancel/archive (Checkbox-Liste)
 - [~] M138: Notification Preferences — /settings/notifications mit granularen Einstellungen (welche Events triggern Bell)
 - [~] M139: Work Item Kanban View — /work-items als Kanban-Board (todo/in_progress/done Spalten, drag-and-drop)
-- [ ] M140: API Key Rotation Alert — automatische Warnung wenn API-Key älter als 90 Tage (Badge in Settings)
+- [~] M140: API Key Rotation Alert — automatische Warnung wenn API-Key älter als 90 Tage (Badge in Settings)
+
+## 🟠 Medium Priority — DX & Operations (M141–M145)
+
+- [x] M141: Dark Mode Toggle — System-Präferenz + manueller Override (localStorage), gilt für alle Pages
+- [x] M142: Global Search — Cmd+K Palette: Work Items, Delegations, Project Briefs, Navigations-Shortcuts
+- [~] M143: CSV Export — Work Items + Delegations als CSV-Download (/api/work-items/export, /api/delegations/export)
+- [x] M144: Keyboard Shortcuts — vollständige Shortcut-Map (j/k Navigation, a Approve, c Cancel, ? Hilfe-Overlay)
+- [~] M145: Settings Import/Export — komplette Konfiguration (API Keys ausgenommen) als JSON exportieren/importieren
+
+## 🟠 Medium Priority — Intelligence & Agent UX (M146–M153)
+
+- [~] M146: Delegation Comment Thread — Kommentare pro Delegation (Nutzer + Agent-Output) mit Timestamp
+- [~] M147: Work Item Priority Sort — Drag-and-Drop Prioritäts-Sortierung in der List-View
+- [~] M148: Project Brief Diff View — vergleiche zwei Versionen eines Briefs side-by-side
+- [~] M149: Agent Run Replay — gespeicherte Delegation-Runs wiedergeben (Context + Prompt + Response Timeline)
+- [~] M150: Smart Notification Digest — tägliche/wöchentliche Zusammenfassung aller Aktivitäten per Email (optional)
+- [~] M151: Telegram Command & Control — Bot-Integration: alle Status-Updates in Telegram, Steuerung via /approve /reject /status /runs /digest /notif
+- [~] M152: Telegram Scheduled Digest — täglicher Digest 07:00 UTC via Vercel Cron (/api/cron/telegram-digest)
+- [~] M153: Telegram Webhook Setup — /api/telegram/setup-webhook: automatisches Registrieren des Webhooks, "Webhook einrichten"-Button in Settings

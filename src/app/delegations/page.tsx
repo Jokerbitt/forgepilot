@@ -458,6 +458,61 @@ function DelegationsContent() {
     loadDelegations()
   }
 
+  // ── Bulk Cancel (selected pending/approved/running) ──────────────────────
+  const handleSelectionBatchCancel = async () => {
+    if (selectedIds.size === 0) return
+    const ids = Array.from(selectedIds)
+    const now = new Date().toISOString()
+
+    const cancellable = delegations.filter(
+      d => selectedIds.has(d.id) && (d.status === 'pending' || d.status === 'approved' || d.status === 'running')
+    )
+    if (cancellable.length === 0) return
+
+    // Optimistic update
+    cancellable.forEach(del => {
+      applyUpdate({
+        ...del,
+        status: 'cancelled',
+        logs: [...(del.logs ?? []), { timestamp: now, type: 'info', message: 'Bulk-abgebrochen.' }],
+        updatedAt: now,
+      })
+    })
+
+    // Persist via individual cancel calls
+    await Promise.all(
+      cancellable.map(del =>
+        fetch(`/api/delegations/${del.id}/cancel`, { method: 'POST' })
+      )
+    )
+
+    setSelectedIds(new Set())
+    loadDelegations()
+  }
+
+  // ── Bulk Archive (selected completed/failed/cancelled) ───────────────────
+  const handleSelectionBatchArchive = async () => {
+    if (selectedIds.size === 0) return
+    const archivable = delegations.filter(
+      d => selectedIds.has(d.id) && (d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled')
+    )
+    if (archivable.length === 0) return
+
+    // Optimistic removal from list
+    const archivableIds = new Set(archivable.map(d => d.id))
+    setDelegations(prev => prev.filter(d => !archivableIds.has(d.id)))
+
+    // Persist via individual delete calls
+    await Promise.all(
+      archivable.map(del =>
+        fetch(`/api/delegations/${del.id}`, { method: 'DELETE' })
+      )
+    )
+
+    setSelectedIds(new Set())
+    loadDelegations()
+  }
+
   // ── Drag & Drop ─────────────────────────────────────────────────────────
   const handleDragStart = (index: number) => setDraggedIndex(index)
 
@@ -935,7 +990,7 @@ function DelegationsContent() {
                                   checked={selectedIds.has(del.id)}
                                   onChange={() => toggleSelect(del.id)}
                                   className="cursor-pointer accent-green-500"
-                                  title="Auswählen"
+                                  title="Auswählen (freigeben/abbrechen)"
                                 />
                                 <span
                                   draggable
@@ -945,6 +1000,22 @@ function DelegationsContent() {
                                   ⋮⋮
                                 </span>
                               </div>
+                            ) : (del.status === 'approved' || del.status === 'running') ? (
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(del.id)}
+                                onChange={() => toggleSelect(del.id)}
+                                className="cursor-pointer accent-red-500"
+                                title="Auswählen (abbrechen)"
+                              />
+                            ) : (del.status === 'completed' || del.status === 'failed' || del.status === 'cancelled') ? (
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(del.id)}
+                                onChange={() => toggleSelect(del.id)}
+                                className="cursor-pointer accent-gray-500"
+                                title="Auswählen (archivieren)"
+                              />
                             ) : !isDone ? (
                               <span
                                 draggable
@@ -1230,27 +1301,54 @@ function DelegationsContent() {
         )}
       </div>
 
-      {/* ── Floating Batch-Approve Bar ─────────────────────────────────── */}
-      {selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 rounded-xl border border-gray-700 bg-gray-900/95 px-5 py-3 shadow-2xl shadow-black/60 backdrop-blur">
-          <span className="text-sm text-gray-300">
-            <span className="font-semibold text-white">{selectedIds.size}</span> ausgewählt
-          </span>
-          <button
-            onClick={handleSelectionBatchApprove}
-            className="flex items-center gap-1.5 rounded-lg bg-green-700 px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-green-600"
-          >
-            Alle freigeben ▶
-          </button>
-          <button
-            onClick={() => setSelectedIds(new Set())}
-            className="rounded px-2 py-1 text-sm text-gray-500 transition-colors hover:text-white"
-            title="Auswahl aufheben"
-          >
-            ✕
-          </button>
-        </div>
-      )}
+      {/* ── Floating Bulk Action Bar ───────────────────────────────────── */}
+      {selectedIds.size > 0 && (() => {
+        const selectedDels = delegations.filter(d => selectedIds.has(d.id))
+        const canApprove = selectedDels.some(d => d.status === 'pending' && d.contract.riskClass !== 'C')
+        const canCancel = selectedDels.some(d => d.status === 'pending' || d.status === 'approved' || d.status === 'running')
+        const canArchive = selectedDels.some(d => d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled')
+        return (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-xl border border-gray-700 bg-gray-900/95 px-4 py-3 shadow-2xl shadow-black/60 backdrop-blur">
+            <span className="text-sm text-gray-300 mr-1">
+              <span className="font-semibold text-white">{selectedIds.size}</span> ausgewählt
+            </span>
+            {canApprove && (
+              <button
+                onClick={() => void handleSelectionBatchApprove()}
+                className="flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-green-600"
+                title="Auswahl genehmigen (Risk Class C ausgeschlossen)"
+              >
+                ✓ Freigeben
+              </button>
+            )}
+            {canCancel && (
+              <button
+                onClick={() => void handleSelectionBatchCancel()}
+                className="flex items-center gap-1.5 rounded-lg bg-red-900 px-3 py-1.5 text-xs font-semibold text-red-200 transition-colors hover:bg-red-800"
+                title="Auswahl abbrechen (pending/approved/running)"
+              >
+                ✕ Abbrechen
+              </button>
+            )}
+            {canArchive && (
+              <button
+                onClick={() => void handleSelectionBatchArchive()}
+                className="flex items-center gap-1.5 rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-semibold text-gray-200 transition-colors hover:bg-gray-600"
+                title="Auswahl archivieren (completed/failed/cancelled löschen)"
+              >
+                🗑 Archivieren
+              </button>
+            )}
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="rounded px-2 py-1 text-sm text-gray-500 transition-colors hover:text-white ml-1"
+              title="Auswahl aufheben"
+            >
+              ✕
+            </button>
+          </div>
+        )
+      })()}
 
       {/* ── Delegation Drawer ──────────────────────────────────────────── */}
       {selectedDelegation && (
