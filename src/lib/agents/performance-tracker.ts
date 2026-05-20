@@ -118,7 +118,7 @@ export function getBestPractices(): string[] {
   practices.push(`Add ≥${Math.ceil(avgTests)} tests per feature (avg in successful runs)`)
 
   const conflictFree = good.filter(r => r.mergeConflicts === 0).length / good.length
-  if (conflictFree > 0.9) practices.push('Use file-lock-registry before editing shared files')
+  if (conflictFree > 0.9) practices.push('Use scope-lock (npm run agent -- claim) before editing shared files')
 
   const noHealing = good.filter(r => !r.selfHealingUsed).length / good.length
   if (noHealing > 0.8) practices.push('Run type-check before committing to avoid self-healing cycles')
