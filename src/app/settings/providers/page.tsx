@@ -59,6 +59,7 @@ function GeminiQuickSetupBanner({ onActivated }: { onActivated: () => void }) {
               aistudio.google.com
             </a>
           </li>
+          {/* eslint-disable-next-line react/no-unescaped-entities */}
           <li>2. „Get API key" → „Create API key" → kopieren</li>
           <li>3. Key hier einfügen:</li>
         </ol>
