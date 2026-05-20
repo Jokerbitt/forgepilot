@@ -12,7 +12,16 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 
 ---
 
-## 🔴 High Priority
+## 🔴 High Priority — Tech Quality (M94–M99)
+
+- [ ] M94: Zod schema validation on all API routes — structured 400 errors with field details
+- [ ] M95: Pino structured logging — replace 19x console.log, JSON output in prod, child loggers per module
+- [ ] M96: Error Boundaries + Next.js error.tsx — global crash recovery + 404 page
+- [ ] M97: Sentry error monitoring — unhandled errors, performance traces, free tier
+- [ ] M98: OpenTelemetry AI call tracing — span per delegation.execute, context.build, ai.generate
+- [ ] M99: Vercel deployment config — vercel.json, edge runtime for /api/intake, cron for DSGVO retention
+
+## 🟡 Medium Priority
 
 - [x] feat: Ollama model auto-detection — list available local models in `/settings/providers` via GET `http://localhost:11434/api/tags`
 - [x] feat: Settings — separate model picker for fast vs coding purpose (currently only changeable via config file)
