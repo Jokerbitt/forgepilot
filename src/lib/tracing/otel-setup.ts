@@ -12,6 +12,7 @@
 import { NodeSDK } from '@opentelemetry/sdk-node'
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node'
+import { logger } from '@/lib/logger'
 
 let sdk: NodeSDK | undefined
 
@@ -39,8 +40,8 @@ export function registerOtelSDK(): void {
   sdk.start()
 
   process.on('SIGTERM', () => {
-    sdk?.shutdown().catch(console.error)
+    sdk?.shutdown().catch((err: unknown) => logger.error({ event: 'otel.shutdown_error', err }, 'OTel shutdown failed'))
   })
 
-  console.log(`[otel] Tracing initialized → ${endpoint}`)
+  logger.info({ event: 'otel.initialized', endpoint }, 'OpenTelemetry tracing initialized')
 }

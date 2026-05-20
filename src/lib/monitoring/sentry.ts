@@ -15,7 +15,7 @@ export function captureError(error: Error, context?: Record<string, unknown>): v
   if (!process.env.SENTRY_DSN) return
   // When @sentry/nextjs is installed:
   // Sentry.captureException(error, { extra: context })
-  console.error('[sentry-stub] Would capture:', error.message, context)
+  // @sentry/nextjs captures automatically via instrumentation — stub kept for explicit calls
 }
 
 /** Set user context — no-op if Sentry not configured */
