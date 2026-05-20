@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { findProjectBriefById } from '@/lib/project-briefs'
 import { generateBriefPdf, briefPdfFilename } from '@/lib/project-briefs/pdf-export'
+import { apiLogger } from '@/lib/logger'
 
 interface RouteParams {
   params: { id: string }
@@ -25,7 +26,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
       },
     })
   } catch (error) {
-    console.error('PDF export error:', error)
+    apiLogger.error({ event: 'pdf.export.error', error: error instanceof Error ? error.message : String(error) })
     return NextResponse.json({ error: 'Failed to generate PDF' }, { status: 500 })
   }
 }

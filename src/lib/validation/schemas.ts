@@ -159,6 +159,61 @@ export const LogProcessingInputSchema = z.object({
 
 export type LogProcessingInput = z.infer<typeof LogProcessingInputSchema>
 
+// ─── Agent Run ───────────────────────────────────────────────────────────────
+
+export const CreateAgentRunSchema = z.object({
+  delegationId: z.string().min(1, 'delegationId required'),
+  contractId:   z.string().min(1, 'contractId required'),
+  model:        z.string().min(1, 'model required'),
+})
+
+export type CreateAgentRunInput = z.infer<typeof CreateAgentRunSchema>
+
+// ─── Settings / NBA Config ────────────────────────────────────────────────────
+
+export const NBAConfigUpdateSchema = z.object({
+  ignoreStatuses:        z.array(z.string()).optional(),
+  penalizeOldBacklogs:   z.boolean().optional(),
+  backlogPenaltyAgeDays: z.number().int().min(0).optional(),
+  backlogPenaltyScore:   z.number().min(0).optional(),
+  showTriageJoker:       z.boolean().optional(),
+  maxRecommendations:    z.number().int().min(1).max(20).optional(),
+  pinnedItems:           z.array(z.string()).optional(),
+  customLlmModels:       z.array(z.string()).optional(),
+  projects:              z.array(z.string()).optional(),
+  milestones:            z.array(z.string()).optional(),
+  approvalMode:          z.enum(['manual', 'balanced', 'autopilot']).optional(),
+  autopilotMinScore:     z.number().min(0).max(100).optional(),
+  autopilotMaxRiskClass: z.enum(['A', 'B', 'C']).optional(),
+  aiProvider:            z.enum(['anthropic', 'ollama']).optional(),
+  localCodingModel:      z.string().optional(),
+  localFastModel:        z.string().optional(),
+  maxConcurrentAgents:   z.number().int().min(1).max(10).optional(),
+  autoStartApproved:     z.boolean().optional(),
+  autoPmAgent:           z.boolean().optional(),
+}).strict()
+
+export type NBAConfigUpdate = z.infer<typeof NBAConfigUpdateSchema>
+
+// ─── Attention Item ───────────────────────────────────────────────────────────
+
+export const AttentionItemCreateSchema = z.object({
+  id:                z.string().optional(),
+  type:              z.enum(['delegation_completed', 'delegation_failed', 'delegation_stalled', 'budget_exceeded', 'approval_pending', 'escalation', 'system_error', 'review_passed', 'review_failed']),
+  severity:          z.enum(['info', 'warning', 'critical']).default('info'),
+  title:             z.string().min(3, 'Title required').max(200),
+  body:              z.string().max(2000).optional(),
+  delegationId:      z.string().optional(),
+  actionUrl:         z.string().url().optional(),
+  escalationContext: z.object({
+    problem:        z.string(),
+    options:        z.array(z.string()).optional(),
+    recommendation: z.string().optional(),
+  }).optional(),
+})
+
+export type AttentionItemCreate = z.infer<typeof AttentionItemCreateSchema>
+
 // ─── Work Item Import ─────────────────────────────────────────────────────────
 
 export const WorkItemImportSchema = z.object({

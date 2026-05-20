@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getVersionHistory, saveVersion } from '@/lib/delegations/contract-versions'
 import { parseBody, parseParams, isValidationError } from '@/lib/validation/api'
 import { DelegationVersionSchema } from '@/lib/validation/schemas'
+import { apiLogger } from '@/lib/logger'
 import { z } from 'zod'
 import type { Delegation } from '@/lib/models/delegation'
 
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       count: history.length,
     })
   } catch (error) {
-    console.error('Error fetching version history:', error)
+    apiLogger.error({ event: 'delegation.versions.fetch.error', error: error instanceof Error ? error.message : String(error) })
     return NextResponse.json(
       { error: 'Failed to fetch version history' },
       { status: 500 }
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { status: 201 }
     )
   } catch (error) {
-    console.error('Error saving contract version:', error)
+    apiLogger.error({ event: 'delegation.versions.save.error', error: error instanceof Error ? error.message : String(error) })
     return NextResponse.json(
       { error: 'Failed to save contract version' },
       { status: 500 }
