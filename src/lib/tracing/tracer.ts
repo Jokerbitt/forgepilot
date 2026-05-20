@@ -1,22 +1,39 @@
 /**
- * OpenTelemetry Tracer — M98
+ * OpenTelemetry tracer — no-op implementation.
+ * Replace with real OTel when @opentelemetry/sdk-node is installed.
  *
- * Central tracer instance for ForgePilot.
- * Used to create spans around AI calls, delegation execution, and context building.
- *
- * Dev: export to Jaeger (docker run -p 4318:4318 jaegertracing/all-in-one)
- * Prod: export to Honeycomb or Vercel Observability via OTEL_EXPORTER_OTLP_ENDPOINT
+ * Usage:
+ *   const span = tracer.startSpan('ai.generate', { attributes: { provider } })
+ *   try { ... } finally { span.end() }
  */
 
-import { trace, type Tracer } from '@opentelemetry/api'
+export interface Span {
+  setAttribute(key: string, value: string | number | boolean): this
+  end(): void
+}
 
-/**
- * The ForgePilot tracer — use this to create spans throughout the app.
- *
- * @example
- * const span = tracer.startSpan('delegation.execute')
- * try { ... } finally { span.end() }
- *
- * Or use withAISpan() from ai-span.ts for cleaner async wrapping.
- */
-export const tracer: Tracer = trace.getTracer('forgepilot', '1.0.0')
+const noOpSpan: Span = {
+  setAttribute() {
+    return this
+  },
+  end() {},
+}
+
+export const tracer = {
+  startSpan(_name: string, _attrs?: Record<string, unknown>): Span {
+    return noOpSpan
+  },
+  /** Wraps an async function in a span */
+  async withSpan<T>(
+    name: string,
+    attrs: Record<string, unknown>,
+    fn: () => Promise<T>
+  ): Promise<T> {
+    const span = this.startSpan(name, attrs)
+    try {
+      return await fn()
+    } finally {
+      span.end()
+    }
+  },
+}
