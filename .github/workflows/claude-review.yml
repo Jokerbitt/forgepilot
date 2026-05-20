@@ -1,27 +1,81 @@
-name: Claude Code Review
+name: 🤖 AI Code Review
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
   claude-review:
+    name: Claude Code Review
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
+    timeout-minutes: 10
+
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Collect diff stats
+        id: stats
+        run: |
+          FILES=$(git diff --name-only origin/main...HEAD | grep -E '\.(ts|tsx)$' | wc -l | tr -d ' ')
+          NEW_TESTS=$(git diff origin/main...HEAD -- 'src/**/*.test.*' | grep '^+' | grep -v '^+++' | wc -l | tr -d ' ')
+          echo "changed_files=$FILES" >> $GITHUB_OUTPUT
+          echo "new_test_lines=$NEW_TESTS" >> $GITHUB_OUTPUT
+
       - name: Claude PR Review
         uses: anthropics/claude-code-action@beta
-        continue-on-error: true
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          model: claude-haiku-4-5
           direct_prompt: |
-            Reviewe diesen Pull Request auf Deutsch.
-            Pruefe: Korrektheit, Sicherheit, Performance, Code-Stil.
-            Sei direkt und konkret. Keine langen Erklaerungen.
+            Reviewe diesen Pull Request für das ForgePilot-Projekt (Next.js 14, TypeScript strict, Vitest).
+
+            **Kontext:** ForgePilot ist ein AI Workflow OS — Next.js API Routes, lokale JSON-Stores, Pino-Logging, Zod-Validation.
+
+            **Prüfe KONKRET:**
+
+            1. **Neue API-Route mit POST-Body?**
+               → Hat sie `parseBody()` aus `@/lib/validation/api` + passendes Zod-Schema?
+               → Falls nicht: Kommentiere die fehlende Validation.
+
+            2. **Neue console.log/error/warn in API-Routes oder lib/?**
+               → Sollte durch Pino-Logger ersetzt werden (`apiLogger`, `dsgvoLogger`, etc.)
+               → Falls gefunden: Zeige die Zeile und den korrekten Ersatz.
+
+            3. **Neue API-Routes mit teuren Operationen (AI-Calls, Filesystem)?**
+               → Sollten `checkRateLimit()` aus `@/lib/rate-limit` nutzen.
+
+            4. **Neue Dateien ohne Tests?**
+               → PR hat ${{ steps.stats.outputs.changed_files }} geänderte TS-Dateien.
+               → Wenn neue lib-Dateien ohne `*.test.ts` geliefert werden: erwähne es.
+
+            5. **TypeScript strict violations?**
+               → `any` Types, fehlende Type-Guards, unsichere Casts.
+
+            6. **Security-Check:**
+               → Hardcoded Secrets/API-Keys?
+               → Fehlende Authorization-Checks auf neuen Routes?
+
+            **Format:**
+            - Fasse in 3-5 Bulletpoints zusammen was gut ist
+            - Liste konkrete Probleme mit Dateiname + Zeile
+            - Sei direkt, kein Fluff
+            - Auf Deutsch
+
+            Wenn alles korrekt ist: "✅ Review passed — keine kritischen Issues gefunden."
