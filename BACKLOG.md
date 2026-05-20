@@ -99,7 +99,7 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 ## 🔴 High Priority — Autonomy & UX (M126–M130)
 
 - [ ] M126: Linear → Auto-Delegation — webhook: Linear ticket "In Progress" → automatisch ForgePilot Delegation erstellen
-- [ ] M127: Delegation Templates — vorgefertigte Templates (Add API Route, Fix Bug, Write Tests, Refactor) für schnellere Erstellung
-- [ ] M128: Multi-Provider Fallback — wenn primärer AI-Provider scheitert, automatisch auf sekundären wechseln
-- [ ] M129: Delegation Cost Tracker — tatsächliche Token-Kosten pro Delegation summieren + Budget-Warnung im UI
-- [ ] M130: One-Click Deploy to Vercel — /settings/deployment Seite mit Vercel-Verbindungsstatus + Env-Var-Checkliste
+- [x] M127: Delegation Templates — vorgefertigte Templates (Add API Route, Fix Bug, Write Tests, Refactor) für schnellere Erstellung
+- [x] M128: Multi-Provider Fallback — wenn primärer AI-Provider scheitert, automatisch auf sekundären wechseln
+- [x] M129: Delegation Cost Tracker — tatsächliche Token-Kosten pro Delegation summieren + Budget-Warnung im UI
+- [x] M130: One-Click Deploy to Vercel — /settings/deployment Seite mit Vercel-Verbindungsstatus + Env-Var-Checkliste
