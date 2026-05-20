@@ -122,8 +122,8 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 
 ## 🟠 Medium Priority — DX & Operations (M141–M145)
 
-- [ ] M141: Dark Mode Toggle — System-Präferenz + manueller Override (localStorage), gilt für alle Pages
-- [ ] M142: Global Search — Cmd+K Palette: Work Items, Delegations, Project Briefs, Navigations-Shortcuts
+- [x] M141: Dark Mode Toggle — System-Präferenz + manueller Override (localStorage), gilt für alle Pages
+- [x] M142: Global Search — Cmd+K Palette: Work Items, Delegations, Project Briefs, Navigations-Shortcuts
 - [ ] M143: CSV Export — Work Items + Delegations als CSV-Download (/api/work-items/export, /api/delegations/export)
 - [ ] M144: Keyboard Shortcuts — vollständige Shortcut-Map (j/k Navigation, a Approve, c Cancel, ? Hilfe-Overlay)
 - [ ] M145: Settings Import/Export — komplette Konfiguration (API Keys ausgenommen) als JSON exportieren/importieren
