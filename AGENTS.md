@@ -44,7 +44,7 @@ Two agents on the same branch silently overwrote each other's commits in May
 2026. To prevent recurrence, every long-running agent **must** claim scope
 before editing files and renew the lease while working.
 
-State lives in `config/agent-scope.json`. Use the CLI — no HTTP server needed:
+State lives in `<git-common-dir>/forgepilot-agent-scope.json` (typically `.git/forgepilot-agent-scope.json` of the main checkout). This path is shared across **all linked worktrees of the same repo**, so an agent in worktree A sees the claims of an agent in worktree B. Falls back to `<cwd>/config/agent-scope.json` when not inside a git checkout. Use the CLI — no HTTP server needed:
 
 ```bash
 # 1. Check whether the current branch + intended files are clear
