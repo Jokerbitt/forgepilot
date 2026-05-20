@@ -109,5 +109,13 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [x] M131: Enhanced Projects Dashboard — Projekt-Status-Pipeline (intake→planning→ready→in_progress→attention→completed) mit Metriken + Next-Action-CTA
 - [x] M132: AI Cost Analytics Dashboard — /analytics Seite mit Kosten pro Provider, Trend-Charts, Budget-Übersicht + Token-Verbrauch nach Zweck
 - [x] M133: Delegation Health Monitor — automatische Erkennung von stuck/hängengebliebenen Delegations + Retry-Empfehlung
-- [~] M134: GitHub PR Status Integration — PR-URL + CI-Status direkt in Delegation-Detailansicht (kein Tab-Wechsel nötig)
+- [x] M134: GitHub PR Status Integration — PR-URL + CI-Status direkt in Delegation-Detailansicht (kein Tab-Wechsel nötig)
 - [x] M135: Webhook Event Log — alle eingehenden Webhooks (Linear, n8n) in /settings/webhooks mit Status + Replay-Button
+
+## 🔴 High Priority — Product Polish (M136–M140)
+
+- [~] M136: Idea Refinement Wizard — mehrstufiger Dialog: Idee eingeben → KI generiert Fragen → Antworten fließen in Project Brief
+- [ ] M137: Delegation Bulk-Actions — mehrere Delegations gleichzeitig approve/cancel/archive (Checkbox-Liste)
+- [ ] M138: Notification Preferences — /settings/notifications mit granularen Einstellungen (welche Events triggern Bell)
+- [ ] M139: Work Item Kanban View — /work-items als Kanban-Board (todo/in_progress/done Spalten, drag-and-drop)
+- [ ] M140: API Key Rotation Alert — automatische Warnung wenn API-Key älter als 90 Tage (Badge in Settings)
