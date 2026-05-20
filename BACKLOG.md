@@ -72,6 +72,14 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [x] chore: Upgrade dependencies (next, typescript, tailwind) to latest versions
 - [x] docs: Add JSDoc comments to all public lib functions
 
+## 🔴 High Priority — Intelligence Layer (M116–M120)
+
+- [x] M116: Auto-Knowledge Extraction — extract Knowledge Cards from completed delegations, feed into context layer 5
+- [ ] M117: Context Engineer Tests + Integration — comprehensive tests for buildContext(), token budget, PII scrubbing (currently 0% coverage)
+- [ ] M118: Smart Delegation Retry — auto-detect failure cause, improve prompt, retry with backoff
+- [ ] M119: AI Decomposer Tests + Sub-task quality scoring
+- [ ] M120: Scheduled Delegation Queue — cron-based auto-execution of approved delegations
+
 ---
 
 ## ✅ Completed (this month)

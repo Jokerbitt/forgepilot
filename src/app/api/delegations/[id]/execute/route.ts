@@ -23,6 +23,7 @@ import { budgetToMaxTurns } from '@/lib/budget-utils'
 import { scoreWork } from '@/lib/agents/work-quality'
 import { recordOutcome } from '@/lib/agents/skill-evolver'
 import { generateText } from '@/lib/ai/text-generation'
+import { extractKnowledge } from '@/lib/knowledge/extraction'
 
 const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
 
@@ -349,6 +350,15 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       // Linear writeback — fire-and-forget
       if (success && report) {
         postLinearCompletionComment(finishedDelegation).catch(() => {})
+      }
+
+      // M116: Auto-Knowledge Extraction — fire-and-forget
+      if (success) {
+        try {
+          extractKnowledge(finishedDelegation)
+        } catch {
+          // Non-critical — never block execution
+        }
       }
 
       // Completion attention item
