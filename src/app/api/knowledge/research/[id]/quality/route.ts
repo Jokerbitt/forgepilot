@@ -5,9 +5,10 @@ import { computeQuality } from '@/lib/knowledge/quality-scorer'
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const doc = getResearchDocument(params.id)
+  const { id } = await params
+  const doc = getResearchDocument(id)
   if (!doc) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json(computeQuality(doc))
 }

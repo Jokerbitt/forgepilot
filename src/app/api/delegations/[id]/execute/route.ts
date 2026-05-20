@@ -601,7 +601,7 @@ function runSimulation(id: string, delegation: Delegation) {
 
 export async function POST(
   _req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   // Rate limit: 10 executions per minute per IP (AI calls are expensive)
   const rateCheck = checkRateLimit(_req, { limit: 10, windowSec: 60, keyPrefix: 'execute' })
@@ -613,7 +613,7 @@ export async function POST(
     )
   }
 
-  const { id } = params
+  const { id } = await params
 
   const delegations = readDelegations()
   const delegation = delegations.find(d => d.id === id)

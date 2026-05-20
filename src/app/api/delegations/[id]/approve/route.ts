@@ -26,10 +26,11 @@ function writeDelegationsAtomic(delegations: Delegation[]): void {
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params
   const delegations = readDelegations()
-  const index = delegations.findIndex(delegation => delegation.id === params.id)
+  const index = delegations.findIndex(delegation => delegation.id === id)
 
   if (index < 0) {
     return NextResponse.json({ error: 'Delegation nicht gefunden' }, { status: 404 })

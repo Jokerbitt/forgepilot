@@ -4,14 +4,15 @@ import { findProjectBriefById, updateProjectBrief } from '@/lib/project-briefs'
 import type { Requirement, RequirementType, RequirementPriority } from '@/lib/models/project-brief'
 
 interface RouteParams {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 // PATCH /api/project-briefs/[id]/requirements
 // Body: { requirementId, status } | { requirements: Requirement[] }
 export async function PATCH(request: Request, { params }: RouteParams) {
+  const { id } = await params
   try {
-    const brief = findProjectBriefById(params.id)
+    const brief = findProjectBriefById(id)
     if (!brief) {
       return NextResponse.json({ error: 'Project brief not found' }, { status: 404 })
     }
@@ -33,7 +34,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       )
     }
 
-    const updated = updateProjectBrief(params.id, { requirements: updatedRequirements })
+    const updated = updateProjectBrief(id, { requirements: updatedRequirements })
     if (!updated) {
       return NextResponse.json({ error: 'Failed to update requirements' }, { status: 500 })
     }
@@ -46,8 +47,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 // POST /api/project-briefs/[id]/requirements
 // Body: { title, description, type, priority }
 export async function POST(request: Request, { params }: RouteParams) {
+  const { id } = await params
   try {
-    const brief = findProjectBriefById(params.id)
+    const brief = findProjectBriefById(id)
     if (!brief) {
       return NextResponse.json({ error: 'Project brief not found' }, { status: 404 })
     }
@@ -64,8 +66,8 @@ export async function POST(request: Request, { params }: RouteParams) {
     }
 
     const newReq: Requirement = {
-      id: `${params.id}-req-${Date.now()}`,
-      briefId: params.id,
+      id: `${id}-req-${Date.now()}`,
+      briefId: id,
       type: body.type ?? 'functional',
       title: body.title.trim(),
       description: body.description.trim(),
@@ -75,7 +77,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       status: 'accepted', // manually added = immediately accepted
     }
 
-    const updated = updateProjectBrief(params.id, {
+    const updated = updateProjectBrief(id, {
       requirements: [...brief.requirements, newReq],
     })
 

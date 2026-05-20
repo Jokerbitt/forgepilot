@@ -25,11 +25,12 @@ function writeDelegations(delegations: Delegation[]) {
   fs.renameSync(tmp, DELEGATIONS_FILE)
 }
 
-type RouteParams = { params: { id: string } }
+type RouteParams = { params: Promise<{ id: string }> }
 
 export async function POST(_request: Request, { params }: RouteParams) {
+  const { id } = await params
   const workPackages = readWorkPackages()
-  const wp = workPackages.find(w => w.id === params.id)
+  const wp = workPackages.find(w => w.id === id)
 
   if (!wp) {
     return NextResponse.json({ error: 'Work Package nicht gefunden' }, { status: 404 })

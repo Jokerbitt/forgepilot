@@ -44,7 +44,7 @@ describe('GET /api/work-items/[id]/details', () => {
     const fetcher = vi.fn()
     installFetchMock(fetcher as unknown as typeof fetch)
 
-    const res = await GET(new Request('http://localhost/x'), { params: { id: 'ENG-42' } })
+    const res = await GET(new Request('http://localhost/x'), { params: Promise.resolve({ id: 'ENG-42' }) })
 
     expect(res.status).toBe(404)
     expect(fetcher).not.toHaveBeenCalled()
@@ -55,7 +55,7 @@ describe('GET /api/work-items/[id]/details', () => {
     const fetcher = vi.fn()
     installFetchMock(fetcher as unknown as typeof fetch)
 
-    const res = await GET(new Request('http://localhost/x'), { params: { id: 'not-a-linear-id' } })
+    const res = await GET(new Request('http://localhost/x'), { params: Promise.resolve({ id: 'not-a-linear-id' }) })
 
     expect(res.status).toBe(404)
     expect(fetcher).not.toHaveBeenCalled()
@@ -82,7 +82,7 @@ describe('GET /api/work-items/[id]/details', () => {
     )
     installFetchMock(fetcher as unknown as typeof fetch)
 
-    const res = await GET(new Request('http://localhost/x'), { params: { id: 'ENG-42' } })
+    const res = await GET(new Request('http://localhost/x'), { params: Promise.resolve({ id: 'ENG-42' }) })
 
     expect(res.status).toBe(200)
     const body = await res.json() as {
@@ -108,7 +108,7 @@ describe('GET /api/work-items/[id]/details', () => {
     )
     installFetchMock(fetcher as unknown as typeof fetch)
 
-    const res = await GET(new Request('http://localhost/x'), { params: { id: 'ENG-999' } })
+    const res = await GET(new Request('http://localhost/x'), { params: Promise.resolve({ id: 'ENG-999' }) })
 
     expect(res.status).toBe(404)
     expect(fetcher).toHaveBeenCalledTimes(1)
@@ -119,7 +119,7 @@ describe('GET /api/work-items/[id]/details', () => {
     const fetcher = vi.fn(async () => { throw new Error('network down') })
     installFetchMock(fetcher as unknown as typeof fetch)
 
-    const res = await GET(new Request('http://localhost/x'), { params: { id: 'ENG-42' } })
+    const res = await GET(new Request('http://localhost/x'), { params: Promise.resolve({ id: 'ENG-42' }) })
 
     expect(res.status).toBe(404)
   })

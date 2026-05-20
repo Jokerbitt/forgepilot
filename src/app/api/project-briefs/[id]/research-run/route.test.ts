@@ -159,7 +159,7 @@ vi.mock('@/lib/ai/text-generation', () => {
   }
 })
 
-const makeParams = (id: string) => ({ params: { id } })
+const makeParams = (id: string) => ({ params: Promise.resolve({ id }) })
 
 describe('GET /api/project-briefs/[id]/research-run', () => {
   it('returns research brief preview for existing brief', async () => {

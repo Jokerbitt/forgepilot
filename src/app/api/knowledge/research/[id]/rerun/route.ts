@@ -7,9 +7,10 @@ import type { ResearchDocument } from '@/lib/models/research'
 
 export async function POST(
   _req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const existing = getResearchDocument(params.id)
+  const { id } = await params
+  const existing = getResearchDocument(id)
   if (!existing) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }

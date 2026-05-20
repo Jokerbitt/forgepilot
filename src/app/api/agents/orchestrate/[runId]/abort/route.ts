@@ -4,9 +4,10 @@ import { getRun, updateRunStatus } from '@/lib/agents/orchestrated-run'
 
 export async function POST(
   _req: Request,
-  { params }: { params: { runId: string } },
+  { params }: { params: Promise<{ runId: string }> },
 ) {
-  const run = getRun(params.runId)
+  const { runId } = await params
+  const run = getRun(runId)
   if (!run) {
     return NextResponse.json({ error: 'Run not found' }, { status: 404 })
   }
@@ -18,7 +19,7 @@ export async function POST(
     )
   }
 
-  updateRunStatus(params.runId, 'aborted')
+  updateRunStatus(runId, 'aborted')
 
-  return NextResponse.json({ aborted: true, runId: params.runId })
+  return NextResponse.json({ aborted: true, runId: runId })
 }

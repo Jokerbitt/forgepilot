@@ -22,8 +22,9 @@ import crypto from 'crypto'
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
 
-export async function POST(req: Request, { params }: { params: { runId: string } }) {
-  const run = getRun(params.runId)
+export async function POST(req: Request, { params }: { params: Promise<{ runId: string }> }) {
+  const { runId } = await params
+  const run = getRun(runId)
   if (!run) return NextResponse.json({ error: 'Run not found' }, { status: 404 })
   if (run.status === 'running') {
     return NextResponse.json({ error: 'Run already executing' }, { status: 409 })
@@ -31,14 +32,14 @@ export async function POST(req: Request, { params }: { params: { runId: string }
 
   const { skipFailed = false } = await req.json().catch(() => ({})) as { skipFailed?: boolean }
 
-  updateRunStatus(params.runId, 'running')
+  updateRunStatus(runId, 'running')
 
   // Fire-and-forget — respond immediately, execution happens async
-  executeRunAsync(params.runId, skipFailed).catch((err: unknown) => {
-    orchestrationLogger.error({ event: 'orchestration.error', runId: params.runId, error: String(err) }, 'Async run failed')
+  executeRunAsync(runId, skipFailed).catch((err: unknown) => {
+    orchestrationLogger.error({ event: 'orchestration.error', runId: runId, error: String(err) }, 'Async run failed')
   })
 
-  return NextResponse.json({ started: true, runId: params.runId })
+  return NextResponse.json({ started: true, runId: runId })
 }
 
 async function executeRunAsync(runId: string, skipFailed: boolean): Promise<void> {

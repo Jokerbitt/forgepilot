@@ -4,9 +4,9 @@ import { retryTask, canRetry } from '@/lib/agents/orchestrated-run'
 
 export async function POST(
   _req: Request,
-  { params }: { params: { runId: string; taskId: string } },
+  { params }: { params: Promise<{ runId: string; taskId: string }> },
 ) {
-  const { runId, taskId } = params
+  const { runId, taskId } = await params
 
   if (!canRetry(runId, taskId)) {
     return NextResponse.json(

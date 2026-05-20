@@ -32,7 +32,7 @@ const failedDelegation = {
 }
 
 function makeParams(id: string) {
-  return { params: { id } }
+  return { params: Promise.resolve({ id }) }
 }
 
 describe('POST /api/delegations/[id]/retry', () => {

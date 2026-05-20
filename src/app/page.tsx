@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { ConnectorHealthBar } from '@/components/command-center/ConnectorHealthBar'
 import { AutopilotRunner } from '@/components/command-center/AutopilotRunner'
 import { ApiKeysBanner } from '@/components/shared/ApiKeysBanner'
@@ -22,12 +23,12 @@ export default function Home() {
             </p>
           </div>
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-            <a href="/project-briefs" className={buttonClassName('secondary')}>
+            <Link href="/project-briefs" className={buttonClassName('secondary')}>
               Neue Idee
-            </a>
-            <a href="/delegations?new=1" className={buttonClassName('primary')}>
+            </Link>
+            <Link href="/delegations?new=1" className={buttonClassName('primary')}>
               Neue Delegation
-            </a>
+            </Link>
           </div>
         </header>
 

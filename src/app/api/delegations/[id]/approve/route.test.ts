@@ -49,7 +49,7 @@ describe('POST /api/delegations/[id]/approve', () => {
   })
 
   it('approves a pending non-critical delegation and writes an audit log', async () => {
-    const res = await POST(makeRequest({ source: 'n8n-autopilot', note: 'max batch 10' }), { params: { id: 'del-approve-1' } })
+    const res = await POST(makeRequest({ source: 'n8n-autopilot', note: 'max batch 10' }), { params: Promise.resolve({ id: 'del-approve-1' }) })
     expect(res.status).toBe(200)
     const data = await res.json()
     expect(data.status).toBe('approved')
@@ -60,13 +60,13 @@ describe('POST /api/delegations/[id]/approve', () => {
 
   it('blocks RiskClass C approval through the automation endpoint', async () => {
     store.data = JSON.stringify([{ ...pendingDelegation, contract: { ...pendingDelegation.contract, riskClass: 'C' } }])
-    const res = await POST(makeRequest(), { params: { id: 'del-approve-1' } })
+    const res = await POST(makeRequest(), { params: Promise.resolve({ id: 'del-approve-1' }) })
     expect(res.status).toBe(403)
   })
 
   it('returns conflict for already approved delegations', async () => {
     store.data = JSON.stringify([{ ...pendingDelegation, status: 'approved' }])
-    const res = await POST(makeRequest(), { params: { id: 'del-approve-1' } })
+    const res = await POST(makeRequest(), { params: Promise.resolve({ id: 'del-approve-1' }) })
     expect(res.status).toBe(409)
   })
 })

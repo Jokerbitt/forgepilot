@@ -56,7 +56,7 @@ vi.mock('fs', () => ({
   },
 }))
 
-const makeParams = (id: string) => ({ params: { id } })
+const makeParams = (id: string) => ({ params: Promise.resolve({ id }) })
 
 describe('POST /api/project-briefs/[id]/create-delegation', () => {
   beforeEach(() => { vi.clearAllMocks() })

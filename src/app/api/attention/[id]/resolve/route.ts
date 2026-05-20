@@ -6,9 +6,10 @@ export const dynamic = 'force-dynamic'
 /** POST /api/attention/[id]/resolve */
 export async function POST(
   _req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const resolved = resolveAttentionItem(params.id, 'user')
+  const { id } = await params
+  const resolved = resolveAttentionItem(id, 'user')
   if (!resolved) {
     return NextResponse.json({ error: 'Item nicht gefunden' }, { status: 404 })
   }

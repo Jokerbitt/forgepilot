@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { cx } from '@/components/ui/primitives'
 import type { IdeaHistoryEntry } from '@/lib/pilot/idea-history-store'
 
@@ -259,7 +260,7 @@ export default function IdeaPage() {
     <main className="min-h-screen bg-[#08080d] flex flex-col">
       {/* Header */}
       <div className="border-b border-white/[0.06] px-6 py-4 flex items-center gap-3">
-        <a href="/" className="text-slate-500 hover:text-slate-300 text-sm transition-colors">← Command Center</a>
+        <Link href="/" className="text-slate-500 hover:text-slate-300 text-sm transition-colors">← Command Center</Link>
         <span className="text-slate-700">/</span>
         <span className="text-sm text-slate-400">Idea → Production</span>
       </div>

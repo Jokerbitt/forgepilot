@@ -5,7 +5,7 @@ import type { Requirement, UseCase, Risk } from '@/lib/models/project-brief'
 import { AIProviderConfigurationError, generateText, stripJsonCodeFence } from '@/lib/ai/text-generation'
 
 interface RouteParams {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 const SYSTEM_PROMPT = `Du bist ein erfahrener Requirements Engineer und Produktmanager.
@@ -21,8 +21,9 @@ Regeln:
 - Antworte ausschliesslich mit gueltigem JSON ohne Markdown-Codeblocks.`
 
 export async function POST(_request: Request, { params }: RouteParams) {
+  const { id } = await params
   try {
-    const brief = findProjectBriefById(params.id)
+    const brief = findProjectBriefById(id)
     if (!brief) {
       return NextResponse.json({ error: 'Project brief not found' }, { status: 404 })
     }
@@ -105,8 +106,8 @@ Antwort-Format:
     const now = Date.now()
 
     const requirements: Requirement[] = parsed.requirements.map((r, i) => ({
-      id: `${params.id}-gen-req-${now}-${i}`,
-      briefId: params.id,
+      id: `${id}-gen-req-${now}-${i}`,
+      briefId: id,
       type: (r.type as Requirement['type']) ?? 'functional',
       title: r.title,
       description: r.description,
@@ -117,8 +118,8 @@ Antwort-Format:
     }))
 
     const useCases: UseCase[] = (parsed.useCases ?? []).map((uc, i) => ({
-      id: `${params.id}-gen-uc-${now}-${i}`,
-      briefId: params.id,
+      id: `${id}-gen-uc-${now}-${i}`,
+      briefId: id,
       title: uc.title,
       actor: uc.actor,
       trigger: uc.trigger,
@@ -128,8 +129,8 @@ Antwort-Format:
     }))
 
     const risks: Risk[] = parsed.risks.map((r, i) => ({
-      id: `${params.id}-gen-risk-${now}-${i}`,
-      briefId: params.id,
+      id: `${id}-gen-risk-${now}-${i}`,
+      briefId: id,
       title: r.title,
       description: r.description,
       probability: (r.probability as Risk['probability']) ?? 'medium',
@@ -148,7 +149,7 @@ Antwort-Format:
     const mergedUseCases = [...existingAcceptedUC, ...useCases]
     const mergedRisks = [...existingAcceptedRisks, ...risks]
 
-    const updated = updateProjectBrief(params.id, {
+    const updated = updateProjectBrief(id, {
       requirements: mergedRequirements,
       useCases: mergedUseCases,
       risks: mergedRisks,

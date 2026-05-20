@@ -8,9 +8,10 @@ import { readStoredApiKeys } from '@/lib/connectors/config'
 
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const brief = findProjectBriefById(params.id)
+  const { id } = await params
+  const brief = findProjectBriefById(id)
   if (!brief) {
     return NextResponse.json({ error: 'Project brief not found' }, { status: 404 })
   }

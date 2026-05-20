@@ -8,6 +8,7 @@
  */
 
 import { useEffect } from 'react'
+import Link from 'next/link'
 
 interface ErrorPageProps {
   error: Error & { digest?: string }
@@ -62,12 +63,12 @@ export default function GlobalError({ error, reset }: ErrorPageProps) {
           >
             ↺ Seite neu laden
           </button>
-          <a
+          <Link
             href="/"
             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg transition-colors"
           >
             ← Command Center
-          </a>
+          </Link>
         </div>
 
       </div>

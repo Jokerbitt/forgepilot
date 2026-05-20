@@ -31,9 +31,9 @@ interface EscalateBody {
  */
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = params
+  const { id } = await params
   const delegation = readDelegations().find(d => d.id === id)
   if (!delegation) {
     return NextResponse.json({ error: 'Delegation nicht gefunden' }, { status: 404 })

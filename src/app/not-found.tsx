@@ -3,6 +3,8 @@
  * Shown when a page or dynamic route doesn't exist.
  */
 
+import Link from 'next/link'
+
 export default function NotFound() {
   return (
     <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
@@ -14,12 +16,12 @@ export default function NotFound() {
             Diese Seite existiert nicht oder wurde verschoben.
           </p>
         </div>
-        <a
+        <Link
           href="/"
           className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors"
         >
           ← Command Center
-        </a>
+        </Link>
       </div>
     </div>
   )

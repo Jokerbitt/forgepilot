@@ -28,10 +28,11 @@ function writeLocalWorkItems(items: WorkItem[]): void {
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params
   const items = readLocalWorkItems()
-  const item = items.find(i => i.id === params.id)
+  const item = items.find(i => i.id === id)
 
   if (!item) {
     return NextResponse.json({ error: 'Work item not found' }, { status: 404 })
@@ -46,8 +47,9 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params
   try {
     const body = await req.json() as { blockedBy: string[] }
 
@@ -59,7 +61,7 @@ export async function POST(
     }
 
     const items = readLocalWorkItems()
-    const itemIndex = items.findIndex(i => i.id === params.id)
+    const itemIndex = items.findIndex(i => i.id === id)
 
     if (itemIndex === -1) {
       return NextResponse.json({ error: 'Work item not found' }, { status: 404 })
@@ -140,13 +142,14 @@ export async function POST(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params
   try {
     const body = await req.json() as { blockerId: string }
 
     const items = readLocalWorkItems()
-    const itemIndex = items.findIndex(i => i.id === params.id)
+    const itemIndex = items.findIndex(i => i.id === id)
 
     if (itemIndex === -1) {
       return NextResponse.json({ error: 'Work item not found' }, { status: 404 })

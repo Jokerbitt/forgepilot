@@ -25,9 +25,9 @@ function writeDelegationsAtomic(delegations: Delegation[]) {
 
 export async function POST(
   _req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = params
+  const { id } = await params
 
   const delegations = readDelegations()
   const idx = delegations.findIndex(d => d.id === id)

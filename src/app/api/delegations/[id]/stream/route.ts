@@ -30,9 +30,9 @@ function encodeSSE(event: string, data: unknown): string {
  */
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = params
+  const { id } = await params
 
   const delegation = readDelegation(id)
   if (!delegation) {
