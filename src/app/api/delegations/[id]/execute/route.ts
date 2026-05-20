@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { delegationLogger } from '@/lib/logger'
+import { withSpan } from '@/lib/tracing/tracer'
 import { checkRateLimit, buildRateLimitHeaders } from '@/lib/rate-limit'
 import { spawn, execSync } from 'child_process'
 import fs from 'fs'
@@ -658,21 +659,36 @@ export async function POST(
     ? buildSubTaskPrompt(delegation)
     : buildPrompt(delegation)
 
-  if (delegation.executionRoute === 'ollama-agent') {
+  // OTel: trace execution start + routing decision
+  const mode = delegation.executionRoute === 'ollama-agent'
+    ? 'ollama-agent'
+    : isClaudeAvailable()
+      ? 'claude-cli'
+      : readStoredApiKeys().ANTHROPIC_API_KEY?.trim()
+        ? 'claude-api'
+        : 'simulation'
+
+  void withSpan('delegation.execute', {
+    'delegation.id':          id,
+    'delegation.mode':        mode,
+    'delegation.riskClass':   delegation.contract.riskClass,
+    'delegation.privacyMode': delegation.contract.privacyMode,
+    'delegation.budget':      delegation.contract.maxBudgetUsd ?? 0,
+  }, async () => Promise.resolve())
+
+  if (mode === 'ollama-agent') {
     const model = delegation.contract.llmModel?.trim() || 'qwen2.5-coder:14b'
     void runWithOllamaAgent(id, prompt, startTime, delegation.contract.maxBudgetUsd, model)
     return NextResponse.json({ started: true, mode: 'ollama-agent', delegationId: id, model })
   }
 
-  if (isClaudeAvailable()) {
+  if (mode === 'claude-cli') {
     runWithClaudeCLI(id, prompt, startTime, delegation.contract.maxBudgetUsd)
     return NextResponse.json({ started: true, mode: 'claude-cli', delegationId: id })
   }
 
   // Fallback 1: Claude API (generateText) — real AI output, no tool-use loop
-  const storedKeys = readStoredApiKeys()
-  const hasApiKey = !!storedKeys.ANTHROPIC_API_KEY?.trim()
-  if (hasApiKey) {
+  if (mode === 'claude-api') {
     void runWithClaudeAPI(id, delegation, startTime)
     return NextResponse.json({ started: true, mode: 'claude-api', delegationId: id })
   }
