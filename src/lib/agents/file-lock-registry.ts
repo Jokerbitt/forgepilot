@@ -1,15 +1,23 @@
 /**
- * File Lock Registry
+ * File Lock Registry — LEGACY
  *
- * Prevents merge conflicts between parallel agents by tracking
- * which files each agent is currently working on.
+ * @deprecated Use `scope-lock.ts` instead. This module is kept as a
+ * compatibility shim for existing call sites (and its test). New code
+ * should use `claimScope` / `heartbeatScope` / `releaseScope` from
+ * `./scope-lock`, plus the `agent-coord.mjs` CLI.
  *
- * Locks are stored in config/agent-file-locks.json
- * Stale locks (>2h) are auto-cleaned on every read/write.
+ * Differences vs scope-lock:
+ *  - exact file paths only (no glob `**`)
+ *  - static 2h timeout (no heartbeat, no pid check)
+ *  - no branch-isolation check
+ *
+ * `generateForbiddenFilesBlock()` below merges BOTH stores so legacy
+ * prompts still see modern scope-lock claims.
  */
 
 import fs from 'fs'
 import path from 'path'
+import { getActiveClaims } from './scope-lock'
 
 const LOCK_FILE = path.join(process.cwd(), 'config', 'agent-file-locks.json')
 const STALE_AFTER_MS = 2 * 60 * 60 * 1000 // 2 hours
@@ -112,17 +120,28 @@ export function cleanStaleLocks(maxAgeHours = 2): number {
 
 /**
  * Generate a "FORBIDDEN FILES" block for agent prompts.
- * Include this in every agent spawn to prevent conflicts.
+ * Reads BOTH the legacy lock store and the modern `scope-lock` claims so
+ * old prompts surface conflicts written by either system.
  */
 export function generateForbiddenFilesBlock(): string {
-  const locks = getActiveLocks()
-  if (locks.length === 0) return ''
+  const lines: string[] = []
 
-  const lines = locks.flatMap(l => {
+  for (const l of getActiveLocks()) {
     const ageMin = Math.round((Date.now() - new Date(l.lockedAt).getTime()) / 60000)
     const remaining = Math.max(0, 120 - ageMin)
-    return l.files.map(f => `  - ${f}  (locked by: ${l.agentName}, ~${remaining}min remaining)`)
-  })
+    for (const f of l.files) {
+      lines.push(`  - ${f}  (legacy lock — ${l.agentName}, ~${remaining}min remaining)`)
+    }
+  }
+
+  for (const c of getActiveClaims()) {
+    const expiresIn = Math.max(0, Math.round((new Date(c.expiresAt).getTime() - Date.now()) / 60000))
+    for (const pattern of c.filePatterns) {
+      lines.push(`  - ${pattern}  (scope-lock — ${c.agentId} on ${c.branch}, ~${expiresIn}min remaining)`)
+    }
+  }
+
+  if (lines.length === 0) return ''
 
   return [
     '⚠️  LOCKED FILES — do NOT edit these (another agent is working on them):',
