@@ -7,6 +7,7 @@ import fs from 'fs'
 import path from 'path'
 import { buildProjectBrief, saveProjectBrief } from '@/lib/project-briefs'
 import { apiLogger } from '@/lib/logger'
+import { checkRateLimit, buildRateLimitHeaders } from '@/lib/rate-limit'
 import type { IdeaIntakeInput } from '@/lib/models/project-brief'
 import type { WorkItem } from '@/lib/models/work-item'
 
@@ -83,6 +84,16 @@ interface WebhookBody {
 }
 
 export async function POST(request: NextRequest) {
+  // Rate limit: 30 webhook calls per minute per IP
+  const rateCheck = checkRateLimit(request, { limit: 30, windowSec: 60, keyPrefix: 'webhook' })
+  if (!rateCheck.allowed) {
+    apiLogger.warn({ event: 'webhook.intake.rate_limited', retryAfter: rateCheck.retryAfter })
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: buildRateLimitHeaders(rateCheck) },
+    )
+  }
+
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
