@@ -83,13 +83,12 @@ describe('scrubPII', () => {
     expect(result.totalRedacted).toBeGreaterThanOrEqual(2)
   })
 
-  it('credentials in URLs are redacted (email part first)', () => {
-    // Note: the email regex runs before url-with-credentials, so "user@host" in
-    // the URL gets redacted as an email. Either way, credentials are scrubbed.
+  it('credentials in URLs are redacted as url-with-credentials', () => {
     const result = scrubPII('Webhook: https://admin:secret@api.example.com/hook')
     expect(result.wasModified).toBe(true)
-    // Either the email or the URL pattern fires — credentials are gone
-    expect(result.scrubbed).not.toContain('secret@api.example.com')
+    expect(result.scrubbed).not.toContain('admin:secret@api.example.com')
+    expect(result.scrubbed).toContain('[URL_WITH_CREDENTIALS_REDACTED]')
+    expect(result.findings.some(f => f.type === 'url-with-credentials')).toBe(true)
   })
 })
 
