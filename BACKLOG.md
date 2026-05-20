@@ -14,12 +14,12 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 
 ## 🔴 High Priority — Tech Quality (M94–M99)
 
-- [ ] M94: Zod schema validation on all API routes — structured 400 errors with field details
-- [ ] M95: Pino structured logging — replace 19x console.log, JSON output in prod, child loggers per module
-- [ ] M96: Error Boundaries + Next.js error.tsx — global crash recovery + 404 page
-- [ ] M97: Sentry error monitoring — unhandled errors, performance traces, free tier
-- [ ] M98: OpenTelemetry AI call tracing — span per delegation.execute, context.build, ai.generate
-- [ ] M99: Vercel deployment config — vercel.json, edge runtime for /api/intake, cron for DSGVO retention
+- [x] M94: Zod schema validation on all API routes — structured 400 errors with field details
+- [x] M95: Pino structured logging — replace 19x console.log, JSON output in prod, child loggers per module
+- [x] M96: Error Boundaries + Next.js error.tsx — global crash recovery + 404 page
+- [x] M97: Sentry error monitoring — unhandled errors, performance traces, free tier
+- [x] M98: OpenTelemetry AI call tracing — span per delegation.execute, context.build, ai.generate
+- [x] M99: Vercel deployment config — vercel.json, edge runtime for /api/intake, cron for DSGVO retention
 
 ## 🟡 Medium Priority
 
