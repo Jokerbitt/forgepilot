@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, Suspense } from 'react'
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import type { WorkItem, WorkItemSource } from '@/lib/models/work-item'
 import { Badge, StatusDot, cx } from '@/components/ui/primitives'
@@ -316,12 +317,12 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
                         ⚙ Orchestriert ✓
                       </a>
                     ) : created.has(item.id) ? (
-                      <a
+                      <Link
                         href="/delegations"
                         className="text-xs font-medium text-emerald-400 hover:underline"
                       >
                         Angelegt ✓
-                      </a>
+                      </Link>
                     ) : (
                       <div className="flex items-center gap-1">
                         <button
@@ -493,12 +494,12 @@ function WorkPackagesTab() {
                       <td className="hidden px-4 py-3 text-xs text-slate-500 lg:table-cell">{wp.estimatedHours}h</td>
                       <td className="px-4 py-3">
                         {delegated.has(wp.id) ? (
-                          <a
+                          <Link
                             href="/delegations"
                             className="text-xs font-medium text-emerald-400 hover:underline"
                           >
                             Delegiert ✓
-                          </a>
+                          </Link>
                         ) : (
                           <button
                             onClick={() => handleDelegate(wp)}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import Link from 'next/link'
 import type { Delegation } from '@/lib/models/delegation'
 import type { OperatorReadiness, ReadinessStatus } from '@/lib/operator/readiness'
 import type { WorkItem } from '@/lib/models/work-item'
@@ -232,7 +233,7 @@ export function CommandCenterOverview() {
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Attention</p>
               <h2 className="mt-1 text-lg font-semibold text-white">Nur was Sven entscheiden muss</h2>
             </div>
-            <a href="/delegations" className={buttonClassName('ghost')}>Queue öffnen</a>
+            <Link href="/delegations" className={buttonClassName('ghost')}>Queue öffnen</Link>
           </div>
 
           <div className="mt-5 grid gap-3 md:grid-cols-3">
@@ -275,7 +276,7 @@ export function CommandCenterOverview() {
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Heute relevant</p>
             <h2 className="mt-1 text-lg font-semibold text-white">Maximal drei Vorschläge</h2>
           </div>
-          <a href="/project-briefs" className={buttonClassName('secondary')}>Briefs ansehen</a>
+          <Link href="/project-briefs" className={buttonClassName('secondary')}>Briefs ansehen</Link>
         </div>
 
         <div className="mt-5 grid gap-3 lg:grid-cols-3">

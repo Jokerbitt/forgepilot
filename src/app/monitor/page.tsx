@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import { Panel, StatusDot, Badge, buttonClassName, cx } from '@/components/ui/primitives'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -439,7 +440,7 @@ export default function MonitorPage() {
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Verlauf</p>
               <h2 className="mt-1 text-lg font-semibold text-white">Letzte Runs</h2>
             </div>
-            <a href="/agent-runs" className={buttonClassName('ghost', 'text-xs')}>Alle Runs →</a>
+            <Link href="/agent-runs" className={buttonClassName('ghost', 'text-xs')}>Alle Runs →</Link>
           </div>
 
           {recentSlice.length === 0 ? (
