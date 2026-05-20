@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { ProcessingRecord } from '@/lib/dsgvo/processing-ledger'
 
 vi.mock('@/lib/dsgvo/processing-ledger', () => ({
   readProcessingLedger: vi.fn(),
@@ -25,6 +26,24 @@ import { GET } from './route'
 const mockReadLedger = vi.mocked(readProcessingLedger)
 const mockReadDelegations = vi.mocked(readDelegations)
 
+/** Build a minimal valid ProcessingRecord for test fixtures */
+function makeRecord(overrides: Partial<ProcessingRecord> & { id: string }): ProcessingRecord {
+  return {
+    purpose: 'delegation.execute',
+    processor: 'anthropic',
+    dataTypes: [],
+    legalBasis: 'legitimate-interest',
+    dataResidency: 'eu',
+    piiDetected: false,
+    piiCategories: [],
+    piiRedacted: false,
+    piiCount: 0,
+    retentionDays: 30,
+    processedAt: new Date().toISOString(),
+    ...overrides,
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mockReadDelegations.mockReturnValue([])
@@ -43,12 +62,9 @@ describe('GET /api/analytics/costs', () => {
   })
 
   it('calculates total cost from input tokens (1000 tokens × $0.00025/1k = $0.00025)', async () => {
-    mockReadLedger.mockReturnValue([{
-      id: 'r1', purpose: 'delegation.execute', processor: 'anthropic',
-      dataTypes: [], dataResidency: 'eu', retentionDays: 30,
-      providerId: 'anthropic', inputTokens: 1000,
-      processedAt: new Date().toISOString(),
-    }])
+    mockReadLedger.mockReturnValue([
+      makeRecord({ id: 'r1', providerId: 'anthropic', inputTokens: 1000 }),
+    ])
     const res = await GET()
     const data = await res.json()
     expect(data.totals.costUsd).toBeCloseTo(0.00025, 6)
@@ -57,8 +73,8 @@ describe('GET /api/analytics/costs', () => {
 
   it('aggregates by provider correctly', async () => {
     mockReadLedger.mockReturnValue([
-      { id: 'r1', purpose: 'a', processor: 'anthropic', dataTypes: [], dataResidency: 'eu', retentionDays: 30, providerId: 'anthropic', inputTokens: 2000, processedAt: new Date().toISOString() },
-      { id: 'r2', purpose: 'b', processor: 'groq', dataTypes: [], dataResidency: 'us', retentionDays: 30, providerId: 'groq', inputTokens: 1000, processedAt: new Date().toISOString() },
+      makeRecord({ id: 'r1', purpose: 'a', processor: 'anthropic', providerId: 'anthropic', inputTokens: 2000 }),
+      makeRecord({ id: 'r2', purpose: 'b', processor: 'groq', dataResidency: 'us', providerId: 'groq', inputTokens: 1000 }),
     ])
     const res = await GET()
     const data = await res.json()
@@ -70,9 +86,9 @@ describe('GET /api/analytics/costs', () => {
 
   it('aggregates by purpose correctly', async () => {
     mockReadLedger.mockReturnValue([
-      { id: 'r1', purpose: 'delegation.execute', processor: 'anthropic', dataTypes: [], dataResidency: 'eu', retentionDays: 30, providerId: 'anthropic', inputTokens: 500, processedAt: new Date().toISOString() },
-      { id: 'r2', purpose: 'delegation.execute', processor: 'anthropic', dataTypes: [], dataResidency: 'eu', retentionDays: 30, providerId: 'anthropic', inputTokens: 500, processedAt: new Date().toISOString() },
-      { id: 'r3', purpose: 'context.build', processor: 'anthropic', dataTypes: [], dataResidency: 'eu', retentionDays: 30, providerId: 'anthropic', inputTokens: 200, processedAt: new Date().toISOString() },
+      makeRecord({ id: 'r1', purpose: 'delegation.execute', providerId: 'anthropic', inputTokens: 500 }),
+      makeRecord({ id: 'r2', purpose: 'delegation.execute', providerId: 'anthropic', inputTokens: 500 }),
+      makeRecord({ id: 'r3', purpose: 'context.build', providerId: 'anthropic', inputTokens: 200 }),
     ])
     const res = await GET()
     const data = await res.json()
@@ -103,10 +119,9 @@ describe('GET /api/analytics/costs', () => {
   })
 
   it('handles unknown provider gracefully (cost = 0)', async () => {
-    mockReadLedger.mockReturnValue([{
-      id: 'r1', purpose: 'test', processor: 'ollama', dataTypes: [], dataResidency: 'local', retentionDays: 30,
-      providerId: 'ollama', inputTokens: 5000, processedAt: new Date().toISOString(),
-    }])
+    mockReadLedger.mockReturnValue([
+      makeRecord({ id: 'r1', purpose: 'test', processor: 'ollama', dataResidency: 'local', providerId: 'ollama', inputTokens: 5000 }),
+    ])
     const res = await GET()
     expect(res.status).toBe(200)
     const data = await res.json()
