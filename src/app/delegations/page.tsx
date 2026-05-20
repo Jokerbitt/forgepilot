@@ -31,6 +31,7 @@ import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 import { AutopilotReadinessPill } from '@/components/delegation/AutopilotReadinessBadge'
 import { VersionBadge } from '@/components/delegation/VersionBadge'
 import { Badge, EmptyState, Metric, Panel, buttonClassName, cx } from '@/components/ui/primitives'
+import { checkBudget, formatCostUsd } from '@/lib/delegations/cost-tracker'
 
 type ApprovalFilter = 'Alle' | 'approval-required' | 'auto-approved' | 'risk-blocked'
 
@@ -990,11 +991,18 @@ function DelegationsContent() {
                                 <div className="text-xs text-green-400/70 font-mono">
                                   {formatCompletedDuration(del.createdAt, del.updatedAt)}
                                 </div>
-                                {del.actualCostUsd != null ? (
-                                  <div className="text-xs text-yellow-600/80 font-mono mt-0.5">
-                                    ${del.actualCostUsd.toFixed(4)}
-                                  </div>
-                                ) : (
+                                {del.actualCostUsd != null ? (() => {
+                                  const budget = checkBudget(del.actualCostUsd, del.contract.maxBudgetUsd)
+                                  return (
+                                    <div className="mt-0.5" title={budget.message}>
+                                      <span className={`text-xs font-mono ${budget.exceeded ? 'text-red-400' : budget.warning ? 'text-yellow-400' : 'text-yellow-600/80'}`}>
+                                        {formatCostUsd(del.actualCostUsd)}
+                                      </span>
+                                      {budget.exceeded && <span className="ml-1 text-xs text-red-400">⚠</span>}
+                                      {budget.warning && !budget.exceeded && <span className="ml-1 text-xs text-yellow-500">!</span>}
+                                    </div>
+                                  )
+                                })() : (
                                   <div className="text-xs text-gray-600 mt-0.5">
                                     {new Date(del.updatedAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}
                                   </div>
