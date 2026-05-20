@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
 import { cx } from '@/components/ui/primitives'
 import type { AIProviderConfig, AIModelSelection, AIModelDef } from '@/lib/ai/providers/types'
@@ -54,10 +55,10 @@ function QuickSetupBanner({
             <p className="text-sm font-semibold text-white">{title}</p>
             <p className="text-xs text-white/50 mt-0.5">
               {subtitle}{' '}·{' '}
-              <a href={signupUrl} target="_blank" rel="noopener noreferrer"
+              <Link href={signupUrl} target="_blank" rel="noopener noreferrer"
                 className="underline underline-offset-2 hover:text-white/80 transition-colors">
                 {new URL(signupUrl).hostname}
-              </a>
+              </Link>
             </p>
           </div>
         </div>
@@ -363,10 +364,10 @@ function InlineKeyEntry({
       {signupUrl && (
         <p className="text-[10px] text-slate-600">
           Noch kein Key?{' '}
-          <a href={signupUrl} target="_blank" rel="noopener noreferrer"
+          <Link href={signupUrl} target="_blank" rel="noopener noreferrer"
             className="text-violet-400 hover:text-violet-300 underline underline-offset-2">
             Kostenlos holen →
-          </a>
+          </Link>
         </p>
       )}
     </div>
@@ -1046,7 +1047,7 @@ export default function ProvidersPage() {
       {/* Header */}
       <div className="border-b border-white/[0.06] px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <a href="/settings" className="text-slate-500 hover:text-slate-300 text-sm transition-colors">← Settings</a>
+          <Link href="/settings" className="text-slate-500 hover:text-slate-300 text-sm transition-colors">← Settings</Link>
           <span className="text-slate-700">/</span>
           <span className="text-sm text-slate-400">AI Providers</span>
         </div>

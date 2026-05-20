@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { RoutingDecision } from '@/lib/models/model-router'
@@ -172,9 +173,9 @@ export default function ModelRouterPage() {
               </button>
             ))}
           </div>
-          <a href="/settings" className={buttonClassName('secondary', 'w-full sm:w-auto')}>
+          <Link href="/settings" className={buttonClassName('secondary', 'w-full sm:w-auto')}>
             Routing einstellen
-          </a>
+          </Link>
         </div>
 
         {tab === 'profiles' ? (
