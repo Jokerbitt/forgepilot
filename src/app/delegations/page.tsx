@@ -31,7 +31,7 @@ import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 import { AutopilotReadinessPill } from '@/components/delegation/AutopilotReadinessBadge'
 import { VersionBadge } from '@/components/delegation/VersionBadge'
 import { Badge, EmptyState, Metric, Panel, buttonClassName, cx } from '@/components/ui/primitives'
-import { checkBudget, formatCostUsd } from '@/lib/delegations/cost-tracker'
+import { checkBudget, formatCostUsd } from '@/lib/delegations/cost-format'
 
 type ApprovalFilter = 'Alle' | 'approval-required' | 'auto-approved' | 'risk-blocked'
 

@@ -7,6 +7,8 @@
  */
 
 import { getAllProviderConfigs } from '@/lib/ai/providers/config-store'
+export { checkBudget, formatCostUsd } from './cost-format'
+export type { BudgetStatus } from './cost-format'
 
 export interface TokenUsageSummary {
   inputTokens: number
@@ -25,21 +27,6 @@ export interface CostBreakdown {
   modelId: string
   /** True when pricing data was found in the catalog for this model */
   hasPricingData: boolean
-}
-
-export interface BudgetStatus {
-  /** Actual cost incurred so far */
-  actualCostUsd: number
-  /** Maximum allowed spend from TaskContract.maxBudgetUsd */
-  maxBudgetUsd: number
-  /** 0.0–1.0 ratio of used / allowed (may exceed 1.0) */
-  usageRatio: number
-  /** Budget has been exceeded */
-  exceeded: boolean
-  /** Usage is >= 80% of budget (early warning) */
-  warning: boolean
-  /** Human-readable status message */
-  message: string
 }
 
 /**
@@ -74,40 +61,4 @@ export function calculateCallCost(usage: TokenUsageSummary): CostBreakdown {
  */
 export function sumCosts(breakdowns: CostBreakdown[]): number {
   return breakdowns.reduce((total, b) => total + b.totalCostUsd, 0)
-}
-
-/**
- * Compare actual spend against the delegation budget and return a status.
- */
-export function checkBudget(actualCostUsd: number, maxBudgetUsd: number): BudgetStatus {
-  const usageRatio = maxBudgetUsd > 0 ? actualCostUsd / maxBudgetUsd : 0
-  const exceeded   = actualCostUsd > maxBudgetUsd && maxBudgetUsd > 0
-  const warning    = usageRatio >= 0.8 && !exceeded
-
-  let message: string
-  if (maxBudgetUsd <= 0) {
-    message = 'No budget set'
-  } else if (exceeded) {
-    const pct = Math.round(usageRatio * 100)
-    message = `Budget exceeded: $${actualCostUsd.toFixed(4)} / $${maxBudgetUsd.toFixed(2)} (${pct}%)`
-  } else if (warning) {
-    const pct = Math.round(usageRatio * 100)
-    message = `Budget warning: ${pct}% used ($${actualCostUsd.toFixed(4)} / $${maxBudgetUsd.toFixed(2)})`
-  } else {
-    const pct = Math.round(usageRatio * 100)
-    message = `$${actualCostUsd.toFixed(4)} / $${maxBudgetUsd.toFixed(2)} (${pct}%)`
-  }
-
-  return { actualCostUsd, maxBudgetUsd, usageRatio, exceeded, warning, message }
-}
-
-/**
- * Format a USD amount for display.
- * Under $0.01 → show in milli-cents for readability.
- */
-export function formatCostUsd(usd: number): string {
-  if (usd === 0) return '$0.00'
-  if (usd < 0.0001) return `< $0.0001`
-  if (usd < 0.01)   return `$${usd.toFixed(4)}`
-  return `$${usd.toFixed(2)}`
 }
