@@ -15,11 +15,17 @@ if (process.env.NODE_ENV === 'development') {
   module.exports = nextConfig
 } else {
   module.exports = withSentryConfig(nextConfig, {
+    org:     process.env.SENTRY_ORG     ?? 'privat-0p',
+    project: process.env.SENTRY_PROJECT ?? 'javascript-nextjs',
+    // authToken is read from SENTRY_AUTH_TOKEN env var automatically by the Sentry webpack plugin
     silent: !process.env.CI,
-    webpack: {
-      autoInstrumentServerFunctions: true,
-      treeshake: { removeDebugLogging: true },
-    },
     widenClientFileUpload: true,
+    // Upload source maps to Sentry on every production build
+    sourcemaps: {
+      disable: false,
+    },
+    autoInstrumentServerFunctions: true,
+    hideSourceMaps: true,         // strip .map files from the deployed bundle
+    disableLogger: true,          // tree-shake Sentry debug logging in prod
   })
 }
