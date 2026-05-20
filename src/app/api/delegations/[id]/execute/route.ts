@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { delegationLogger } from '@/lib/logger'
+import { checkRateLimit, buildRateLimitHeaders } from '@/lib/rate-limit'
 import { spawn, execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
@@ -587,9 +588,19 @@ function runSimulation(id: string, delegation: Delegation) {
 }
 
 export async function POST(
-  _req: Request,
+  _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  // Rate limit: 10 executions per minute per IP (AI calls are expensive)
+  const rateCheck = checkRateLimit(_req, { limit: 10, windowSec: 60, keyPrefix: 'execute' })
+  if (!rateCheck.allowed) {
+    delegationLogger.warn({ event: 'delegation.execute.rate_limited', retryAfter: rateCheck.retryAfter })
+    return NextResponse.json(
+      { error: 'Too many requests. Please wait before executing another delegation.' },
+      { status: 429, headers: buildRateLimitHeaders(rateCheck) },
+    )
+  }
+
   const { id } = params
 
   const delegations = readDelegations()
