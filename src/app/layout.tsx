@@ -28,7 +28,7 @@ export default function RootLayout({
           <AppNav />
           <GlobalKeyboardHandler />
           <GlobalSearch />
-          <div className="lg:pl-64">
+          <div className="sm:pl-64">
             {children}
           </div>
         </ToastProvider>

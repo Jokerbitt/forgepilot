@@ -130,7 +130,7 @@ export function AppNav() {
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-white/[0.06] bg-[#0a0a0f] lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-white/[0.06] bg-[#0a0a0f] sm:flex">
         {/* Logo */}
         <div className="flex h-14 items-center gap-3 border-b border-white/[0.06] px-4">
           <Link href="/" className="group flex items-center gap-3 min-w-0">
@@ -222,7 +222,7 @@ export function AppNav() {
       </aside>
 
       {/* Mobile top nav */}
-      <nav className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#0a0a0f]/95 backdrop-blur lg:hidden">
+      <nav className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#0a0a0f]/95 backdrop-blur sm:hidden">
         <div className="flex h-12 items-center gap-1.5 px-3">
           <Link href="/" className="flex shrink-0 items-center gap-2 pr-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600">
