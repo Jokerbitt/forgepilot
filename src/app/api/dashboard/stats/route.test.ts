@@ -70,7 +70,7 @@ describe('GET /api/dashboard/stats', () => {
 
   it('counts knowledge cards and recent cards', async () => {
     const recentDate = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() // 2 days ago
-    const oldDate = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString() // 10 days ago
+    const oldDate = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString() // 45 days ago (outside 30d window)
 
     mockKnowledge = JSON.stringify({
       sources: [],

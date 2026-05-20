@@ -105,7 +105,7 @@ export interface DashboardStats {
   }
   knowledge: {
     cardCount: number
-    recentCards: number   // added in last 7 days
+    recentCards: number   // added in last 30 days
   }
   system: {
     aiCallsToday: number
@@ -168,10 +168,10 @@ export async function GET(): Promise<NextResponse<DashboardStats>> {
 
   // Knowledge
   const cards = getCards()
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
   const knowledgeStats = {
     cardCount: cards.length,
-    recentCards: cards.filter(c => c.createdAt >= sevenDaysAgo).length,
+    recentCards: cards.filter(c => c.createdAt >= thirtyDaysAgo).length,
   }
 
   // System metrics
