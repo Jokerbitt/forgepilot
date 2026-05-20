@@ -40,7 +40,7 @@ describe('POST /api/idea/refine', () => {
     mockParseBody.mockResolvedValue({ idea: 'Build a task management app for remote teams' })
     mockGenerate.mockResolvedValue({
       text: '["Who are the primary users?","What platforms?","How does success look?","Any budget constraints?"]',
-      usage: { inputTokens: 100, outputTokens: 50 },
+      provider: 'anthropic', model: 'claude-3-haiku', inputTokens: 100, outputTokens: 50,
     })
     const res = await POST(mockReq())
     expect(res.status).toBe(200)
@@ -69,7 +69,7 @@ describe('POST /api/idea/refine', () => {
         technicalConstraints: 'Must work on web browsers',
         scope: 'standard',
       }),
-      usage: { inputTokens: 200, outputTokens: 150 },
+      provider: 'anthropic', model: 'claude-3-haiku', inputTokens: 200, outputTokens: 150,
     })
     const res = await POST(mockReq())
     expect(res.status).toBe(200)
@@ -92,7 +92,7 @@ describe('POST /api/idea/refine', () => {
     mockParseBody.mockResolvedValue({ idea: 'My great idea for testing' })
     mockGenerate.mockResolvedValue({
       text: 'NOT VALID JSON AT ALL',
-      usage: { inputTokens: 10, outputTokens: 5 },
+      provider: 'anthropic', model: 'claude-3-haiku', inputTokens: 10, outputTokens: 5,
     })
     const res = await POST(mockReq())
     expect(res.status).toBe(500)
