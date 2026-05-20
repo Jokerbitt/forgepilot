@@ -106,8 +106,8 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 
 ## 🔴 High Priority — UX & Intelligence (M131–M135)
 
-- [~] M131: Enhanced Projects Dashboard — Projekt-Status-Pipeline (intake→planning→ready→in_progress→attention→completed) mit Metriken + Next-Action-CTA
-- [~] M132: AI Cost Analytics Dashboard — /analytics Seite mit Kosten pro Provider, Trend-Charts, Budget-Übersicht + Token-Verbrauch nach Zweck
+- [x] M131: Enhanced Projects Dashboard — Projekt-Status-Pipeline (intake→planning→ready→in_progress→attention→completed) mit Metriken + Next-Action-CTA
+- [x] M132: AI Cost Analytics Dashboard — /analytics Seite mit Kosten pro Provider, Trend-Charts, Budget-Übersicht + Token-Verbrauch nach Zweck
 - [x] M133: Delegation Health Monitor — automatische Erkennung von stuck/hängengebliebenen Delegations + Retry-Empfehlung
 - [~] M134: GitHub PR Status Integration — PR-URL + CI-Status direkt in Delegation-Detailansicht (kein Tab-Wechsel nötig)
 - [x] M135: Webhook Event Log — alle eingehenden Webhooks (Linear, n8n) in /settings/webhooks mit Status + Replay-Button
