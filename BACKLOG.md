@@ -14,10 +14,10 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 
 ## 🔴 High Priority — Tech Quality (M100–M105)
 
-- [ ] M100: Zod validation rollout — apply parseBody() to all POST/PUT API routes (agent-runs, settings, eval, full-cycle, pm-agent, projects, attention)
-- [ ] M101: Pino migration complete — replace remaining 4 console.error calls in API routes (pdf-export, dsgvo-export, delegation-versions, execute) + component console.log calls
-- [ ] M102: API rate limiting — simple in-memory rate limiter middleware for all /api routes (100 req/min per IP, 429 response with Retry-After)
-- [ ] M103: API route test coverage — add ≥3 tests each for: /api/agent-runs, /api/settings, /api/projects, /api/health (currently 0 coverage)
+- [x] M100: Zod validation rollout — apply parseBody() to all POST/PUT API routes (agent-runs, settings, eval, full-cycle, pm-agent, projects, attention)
+- [x] M101: Pino migration complete — replace remaining 4 console.error calls in API routes (pdf-export, dsgvo-export, delegation-versions, execute) + component console.log calls
+- [x] M102: API rate limiting — simple in-memory rate limiter middleware for all /api routes (100 req/min per IP, 429 response with Retry-After)
+- [x] M103: API route test coverage — add ≥3 tests each for: /api/agent-runs, /api/settings, /api/projects, /api/health (currently 0 coverage)
 - [ ] M104: Integration test suite — end-to-end flow test: POST /api/project-briefs → GET /api/project-briefs/[id] → POST /api/delegations → GET /api/delegations/[id]
 - [ ] M105: Dashboard stats accuracy — /api/dashboard/stats currently returns mock-mixed data; ensure all counts come from real JSON stores, add snapshot test
 
