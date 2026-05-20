@@ -6,7 +6,7 @@
  */
 
 import { readProcessingLedger } from '@/lib/dsgvo/processing-ledger'
-import { BUILT_IN_PROVIDER_CONFIGS } from '@/lib/ai/providers/registry'
+import { BUILT_IN_PROVIDER_CONFIGS } from '@/lib/ai/providers/catalog'
 import { getModelSelection } from '@/lib/ai/providers/config-store'
 import { listRuns } from '@/lib/agents/orchestrated-run'
 import type { MonitorSnapshot, ProviderStats, MonitorRecommendation, AgentActivity } from './types'

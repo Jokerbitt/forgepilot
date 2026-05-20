@@ -13,6 +13,8 @@ export type ProviderType =
 
 export type ModelPurpose = 'fast' | 'coding' | 'embedding' | 'both'
 
+export type PriceVerificationStatus = 'verified' | 'unverified'
+
 export interface AIModelDef {
   id: string           // model identifier sent to API (e.g. 'claude-haiku-4-5')
   name: string         // human-readable label (e.g. 'Claude Haiku')
@@ -20,6 +22,12 @@ export interface AIModelDef {
   contextWindow?: number
   costPer1kInput?: number   // USD
   costPer1kOutput?: number  // USD
+  /** Volatile public pricing metadata; never treat as a billing source of truth. */
+  priceVerification?: {
+    status: PriceVerificationStatus
+    verifiedAt?: string
+    sourceUrl?: string
+  }
   /** True when this model is permanently free (cost = 0) */
   isFree?: boolean
 }
@@ -32,6 +40,12 @@ export interface ProviderFreeTier {
   signupUrl: string
   /** One-liner shown in quick-setup banner */
   description?: string
+  /** Free-tier limits change often; unverified means UI must present them as guidance, not fact. */
+  verification?: {
+    status: PriceVerificationStatus
+    verifiedAt?: string
+    sourceUrl?: string
+  }
 }
 
 /** Config stored in nba-settings.json under `configuredProviders` */

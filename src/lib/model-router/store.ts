@@ -11,13 +11,25 @@ interface RouterStore {
   decisions: RoutingDecision[]
 }
 
+function mergeDefaultProfiles(profiles: ModelProfile[]): ModelProfile[] {
+  const byId = new Map(DEFAULT_PROFILES.map(profile => [profile.id, profile]))
+  for (const profile of profiles) {
+    byId.set(profile.id, profile)
+  }
+  return Array.from(byId.values())
+}
+
 function readStore(): RouterStore {
   try {
     if (!fs.existsSync(STORE_PATH)) {
       return { profiles: DEFAULT_PROFILES, decisions: [] }
     }
     const raw = fs.readFileSync(STORE_PATH, 'utf-8')
-    return JSON.parse(raw) as RouterStore
+    const parsed = JSON.parse(raw) as RouterStore
+    return {
+      profiles: mergeDefaultProfiles(parsed.profiles ?? []),
+      decisions: parsed.decisions ?? [],
+    }
   } catch {
     return { profiles: DEFAULT_PROFILES, decisions: [] }
   }

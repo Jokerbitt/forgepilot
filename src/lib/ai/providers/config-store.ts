@@ -9,7 +9,8 @@ import fs from 'fs'
 import path from 'path'
 import { getDataDir } from '@/lib/config/paths'
 import type { AIProviderConfig, AIModelSelection } from './types'
-import { BUILT_IN_PROVIDER_CONFIGS, registerCustomProvider } from './registry'
+import { BUILT_IN_PROVIDER_CONFIGS } from './catalog'
+import { registerCustomProvider } from './registry'
 
 interface AIProvidersStore {
   /** Overrides / additions on top of built-in configs */

@@ -11,6 +11,7 @@ export type ModelProvider =
   | 'anthropic'
   | 'n8n'
   | 'local-script'
+  | (string & {})
 
 export type ModelExecutionMode = 'local' | 'desktop-agent' | 'cloud' | 'workflow'
 export type ModelCostClass = 'free-local' | 'included-subscription' | 'metered-low' | 'metered-high'

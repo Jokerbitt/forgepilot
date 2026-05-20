@@ -274,10 +274,13 @@ const KEY_LABELS: Record<string, string> = {
   SUPABASE_ANON_KEY:  'Supabase Anon Key',
 }
 
-function FreeTierBadge({ limit }: { limit: string }) {
+function FreeTierBadge({ limit, unverified }: { limit: string; unverified?: boolean }) {
   return (
-    <span className="text-[10px] font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/20 rounded px-1.5 py-0.5 shrink-0">
-      🆓 {limit}
+    <span
+      className="text-[10px] font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/20 rounded px-1.5 py-0.5 shrink-0"
+      title={unverified ? 'Free-Tier-Angabe ist ein Richtwert und muss beim Anbieter geprüft werden.' : undefined}
+    >
+      {limit}{unverified ? ' · Richtwert' : ''}
     </span>
   )
 }
@@ -494,7 +497,10 @@ function ProviderCard({
             <span className="shrink-0 text-[10px] text-slate-600 border border-slate-700/50 rounded px-1">built-in</span>
           )}
           {provider.freeTier && (
-            <FreeTierBadge limit={provider.freeTier.limit} />
+            <FreeTierBadge
+              limit={provider.freeTier.limit}
+              unverified={provider.freeTier.verification?.status === 'unverified'}
+            />
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
