@@ -90,6 +90,67 @@ describe('scrubPII', () => {
     expect(result.scrubbed).toContain('[URL_WITH_CREDENTIALS_REDACTED]')
     expect(result.findings.some(f => f.type === 'url-with-credentials')).toBe(true)
   })
+
+  it('detects and redacts credit card numbers (Visa)', () => {
+    const result = scrubPII('Payment with card 4111111111111111')
+    expect(result.wasModified).toBe(true)
+    expect(result.scrubbed).not.toContain('4111111111111111')
+    expect(result.scrubbed).toContain('[CREDITCARD_REDACTED]')
+    expect(result.findings.some(f => f.type === 'credit-card')).toBe(true)
+  })
+
+  it('detects and redacts credit card numbers (Mastercard)', () => {
+    const result = scrubPII('Card number: 5500005555555559')
+    expect(result.wasModified).toBe(true)
+    expect(result.scrubbed).not.toContain('5500005555555559')
+    expect(result.findings.some(f => f.type === 'credit-card')).toBe(true)
+  })
+
+  it('detects and redacts GitHub personal access token', () => {
+    const result = scrubPII('Token: ghp_ABCDEFghijklmnopqrst1234567890ab')
+    expect(result.wasModified).toBe(true)
+    expect(result.scrubbed).not.toContain('ghp_ABCDEFG')
+    expect(result.findings.some(f => f.type === 'api-key')).toBe(true)
+  })
+
+  it('detects and redacts Austrian phone number (+43)', () => {
+    const result = scrubPII('Kontakt: +43 664 1234567')
+    expect(result.wasModified).toBe(true)
+    expect(result.scrubbed).not.toContain('+43 664 1234567')
+    expect(result.findings.some(f => f.type === 'phone')).toBe(true)
+  })
+
+  it('detects and redacts Swiss phone number (+41)', () => {
+    const result = scrubPII('Ruf mich an: +41 44 55512345')
+    expect(result.wasModified).toBe(true)
+    expect(result.findings.some(f => f.type === 'phone')).toBe(true)
+  })
+
+  it('does not redact plain words without PII patterns', () => {
+    const result = scrubPII('Max Mustermann arbeitet bei Beispiel GmbH')
+    expect(result.wasModified).toBe(false)
+    expect(result.scrubbed).toBe('Max Mustermann arbeitet bei Beispiel GmbH')
+  })
+
+  it('findings array has correct placeholder for each PII type', () => {
+    const result = scrubPII('alice@example.com and 192.168.1.1')
+    const emailFinding = result.findings.find(f => f.type === 'email')
+    const ipFinding = result.findings.find(f => f.type === 'ip-address')
+    expect(emailFinding?.placeholder).toBe('[EMAIL_REDACTED]')
+    expect(ipFinding?.placeholder).toBe('[IP_REDACTED]')
+  })
+
+  it('handles text with only whitespace gracefully', () => {
+    const result = scrubPII('   \n\t  ')
+    expect(result.wasModified).toBe(false)
+    expect(result.totalRedacted).toBe(0)
+  })
+
+  it('redacts Swiss IBAN', () => {
+    const result = scrubPII('Konto: CH5604835012345678009')
+    expect(result.wasModified).toBe(true)
+    expect(result.findings.some(f => f.type === 'iban')).toBe(true)
+  })
 })
 
 describe('scrubPIIBatch', () => {
