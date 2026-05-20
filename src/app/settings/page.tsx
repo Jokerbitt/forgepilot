@@ -390,6 +390,22 @@ export default function SettingsPage() {
               Research Run, Requirements-Generierung und AI Suggest nutzen diese Auswahl.
             </p>
 
+            {/* Quick-links to provider management + test */}
+            <div className="flex flex-wrap gap-2 pt-1">
+              <a
+                href="/settings/providers"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-semibold text-violet-300 hover:bg-violet-500/20 transition-colors"
+              >
+                ⚙ Provider & Modelle verwalten
+              </a>
+              <a
+                href="/settings/ai-test"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/20 transition-colors"
+              >
+                ⚡ AI direkt testen
+              </a>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Coding-/Research-Modell</label>
