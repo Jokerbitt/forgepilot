@@ -539,6 +539,12 @@ export default function SettingsPage() {
                 </svg>
                 Vercel Deployment
               </a>
+              <a
+                href="/settings/notifications"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-semibold text-purple-300 hover:bg-purple-500/20 transition-colors"
+              >
+                🔔 Benachrichtigungen
+              </a>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
