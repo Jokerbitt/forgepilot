@@ -1,8 +1,10 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
 import { parseCSV } from '@/lib/work-items/csv-parser'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { WorkItemImportSchema } from '@/lib/validation/schemas'
 import type { WorkItem } from '@/lib/models/work-item'
 
 export const dynamic = 'force-dynamic'
@@ -34,24 +36,11 @@ function mapPriority(priority: string): 0 | 1 | 2 | 3 | 4 {
   }
 }
 
-export async function POST(request: Request) {
-  let body: unknown
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
-  }
+export async function POST(request: NextRequest) {
+  const result = await parseBody(request, WorkItemImportSchema)
+  if (isValidationError(result)) return result
 
-  if (
-    typeof body !== 'object' ||
-    body === null ||
-    !('csv' in body) ||
-    typeof (body as Record<string, unknown>).csv !== 'string'
-  ) {
-    return NextResponse.json({ error: 'Missing required field: csv (string)' }, { status: 400 })
-  }
-
-  const csvInput = (body as { csv: string }).csv
+  const csvInput = result.csv
   let parsed
   try {
     parsed = parseCSV(csvInput)
