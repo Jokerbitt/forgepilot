@@ -468,9 +468,16 @@ function CoordinationOverview({ summary }: { summary: AgentControlPlaneSummary |
   }
 
   const tone = summary.coordination.canStartMoreWork ? 'text-emerald-400' : 'text-amber-400'
+  const healthTone = summary.pm.overallHealth === 'green'
+    ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+    : summary.pm.overallHealth === 'red'
+    ? 'text-rose-400 border-rose-500/30 bg-rose-500/10'
+    : summary.pm.overallHealth === 'yellow'
+    ? 'text-amber-400 border-amber-500/30 bg-amber-500/10'
+    : 'text-slate-400 border-slate-700 bg-slate-800/50'
 
   return (
-    <section className="mb-6 space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-5">
+    <section className="mb-6 min-w-0 space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Parallel Work Control</p>
@@ -488,6 +495,77 @@ function CoordinationOverview({ summary }: { summary: AgentControlPlaneSummary |
         </div>
       </div>
 
+      <div className="rounded-lg border border-violet-900/40 bg-violet-950/10 p-4">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-violet-300">PM Agent Steering</p>
+            <p className="mt-1 text-sm font-semibold text-white">
+              {summary.pm.hasPlan ? 'Projektleiter-Kontext aktiv' : 'Noch kein PM-Plan vorhanden'}
+            </p>
+            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-400">
+              {summary.pm.summary ?? 'Starte den PM Agenten, damit Fortschritt, Blocker, Prioritaeten und naechste Delegationen zentral bewertet werden.'}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <span className={cx('rounded-full border px-2 py-1 text-xs font-semibold', healthTone)}>
+              {summary.pm.overallHealth ? `Health ${summary.pm.overallHealth}` : 'kein Plan'}
+            </span>
+            {summary.pm.stale && (
+              <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-300">
+                stale
+              </span>
+            )}
+            <Link
+              href="/pm-agent"
+              className="rounded-lg border border-violet-700/60 bg-violet-600/15 px-3 py-1.5 text-xs font-semibold text-violet-200 transition-colors hover:bg-violet-600/25"
+            >
+              PM Agent oeffnen
+            </Link>
+          </div>
+        </div>
+
+        <div className="grid min-w-0 gap-3 lg:grid-cols-3">
+          <div className="min-w-0 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+            <p className="mb-2 text-xs font-semibold text-slate-300">Blocker</p>
+            {summary.pm.blockers.length === 0 ? (
+              <p className="text-xs text-slate-500">Keine PM-Blocker im aktuellen Plan.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {summary.pm.blockers.slice(0, 3).map(blocker => (
+                  <li key={blocker} className="truncate text-xs text-amber-300">{blocker}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="min-w-0 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+            <p className="mb-2 text-xs font-semibold text-slate-300">Handlungsempfehlungen</p>
+            {summary.pm.recommendations.length === 0 ? (
+              <p className="text-xs text-slate-500">Noch keine PM-Empfehlungen vorhanden.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {summary.pm.recommendations.slice(0, 3).map(recommendation => (
+                  <li key={recommendation} className="truncate text-xs text-slate-400">{recommendation}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="min-w-0 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+            <p className="mb-2 text-xs font-semibold text-slate-300">PM empfiehlt als naechstes</p>
+            {summary.pm.nextDelegations.length === 0 ? (
+              <p className="text-xs text-slate-500">Keine PM-Delegation freigegeben.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {summary.pm.nextDelegations.slice(0, 3).map(item => (
+                  <li key={`${item.workPackageId}-${item.title}`} className="truncate text-xs text-emerald-300">
+                    {item.title}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+
       {summary.coordination.blockedReason && (
         <div className="rounded-lg border border-amber-900/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-300">
           {summary.coordination.blockedReason}
@@ -501,8 +579,8 @@ function CoordinationOverview({ summary }: { summary: AgentControlPlaneSummary |
         <CoordinationMetric label="Cloud / Abo" value={summary.agents.cloudOrSubscription} detail="fuer komplexe Tasks" />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="min-w-0 rounded-lg border border-slate-800 bg-slate-950/40 p-4">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm font-semibold text-white">Naechste sinnvolle Delegationen</p>
             <span className="text-xs text-slate-600">{summary.nextDelegations.length} Vorschlaege</span>
@@ -533,7 +611,7 @@ function CoordinationOverview({ summary }: { summary: AgentControlPlaneSummary |
           )}
         </div>
 
-        <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
+        <div className="min-w-0 rounded-lg border border-slate-800 bg-slate-950/40 p-4">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm font-semibold text-white">Aktive Scopes</p>
             <span className="text-xs text-slate-600">Lease-basiert</span>
@@ -543,9 +621,9 @@ function CoordinationOverview({ summary }: { summary: AgentControlPlaneSummary |
           ) : (
             <div className="space-y-2">
               {summary.scopes.claims.slice(0, 4).map(claim => (
-                <div key={`${claim.agentId}-${claim.claimedAt}`} className="rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2">
-                  <p className="text-xs font-semibold text-white">{claim.agentId}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">{claim.milestone} · {claim.branch}</p>
+                <div key={`${claim.agentId}-${claim.claimedAt}`} className="min-w-0 rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2">
+                  <p className="truncate text-xs font-semibold text-white">{claim.agentId}</p>
+                  <p className="mt-0.5 truncate text-xs text-slate-500">{claim.milestone} · {claim.branch}</p>
                   <p className="mt-1 truncate font-mono text-xs text-slate-600">{claim.filePatterns.join(', ')}</p>
                 </div>
               ))}

@@ -120,4 +120,37 @@ describe('buildAgentControlPlaneSummary', () => {
     expect(summary.coordination.canStartMoreWork).toBe(false)
     expect(summary.coordination.blockedReason).toContain('Fehlerhafte Delegationen')
   })
+
+  it('surfaces the current PM agent plan as steering context', () => {
+    const summary = buildAgentControlPlaneSummary(
+      [agent({ id: 'backend-engineer' })],
+      [],
+      [delegation({})],
+      {
+        summary: 'MVP is progressing but blocked by failed delegations.',
+        overallHealth: 'yellow',
+        reviews: [],
+        nextDelegations: [
+          {
+            workPackageId: 'wp-1',
+            title: 'Fix failed delegation gate',
+            rationale: 'Unblocks safe parallel work.',
+            estimatedHours: 2,
+            riskClass: 'A',
+          },
+        ],
+        blockers: ['One failed delegation needs review'],
+        recommendations: ['Review failure before starting more agents'],
+        runAt: now,
+        tokenUsage: { promptTokens: 100, completionTokens: 50 },
+      },
+      false,
+    )
+
+    expect(summary.pm.hasPlan).toBe(true)
+    expect(summary.pm.overallHealth).toBe('yellow')
+    expect(summary.pm.stale).toBe(false)
+    expect(summary.pm.blockers[0]).toContain('failed delegation')
+    expect(summary.pm.nextDelegations[0].title).toBe('Fix failed delegation gate')
+  })
 })

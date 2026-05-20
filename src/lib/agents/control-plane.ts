@@ -1,5 +1,6 @@
 import type { AgentProfile } from '@/lib/models/agent-profile'
 import type { Delegation, TaskContract } from '@/lib/models/delegation'
+import type { PMAgentResult } from '@/lib/agent-runner/pm-agent'
 import type { ScopeClaim } from './scope-lock'
 
 type TaskSkill = NonNullable<TaskContract['skillCategory']>
@@ -18,6 +19,16 @@ export interface AgentTaskRecommendation {
 
 export interface AgentControlPlaneSummary {
   generatedAt: string
+  pm: {
+    hasPlan: boolean
+    overallHealth: PMAgentResult['overallHealth'] | null
+    summary: string | null
+    stale: boolean
+    lastRunAt: string | null
+    blockers: string[]
+    recommendations: string[]
+    nextDelegations: PMAgentResult['nextDelegations']
+  }
   agents: {
     total: number
     available: number
@@ -47,6 +58,8 @@ export function buildAgentControlPlaneSummary(
   agents: AgentProfile[],
   claims: ScopeClaim[],
   delegations: Delegation[],
+  pmPlan: PMAgentResult | null = null,
+  pmPlanStale = false,
 ): AgentControlPlaneSummary {
   const availableAgents = agents.filter(agent => agent.availability === 'available')
   const approved = delegations
@@ -61,6 +74,16 @@ export function buildAgentControlPlaneSummary(
 
   return {
     generatedAt: new Date().toISOString(),
+    pm: {
+      hasPlan: !!pmPlan,
+      overallHealth: pmPlan?.overallHealth ?? null,
+      summary: pmPlan?.summary ?? null,
+      stale: pmPlan ? pmPlanStale : true,
+      lastRunAt: pmPlan?.runAt ?? null,
+      blockers: pmPlan?.blockers.slice(0, 5) ?? [],
+      recommendations: pmPlan?.recommendations.slice(0, 5) ?? [],
+      nextDelegations: pmPlan?.nextDelegations.slice(0, 5) ?? [],
+    },
     agents: {
       total: agents.length,
       available: availableAgents.length,
