@@ -29,8 +29,8 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [x] M101: Pino migration complete — replace remaining 4 console.error calls in API routes (pdf-export, dsgvo-export, delegation-versions, execute) + component console.log calls
 - [x] M102: API rate limiting — simple in-memory rate limiter middleware for all /api routes (100 req/min per IP, 429 response with Retry-After)
 - [x] M103: API route test coverage — add ≥3 tests each for: /api/agent-runs, /api/settings, /api/projects, /api/health (currently 0 coverage)
-- [ ] M104: Integration test suite — end-to-end flow test: POST /api/project-briefs → GET /api/project-briefs/[id] → POST /api/delegations → GET /api/delegations/[id]
-- [ ] M105: Dashboard stats accuracy — /api/dashboard/stats currently returns mock-mixed data; ensure all counts come from real JSON stores, add snapshot test
+- [x] M104: Integration test suite — end-to-end flow test: POST /api/project-briefs → GET /api/project-briefs/[id] → POST /api/delegations → GET /api/delegations/[id]
+- [x] M105: Dashboard stats accuracy — /api/dashboard/stats currently returns mock-mixed data; ensure all counts come from real JSON stores, add snapshot test
 
 ## 🔴 High Priority — Tech Quality (M94–M99)
 

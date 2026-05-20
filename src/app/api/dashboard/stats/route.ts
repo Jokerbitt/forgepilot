@@ -17,6 +17,7 @@ import { getCards } from '@/lib/knowledge/store'
 const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
 const LEDGER_FILE = path.join(process.cwd(), 'config', 'processing-ledger.json')
 const API_KEYS_FILE = path.join(process.cwd(), 'config', 'api-keys.json')
+const TEST_RESULTS_FILE = path.join(process.cwd(), 'config', 'test-results.json')
 
 /** Known AI provider key names that indicate an active external AI provider. */
 const AI_PROVIDER_KEY_NAMES = [
@@ -56,6 +57,18 @@ function readActiveProviders(): number {
       k => typeof keys[k] === 'string' && keys[k].length > 0
     ).length
     return externalCount + (hasOllama ? 1 : 0)
+  } catch { return 0 }
+}
+
+/** Read passing test count from config/test-results.json (written by vitest after each run). */
+function readTestsGreen(): number {
+  try {
+    if (!fs.existsSync(TEST_RESULTS_FILE)) return 0
+    const data = JSON.parse(fs.readFileSync(TEST_RESULTS_FILE, 'utf-8')) as {
+      numPassedTests?: number
+      success?: boolean
+    }
+    return data.numPassedTests ?? 0
   } catch { return 0 }
 }
 
@@ -165,7 +178,7 @@ export async function GET(): Promise<NextResponse<DashboardStats>> {
   const systemStats = {
     aiCallsToday: readAiCallsToday(),
     activeProviders: readActiveProviders(),
-    testsGreen: 604,
+    testsGreen: readTestsGreen(),
   }
 
   return NextResponse.json({
