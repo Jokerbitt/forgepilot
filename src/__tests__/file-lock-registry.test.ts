@@ -1,6 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'fs'
 import path from 'path'
+
+// `generateForbiddenFilesBlock` reads BOTH the legacy file-lock store and the
+// modern scope-lock registry (config/agent-scope.json). The file-lock tests
+// only exercise legacy behaviour, so mock scope-lock to return no claims —
+// otherwise an unrelated live developer/agent claim makes "no locks" untrue.
+vi.mock('../lib/agents/scope-lock', () => ({
+  getActiveClaims: () => [],
+}))
 
 // Use a temp lock file for tests
 const TEST_LOCK_FILE = path.join(process.cwd(), 'config', 'agent-file-locks.json')
