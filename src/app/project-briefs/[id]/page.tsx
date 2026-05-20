@@ -5,11 +5,12 @@ import { BlueprintScreen } from '@/components/project-briefs/BlueprintScreen'
 export const dynamic = 'force-dynamic'
 
 interface Props {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
-export default function BlueprintPage({ params }: Props) {
-  const brief = findProjectBriefById(params.id)
+export default async function BlueprintPage({ params }: Props) {
+  const { id } = await params
+  const brief = findProjectBriefById(id)
   if (!brief) notFound()
   return <BlueprintScreen initialBrief={brief} />
 }
