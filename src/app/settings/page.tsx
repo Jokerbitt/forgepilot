@@ -530,6 +530,15 @@ export default function SettingsPage() {
               >
                 <Zap className="h-3.5 w-3.5" /> AI direkt testen
               </a>
+              <a
+                href="/settings/deployment"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-300 hover:bg-blue-500/20 transition-colors"
+              >
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 2L2 19.5h20L12 2z" />
+                </svg>
+                Vercel Deployment
+              </a>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

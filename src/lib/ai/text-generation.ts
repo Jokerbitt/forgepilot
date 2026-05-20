@@ -48,13 +48,49 @@ export async function generateText(options: GenerateTextOptions): Promise<Genera
   const selection = getModelSelection()
   const purpose   = options.purpose ?? 'fast'
 
-  // Resolve which provider + model to use
-  const providerId = options.providerId
+  // Resolve primary provider + model
+  const primaryProviderId = options.providerId
     ?? (purpose === 'coding' ? selection.codingProvider : selection.fastProvider)
 
-  const modelId = options.anthropicModel
+  const primaryModelId = options.anthropicModel
     ?? (purpose === 'coding' ? selection.codingModel : selection.fastModel)
 
+  // Resolve fallback provider + model (M128)
+  const fallbackProviderId = options.providerId ? undefined
+    : (purpose === 'coding' ? selection.codingFallbackProvider : selection.fastFallbackProvider)
+  const fallbackModelId = purpose === 'coding'
+    ? selection.codingFallbackModel
+    : selection.fastFallbackModel
+
+  try {
+    return await callProvider(primaryProviderId, primaryModelId, purpose, options)
+  } catch (primaryError) {
+    // M128: Try fallback provider if configured and primary failed
+    if (fallbackProviderId && fallbackProviderId !== primaryProviderId) {
+      aiLogger.warn({
+        event: 'ai.fallback',
+        primaryProvider: primaryProviderId,
+        fallbackProvider: fallbackProviderId,
+        reason: primaryError instanceof Error ? primaryError.message : String(primaryError),
+      }, 'Primary provider failed — switching to fallback')
+
+      return await callProvider(
+        fallbackProviderId,
+        fallbackModelId ?? primaryModelId,
+        purpose,
+        options,
+      )
+    }
+    throw primaryError
+  }
+}
+
+async function callProvider(
+  providerId: string,
+  modelId: string,
+  purpose: string,
+  options: GenerateTextOptions,
+): Promise<GenerateTextResult> {
   // Look up provider config for API key + base URL
   const allConfigs = getAllProviderConfigs()
   const config     = allConfigs.find(c => c.id === providerId)

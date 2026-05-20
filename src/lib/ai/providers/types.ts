@@ -71,6 +71,12 @@ export interface AIModelSelection {
   codingModel: string
   embeddingProvider?: string
   embeddingModel?: string
+  /** Fallback provider used when fastProvider fails (M128) */
+  fastFallbackProvider?: string
+  fastFallbackModel?: string
+  /** Fallback provider used when codingProvider fails (M128) */
+  codingFallbackProvider?: string
+  codingFallbackModel?: string
 }
 
 export interface ProviderGenerateOptions {

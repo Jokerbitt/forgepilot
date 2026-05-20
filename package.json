@@ -16,6 +16,9 @@
     "validate": "bash scripts/pre-commit-check.sh",
     "validate:quick": "bash scripts/pre-commit-check.sh --quick",
     "validate:agent": "bash scripts/validate-agent-work.sh",
+    "agent": "node scripts/agent-coord.mjs",
+    "agent:status": "node scripts/agent-coord.mjs status",
+    "agent:preflight": "node scripts/agent-coord.mjs preflight",
     "seed": "tsx scripts/seed-demo.ts",
     "seed:clean": "rm -f config/local-items.json config/delegations.json config/orchestrated-runs.json && npm run seed"
   },

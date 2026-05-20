@@ -32,12 +32,9 @@ export class AnthropicProvider implements AIProvider {
     if (!apiKey) return false
     try {
       const client = new Anthropic({ apiKey })
-      await client.messages.create({
-        model: 'claude-haiku-4-5',
-        max_tokens: 5,
-        messages: [{ role: 'user', content: 'ping' }],
-      })
-      return true
+      // models.list() validates the key without consuming generation tokens.
+      const page = await client.models.list({ limit: 1 })
+      return page.data.length >= 0
     } catch {
       return false
     }

@@ -75,10 +75,10 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 ## 🔴 High Priority — Intelligence Layer (M116–M120)
 
 - [x] M116: Auto-Knowledge Extraction — extract Knowledge Cards from completed delegations, feed into context layer 5
-- [ ] M117: Context Engineer Tests + Integration — comprehensive tests for buildContext(), token budget, PII scrubbing (currently 0% coverage)
-- [ ] M118: Smart Delegation Retry — auto-detect failure cause, improve prompt, retry with backoff
-- [ ] M119: AI Decomposer Tests + Sub-task quality scoring
-- [ ] M120: Scheduled Delegation Queue — cron-based auto-execution of approved delegations
+- [x] M117: Context Engineer Tests + Integration — comprehensive tests for buildContext(), token budget, PII scrubbing (currently 0% coverage)
+- [x] M118: Smart Delegation Retry — auto-detect failure cause, improve prompt, retry with backoff
+- [x] M119: AI Decomposer Tests + Sub-task quality scoring
+- [x] M120: Scheduled Delegation Queue — cron-based auto-execution of approved delegations
 
 ---
 
@@ -95,3 +95,11 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [x] feat: Notification bell + /notifications page (PR #177)
 - [x] docs: README rewrite + seed script + Dockerfile (PR #178)
 - [x] feat: Knowledge Cards UI — search, tags, expandable (PR #179)
+
+## 🔴 High Priority — Autonomy & UX (M126–M130)
+
+- [ ] M126: Linear → Auto-Delegation — webhook: Linear ticket "In Progress" → automatisch ForgePilot Delegation erstellen
+- [x] M127: Delegation Templates — vorgefertigte Templates (Add API Route, Fix Bug, Write Tests, Refactor) für schnellere Erstellung
+- [x] M128: Multi-Provider Fallback — wenn primärer AI-Provider scheitert, automatisch auf sekundären wechseln
+- [x] M129: Delegation Cost Tracker — tatsächliche Token-Kosten pro Delegation summieren + Budget-Warnung im UI
+- [x] M130: One-Click Deploy to Vercel — /settings/deployment Seite mit Vercel-Verbindungsstatus + Env-Var-Checkliste
