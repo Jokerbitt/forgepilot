@@ -2,13 +2,27 @@
 
 import { useEffect, useState } from 'react'
 import {
-  DollarSign, Cpu, TrendingDown, Activity, BarChart3,
-  CheckCircle2, XCircle, Clock, Zap, ChevronRight,
-  BookOpen, GraduationCap, Tag,
+  AlertTriangle,
+  Activity,
+  BarChart3,
+  BookOpen,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  Cpu,
+  DollarSign,
+  GraduationCap,
+  Server,
+  Tag,
+  TrendingDown,
+  TrendingUp,
+  XCircle,
+  Zap,
 } from 'lucide-react'
 import Link from 'next/link'
 import type { Delegation } from '@/lib/models/delegation'
 import { cx } from '@/components/ui/primitives'
+import type { CostAnalytics } from '@/lib/analytics/cost-types'
 
 interface ResearchStats {
   total: number
@@ -24,8 +38,6 @@ interface ResearchStats {
   topTags: { tag: string; count: number }[]
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 interface ModelBreakdown {
   model: string
   runs: number
@@ -40,8 +52,6 @@ interface TimePoint {
   tokens: number
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
 function buildModelBreakdowns(delegations: Delegation[]): ModelBreakdown[] {
   const map = new Map<string, ModelBreakdown>()
   for (const d of delegations) {
@@ -54,28 +64,13 @@ function buildModelBreakdowns(delegations: Delegation[]): ModelBreakdown[] {
       existing.totalTokens += cs.tokensUsed.totalTokens
       existing.savedUsd += cs.savedUsd
     } else {
-      map.set(key, {
-        model: key,
-        runs: 1,
-        totalTokens: cs.tokensUsed.totalTokens,
-        savedUsd: cs.savedUsd,
-        isLocal: true,
-      })
+      map.set(key, { model: key, runs: 1, totalTokens: cs.tokensUsed.totalTokens, savedUsd: cs.savedUsd, isLocal: true })
     }
   }
-  // Claude CLI runs (no costSavings but have actualCostUsd)
-  const claudeRuns = delegations.filter(
-    d => d.executionRoute !== 'ollama-agent' && d.status === 'completed' && d.actualCostUsd != null,
-  )
+  const claudeRuns = delegations.filter(d => d.executionRoute !== 'ollama-agent' && d.status === 'completed' && d.actualCostUsd != null)
   if (claudeRuns.length > 0) {
     const totalCost = claudeRuns.reduce((s, d) => s + (d.actualCostUsd ?? 0), 0)
-    map.set('claude-cli', {
-      model: 'claude-cli',
-      runs: claudeRuns.length,
-      totalTokens: 0,
-      savedUsd: -totalCost,
-      isLocal: false,
-    })
+    map.set('claude-cli', { model: 'claude-cli', runs: claudeRuns.length, totalTokens: 0, savedUsd: -totalCost, isLocal: false })
   }
   return Array.from(map.values()).sort((a, b) => b.savedUsd - a.savedUsd)
 }
@@ -97,15 +92,8 @@ function buildTimeline(delegations: Delegation[]): TimePoint[] {
   return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date)).slice(-14)
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
 function KpiCard({ label, value, sub, icon: Icon, color, pulse }: {
-  label: string
-  value: string
-  sub?: string
-  icon: React.ElementType
-  color: string
-  pulse?: boolean
+  label: string; value: string; sub?: string; icon: React.ElementType; color: string; pulse?: boolean
 }) {
   return (
     <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-4">
@@ -116,9 +104,7 @@ function KpiCard({ label, value, sub, icon: Icon, color, pulse }: {
         </div>
       </div>
       <div className="flex items-end gap-2">
-        <span className={cx('text-2xl font-bold tabular-nums tracking-tight', pulse ? 'text-emerald-400' : 'text-white')}>
-          {value}
-        </span>
+        <span className={cx('text-2xl font-bold tabular-nums tracking-tight', pulse ? 'text-emerald-400' : 'text-white')}>{value}</span>
         {sub && <span className="mb-0.5 text-xs text-slate-500">{sub}</span>}
       </div>
     </div>
@@ -136,14 +122,8 @@ function SavingsBar({ timeline }: { timeline: TimePoint[] }) {
           const pct = Math.round((pt.savedUsd / max) * 100)
           return (
             <div key={pt.date} className="group relative flex flex-1 flex-col items-center justify-end gap-1">
-              <div
-                className="w-full rounded-t bg-emerald-500/70 transition-all group-hover:bg-emerald-400"
-                style={{ height: `${pct}%`, minHeight: 2 }}
-              />
-              <span className="text-[9px] text-slate-600 rotate-45 origin-left whitespace-nowrap">
-                {pt.date.slice(5)}
-              </span>
-              {/* Tooltip */}
+              <div className="w-full rounded-t bg-emerald-500/70 transition-all group-hover:bg-emerald-400" style={{ height: `${pct}%`, minHeight: 2 }} />
+              <span className="text-[9px] text-slate-600 rotate-45 origin-left whitespace-nowrap">{pt.date.slice(5)}</span>
               <div className="pointer-events-none absolute bottom-full mb-1 hidden rounded bg-white/10 px-1.5 py-1 text-[10px] text-white backdrop-blur group-hover:block whitespace-nowrap">
                 ${pt.savedUsd.toFixed(4)} · {pt.tokens.toLocaleString('de')} tok
               </div>
@@ -166,34 +146,20 @@ function ModelBreakdownTable({ models }: { models: ModelBreakdown[] }) {
           <div key={m.model} className="space-y-1">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                {m.isLocal ? (
-                  <Cpu className="h-3.5 w-3.5 text-emerald-400" />
-                ) : (
-                  <Activity className="h-3.5 w-3.5 text-violet-400" />
-                )}
+                {m.isLocal ? <Cpu className="h-3.5 w-3.5 text-emerald-400" /> : <Activity className="h-3.5 w-3.5 text-violet-400" />}
                 <span className="text-xs font-mono font-medium text-white">{m.model}</span>
-                <span className="rounded-full border border-white/[0.08] px-1.5 py-0.5 text-[10px] text-slate-500">
-                  {m.runs} Run{m.runs !== 1 ? 's' : ''}
-                </span>
+                <span className="rounded-full border border-white/[0.08] px-1.5 py-0.5 text-[10px] text-slate-500">{m.runs} Run{m.runs !== 1 ? 's' : ''}</span>
               </div>
               <div className="flex items-center gap-3 text-right">
-                {m.totalTokens > 0 && (
-                  <span className="text-[11px] font-mono text-slate-400">{m.totalTokens.toLocaleString('de')} tok</span>
-                )}
-                <span className={cx(
-                  'text-xs font-bold tabular-nums',
-                  m.savedUsd > 0 ? 'text-emerald-400' : 'text-rose-400',
-                )}>
+                {m.totalTokens > 0 && <span className="text-[11px] font-mono text-slate-400">{m.totalTokens.toLocaleString('de')} tok</span>}
+                <span className={cx('text-xs font-bold tabular-nums', m.savedUsd > 0 ? 'text-emerald-400' : 'text-rose-400')}>
                   {m.savedUsd > 0 ? '+' : ''}${Math.abs(m.savedUsd).toFixed(4)}
                 </span>
               </div>
             </div>
             {m.savedUsd > 0 && (
               <div className="h-1 overflow-hidden rounded-full bg-white/[0.06]">
-                <div
-                  className="h-full rounded-full bg-emerald-500/60"
-                  style={{ width: `${(m.savedUsd / maxSaved) * 100}%` }}
-                />
+                <div className="h-full rounded-full bg-emerald-500/60" style={{ width: `${(m.savedUsd / maxSaved) * 100}%` }} />
               </div>
             )}
           </div>
@@ -205,53 +171,27 @@ function ModelBreakdownTable({ models }: { models: ModelBreakdown[] }) {
 
 function RecentRunsTable({ delegations }: { delegations: Delegation[] }) {
   const runs = delegations
-    .filter(d => d.status === 'completed' || d.status === 'failed')
+    .filter(d => ['completed', 'failed', 'running'].includes(d.status))
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 10)
-
+    .slice(0, 8)
   if (runs.length === 0) return null
-
   return (
     <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-4">
       <p className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Letzte Runs</p>
-      <div className="space-y-0 divide-y divide-white/[0.04]">
+      <div className="space-y-2">
         {runs.map(d => {
           const cs = d.summaryReport?.costSavings
           const isOllama = d.executionRoute === 'ollama-agent'
           return (
-            <div key={d.id} className="flex items-center gap-3 py-2.5">
-              {d.status === 'completed' ? (
-                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
-              ) : (
-                <XCircle className="h-3.5 w-3.5 shrink-0 text-rose-400" />
-              )}
-              <div className="min-w-0 flex-1">
-                <Link
-                  href={`/delegations/${d.id}`}
-                  className="block truncate text-sm text-white hover:text-violet-300 transition-colors"
-                >
-                  {d.title || d.contract.goal.slice(0, 60)}
-                </Link>
-                <p className="text-[10px] text-slate-600">
-                  {new Date(d.updatedAt).toLocaleDateString('de', { day: '2-digit', month: '2-digit', year: '2-digit' })}
-                  {' · '}
-                  {d.contract.workItemId}
-                  {isOllama && <span className="ml-1 text-emerald-600">Ollama</span>}
-                </p>
-              </div>
-              <div className="shrink-0 text-right">
-                {cs && cs.savedUsd > 0 ? (
-                  <>
-                    <p className="text-xs font-bold text-emerald-400">${cs.savedUsd.toFixed(4)}</p>
-                    <p className="text-[10px] text-slate-600">{cs.tokensUsed.totalTokens.toLocaleString('de')} tok</p>
-                  </>
-                ) : d.actualCostUsd != null ? (
-                  <p className="text-xs font-mono text-slate-400">${d.actualCostUsd.toFixed(4)}</p>
-                ) : (
-                  <p className="text-[10px] text-slate-600">—</p>
-                )}
-              </div>
-            </div>
+            <Link key={d.id} href={`/delegations/${d.id}`} className="flex items-center gap-3 rounded-lg border border-white/[0.04] bg-white/[0.02] px-3 py-2 text-sm hover:border-white/[0.08] transition-colors">
+              {d.status === 'completed' ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" /> : d.status === 'failed' ? <XCircle className="h-3.5 w-3.5 shrink-0 text-rose-400" /> : <Zap className="h-3.5 w-3.5 shrink-0 text-amber-400 animate-pulse" />}
+              <span className="flex-1 truncate text-slate-300">{d.title}</span>
+              <span className={cx('shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full border', isOllama ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-violet-500/30 bg-violet-500/10 text-violet-400')}>
+                {isOllama ? 'local' : 'cloud'}
+              </span>
+              {cs && <span className="shrink-0 font-mono text-[11px] text-emerald-400">+${cs.savedUsd.toFixed(4)}</span>}
+              {!cs && d.actualCostUsd != null && <span className="shrink-0 font-mono text-[11px] text-rose-400">-${d.actualCostUsd.toFixed(4)}</span>}
+            </Link>
           )
         })}
       </div>
@@ -259,20 +199,65 @@ function RecentRunsTable({ delegations }: { delegations: Delegation[] }) {
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── M132: AI Cost Analytics ───────────────────────────────────────────────────
+
+function DailyTrendBar({ data }: { data: CostAnalytics['dailyTrend'] }) {
+  const maxCost = Math.max(...data.map((d: CostAnalytics['dailyTrend'][0]) => d.totalCostUsd), 0.0001)
+  const hasData = data.some((d: CostAnalytics['dailyTrend'][0]) => d.totalCostUsd > 0)
+  if (!hasData) return <div className="flex h-20 items-center justify-center text-[11px] text-slate-600">Noch keine AI-Calls aufgezeichnet</div>
+  return (
+    <div className="flex h-20 items-end gap-0.5">
+      {data.map((pt: CostAnalytics['dailyTrend'][0]) => {
+        const pct = Math.max(Math.round((pt.totalCostUsd / maxCost) * 100), pt.totalCostUsd > 0 ? 2 : 0)
+        return (
+          <div key={pt.date} className="group relative flex-1" title={`${pt.date}: $${pt.totalCostUsd.toFixed(5)} (${pt.calls} calls)`}>
+            <div style={{ height: `${pct}%` }} className={cx('rounded-sm transition-all', pt.totalCostUsd > 0 ? 'bg-violet-500/60 group-hover:bg-violet-400' : 'bg-white/[0.04]')} />
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function ProviderCostRow({ provider, maxCost }: { provider: CostAnalytics['byProvider'][0]; maxCost: number }) {
+  const pct = maxCost > 0 ? (provider.totalCostUsd / maxCost) * 100 : 0
+  const rc: Record<string, string> = { eu: 'text-emerald-400', us: 'text-amber-400', local: 'text-sky-400', unknown: 'text-slate-500' }
+  return (
+    <div className="flex items-center gap-3 py-2">
+      <div className="w-28 shrink-0">
+        <p className="truncate text-[11px] font-medium text-slate-300">{provider.providerName}</p>
+        <p className={cx('text-[10px]', rc[provider.dataResidency] ?? 'text-slate-500')}>{provider.dataResidency}</p>
+      </div>
+      <div className="flex-1">
+        <div className="h-1.5 rounded-full bg-white/[0.06]">
+          <div className="h-full rounded-full bg-violet-500/70" style={{ width: `${Math.max(pct, provider.totalCostUsd > 0 ? 2 : 0)}%` }} />
+        </div>
+      </div>
+      <div className="w-24 text-right">
+        <p className="text-[11px] tabular-nums text-slate-300">${provider.totalCostUsd < 0.0001 ? '< 0.0001' : provider.totalCostUsd.toFixed(4)}</p>
+        <p className="text-[10px] text-slate-600">{provider.calls} calls</p>
+      </div>
+    </div>
+  )
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
   const [delegations, setDelegations] = useState<Delegation[]>([])
   const [researchStats, setResearchStats] = useState<ResearchStats | null>(null)
+  const [costAnalytics, setCostAnalytics] = useState<CostAnalytics | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     Promise.all([
       fetch('/api/delegations').then(r => r.json() as Promise<Delegation[]>),
       fetch('/api/knowledge/research/stats').then(r => r.json() as Promise<ResearchStats>).catch(() => null),
-    ]).then(([dels, rs]) => {
+      fetch('/api/analytics/costs').then(r => r.json() as Promise<CostAnalytics>).catch(() => null),
+    ]).then(([dels, rs, ca]) => {
       setDelegations(dels)
       setResearchStats(rs)
+      setCostAnalytics(ca)
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
@@ -280,14 +265,10 @@ export default function AnalyticsPage() {
   const completed = delegations.filter(d => d.status === 'completed')
   const failed = delegations.filter(d => d.status === 'failed')
   const ollamaRuns = delegations.filter(d => d.executionRoute === 'ollama-agent' && d.status === 'completed')
-
   const totalSavedUsd = delegations.reduce((s, d) => s + (d.summaryReport?.costSavings?.savedUsd ?? 0), 0)
   const totalTokens = delegations.reduce((s, d) => s + (d.summaryReport?.costSavings?.tokensUsed.totalTokens ?? 0), 0)
   const totalActualCost = delegations.reduce((s, d) => s + (d.actualCostUsd ?? 0), 0)
-  const avgSavingsPerRun = ollamaRuns.length > 0
-    ? totalSavedUsd / ollamaRuns.length
-    : 0
-
+  const avgSavingsPerRun = ollamaRuns.length > 0 ? totalSavedUsd / ollamaRuns.length : 0
   const modelBreakdowns = buildModelBreakdowns(delegations)
   const timeline = buildTimeline(delegations)
 
@@ -297,9 +278,7 @@ export default function AnalyticsPage() {
         <div className="mx-auto max-w-5xl space-y-4">
           <div className="h-8 w-48 animate-pulse rounded-lg bg-white/[0.06]" />
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-24 animate-pulse rounded-xl border border-white/[0.07] bg-white/[0.03]" />
-            ))}
+            {[...Array(4)].map((_, i) => <div key={i} className="h-24 animate-pulse rounded-xl border border-white/[0.07] bg-white/[0.03]" />)}
           </div>
         </div>
       </main>
@@ -310,54 +289,123 @@ export default function AnalyticsPage() {
     <main className="min-h-screen p-6 text-white">
       <div className="mx-auto max-w-5xl space-y-5">
 
-        {/* Page header */}
         <div className="flex items-center justify-between">
           <div>
             <p className="page-eyebrow">System</p>
             <h1 className="page-title">Cost Analytics</h1>
           </div>
-          <Link
-            href="/active"
-            className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-300 transition-colors"
-          >
+          <Link href="/active" className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-300 transition-colors">
             Mission Control <ChevronRight className="h-3.5 w-3.5" />
           </Link>
         </div>
 
-        {/* KPI cards */}
+        {/* ── M132: AI Provider Cost Analytics ─────────────────────────────── */}
+        {costAnalytics && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-4">
+                <div className="mb-2 flex items-center gap-1.5">
+                  <DollarSign className="h-3.5 w-3.5 text-violet-400" />
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">AI-Kosten gesamt</p>
+                </div>
+                <p className="text-xl font-bold tabular-nums text-white">
+                  {costAnalytics.totals.costUsd < 0.001 && costAnalytics.totals.costUsd > 0 ? `< $0.001` : `$${costAnalytics.totals.costUsd.toFixed(4)}`}
+                </p>
+                <p className="mt-1 text-[10px] text-slate-600">{costAnalytics.totals.calls.toLocaleString()} API-Calls</p>
+              </div>
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-4">
+                <div className="mb-2 flex items-center gap-1.5">
+                  <TrendingUp className="h-3.5 w-3.5 text-amber-400" />
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Monat geschätzt</p>
+                </div>
+                <p className="text-xl font-bold tabular-nums text-amber-400">${costAnalytics.totals.estimatedMonthlyCostUsd.toFixed(2)}</p>
+                <p className="mt-1 text-[10px] text-slate-600">basierend auf 30 Tagen</p>
+              </div>
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-4">
+                <div className="mb-2 flex items-center gap-1.5">
+                  <Cpu className="h-3.5 w-3.5 text-sky-400" />
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Input-Tokens</p>
+                </div>
+                <p className="text-xl font-bold tabular-nums text-white">
+                  {costAnalytics.totals.inputTokens >= 1_000_000 ? `${(costAnalytics.totals.inputTokens / 1_000_000).toFixed(1)}M` : costAnalytics.totals.inputTokens > 0 ? `${(costAnalytics.totals.inputTokens / 1000).toFixed(1)}K` : '0'}
+                </p>
+                <p className="mt-1 text-[10px] text-slate-600">DSGVO-Ledger (letzte 2000)</p>
+              </div>
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-4">
+                <div className="mb-2 flex items-center gap-1.5">
+                  {costAnalytics.budgetUtilization.delegationsExceeded > 0 ? <AlertTriangle className="h-3.5 w-3.5 text-red-400" /> : <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />}
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Budget</p>
+                </div>
+                <p className={cx('text-xl font-bold tabular-nums', costAnalytics.budgetUtilization.delegationsExceeded > 0 ? 'text-red-400' : 'text-emerald-400')}>
+                  {costAnalytics.budgetUtilization.utilizationPct.toFixed(0)}%
+                </p>
+                <p className="mt-1 text-[10px] text-slate-600">
+                  {costAnalytics.budgetUtilization.delegationsExceeded > 0 ? `${costAnalytics.budgetUtilization.delegationsExceeded} überschritten` : `${costAnalytics.budgetUtilization.delegationsWithBudget} Delegations`}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-5">
+                <div className="mb-3 flex items-center gap-2">
+                  <Server className="h-4 w-4 text-slate-500" />
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Kosten nach Provider</p>
+                </div>
+                {costAnalytics.byProvider.length === 0 ? (
+                  <p className="py-4 text-center text-[11px] text-slate-600">Keine Provider-Daten</p>
+                ) : (
+                  <div className="divide-y divide-white/[0.04]">
+                    {costAnalytics.byProvider.slice(0, 6).map((p: CostAnalytics['byProvider'][0]) => (
+                      <ProviderCostRow key={p.providerId} provider={p} maxCost={costAnalytics.byProvider[0]?.totalCostUsd ?? 1} />
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4 text-slate-500" />
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Kosten 30 Tage</p>
+                  </div>
+                  <p className="text-[10px] text-slate-600">
+                    ${costAnalytics.dailyTrend.reduce((s: number, d: CostAnalytics['dailyTrend'][0]) => s + d.totalCostUsd, 0).toFixed(4)} total
+                  </p>
+                </div>
+                <DailyTrendBar data={costAnalytics.dailyTrend} />
+                <div className="mt-2 flex justify-between text-[10px] text-slate-700">
+                  <span>{costAnalytics.dailyTrend[0]?.date}</span>
+                  <span>heute</span>
+                </div>
+              </div>
+            </div>
+
+            {costAnalytics.byPurpose.length > 0 && (
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-5">
+                <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-slate-500">Kosten nach Zweck</p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {costAnalytics.byPurpose.slice(0, 8).map((p: CostAnalytics['byPurpose'][0]) => (
+                    <div key={p.purpose} className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2">
+                      <p className="truncate text-[10px] text-slate-500">{p.purpose.replace('generateText:', '')}</p>
+                      <p className="mt-1 font-mono text-[11px] font-medium text-white">
+                        ${p.totalCostUsd < 0.0001 ? '< 0.0001' : p.totalCostUsd.toFixed(4)}
+                      </p>
+                      <p className="text-[10px] text-slate-600">{p.calls} calls</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* KPI cards — Ollama savings */}
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <KpiCard
-            label="Gespart gesamt"
-            value={`$${totalSavedUsd.toFixed(3)}`}
-            sub="vs Claude"
-            icon={TrendingDown}
-            color="bg-emerald-500/10 text-emerald-400"
-            pulse={totalSavedUsd > 0}
-          />
-          <KpiCard
-            label="Token verbraucht"
-            value={totalTokens > 0 ? (totalTokens / 1000).toFixed(1) + 'K' : '0'}
-            sub="Ollama lokal"
-            icon={Cpu}
-            color="bg-emerald-500/10 text-emerald-400"
-          />
-          <KpiCard
-            label="Ollama Runs"
-            value={String(ollamaRuns.length)}
-            sub={`von ${completed.length + failed.length} gesamt`}
-            icon={Zap}
-            color="bg-violet-500/10 text-violet-400"
-          />
-          <KpiCard
-            label="Ø Ersparnis / Run"
-            value={avgSavingsPerRun > 0 ? `$${avgSavingsPerRun.toFixed(4)}` : '—'}
-            sub="pro Ollama Run"
-            icon={BarChart3}
-            color="bg-amber-500/10 text-amber-400"
-          />
+          <KpiCard label="Gespart gesamt" value={`$${totalSavedUsd.toFixed(3)}`} sub="vs Claude" icon={TrendingDown} color="bg-emerald-500/10 text-emerald-400" pulse={totalSavedUsd > 0} />
+          <KpiCard label="Token verbraucht" value={totalTokens > 0 ? (totalTokens / 1000).toFixed(1) + 'K' : '0'} sub="Ollama lokal" icon={Cpu} color="bg-emerald-500/10 text-emerald-400" />
+          <KpiCard label="Ollama Runs" value={String(ollamaRuns.length)} sub={`von ${completed.length + failed.length} gesamt`} icon={Zap} color="bg-violet-500/10 text-violet-400" />
+          <KpiCard label="Ø Ersparnis / Run" value={avgSavingsPerRun > 0 ? `$${avgSavingsPerRun.toFixed(4)}` : '—'} sub="pro Ollama Run" icon={BarChart3} color="bg-amber-500/10 text-amber-400" />
         </div>
 
-        {/* Secondary KPIs */}
         <div className="grid grid-cols-3 gap-4">
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-4">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 mb-2">Tatsächliche Kosten</p>
@@ -371,42 +419,30 @@ export default function AnalyticsPage() {
           </div>
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-4">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 mb-2">Lokale Quote</p>
-            <p className="text-xl font-bold tabular-nums text-white">
-              {completed.length > 0
-                ? Math.round((ollamaRuns.length / completed.length) * 100)
-                : 0}%
-            </p>
+            <p className="text-xl font-bold tabular-nums text-white">{completed.length > 0 ? Math.round((ollamaRuns.length / completed.length) * 100) : 0}%</p>
             <p className="mt-1 text-[10px] text-slate-600">Ollama vs gesamt</p>
           </div>
         </div>
 
-        {/* Charts row */}
         <div className="grid gap-4 lg:grid-cols-2">
           <SavingsBar timeline={timeline} />
           <ModelBreakdownTable models={modelBreakdowns} />
         </div>
 
-        {/* Zero-state for empty savings */}
         {totalSavedUsd === 0 && !loading && (
           <div className="flex min-h-32 flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.07] bg-white/[0.02] p-8 text-center">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04]">
               <DollarSign className="h-5 w-5 text-slate-500" />
             </div>
             <p className="font-semibold text-white">Noch keine Token-Daten</p>
-            <p className="mt-1 text-sm text-slate-500">
-              Starte einen Ollama-Agenten um Token-Verbrauch und Ersparnis zu tracken
-            </p>
-            <Link
-              href="/active"
-              className="mt-3 flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-sm font-medium text-violet-400 hover:bg-violet-500/20 transition-all"
-            >
+            <p className="mt-1 text-sm text-slate-500">Starte einen Ollama-Agenten um Token-Verbrauch und Ersparnis zu tracken</p>
+            <Link href="/active" className="mt-3 flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-sm font-medium text-violet-400 hover:bg-violet-500/20 transition-all">
               <Activity className="h-4 w-4" />
               Mission Control
             </Link>
           </div>
         )}
 
-        {/* Research Platform Stats */}
         {researchStats && researchStats.total > 0 && (
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-5">
             <div className="mb-4 flex items-center justify-between">
@@ -445,9 +481,7 @@ export default function AnalyticsPage() {
                   <Cpu className="h-3.5 w-3.5 text-sky-400" />
                   <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Tokens</span>
                 </div>
-                <p className="text-xl font-bold tabular-nums text-white">
-                  {researchStats.totalTokens > 0 ? (researchStats.totalTokens / 1000).toFixed(1) + 'K' : '0'}
-                </p>
+                <p className="text-xl font-bold tabular-nums text-white">{researchStats.totalTokens > 0 ? (researchStats.totalTokens / 1000).toFixed(1) + 'K' : '0'}</p>
                 <p className="mt-0.5 text-[10px] text-slate-600">Claude Opus</p>
               </div>
             </div>
@@ -456,8 +490,7 @@ export default function AnalyticsPage() {
                 <Tag className="h-3 w-3 text-slate-600" />
                 {researchStats.topTags.slice(0, 6).map(({ tag, count }) => (
                   <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10px] text-slate-400">
-                    {tag}
-                    <span className="text-slate-600">{count}</span>
+                    {tag}<span className="text-slate-600">{count}</span>
                   </span>
                 ))}
               </div>
@@ -465,7 +498,6 @@ export default function AnalyticsPage() {
           </div>
         )}
 
-        {/* Recent runs */}
         <RecentRunsTable delegations={delegations} />
 
         <div className="flex items-center justify-center gap-2 py-2 text-[11px] text-slate-700">

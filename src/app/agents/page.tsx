@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import type { AgentProfile, AgentRole, AgentAvailability, AgentAutonomyLevel } from '@/lib/models/agent-profile'
 import type { SkillPerformanceSummary } from '@/lib/agents/skill-evolver'
 import type { OrchestratedRun } from '@/lib/agents/orchestrated-run'
+import type { AgentControlPlaneSummary } from '@/lib/agents/control-plane'
 import { Badge, StatusDot, cx } from '@/components/ui/primitives'
 
 // ─── constants ───────────────────────────────────────────────────────────────
@@ -100,15 +102,29 @@ export default function AgentsPage() {
   const [selected, setSelected] = useState<AgentProfile | null>(null)
   const [roleFilter, setRoleFilter] = useState<AgentRole | ''>('')
   const [tab, setTab] = useState<Tab>('control-plane')
+  const [summary, setSummary] = useState<AgentControlPlaneSummary | null>(null)
 
   useEffect(() => {
-    fetch('/api/agents')
-      .then(r => r.json())
-      .then((data: AgentProfile[]) => {
-        setAgents(Array.isArray(data) ? data : [])
+    async function loadControlPlane() {
+      try {
+        const [agentsResult, summaryResult] = await Promise.allSettled([
+          fetch('/api/agents').then(r => r.json() as Promise<AgentProfile[]>),
+          fetch('/api/agents/control-plane').then(r => r.json() as Promise<AgentControlPlaneSummary>),
+        ])
+
+        if (agentsResult.status === 'fulfilled') {
+          setAgents(Array.isArray(agentsResult.value) ? agentsResult.value : [])
+        }
+
+        if (summaryResult.status === 'fulfilled' && summaryResult.value?.generatedAt) {
+          setSummary(summaryResult.value)
+        }
+      } finally {
         setLoading(false)
-      })
-      .catch(() => setLoading(false))
+      }
+    }
+
+    void loadControlPlane()
   }, [])
 
   const available = agents.filter(a => a.availability === 'available').length
@@ -128,12 +144,12 @@ export default function AgentsPage() {
               <h1 className="mt-2 text-3xl font-semibold tracking-tight">Agent Control Plane</h1>
               <p className="mt-2 text-sm text-slate-400">Agentenprofile, Skills, Performance und Orchestrierung.</p>
             </div>
-            <a
+            <Link
               href="/agents/skills"
               className="rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-1.5 text-xs font-semibold text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
             >
-              📚 Skill Library
-            </a>
+              Skill Library
+            </Link>
             <div className="flex gap-4 text-right text-xs">
               <div>
                 <p className="text-slate-500">Gesamt</p>
@@ -178,6 +194,8 @@ export default function AgentsPage() {
         {/* Tab content */}
         {tab === 'control-plane' && (
           <>
+            <CoordinationOverview summary={summary} />
+
             {!loading && agents.length > 0 && (
               <div className="mb-6 flex flex-wrap gap-1">
                 <button
@@ -408,12 +426,12 @@ function AgentDetailPanel({
       )}
 
       <div className="mt-4 border-t border-slate-800 pt-3">
-        <a
+        <Link
           href={`/agent-runs?agentId=${agent.id}`}
           className="text-xs font-medium text-sky-400 hover:underline"
         >
           Agent Runs ansehen →
-        </a>
+        </Link>
       </div>
     </aside>
   )
@@ -435,6 +453,116 @@ function EmptyState() {
       <p className="mt-1 text-xs text-slate-500">
         Registry läuft über <code className="text-sky-400">/api/agents</code> — Standard-Profile werden beim ersten Aufruf geladen.
       </p>
+    </div>
+  )
+}
+
+function CoordinationOverview({ summary }: { summary: AgentControlPlaneSummary | null }) {
+  if (!summary) {
+    return (
+      <div className="mb-6 rounded-xl border border-slate-800 bg-slate-900 p-5">
+        <p className="text-sm font-semibold text-white">Parallel Work Control</p>
+        <p className="mt-1 text-xs text-slate-500">Koordinationsdaten werden geladen.</p>
+      </div>
+    )
+  }
+
+  const tone = summary.coordination.canStartMoreWork ? 'text-emerald-400' : 'text-amber-400'
+
+  return (
+    <section className="mb-6 space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Parallel Work Control</p>
+          <h2 className="mt-1 text-lg font-semibold text-white">Schwarmfaehigkeit und Write-Scopes</h2>
+          <p className="mt-1 max-w-2xl text-sm text-slate-400">
+            Diese Sicht zeigt, wie viele Agenten gerade sicher parallel arbeiten koennen, welche Aufgaben als naechstes passen
+            und ob kaputte Delegationen zuerst reviewt werden muessen.
+          </p>
+        </div>
+        <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-4 py-3 text-right">
+          <p className="text-xs text-slate-500">Freie Parallel-Slots</p>
+          <p className={cx('mt-1 text-3xl font-semibold tabular-nums', tone)}>
+            {summary.coordination.recommendedParallelSlots}
+          </p>
+        </div>
+      </div>
+
+      {summary.coordination.blockedReason && (
+        <div className="rounded-lg border border-amber-900/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-300">
+          {summary.coordination.blockedReason}
+        </div>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <CoordinationMetric label="Approved Queue" value={summary.queue.approved} detail={`${summary.queue.pending} pending`} />
+        <CoordinationMetric label="Aktive Write-Scopes" value={summary.scopes.active} detail={`${summary.queue.running} running`} />
+        <CoordinationMetric label="Lokale Agenten" value={summary.agents.local} detail="local first" />
+        <CoordinationMetric label="Cloud / Abo" value={summary.agents.cloudOrSubscription} detail="fuer komplexe Tasks" />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-semibold text-white">Naechste sinnvolle Delegationen</p>
+            <span className="text-xs text-slate-600">{summary.nextDelegations.length} Vorschlaege</span>
+          </div>
+          {summary.nextDelegations.length === 0 ? (
+            <p className="text-xs text-slate-500">Keine freigegebenen Delegationen in der Queue.</p>
+          ) : (
+            <div className="space-y-2">
+              {summary.nextDelegations.slice(0, 3).map(item => (
+                <div key={item.delegationId} className="rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-white">{item.title}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">{item.reason}</p>
+                    </div>
+                    <span className="rounded border border-sky-900/50 px-1.5 py-0.5 text-xs text-sky-300">
+                      {item.suggestedAgentName ?? 'offen'}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <Badge>{item.skillCategory}</Badge>
+                    <Badge>Risk {item.riskClass}</Badge>
+                    <Badge>Prio {item.priority}</Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-semibold text-white">Aktive Scopes</p>
+            <span className="text-xs text-slate-600">Lease-basiert</span>
+          </div>
+          {summary.scopes.claims.length === 0 ? (
+            <p className="text-xs text-slate-500">Derzeit haelt kein Agent einen Write-Scope.</p>
+          ) : (
+            <div className="space-y-2">
+              {summary.scopes.claims.slice(0, 4).map(claim => (
+                <div key={`${claim.agentId}-${claim.claimedAt}`} className="rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2">
+                  <p className="text-xs font-semibold text-white">{claim.agentId}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">{claim.milestone} · {claim.branch}</p>
+                  <p className="mt-1 truncate font-mono text-xs text-slate-600">{claim.filePatterns.join(', ')}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CoordinationMetric({ label, value, detail }: { label: string; value: number; detail: string }) {
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-950/40 px-4 py-3">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-1 text-2xl font-semibold tabular-nums text-white">{value}</p>
+      <p className="mt-0.5 text-xs text-slate-600">{detail}</p>
     </div>
   )
 }
@@ -865,4 +993,3 @@ function OrchestrateTab() {
     </div>
   )
 }
-
