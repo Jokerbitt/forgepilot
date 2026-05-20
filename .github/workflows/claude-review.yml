@@ -1,4 +1,4 @@
-name: 🤖 AI Code Review
+name: 🔍 Static Analysis Review
 
 on:
   pull_request:
@@ -10,8 +10,8 @@ permissions:
   pull-requests: write
 
 jobs:
-  claude-review:
-    name: Claude Code Review
+  static-analysis:
+    name: Static Analysis Review
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -37,45 +37,87 @@ jobs:
           echo "changed_files=$FILES" >> $GITHUB_OUTPUT
           echo "new_test_lines=$NEW_TESTS" >> $GITHUB_OUTPUT
 
-      - name: Claude PR Review
-        uses: anthropics/claude-code-action@beta
+      - name: ESLint check
+        id: eslint
+        run: |
+          set +e
+          npx eslint src --ext .ts,.tsx --max-warnings 0 --report-unused-disable-directives 2>&1 | tee /tmp/eslint_output.txt
+          ESLINT_EXIT=$?
+          set -e
+          ESLINT_WARNINGS=$(grep -c 'warning' /tmp/eslint_output.txt || true)
+          ESLINT_ERRORS=$(grep -c 'error' /tmp/eslint_output.txt || true)
+          echo "eslint_exit=$ESLINT_EXIT" >> $GITHUB_OUTPUT
+          echo "eslint_warnings=$ESLINT_WARNINGS" >> $GITHUB_OUTPUT
+          echo "eslint_errors=$ESLINT_ERRORS" >> $GITHUB_OUTPUT
+          if [ $ESLINT_EXIT -ne 0 ]; then
+            echo "ESLINT_STATUS=❌ Failed ($ESLINT_ERRORS errors, $ESLINT_WARNINGS warnings)" >> $GITHUB_ENV
+          else
+            echo "ESLINT_STATUS=✅ Passed (0 warnings, 0 errors)" >> $GITHUB_ENV
+          fi
+
+      - name: TypeScript strict check
+        id: typecheck
+        run: |
+          set +e
+          npm run type-check 2>&1 | tee /tmp/tsc_output.txt
+          TSC_EXIT=$?
+          set -e
+          TSC_ERRORS=$(grep -c 'error TS' /tmp/tsc_output.txt || true)
+          echo "tsc_exit=$TSC_EXIT" >> $GITHUB_OUTPUT
+          echo "tsc_errors=$TSC_ERRORS" >> $GITHUB_OUTPUT
+          if [ $TSC_EXIT -ne 0 ]; then
+            echo "TSC_STATUS=❌ Failed ($TSC_ERRORS errors)" >> $GITHUB_ENV
+          else
+            echo "TSC_STATUS=✅ Passed (0 errors)" >> $GITHUB_ENV
+          fi
+
+      - name: Test coverage summary
+        id: tests
+        run: |
+          set +e
+          npx vitest run --reporter=verbose 2>&1 | tee /tmp/vitest_output.txt
+          VITEST_EXIT=$?
+          set -e
+          TESTS_PASSED=$(grep -E 'Tests\s+[0-9]+ passed' /tmp/vitest_output.txt | grep -oE '[0-9]+ passed' | head -1 || echo "0 passed")
+          TESTS_FAILED=$(grep -E 'Tests\s+.*failed' /tmp/vitest_output.txt | grep -oE '[0-9]+ failed' | head -1 || echo "")
+          echo "tests_exit=$VITEST_EXIT" >> $GITHUB_OUTPUT
+          echo "tests_passed=$TESTS_PASSED" >> $GITHUB_OUTPUT
+          if [ $VITEST_EXIT -ne 0 ]; then
+            echo "TEST_STATUS=❌ Failed — $TESTS_FAILED" >> $GITHUB_ENV
+          else
+            echo "TEST_STATUS=✅ $TESTS_PASSED" >> $GITHUB_ENV
+          fi
+
+      - name: Post PR comment
+        uses: actions/github-script@v7
+        env:
+          ESLINT_STATUS: ${{ env.ESLINT_STATUS }}
+          TSC_STATUS: ${{ env.TSC_STATUS }}
+          TEST_STATUS: ${{ env.TEST_STATUS }}
+          CHANGED_FILES: ${{ steps.stats.outputs.changed_files }}
+          NEW_TEST_LINES: ${{ steps.stats.outputs.new_test_lines }}
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          model: claude-haiku-4-5
-          direct_prompt: |
-            Reviewe diesen Pull Request für das ForgePilot-Projekt (Next.js 14, TypeScript strict, Vitest).
+          script: |
+            const eslintStatus = process.env.ESLINT_STATUS;
+            const tscStatus = process.env.TSC_STATUS;
+            const testStatus = process.env.TEST_STATUS;
+            const changedFiles = process.env.CHANGED_FILES;
+            const newTestLines = process.env.NEW_TEST_LINES;
 
-            **Kontext:** ForgePilot ist ein AI Workflow OS — Next.js API Routes, lokale JSON-Stores, Pino-Logging, Zod-Validation.
+            const allGreen = !eslintStatus.startsWith('❌') && !tscStatus.startsWith('❌') && !testStatus.startsWith('❌');
+            const overallBadge = allGreen ? '✅ All checks passed' : '❌ Some checks failed';
 
-            **Prüfe KONKRET:**
+            const body = `## 🔍 Static Analysis Review\n\n${overallBadge}\n\n| Check | Status |\n|---|---|\n| ESLint | ${eslintStatus} |\n| TypeScript | ${tscStatus} |\n| Tests | ${testStatus} |\n\n**PR Stats:** ${changedFiles} TypeScript files changed · ${newTestLines} new test lines added\n\n---\n*Static analysis via ESLint + tsc + Vitest — no AI credits required*`;
 
-            1. **Neue API-Route mit POST-Body?**
-               → Hat sie `parseBody()` aus `@/lib/validation/api` + passendes Zod-Schema?
-               → Falls nicht: Kommentiere die fehlende Validation.
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
 
-            2. **Neue console.log/error/warn in API-Routes oder lib/?**
-               → Sollte durch Pino-Logger ersetzt werden (`apiLogger`, `dsgvoLogger`, etc.)
-               → Falls gefunden: Zeige die Zeile und den korrekten Ersatz.
-
-            3. **Neue API-Routes mit teuren Operationen (AI-Calls, Filesystem)?**
-               → Sollten `checkRateLimit()` aus `@/lib/rate-limit` nutzen.
-
-            4. **Neue Dateien ohne Tests?**
-               → PR hat ${{ steps.stats.outputs.changed_files }} geänderte TS-Dateien.
-               → Wenn neue lib-Dateien ohne `*.test.ts` geliefert werden: erwähne es.
-
-            5. **TypeScript strict violations?**
-               → `any` Types, fehlende Type-Guards, unsichere Casts.
-
-            6. **Security-Check:**
-               → Hardcoded Secrets/API-Keys?
-               → Fehlende Authorization-Checks auf neuen Routes?
-
-            **Format:**
-            - Fasse in 3-5 Bulletpoints zusammen was gut ist
-            - Liste konkrete Probleme mit Dateiname + Zeile
-            - Sei direkt, kein Fluff
-            - Auf Deutsch
-
-            Wenn alles korrekt ist: "✅ Review passed — keine kritischen Issues gefunden."
+      - name: Fail if checks failed
+        if: steps.eslint.outputs.eslint_exit != '0' || steps.typecheck.outputs.tsc_exit != '0' || steps.tests.outputs.tests_exit != '0'
+        run: |
+          echo "One or more static analysis checks failed."
+          exit 1
