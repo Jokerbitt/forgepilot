@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ElementType, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ElementType, type ReactNode } from 'react'
 import type { NBAConfig } from '@/lib/nba-engine/nba-config'
 import { describeApprovalMode } from '@/lib/nba-engine/approval-policy'
 import type { PMAgentResult } from '@/lib/agent-runner/pm-agent'
@@ -75,6 +75,91 @@ function StatusPill({
     >
       {children}
     </span>
+  )
+}
+
+// ─── Settings Import/Export ──────────────────────────────────────────────────
+function SettingsImportExport() {
+  const [importStatus, setImportStatus] = useState<'idle' | 'importing' | 'success' | 'error'>('idle')
+  const [importResult, setImportResult] = useState<{ imported: string[]; skipped: string[]; errors: string[] } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const handleImport = async (file: File) => {
+    setImportStatus('importing')
+    setImportResult(null)
+    try {
+      const text = await file.text()
+      const res = await fetch('/api/settings/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: text,
+      })
+      const data = await res.json() as { ok: boolean; imported: string[]; skipped: string[]; errors: string[] }
+      setImportResult(data)
+      setImportStatus(res.ok ? 'success' : 'error')
+    } catch {
+      setImportStatus('error')
+      setImportResult(null)
+    }
+  }
+
+  return (
+    <section className="space-y-4">
+      <SectionHeading icon={Download} title="Einstellungen sichern" />
+      <div className={cx(panelClassName, 'space-y-3')}>
+        <p className="text-sm text-gray-400">
+          Exportiere alle Konfigurationen als JSON-Bundle oder importiere eine gesicherte Konfiguration.
+          API Keys werden <strong className="text-slate-200">nie</strong> exportiert.
+        </p>
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <a
+            href="/api/settings/export"
+            download
+            className={cx(secondaryButtonClassName, 'flex items-center gap-2')}
+          >
+            <Download className="h-4 w-4" />
+            Konfiguration exportieren
+          </a>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importStatus === 'importing'}
+            className={cx(secondaryButtonClassName, 'flex items-center gap-2 disabled:opacity-40')}
+          >
+            <Download className="h-4 w-4 rotate-180" />
+            {importStatus === 'importing' ? 'Importiere...' : 'Konfiguration importieren'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={e => {
+              const file = e.target.files?.[0]
+              if (file) void handleImport(file)
+              e.target.value = ''
+            }}
+          />
+        </div>
+        {importStatus === 'success' && importResult && (
+          <div className="rounded-md bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300 space-y-1">
+            <p className="font-semibold">Import erfolgreich</p>
+            {importResult.imported.length > 0 && (
+              <p>Importiert: {importResult.imported.join(', ')}</p>
+            )}
+            {importResult.skipped.length > 0 && (
+              <p className="text-slate-400">Übersprungen: {importResult.skipped.join(', ')}</p>
+            )}
+          </div>
+        )}
+        {importStatus === 'error' && (
+          <div className="rounded-md bg-red-500/10 px-3 py-2 text-xs text-red-300">
+            {importResult?.errors?.length
+              ? importResult.errors.join(' · ')
+              : 'Import fehlgeschlagen. Prüfe das Format der Datei.'}
+          </div>
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -1051,6 +1136,9 @@ export default function SettingsPage() {
             </div>
           </section>
         )}
+
+        {/* Settings Import/Export */}
+        <SettingsImportExport />
 
         {/* Datenschutz Section — Art. 20 DSGVO */}
         <section className="space-y-4">
