@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 import { buildProjectBrief, saveProjectBrief } from '@/lib/project-briefs'
+import { apiLogger } from '@/lib/logger'
 import type { IdeaIntakeInput } from '@/lib/models/project-brief'
 import type { WorkItem } from '@/lib/models/work-item'
 
@@ -71,7 +72,7 @@ function handleNewTask(payload: unknown): string {
 function handleDelegationTrigger(payload: unknown, source: string): string {
   const p = (typeof payload === 'object' && payload !== null ? payload : {}) as Record<string, unknown>
   const ref = String(p.delegationId ?? p.delegation_id ?? p.id ?? crypto.randomUUID())
-  console.info(`[webhook/intake] delegation-trigger received from=${source} ref=${ref}`)
+  apiLogger.info({ event: 'webhook.delegation_trigger', source, delegationId: ref }, 'Webhook delegation-trigger received')
   return ref
 }
 

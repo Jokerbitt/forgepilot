@@ -19,6 +19,7 @@ import path from 'path'
 import crypto from 'crypto'
 import { getDataDir } from '@/lib/config/paths'
 import { getSupabaseClient } from '@/lib/supabase/client'
+import { dsgvoLogger } from '@/lib/logger'
 import type { PIIFinding } from '@/lib/context/pii-scrubber'
 
 export type LegalBasis =
@@ -127,7 +128,7 @@ export async function logProcessing(input: LogProcessingInput): Promise<void> {
       model_id:       record.modelId,
       input_tokens:   record.inputTokens,
       retention_days: record.retentionDays,
-    }).then((_r) => { /* fire-and-forget */ }, (err: unknown) => { console.error(err) })
+    }).then((_r) => { /* fire-and-forget */ }, (err: unknown) => { dsgvoLogger.error({ event: 'ledger.insert_error', error: String(err) }, 'Failed to insert processing ledger record to Supabase') })
     return
   }
 
