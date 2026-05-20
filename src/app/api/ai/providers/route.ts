@@ -15,6 +15,14 @@ import {
 import { getProviderInstance } from '@/lib/ai/providers/registry'
 import { readStoredApiKeys } from '@/lib/connectors/config'
 import type { AIProviderConfig, AIModelSelection } from '@/lib/ai/providers/types'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { ProviderConfigSchema, ModelSelectionSchema } from '@/lib/validation/schemas'
+import { z } from 'zod'
+
+const ProvidersPostSchema = z.object({
+  provider:  ProviderConfigSchema.partial().extend({ id: z.string() }).optional(),
+  selection: ModelSelectionSchema.optional(),
+})
 
 export const dynamic = 'force-dynamic'
 
@@ -35,17 +43,15 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json() as {
-    provider?: Partial<AIProviderConfig> & { id: string }
-    selection?: AIModelSelection
-  }
+  const body = await parseBody(req, ProvidersPostSchema)
+  if (isValidationError(body)) return body
 
   if (body.provider) {
-    upsertProviderConfig(body.provider)
+    upsertProviderConfig(body.provider as Partial<AIProviderConfig> & { id: string })
   }
 
   if (body.selection) {
-    saveModelSelection(body.selection)
+    saveModelSelection(body.selection as AIModelSelection)
   }
 
   return NextResponse.json({ ok: true })
