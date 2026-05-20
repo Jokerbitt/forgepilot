@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { nanoid } from 'nanoid'
 import { readStoredApiKeys } from '@/lib/connectors/config'
 import { upsertResearchDocument, getResearchDocument } from '@/lib/knowledge/research-store'

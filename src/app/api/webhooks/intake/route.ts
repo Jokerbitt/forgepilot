@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 /**
  * Webhook Intake Endpoint — POST /api/webhooks/intake
  */

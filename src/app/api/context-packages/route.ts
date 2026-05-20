@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { buildContextPackage } from '@/lib/context-packages/builder'
 import { savePackage, getPackages } from '@/lib/context-packages/store'

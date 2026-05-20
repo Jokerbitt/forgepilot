@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { readPMHistory } from '@/lib/agent-runner/pm-history-store'
 

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { runPilot } from '@/lib/pilot/orchestrator'
 import type { PilotInput } from '@/lib/pilot/orchestrator'

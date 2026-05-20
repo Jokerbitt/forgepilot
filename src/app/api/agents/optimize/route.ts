@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { scoreWork } from '@/lib/agents/work-quality'
 import { recordOutcome, getDriftWarnings } from '@/lib/agents/skill-evolver'

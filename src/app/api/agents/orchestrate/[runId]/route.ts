@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { getRun, updateTaskStatus, updateRunStatus } from '@/lib/agents/orchestrated-run'
 import type { TaskResult, RunStatus } from '@/lib/agents/orchestrated-run'

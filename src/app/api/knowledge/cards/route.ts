@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { getCards, upsertCard, deleteCard, queryCards } from '@/lib/knowledge/store'

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { getPackage, deletePackage } from '@/lib/context-packages/store'
 

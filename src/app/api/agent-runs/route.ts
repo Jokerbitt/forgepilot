@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { type NextRequest, NextResponse } from 'next/server'
 import { createRun, getRuns } from '@/lib/agent-runs/store'
 import { parseBody } from '@/lib/validation/api'

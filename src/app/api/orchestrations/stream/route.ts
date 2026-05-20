@@ -7,6 +7,7 @@
  */
 
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 import { listRuns } from '@/lib/agents/orchestrated-run'
 import type { OrchestratedRun } from '@/lib/agents/orchestrated-run'

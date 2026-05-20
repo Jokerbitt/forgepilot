@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
 import { getResearchDocument } from '@/lib/knowledge/research-store'

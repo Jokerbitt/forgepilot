@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { delegationLogger } from '@/lib/logger'
 import { checkRateLimit, buildRateLimitHeaders } from '@/lib/rate-limit'

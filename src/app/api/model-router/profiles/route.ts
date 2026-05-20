@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { getProfiles, upsertProfile } from '@/lib/model-router/store'
 import type { ModelProfile } from '@/lib/models/model-router'

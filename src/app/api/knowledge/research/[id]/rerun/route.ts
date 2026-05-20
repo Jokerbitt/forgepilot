@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { getResearchDocument, upsertResearchDocument } from '@/lib/knowledge/research-store'
 import { runResearchAgent } from '@/lib/agent-runner/research-agent'

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { decomposeWithAI } from '@/lib/agents/ai-decomposer'
 import { createRun, listRuns } from '@/lib/agents/orchestrated-run'
