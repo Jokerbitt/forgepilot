@@ -286,6 +286,157 @@ function FreeModelLabel() {
   return <span className="text-[9px] text-emerald-400 font-medium ml-1">FREE</span>
 }
 
+// ─── Inline API Key Entry (shown inside ProviderCard when key is missing) ─────
+
+function InlineKeyEntry({
+  envKey,
+  providerName,
+  signupUrl,
+  onSaved,
+}: {
+  envKey: string
+  providerName: string
+  signupUrl?: string
+  onSaved: () => void
+}) {
+  const [open, setOpen]     = useState(false)
+  const [value, setValue]   = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState<string | null>(null)
+
+  const handleSave = async () => {
+    if (!value.trim()) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res  = await fetch('/api/settings/env', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: envKey, value: value.trim() }),
+      })
+      const data = await res.json() as { ok: boolean; error?: string }
+      if (!data.ok) setError(data.error ?? 'Fehler beim Speichern')
+      else { setValue(''); setOpen(false); onSaved() }
+    } catch {
+      setError('Netzwerkfehler')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="text-xs text-violet-400 hover:text-violet-300 border border-violet-500/20 hover:border-violet-500/40 rounded px-2 py-0.5 transition-colors"
+      >
+        + API Key eingeben
+      </button>
+    )
+  }
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      <div className="flex items-center gap-2">
+        <input
+          type="password"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { void handleSave() } if (e.key === 'Escape') { setOpen(false) } }}
+          placeholder={`${providerName} API Key…`}
+          className="flex-1 rounded bg-black/40 border border-violet-500/30 px-2 py-1 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-violet-400 transition-colors"
+          autoFocus
+        />
+        <button
+          onClick={() => { void handleSave() }}
+          disabled={saving || !value.trim()}
+          className="rounded bg-violet-700 hover:bg-violet-600 disabled:opacity-40 px-2.5 py-1 text-xs font-semibold text-white transition-colors whitespace-nowrap"
+        >
+          {saving ? '…' : 'Speichern'}
+        </button>
+        <button onClick={() => setOpen(false)} className="text-slate-600 hover:text-slate-400 text-xs">✕</button>
+      </div>
+      {error && <p className="text-[10px] text-rose-400">{error}</p>}
+      {signupUrl && (
+        <p className="text-[10px] text-slate-600">
+          Noch kein Key?{' '}
+          <a href={signupUrl} target="_blank" rel="noopener noreferrer"
+            className="text-violet-400 hover:text-violet-300 underline underline-offset-2">
+            Kostenlos holen →
+          </a>
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ─── Custom BaseUrl Editor (for any provider, not just Ollama) ────────────────
+
+function BaseUrlEditor({
+  providerId,
+  currentUrl,
+  onSaved,
+}: {
+  providerId: string
+  currentUrl: string
+  onSaved: (url: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [url, setUrl]         = useState(currentUrl)
+  const [saving, setSaving]   = useState(false)
+  const [saved, setSaved]     = useState(false)
+
+  const handleSave = async () => {
+    if (!url.trim()) return
+    setSaving(true)
+    try {
+      await fetch('/api/ai/providers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: { id: providerId, baseUrl: url.trim() } }),
+      })
+      onSaved(url.trim())
+      setEditing(false)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap mt-1">
+      {!editing ? (
+        <>
+          <span className="text-xs font-mono text-slate-600 truncate max-w-[200px]">{url}</span>
+          <button
+            onClick={() => { setUrl(currentUrl); setEditing(true) }}
+            className="text-[10px] text-slate-600 hover:text-slate-400 border border-white/[0.06] rounded px-1 py-0.5 transition-colors shrink-0"
+          >
+            ✏
+          </button>
+          {saved && <span className="text-[10px] text-emerald-400">✓</span>}
+        </>
+      ) : (
+        <div className="flex items-center gap-1.5 w-full">
+          <input
+            value={url}
+            onChange={e => setUrl(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { void handleSave() } if (e.key === 'Escape') { setEditing(false) } }}
+            className="flex-1 rounded bg-black/40 border border-violet-500/30 px-2 py-0.5 text-xs font-mono text-white focus:outline-none focus:border-violet-400 transition-colors min-w-0"
+            autoFocus
+          />
+          <button onClick={() => { void handleSave() }} disabled={saving || !url.trim()}
+            className="text-[10px] bg-violet-700 hover:bg-violet-600 disabled:opacity-40 rounded px-2 py-0.5 text-white transition-colors shrink-0">
+            {saving ? '…' : 'OK'}
+          </button>
+          <button onClick={() => setEditing(false)} className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors shrink-0">✕</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ProviderCard({
   provider,
   selection,
@@ -293,6 +444,7 @@ function ProviderCard({
   onTest,
   onSelectModel,
   onProviderUpdate,
+  onKeyAdded,
 }: {
   provider: ProviderWithStatus
   selection: AIModelSelection
@@ -300,10 +452,11 @@ function ProviderCard({
   onTest: (id: string) => Promise<void>
   onSelectModel: (purpose: 'fast' | 'coding', providerId: string, modelId: string) => void
   onProviderUpdate: (patch: Partial<AIProviderConfig> & { id: string }) => void
+  onKeyAdded: () => void
 }) {
   const [testing, setTesting]       = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; latencyMs: number } | null>(null)
-  const [ollamaUrl, setOllamaUrl]   = useState(provider.baseUrl ?? 'http://localhost:11434')
+  const [baseUrl, setBaseUrl]       = useState(provider.baseUrl ?? '')
 
   const handleTest = async () => {
     setTesting(true)
@@ -363,41 +516,53 @@ function ProviderCard({
         </div>
       </div>
 
-      {/* API Key status */}
+      {/* API Key status + inline entry */}
       {provider.apiKeyRef && (
-        <div className="mt-2 flex items-center gap-1.5">
-          <span className={cx('text-xs', provider.hasApiKey ? 'text-emerald-400' : 'text-amber-400')}>
-            {provider.hasApiKey ? '✓' : '⚠'}
-          </span>
-          <span className="text-xs text-slate-500">
-            {provider.hasApiKey
-              ? `${KEY_LABELS[provider.apiKeyRef] ?? provider.apiKeyRef} konfiguriert`
-              : `${KEY_LABELS[provider.apiKeyRef] ?? provider.apiKeyRef} fehlt`
-            }
-          </span>
-          {!provider.hasApiKey && provider.freeTier && (
-            <a
-              href={provider.freeTier.signupUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors"
-            >
-              Kostenlos holen →
-            </a>
+        <div className="mt-2 space-y-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className={cx('text-xs', provider.hasApiKey ? 'text-emerald-400' : 'text-amber-400')}>
+              {provider.hasApiKey ? '✓' : '⚠'}
+            </span>
+            <span className="text-xs text-slate-500">
+              {provider.hasApiKey
+                ? `${KEY_LABELS[provider.apiKeyRef] ?? provider.apiKeyRef} konfiguriert`
+                : `${KEY_LABELS[provider.apiKeyRef] ?? provider.apiKeyRef} fehlt`
+              }
+            </span>
+          </div>
+          {/* Inline key entry — shown when key is missing */}
+          {!provider.hasApiKey && (
+            <InlineKeyEntry
+              envKey={provider.apiKeyRef}
+              providerName={provider.name}
+              signupUrl={provider.freeTier?.signupUrl}
+              onSaved={onKeyAdded}
+            />
           )}
         </div>
       )}
 
-      {provider.type !== 'ollama' && provider.baseUrl && (
-        <p className="mt-1 text-xs text-slate-600 font-mono truncate">{provider.baseUrl}</p>
+      {/* BaseUrl editor — shown for all providers with a baseUrl */}
+      {provider.baseUrl && provider.type !== 'ollama' && (
+        <div className="mt-2">
+          <span className="text-[10px] text-slate-600 uppercase tracking-wide">Base URL</span>
+          <BaseUrlEditor
+            providerId={provider.id}
+            currentUrl={baseUrl}
+            onSaved={(newUrl) => {
+              setBaseUrl(newUrl)
+              onProviderUpdate({ id: provider.id, baseUrl: newUrl })
+            }}
+          />
+        </div>
       )}
 
-      {/* Ollama URL editor */}
+      {/* Ollama URL editor (more prominent, with helper text) */}
       {provider.type === 'ollama' && (
         <OllamaUrlEditor
-          currentUrl={ollamaUrl}
+          currentUrl={baseUrl || 'http://localhost:11434'}
           onSaved={(newUrl) => {
-            setOllamaUrl(newUrl)
+            setBaseUrl(newUrl)
             onProviderUpdate({ id: 'ollama', baseUrl: newUrl })
           }}
         />
@@ -936,6 +1101,7 @@ export default function ProvidersPage() {
                 onTest={async () => {}}
                 onSelectModel={handleSelectModel}
                 onProviderUpdate={handleProviderUpdate}
+                onKeyAdded={load}
               />
             ))}
           </div>
@@ -959,6 +1125,7 @@ export default function ProvidersPage() {
                 onTest={async () => {}}
                 onSelectModel={handleSelectModel}
                 onProviderUpdate={handleProviderUpdate}
+                onKeyAdded={load}
               />
             ))}
           </div>
