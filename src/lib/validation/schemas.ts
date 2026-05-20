@@ -158,3 +158,61 @@ export const LogProcessingInputSchema = z.object({
 })
 
 export type LogProcessingInput = z.infer<typeof LogProcessingInputSchema>
+
+// ─── Work Item Import ─────────────────────────────────────────────────────────
+
+export const WorkItemImportSchema = z.object({
+  csv: z.string().min(1, 'CSV content required'),
+})
+
+export type WorkItemImportInput = z.infer<typeof WorkItemImportSchema>
+
+// ─── Delegation Version ────────────────────────────────────────────────────────
+
+export const TaskContractSchema = z.object({
+  id:                    z.string(),
+  workItemId:            z.string(),
+  goal:                  z.string(),
+  context:               z.string(),
+  taskType:              z.enum(['feature', 'bugfix', 'docs', 'refactor', 'research']).optional(),
+  definitionOfDone:      z.array(z.string()),
+  riskClass:             RiskClassSchema,
+  maxBudgetUsd:          z.number(),
+  allowedTools:          z.array(z.string()),
+  branchStrategy:        z.enum(['feature', 'fix', 'chore']),
+  requiresApproval:      z.boolean(),
+  privacyMode:           PrivacyModeSchema,
+  llmModel:              z.string().optional(),
+  outputMode:            z.enum(['text', 'json', 'stream']).optional(),
+  skillCategory:         z.enum(['api-route', 'ui-component', 'data-model', 'test', 'refactor', 'infrastructure', 'documentation']).optional(),
+  allowedFilePatterns:   z.array(z.string()).optional(),
+  orchestratedRunId:     z.string().optional(),
+  createdAt:             z.string(),
+})
+
+export type TaskContractInput = z.infer<typeof TaskContractSchema>
+
+export const DelegationVersionSchema = z.object({
+  delegationId: z.string().min(1, 'delegationId required'),
+  delegation:   z.record(z.string(), z.any()).optional(),
+  contract:     TaskContractSchema,
+  reason:       z.string().optional(),
+})
+
+export type DelegationVersionInput = z.infer<typeof DelegationVersionSchema>
+
+// ─── Project Brief ────────────────────────────────────────────────────────────
+
+export const ProjectBriefSchema = z.object({
+  title:            z.string().min(3, 'Title required').max(200),
+  rawIdea:          z.string().min(10, 'Idea required'),
+  problemStatement: z.string().min(10, 'Problem statement required'),
+  targetAudience:   z.string().min(3, 'Target audience required'),
+  desiredOutcome:   z.string().min(5, 'Desired outcome required'),
+  constraints:      z.array(z.string()).default([]),
+  scope:            z.enum(['minimal', 'standard', 'full']).default('standard'),
+  researchMode:     z.enum(['quick', 'standard', 'deep']).default('standard'),
+  privacyMode:      z.enum(['local', 'hybrid', 'cloud']).default('local'),
+})
+
+export type ProjectBriefInput = z.infer<typeof ProjectBriefSchema>
