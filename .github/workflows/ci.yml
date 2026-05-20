@@ -33,3 +33,34 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Production build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+          # Stub-Werte damit Build nicht wegen fehlender Env-Vars scheitert
+          ANTHROPIC_API_KEY: placeholder
+          GOOGLE_API_KEY: placeholder
+          SENTRY_SUPPRESS_GLOBAL_ERROR_HANDLER_FILE_WARNING: 1
+
+      - name: Coverage report
+        run: npm run test:coverage
+        continue-on-error: true   # coverage darf fehlschlagen ohne CI zu blocken
+        env:
+          CI: true
+
+      - name: Upload coverage summary
+        if: always()
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            echo "## 📊 Test Coverage" >> $GITHUB_STEP_SUMMARY
+            node -e "
+              const s = require('./coverage/coverage-summary.json').total;
+              const pct = (x) => x.pct.toFixed(1) + '%';
+              console.log('| Metric | Coverage |');
+              console.log('|---|---|');
+              console.log('| Lines | ' + pct(s.lines) + ' |');
+              console.log('| Functions | ' + pct(s.functions) + ' |');
+              console.log('| Branches | ' + pct(s.branches) + ' |');
+            " >> $GITHUB_STEP_SUMMARY
+          fi

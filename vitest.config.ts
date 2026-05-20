@@ -11,6 +11,24 @@ export default defineConfig({
       '**/forgepilot-agent-worktree/**',
       'e2e/**',
     ],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json-summary', 'html'],
+      reportsDirectory: './coverage',
+      include: ['src/lib/**', 'src/app/api/**'],
+      exclude: [
+        'src/**/*.test.ts',
+        'src/**/*.test.tsx',
+        'src/**/__tests__/**',
+        'src/lib/models/**',   // type definitions only
+      ],
+      thresholds: {
+        lines: 20,
+        functions: 20,
+        branches: 15,
+        statements: 20,
+      },
+    },
   },
   resolve: {
     alias: {
