@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 import type { Delegation, AgentLog } from '@/lib/models/delegation'
+import { buildRetryPlan } from '@/lib/delegations/retry'
 
 const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
 
@@ -43,22 +44,45 @@ export async function POST(
     )
   }
 
+  const plan = buildRetryPlan(delegation)
+  if (!plan.shouldRetry) {
+    return NextResponse.json(
+      {
+        error: plan.diagnosticMessage,
+        retryCount: plan.retryCount,
+        maxRetries: plan.maxRetries,
+        failureCause: plan.failureCause,
+      },
+      { status: plan.maxRetriesReached ? 429 : 409 },
+    )
+  }
+
   const now = new Date().toISOString()
   const retryLog: AgentLog = {
     timestamp: now,
     type: 'info' as const,
-    message: '🔁 Erneut eingereicht (Retry)',
+    message: `🔁 Erneut eingereicht (Retry #${plan.retryCount + 1}) — ${plan.diagnosticMessage}`,
   }
 
   delegations[idx] = {
     ...delegation,
     status: 'pending',
     errorMessage: undefined,
+    contract: {
+      ...delegation.contract,
+      context: plan.additionalContext,
+    },
     logs: [...(delegation.logs ?? []), retryLog],
     updatedAt: now,
   }
 
   writeDelegationsAtomic(delegations)
 
-  return NextResponse.json({ retried: true, delegationId: id })
+  return NextResponse.json({
+    retried: true,
+    delegationId: id,
+    retryCount: plan.retryCount + 1,
+    failureCause: plan.failureCause,
+    diagnosticMessage: plan.diagnosticMessage,
+  })
 }

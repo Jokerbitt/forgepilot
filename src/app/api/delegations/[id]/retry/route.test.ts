@@ -53,16 +53,54 @@ describe('POST /api/delegations/[id]/retry', () => {
     expect(res.status).toBe(400)
   })
 
-  it('resets failed delegation to pending', async () => {
+  it('resets failed delegation to pending with retry diagnostics', async () => {
     const res = await POST(new Request('http://localhost'), makeParams('del-001'))
     expect(res.status).toBe(200)
     const data = await res.json()
-    expect(data).toMatchObject({ retried: true, delegationId: 'del-001' })
+    expect(data).toMatchObject({
+      retried: true,
+      delegationId: 'del-001',
+      retryCount: 1,
+      failureCause: 'unknown',
+    })
   })
 
-  it('resets cancelled delegation to pending', async () => {
+  it('blocks cancelled delegation from automatic retry', async () => {
     store.data = JSON.stringify([{ ...failedDelegation, status: 'cancelled' }])
     const res = await POST(new Request('http://localhost'), makeParams('del-001'))
+    expect(res.status).toBe(409)
+    const data = await res.json()
+    expect(data).toMatchObject({
+      failureCause: 'cancelled',
+      retryCount: 0,
+    })
+  })
+
+  it('blocks retry when max retry count is reached', async () => {
+    store.data = JSON.stringify([{
+      ...failedDelegation,
+      logs: [
+        { timestamp: '2026-01-01T00:00:00Z', type: 'info', message: 'Erneut eingereicht (Retry #1)' },
+        { timestamp: '2026-01-01T00:01:00Z', type: 'info', message: 'Erneut eingereicht (Retry #2)' },
+        { timestamp: '2026-01-01T00:02:00Z', type: 'info', message: 'Erneut eingereicht (Retry #3)' },
+      ],
+    }])
+    const res = await POST(new Request('http://localhost'), makeParams('del-001'))
+    expect(res.status).toBe(429)
+    const data = await res.json()
+    expect(data).toMatchObject({
+      failureCause: 'max-retries',
+      retryCount: 3,
+    })
+  })
+
+  it('adds retry guidance to the delegation context', async () => {
+    store.data = JSON.stringify([{ ...failedDelegation, errorMessage: 'TypeScript type error in build' }])
+    const res = await POST(new Request('http://localhost'), makeParams('del-001'))
     expect(res.status).toBe(200)
+
+    const saved = JSON.parse(store.data)[0]
+    expect(saved.contract.context).toContain('## Retry Guidance')
+    expect(saved.contract.context).toContain('TypeScript')
   })
 })
