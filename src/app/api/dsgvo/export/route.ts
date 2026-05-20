@@ -9,6 +9,7 @@ export const runtime = 'nodejs'
 
 import { NextResponse } from 'next/server'
 import { buildDsgvoExportZip } from '@/lib/dsgvo/zip-export'
+import { dsgvoLogger } from '@/lib/logger'
 
 export async function GET(): Promise<NextResponse> {
   try {
@@ -27,7 +28,7 @@ export async function GET(): Promise<NextResponse> {
       },
     })
   } catch (err) {
-    console.error('[DSGVO Export] Failed to build ZIP:', err)
+    dsgvoLogger.error({ event: 'dsgvo.export.error', error: err instanceof Error ? err.message : String(err) })
     return new NextResponse(
       JSON.stringify({ error: 'Export fehlgeschlagen. Bitte erneut versuchen.' }),
       {

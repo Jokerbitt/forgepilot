@@ -1,10 +1,11 @@
-import { NextResponse } from 'next/server'
+import { type NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 import type { Delegation } from '@/lib/models/delegation'
 import { syncAttentionFromDelegations } from '@/lib/attention/engine'
 import { getOpenAttentionItems, upsertAttentionItem } from '@/lib/attention/store'
-import type { AttentionItem } from '@/lib/models/attention'
+import { parseBody } from '@/lib/validation/api'
+import { AttentionItemCreateSchema } from '@/lib/validation/schemas'
 import { randomUUID } from 'crypto'
 
 export const dynamic = 'force-dynamic'
@@ -28,20 +29,19 @@ export async function GET() {
 }
 
 /** POST /api/attention — create a custom attention item (e.g. from agent escalation) */
-export async function POST(req: Request) {
-  const body = await req.json() as Partial<AttentionItem>
-  if (!body.title || !body.type) {
-    return NextResponse.json({ error: 'title and type required' }, { status: 400 })
-  }
-  const item: AttentionItem = {
-    id: body.id ?? randomUUID(),
-    type: body.type,
-    severity: body.severity ?? 'info',
-    title: body.title,
-    body: body.body ?? '',
-    delegationId: body.delegationId,
-    actionUrl: body.actionUrl,
-    escalationContext: body.escalationContext,
+export async function POST(req: NextRequest) {
+  const result = await parseBody(req, AttentionItemCreateSchema)
+  if (result instanceof NextResponse) return result
+
+  const item = {
+    id: result.id ?? randomUUID(),
+    type: result.type,
+    severity: result.severity,
+    title: result.title,
+    body: result.body ?? '',
+    delegationId: result.delegationId,
+    actionUrl: result.actionUrl,
+    escalationContext: result.escalationContext,
     createdAt: new Date().toISOString(),
   }
   upsertAttentionItem(item)
