@@ -49,40 +49,38 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: '/', label: 'Command Center', shortLabel: 'Command', icon: LayoutDashboard, section: 'Operate' },
-  { href: '/inbox', label: 'Inbox', shortLabel: 'Inbox', icon: Inbox, section: 'Operate' },
-  { href: '/notifications', label: 'Notifications', shortLabel: 'Notifs', icon: Bell, section: 'Operate' },
-  { href: '/project-briefs', label: 'Project Briefs', shortLabel: 'Briefs', icon: FileText, section: 'Plan' },
-  { href: '/work-items', label: 'Work Items', shortLabel: 'Items', icon: CheckSquare, section: 'Plan' },
-  { href: '/board', label: 'Agent Board', shortLabel: 'Board', icon: Kanban, section: 'Execute' },
-  { href: '/active', label: 'Active Runs', shortLabel: 'Active', icon: Activity, section: 'Execute' },
-  { href: '/delegations', label: 'Delegation Queue', shortLabel: 'Queue', icon: ListChecks, section: 'Execute' },
-  { href: '/agent-runs', label: 'Agent Runs', shortLabel: 'Runs', icon: History, section: 'Execute' },
-  { href: '/agents', label: 'Agent Control', shortLabel: 'Agents', icon: Bot, section: 'Execute' },
-  { href: '/orchestrations', label: 'Orchestrierungen', shortLabel: 'Orch.', icon: Network, section: 'Execute', isNew: true },
-  { href: '/monitor', label: 'Agent Monitor', shortLabel: 'Monitor', icon: Radio, section: 'Execute', isNew: true },
-  { href: '/pm-agent', label: 'PM Agent', shortLabel: 'PM Agent', icon: Brain, section: 'Execute', isNew: true },
-  { href: '/knowledge', label: 'Knowledge Center', shortLabel: 'Knowledge', icon: BookOpen, section: 'Knowledge' },
-  { href: '/knowledge/research', label: 'Research Platform', shortLabel: 'Research', icon: Search, section: 'Knowledge', isNew: true },
-  { href: '/context-packages', label: 'Context Packages', shortLabel: 'Context', icon: Package, section: 'Knowledge' },
-  { href: '/model-router', label: 'Model Router', shortLabel: 'Router', icon: GitBranch, section: 'System' },
-  { href: '/governance', label: 'Governance Hub', shortLabel: 'Gov', icon: Shield, section: 'System' },
-  { href: '/analytics', label: 'Cost Analytics', shortLabel: 'Analytics', icon: BarChart3, section: 'System' },
-  { href: '/projects', label: 'My Projects', shortLabel: 'Projects', icon: FolderOpen, section: 'Plan', isNew: true },
-  { href: '/idea', label: 'Idea → Production', shortLabel: 'Idea', icon: Lightbulb, section: 'System', isNew: true },
-  { href: '/pilot', label: 'E2E Pilot', shortLabel: 'Pilot', icon: FlaskConical, section: 'System' },
-  { href: '/settings', label: 'Settings', shortLabel: 'Settings', icon: Settings, section: 'System' },
+  { href: '/', label: 'Command Center', shortLabel: 'Command', icon: LayoutDashboard, section: 'Main' },
+  { href: '/projects', label: 'Plan', shortLabel: 'Plan', icon: FolderOpen, section: 'Main' },
+  { href: '/delegations', label: 'Execute', shortLabel: 'Execute', icon: ListChecks, section: 'Main' },
+  { href: '/knowledge', label: 'Knowledge', shortLabel: 'Knowledge', icon: BookOpen, section: 'Main' },
+  { href: '/model-router', label: 'System', shortLabel: 'System', icon: GitBranch, section: 'Main' },
+  { href: '/inbox', label: 'Inbox', shortLabel: 'Inbox', icon: Inbox, section: 'More' },
+  { href: '/notifications', label: 'Notifications', shortLabel: 'Notifs', icon: Bell, section: 'More' },
+  { href: '/project-briefs', label: 'Project Briefs', shortLabel: 'Briefs', icon: FileText, section: 'More' },
+  { href: '/work-items', label: 'Work Items', shortLabel: 'Items', icon: CheckSquare, section: 'More' },
+  { href: '/board', label: 'Agent Board', shortLabel: 'Board', icon: Kanban, section: 'More' },
+  { href: '/active', label: 'Active Runs', shortLabel: 'Active', icon: Activity, section: 'More' },
+  { href: '/agent-runs', label: 'Agent Runs', shortLabel: 'Runs', icon: History, section: 'More' },
+  { href: '/agents', label: 'Agent Control', shortLabel: 'Agents', icon: Bot, section: 'More' },
+  { href: '/orchestrations', label: 'Orchestrierungen', shortLabel: 'Orch.', icon: Network, section: 'More' },
+  { href: '/monitor', label: 'Agent Monitor', shortLabel: 'Monitor', icon: Radio, section: 'More' },
+  { href: '/pm-agent', label: 'PM Agent', shortLabel: 'PM Agent', icon: Brain, section: 'More' },
+  { href: '/knowledge/research', label: 'Research Platform', shortLabel: 'Research', icon: Search, section: 'More' },
+  { href: '/context-packages', label: 'Context Packages', shortLabel: 'Context', icon: Package, section: 'More' },
+  { href: '/governance', label: 'Governance Hub', shortLabel: 'Gov', icon: Shield, section: 'More' },
+  { href: '/analytics', label: 'Cost Analytics', shortLabel: 'Analytics', icon: BarChart3, section: 'More' },
+  { href: '/idea', label: 'Idea → Production', shortLabel: 'Idea', icon: Lightbulb, section: 'More' },
+  { href: '/pilot', label: 'E2E Pilot', shortLabel: 'Pilot', icon: FlaskConical, section: 'More' },
+  { href: '/settings', label: 'Settings', shortLabel: 'Settings', icon: Settings, section: 'More' },
 ]
 
-const sectionOrder = ['Operate', 'Plan', 'Execute', 'Knowledge', 'System']
-
 const sectionColors: Record<string, string> = {
-  Operate: 'text-violet-400',
-  Plan: 'text-sky-400',
-  Execute: 'text-emerald-400',
-  Knowledge: 'text-amber-400',
-  System: 'text-slate-500',
+  Main: 'text-violet-400',
+  More: 'text-slate-500',
 }
+
+const primaryNavItems = navItems.filter(item => item.section === 'Main')
+const moreNavItems = navItems.filter(item => item.section === 'More')
 
 export function AppNav() {
   const pathname = usePathname()
@@ -129,11 +127,6 @@ export function AppNav() {
 
   const totalActive = running + pending
 
-  const grouped = sectionOrder.map(section => ({
-    section,
-    items: navItems.filter(i => i.section === section),
-  }))
-
   return (
     <>
       {/* Desktop sidebar */}
@@ -153,23 +146,30 @@ export function AppNav() {
 
         {/* Nav sections */}
         <div className="flex-1 overflow-y-auto py-3 scrollbar-hide">
-          {grouped.map(({ section, items }) => (
-            <div key={section} className="mb-1">
-              <p className={cx(
-                'mb-0.5 px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest',
-                sectionColors[section] ?? 'text-slate-500'
-              )}>
-                {section}
-              </p>
-              {items.map(item => {
+          <NavSection
+            title="Workspace"
+            items={primaryNavItems}
+            pathname={pathname}
+            running={running}
+            totalActive={totalActive}
+            attentionCount={attentionCount}
+            unreadNotificationCount={unreadNotificationCount}
+            autonomousModeActive={autonomousModeActive}
+            titleClassName={sectionColors.Main}
+          />
+          <details className="mx-2 mt-3 rounded-lg border border-white/[0.06] bg-white/[0.02]">
+            <summary className="cursor-pointer list-none px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-colors hover:text-slate-300">
+              More
+            </summary>
+            <div className="pb-2">
+              {moreNavItems.map(item => {
                 const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
                 const count =
-                  item.href === '/delegations' ? totalActive
-                    : item.href === '/active' ? running
+                  item.href === '/active' ? running
                     : item.href === '/inbox' ? attentionCount
                     : item.href === '/notifications' ? unreadNotificationCount
                     : undefined
-                const isLive = (item.href === '/delegations' || item.href === '/active') && running > 0
+                const isLive = item.href === '/active' && running > 0
                 const isAutonomousSettings = item.href === '/settings' && autonomousModeActive
                 return (
                   <SidebarLink
@@ -182,11 +182,12 @@ export function AppNav() {
                     isLive={isLive}
                     isNew={item.isNew}
                     autonomousActive={isAutonomousSettings}
+                    compact
                   />
                 )
               })}
             </div>
-          ))}
+          </details>
         </div>
 
         {/* Footer */}
@@ -230,7 +231,7 @@ export function AppNav() {
             <span className="hidden text-sm font-bold text-white sm:block">ForgePilot</span>
           </Link>
           <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto scrollbar-hide">
-            {navItems.map(item => {
+            {primaryNavItems.map(item => {
               const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
               return (
                 <Link
@@ -247,6 +248,12 @@ export function AppNav() {
                 </Link>
               )
             })}
+            <Link
+              href="/settings"
+              className="shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white"
+            >
+              More
+            </Link>
           </div>
           {totalActive > 0 && (
             <span className="shrink-0 rounded-full bg-violet-500/20 px-2 py-0.5 text-xs font-bold text-violet-300">
@@ -261,6 +268,59 @@ export function AppNav() {
   )
 }
 
+function NavSection({
+  title,
+  items,
+  pathname,
+  running,
+  totalActive,
+  attentionCount,
+  unreadNotificationCount,
+  autonomousModeActive,
+  titleClassName,
+}: {
+  title: string
+  items: NavItem[]
+  pathname: string
+  running: number
+  totalActive: number
+  attentionCount: number
+  unreadNotificationCount: number
+  autonomousModeActive: boolean
+  titleClassName: string
+}) {
+  return (
+    <div className="mb-1">
+      <p className={cx('mb-0.5 px-4 pt-3 pb-1 text-[10px] font-bold uppercase tracking-widest', titleClassName)}>
+        {title}
+      </p>
+      {items.map(item => {
+        const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
+        const count =
+          item.href === '/delegations' ? totalActive
+            : item.href === '/inbox' ? attentionCount
+            : item.href === '/notifications' ? unreadNotificationCount
+            : undefined
+        const isLive = item.href === '/delegations' && running > 0
+        const isAutonomousSettings = item.href === '/settings' && autonomousModeActive
+        return (
+          <SidebarLink
+            key={item.href}
+            href={item.href}
+            label={item.label}
+            icon={item.icon}
+            isActive={isActive}
+            count={count}
+            isLive={isLive}
+            isNew={item.isNew}
+            autonomousActive={isAutonomousSettings}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
 function SidebarLink({
   href,
   label,
@@ -270,6 +330,7 @@ function SidebarLink({
   isLive,
   isNew,
   autonomousActive,
+  compact = false,
 }: {
   href: string
   label: string
@@ -279,12 +340,14 @@ function SidebarLink({
   isLive?: boolean
   isNew?: boolean
   autonomousActive?: boolean
+  compact?: boolean
 }) {
   return (
     <Link
       href={href}
       className={cx(
-        'group relative mx-2 flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-all duration-150',
+        'group relative mx-2 flex items-center justify-between rounded-lg px-3 text-sm transition-all duration-150',
+        compact ? 'py-1.5' : 'py-2',
         isActive
           ? 'bg-white/[0.08] text-white shadow-sm'
           : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'

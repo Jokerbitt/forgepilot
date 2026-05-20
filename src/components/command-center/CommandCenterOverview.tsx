@@ -9,7 +9,6 @@ import type { PMAgentResult } from '@/lib/agent-runner/pm-agent'
 import type { DashboardStats } from '@/app/api/dashboard/stats/route'
 import type { IdeaHistoryEntry } from '@/lib/pilot/idea-history-store'
 import { Badge, Panel, StatusDot, buttonClassName, cx } from '@/components/ui/primitives'
-import { AgentMonitorWidget } from '@/components/monitor/AgentMonitorWidget'
 
 interface RecommendationsResponse {
   recommendations?: WorkItem[]
@@ -300,19 +299,77 @@ export function CommandCenterOverview() {
         </div>
       </Panel>
 
-      <FirstStepsWidget
-        hasProvider={!!dashboardStats && dashboardStats.system.activeProviders > 0}
-        hasIdea={ideaHistory.length > 0}
-        hasBrief={ideaHistory.length > 0}
-        hasDelegation={!!dashboardStats && dashboardStats.delegations.total > 0}
+      <WorkspaceShortcuts
+        stats={dashboardStats}
+        pmPlan={pmPlan}
+        ideaHistory={ideaHistory}
       />
-      <SystemStatsWidget stats={dashboardStats} />
-      <AgentMonitorWidget />
-      <AgentActivityWidget stats={dashboardStats} />
-      <PMAgentWidget plan={pmPlan} />
-      <QuickActionsPanel activeRunCount={dashboardStats?.orchestrations.running ?? 0} />
-      {ideaHistory.length > 0 && <RecentBuildsWidget entries={ideaHistory} />}
     </div>
+  )
+}
+
+function WorkspaceShortcuts({
+  stats,
+  pmPlan,
+  ideaHistory,
+}: {
+  stats: DashboardStats | null
+  pmPlan: PMAgentResult | null | undefined
+  ideaHistory: IdeaHistoryEntry[]
+}) {
+  const activeRuns = stats?.orchestrations.running ?? 0
+  const activeProviders = stats?.system.activeProviders ?? 0
+  const testsGreen = stats?.system.testsGreen ?? 0
+  const pmStatus = pmPlan === undefined ? 'Lädt' : pmPlan ? (pmPlan.overallHealth === 'green' ? 'Gesund' : 'Prüfen') : 'Nicht gestartet'
+
+  return (
+    <Panel className="p-5">
+      <div className="flex flex-col gap-3 border-b border-slate-800 pb-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Workspace</p>
+          <h2 className="mt-1 text-lg font-semibold text-white">Alles Weitere bleibt einen Klick entfernt</h2>
+        </div>
+        <a href="/projects" className={buttonClassName('secondary')}>Projektübersicht</a>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-4">
+        <WorkspaceLink href="/model-router" label="Local AI & Kosten" value={`${activeProviders} Provider`} detail="Routing, Ollama, Cloud-Freigabe" tone="success" />
+        <WorkspaceLink href="/orchestrations" label="Agentenläufe" value={activeRuns} detail="Aktive Orchestrierungen" tone={activeRuns > 0 ? 'info' : 'neutral'} />
+        <WorkspaceLink href="/pm-agent" label="PM Agent" value={pmStatus} detail="Plan- und Meilensteinprüfung" />
+        <WorkspaceLink href="/idea" label="Idea Pipeline" value={ideaHistory.length} detail="Letzte Produktionsläufe" />
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-500">
+        <span className="rounded border border-slate-800 bg-slate-950 px-2 py-1">Tests grün: {testsGreen}</span>
+        <a href="/analytics" className="rounded border border-slate-800 bg-slate-950 px-2 py-1 transition-colors hover:border-slate-600 hover:text-slate-300">Kostenanalyse</a>
+        <a href="/agents" className="rounded border border-slate-800 bg-slate-950 px-2 py-1 transition-colors hover:border-slate-600 hover:text-slate-300">Agent Control</a>
+        <a href="/settings" className="rounded border border-slate-800 bg-slate-950 px-2 py-1 transition-colors hover:border-slate-600 hover:text-slate-300">Settings</a>
+      </div>
+    </Panel>
+  )
+}
+
+function WorkspaceLink({
+  href,
+  label,
+  value,
+  detail,
+  tone = 'neutral',
+}: {
+  href: string
+  label: string
+  value: string | number
+  detail: string
+  tone?: 'success' | 'info' | 'neutral'
+}) {
+  return (
+    <a href={href} className="rounded-lg border border-slate-800 bg-slate-950 p-4 transition-colors hover:border-slate-600">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className={cx('mt-2 text-lg font-semibold', tone === 'success' ? 'text-emerald-300' : tone === 'info' ? 'text-sky-300' : 'text-white')}>
+        {value}
+      </p>
+      <p className="mt-1 text-xs leading-5 text-slate-500">{detail}</p>
+    </a>
   )
 }
 
