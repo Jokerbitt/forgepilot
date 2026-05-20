@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback, Suspense } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo, Suspense } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
+  AlertTriangle,
   Archive,
   Bot,
   CalendarDays,
@@ -15,6 +16,7 @@ import {
   ListChecks,
   Play,
   Plus,
+  RefreshCw,
   RotateCcw,
   Search,
   SlidersHorizontal,
@@ -101,6 +103,7 @@ function DelegationsContent() {
   const [delegations, setDelegations] = useState<Delegation[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDelegation, setSelectedDelegation] = useState<Delegation | null>(null)
+  const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set())
   // ?new=1 or ?template=<id> auto-opens the dialog on mount
   const [showNewDialog, setShowNewDialog] = useState(
     searchParams.get('new') === '1' || !!searchParams.get('template')
@@ -344,6 +347,35 @@ function DelegationsContent() {
     await fetch(`/api/delegations/${id}/cancel`, { method: 'POST' })
   }
 
+  const handleRetryDelegation = async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    const delegation = delegations.find(d => d.id === id)
+    if (!delegation || (delegation.status !== 'failed' && delegation.status !== 'cancelled')) return
+
+    setRetryingIds(prev => new Set(prev).add(id))
+    try {
+      const res = await fetch(`/api/delegations/${id}/retry`, { method: 'POST' })
+      if (!res.ok) {
+        await loadDelegations()
+        return
+      }
+
+      applyUpdate({
+        ...delegation,
+        status: 'pending',
+        errorMessage: undefined,
+        updatedAt: new Date().toISOString(),
+      })
+      await loadDelegations()
+    } finally {
+      setRetryingIds(prev => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }
+  }
+
   const handleRowDelete = async (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
     await fetch(`/api/delegations?id=${id}`, { method: 'DELETE' })
@@ -543,10 +575,16 @@ function DelegationsContent() {
 
   const runningCount = delegations.filter(d => d.status === 'running').length
   const pendingCount = delegations.filter(d => d.status === 'pending').length
+  const failedCount = delegations.filter(d => d.status === 'failed').length
   const completedCount = delegations.filter(d => d.status === 'completed').length
   const approvalRequiredCount = delegations.filter(d => d.contract.requiresApproval).length
   const autoApprovedCount = delegations.filter(d => !d.contract.requiresApproval).length
   const riskBlockedCount = delegations.filter(d => d.contract.riskClass === 'C').length
+  const recoveryCandidate = useMemo(() => {
+    return delegations
+      .filter(d => d.status === 'failed')
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0] ?? null
+  }, [delegations])
 
   // Cost stats
   const totalEstimated = delegations.reduce((sum, d) => sum + (d.costEstimateUsd || 0), 0)
@@ -663,6 +701,64 @@ function DelegationsContent() {
             </button>
           </div>
         </header>
+
+        {/* ── Recovery Gate ───────────────────────────────────────────── */}
+        {!loading && recoveryCandidate && (
+          <Panel className="overflow-hidden border-rose-500/20 bg-rose-500/[0.06]">
+            <div className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex min-w-0 gap-3">
+                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-rose-500/25 bg-rose-500/10 text-rose-300">
+                  <AlertTriangle size={18} />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone="danger">Recovery Gate</Badge>
+                    <span className="text-xs font-medium text-slate-500">
+                      {failedCount} fehlerhafte Delegation{failedCount !== 1 ? 'en' : ''} blockieren neue Parallelstarts
+                    </span>
+                  </div>
+                  <h2 className="mt-2 truncate text-sm font-semibold text-white">
+                    {getDelegationGoal(recoveryCandidate)}
+                  </h2>
+                  <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-400">
+                    {recoveryCandidate.errorMessage ?? 'Kein Fehlertext gespeichert. Bitte Logs prüfen, bevor weitere Agenten starten.'}
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                    <span className="font-mono">{recoveryCandidate.id}</span>
+                    <span>{recoveryCandidate.executionRoute}</span>
+                    <span>
+                      aktualisiert {new Date(recoveryCandidate.updatedAt).toLocaleString('de-DE', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <button
+                  onClick={e => {
+                    e.stopPropagation()
+                    setSelectedDelegation(recoveryCandidate)
+                  }}
+                  className={buttonClassName('secondary', 'min-h-9 text-xs')}
+                >
+                  Details prüfen
+                </button>
+                <button
+                  onClick={e => handleRetryDelegation(recoveryCandidate.id, e)}
+                  disabled={retryingIds.has(recoveryCandidate.id)}
+                  className={buttonClassName('primary', 'min-h-9 text-xs')}
+                >
+                  <RefreshCw size={14} className={cx(retryingIds.has(recoveryCandidate.id) && 'animate-spin')} />
+                  Retry einreihen
+                </button>
+              </div>
+            </div>
+          </Panel>
+        )}
 
         {/* ── Cost / Stats Summary ──────────────────────────────────── */}
         {!loading && delegations.length > 0 && (
@@ -1145,11 +1241,12 @@ function DelegationsContent() {
                                   {/* Retry — failed/cancelled */}
                                   {(del.status === 'failed' || del.status === 'cancelled') && (
                                     <button
-                                      onClick={e => handleStatusChange(del.id, 'pending', e)}
+                                      onClick={e => handleRetryDelegation(del.id, e)}
+                                      disabled={retryingIds.has(del.id)}
                                       className="text-xs bg-blue-900/50 text-blue-400 hover:bg-blue-900 px-2 py-1 rounded border border-blue-900/50 transition-colors"
                                       title="Erneut starten"
                                     >
-                                      🔄
+                                      <RefreshCw size={13} className={cx(retryingIds.has(del.id) && 'animate-spin')} />
                                     </button>
                                   )}
 
