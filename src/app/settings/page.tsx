@@ -205,6 +205,8 @@ export default function SettingsPage() {
   const [telegramSaving, setTelegramSaving] = useState(false)
   const [telegramTesting, setTelegramTesting] = useState(false)
   const [telegramTestResult, setTelegramTestResult] = useState<'ok' | 'error' | null>(null)
+  const [telegramSettingWebhook, setTelegramSettingWebhook] = useState(false)
+  const [telegramWebhookResult, setTelegramWebhookResult] = useState<'ok' | 'error' | null>(null)
 
   useEffect(() => {
     fetch('/api/settings')
@@ -1231,6 +1233,32 @@ export default function SettingsPage() {
               )}
               {telegramTestResult === 'error' && (
                 <span className="rounded-full bg-red-900/40 px-3 py-1 text-xs text-red-400">❌ Fehler — Token/ChatID prüfen</span>
+              )}
+              <button
+                onClick={async () => {
+                  setTelegramSettingWebhook(true)
+                  setTelegramWebhookResult(null)
+                  try {
+                    const res = await fetch('/api/telegram/setup-webhook', { method: 'POST' })
+                    const data = await res.json() as { ok: boolean; webhookUrl?: string; error?: string }
+                    setTelegramWebhookResult(data.ok ? 'ok' : 'error')
+                  } catch {
+                    setTelegramWebhookResult('error')
+                  } finally {
+                    setTelegramSettingWebhook(false)
+                    setTimeout(() => setTelegramWebhookResult(null), 5000)
+                  }
+                }}
+                disabled={telegramSettingWebhook || !telegramConfigured}
+                className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-40"
+              >
+                {telegramSettingWebhook ? 'Richtet ein…' : '🔗 Webhook einrichten'}
+              </button>
+              {telegramWebhookResult === 'ok' && (
+                <span className="rounded-full bg-emerald-900/40 px-3 py-1 text-xs text-emerald-400">✅ Webhook registriert</span>
+              )}
+              {telegramWebhookResult === 'error' && (
+                <span className="rounded-full bg-red-900/40 px-3 py-1 text-xs text-red-400">❌ Webhook-Fehler — NEXT_PUBLIC_BASE_URL prüfen</span>
               )}
             </div>
 
