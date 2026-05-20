@@ -17,7 +17,7 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [x] M110-A: Production build gate in CI — npm run build als Quality Gate, Vitest Coverage (63.5% Lines) mit Thresholds
 - [x] M110-B: Enhanced AI Code Reviewer — ForgePilot-spezifische Review-Kriterien (Zod, Pino, Rate Limiting, Security) + Pre-commit-Validator Script
 - [x] fix: ESLint build blocker in providers/page.tsx behoben (PR #214)
-- [ ] M111: Echter Sentry aktivieren — @sentry/nextjs konfigurieren, SENTRY_DSN in Vercel/local, global-error.tsx hinzufügen
+- [~] M111: Echter Sentry aktivieren — @sentry/nextjs konfiguriert ✅, global-error.tsx hinzugefügt ✅; SENTRY_DSN in Vercel/local noch ausstehend
 - [ ] M112: OpenTelemetry aktivieren — @opentelemetry Pakete, Jaeger lokal, Honeycomb prod, Spans für delegation.execute + ai.generate
 - [x] M113: GitHub Actions Matrix-Tests — Node 20 + 22 parallel, Test-Report als PR-Kommentar, Flaky-Test-Detektion
 - [x] M114: Dependency Security Scan — npm audit im CI, Dependabot auto-PRs, SBOM-Generierung
