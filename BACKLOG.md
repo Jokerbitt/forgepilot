@@ -118,4 +118,12 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [~] M137: Delegation Bulk-Actions — mehrere Delegations gleichzeitig approve/cancel/archive (Checkbox-Liste)
 - [~] M138: Notification Preferences — /settings/notifications mit granularen Einstellungen (welche Events triggern Bell)
 - [~] M139: Work Item Kanban View — /work-items als Kanban-Board (todo/in_progress/done Spalten, drag-and-drop)
-- [ ] M140: API Key Rotation Alert — automatische Warnung wenn API-Key älter als 90 Tage (Badge in Settings)
+- [~] M140: API Key Rotation Alert — automatische Warnung wenn API-Key älter als 90 Tage (Badge in Settings)
+
+## 🟠 Medium Priority — DX & Operations (M141–M145)
+
+- [ ] M141: Dark Mode Toggle — System-Präferenz + manueller Override (localStorage), gilt für alle Pages
+- [ ] M142: Global Search — Cmd+K Palette: Work Items, Delegations, Project Briefs, Navigations-Shortcuts
+- [ ] M143: CSV Export — Work Items + Delegations als CSV-Download (/api/work-items/export, /api/delegations/export)
+- [ ] M144: Keyboard Shortcuts — vollständige Shortcut-Map (j/k Navigation, a Approve, c Cancel, ? Hilfe-Overlay)
+- [ ] M145: Settings Import/Export — komplette Konfiguration (API Keys ausgenommen) als JSON exportieren/importieren
