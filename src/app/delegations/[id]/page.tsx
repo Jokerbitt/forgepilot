@@ -62,6 +62,27 @@ export default function DelegationDetailPage() {
 
   useEffect(() => { loadDelegation() }, [loadDelegation])
 
+  // M134: Fetch GitHub CI status when PR URL is available
+  useEffect(() => {
+    const prUrl = delegation?.summaryReport?.prUrl
+    if (!prUrl) return
+    setPrStatusLoading(true)
+    fetch(`/api/github/pr-status?url=${encodeURIComponent(prUrl)}`)
+      .then(r => r.json())
+      .then((data: { ciState?: string; ciChecks?: Array<{ name: string; status: string; conclusion: string | null; url: string }>; state?: string; title?: string; error?: string }) => {
+        if (!data.error) {
+          setPrStatus({
+            ciState: (data.ciState ?? 'unknown') as 'pending' | 'success' | 'failure' | 'error' | 'unknown',
+            ciChecks: data.ciChecks ?? [],
+            state: (data.state ?? 'open') as 'open' | 'closed' | 'merged',
+            title: data.title ?? '',
+          })
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => setPrStatusLoading(false))
+  }, [delegation?.summaryReport?.prUrl])
+
   // Auto-load existing orchestrated run for this delegation
   useEffect(() => {
     if (!id) return
@@ -111,6 +132,15 @@ export default function DelegationDetailPage() {
 
   const [creatingPR, setCreatingPR] = useState(false)
   const [prError, setPrError] = useState<string | null>(null)
+
+  // M134: GitHub CI status
+  const [prStatus, setPrStatus] = useState<{
+    ciState: 'pending' | 'success' | 'failure' | 'error' | 'unknown'
+    ciChecks: Array<{ name: string; status: string; conclusion: string | null; url: string }>
+    state: 'open' | 'closed' | 'merged'
+    title: string
+  } | null>(null)
+  const [prStatusLoading, setPrStatusLoading] = useState(false)
 
   const handleCreatePR = async () => {
     if (!delegation) return
@@ -605,10 +635,60 @@ export default function DelegationDetailPage() {
                   ))}
                 </ul>
                 {d.summaryReport.prUrl && (
-                  <a href={d.summaryReport.prUrl} target="_blank" rel="noopener noreferrer"
-                    className="mt-2 inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors">
-                    → PR öffnen
-                  </a>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <a href={d.summaryReport.prUrl} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                      ⎇ PR #{d.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? ''} öffnen
+                    </a>
+                    {prStatusLoading && (
+                      <span className="text-[10px] text-gray-600">CI-Status wird geladen…</span>
+                    )}
+                    {prStatus && !prStatusLoading && (
+                      <div className="flex flex-col gap-1.5">
+                        {/* PR state + CI summary */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border ${
+                            prStatus.state === 'merged' ? 'bg-violet-950/40 text-violet-400 border-violet-800' :
+                            prStatus.state === 'closed' ? 'bg-gray-900 text-gray-500 border-gray-700' :
+                            'bg-emerald-950/40 text-emerald-400 border-emerald-800'
+                          }`}>
+                            {prStatus.state === 'merged' ? '⎇ Merged' : prStatus.state === 'closed' ? '⊘ Closed' : '⎇ Open'}
+                          </span>
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border ${
+                            prStatus.ciState === 'success' ? 'bg-green-950/40 text-green-400 border-green-800' :
+                            prStatus.ciState === 'failure' ? 'bg-red-950/40 text-red-400 border-red-800' :
+                            prStatus.ciState === 'pending' ? 'bg-yellow-950/40 text-yellow-400 border-yellow-800' :
+                            'bg-gray-900 text-gray-500 border-gray-700'
+                          }`}>
+                            {prStatus.ciState === 'success' ? '✓ CI grün' :
+                             prStatus.ciState === 'failure' ? '✗ CI fehlgeschlagen' :
+                             prStatus.ciState === 'pending' ? '⏳ CI läuft' : '○ CI unbekannt'}
+                          </span>
+                        </div>
+                        {/* Individual check runs (collapsed summary) */}
+                        {prStatus.ciChecks.length > 0 && (
+                          <div className="flex flex-col gap-0.5">
+                            {prStatus.ciChecks.slice(0, 6).map((check, i) => (
+                              <a key={i} href={check.url} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 text-[10px] text-gray-500 hover:text-gray-300 transition-colors">
+                                <span className={
+                                  check.conclusion === 'success' ? 'text-green-500' :
+                                  check.conclusion === 'failure' ? 'text-red-500' :
+                                  check.status === 'in_progress' ? 'text-yellow-500' : 'text-gray-600'
+                                }>
+                                  {check.conclusion === 'success' ? '✓' : check.conclusion === 'failure' ? '✗' : check.status === 'in_progress' ? '⏳' : '○'}
+                                </span>
+                                <span className="truncate max-w-[200px]">{check.name}</span>
+                              </a>
+                            ))}
+                            {prStatus.ciChecks.length > 6 && (
+                              <span className="text-[10px] text-gray-600">+{prStatus.ciChecks.length - 6} weitere…</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             )}
