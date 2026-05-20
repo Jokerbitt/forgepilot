@@ -3,7 +3,7 @@
  *
  * Built on Pino — the fastest Node.js logger, non-blocking async output.
  *
- * Dev:  pretty-printed with colors (pino-pretty)
+ * Dev:  newline-delimited JSON (Next.js-safe, no worker transport)
  * Prod: newline-delimited JSON (Vercel Logs / Docker / Datadog-compatible)
  *
  * Usage:
@@ -21,19 +21,9 @@ const level  = process.env.LOG_LEVEL ?? (isDev ? 'debug' : 'info')
 
 export const logger = pino({
   level,
-  // In development: pretty-print with colors + readable timestamps
-  // In production: raw JSON newlines (fastest, log-aggregator compatible)
-  ...(isDev && {
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize:        true,
-        translateTime:   'HH:MM:ss',
-        ignore:          'pid,hostname',
-        messageFormat:   '[{module}] {msg}',
-      },
-    },
-  }),
+  // Keep this transport-free. Pino worker transports can point at stale
+  // .next vendor chunks during hot reloads and crash the dev server.
+  // Raw JSON also works cleanly in Vercel Logs / Docker / Datadog.
   // Base fields on every log line
   base: {
     app:     'forgepilot',

@@ -71,7 +71,7 @@ const navItems: NavItem[] = [
   { href: '/analytics', label: 'Cost Analytics', shortLabel: 'Analytics', icon: BarChart3, section: 'More' },
   { href: '/idea', label: 'Idea → Production', shortLabel: 'Idea', icon: Lightbulb, section: 'More' },
   { href: '/pilot', label: 'E2E Pilot', shortLabel: 'Pilot', icon: FlaskConical, section: 'More' },
-  { href: '/settings', label: 'Settings', shortLabel: 'Settings', icon: Settings, section: 'More' },
+  { href: '/settings', label: 'Settings', shortLabel: 'Settings', icon: Settings, section: 'Utility' },
 ]
 
 const sectionColors: Record<string, string> = {
@@ -81,6 +81,7 @@ const sectionColors: Record<string, string> = {
 
 const primaryNavItems = navItems.filter(item => item.section === 'Main')
 const moreNavItems = navItems.filter(item => item.section === 'More')
+const utilityNavItems = navItems.filter(item => item.section === 'Utility')
 
 export function AppNav() {
   const pathname = usePathname()
@@ -126,11 +127,12 @@ export function AppNav() {
   }, [])
 
   const totalActive = running + pending
+  const isMoreActive = moreNavItems.some(item => item.href === '/' ? pathname === '/' : pathname.startsWith(item.href))
 
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-white/[0.06] bg-[#0a0a0f] sm:flex">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-56 flex-col border-r border-white/[0.06] bg-[#0a0a0f] min-[600px]:flex lg:w-64">
         {/* Logo */}
         <div className="flex h-14 items-center gap-3 border-b border-white/[0.06] px-4">
           <Link href="/" className="group flex items-center gap-3 min-w-0">
@@ -157,8 +159,13 @@ export function AppNav() {
             autonomousModeActive={autonomousModeActive}
             titleClassName={sectionColors.Main}
           />
-          <details className="mx-2 mt-3 rounded-lg border border-white/[0.06] bg-white/[0.02]">
-            <summary className="cursor-pointer list-none px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-colors hover:text-slate-300">
+          <details open={isMoreActive} className="mx-2 mt-3 rounded-lg border border-white/[0.06] bg-white/[0.02]">
+            <summary
+              className={cx(
+                'cursor-pointer list-none px-3 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors hover:text-slate-300',
+                isMoreActive ? 'text-violet-300' : 'text-slate-500'
+              )}
+            >
               More
             </summary>
             <div className="pb-2">
@@ -192,6 +199,21 @@ export function AppNav() {
 
         {/* Footer */}
         <div className="border-t border-white/[0.06] p-3 space-y-2">
+          {utilityNavItems.map(item => {
+            const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
+            const isAutonomousSettings = item.href === '/settings' && autonomousModeActive
+            return (
+              <SidebarLink
+                key={item.href}
+                href={item.href}
+                label={item.label}
+                icon={item.icon}
+                isActive={isActive}
+                autonomousActive={isAutonomousSettings}
+                compact
+              />
+            )
+          })}
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
@@ -201,9 +223,10 @@ export function AppNav() {
             >
               <span className="flex items-center gap-2">
                 <Command className="h-3 w-3" />
-                <span>Quick search</span>
+                <span className="lg:hidden">Search</span>
+                <span className="hidden lg:inline">Quick search</span>
               </span>
-              <kbd className="rounded border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-slate-500">⌘K</kbd>
+              <kbd className="hidden rounded border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-slate-500 lg:inline">⌘K</kbd>
             </button>
             <ThemeToggle />
             <NotificationBell initialUnreadCount={unreadNotificationCount} />
@@ -222,7 +245,7 @@ export function AppNav() {
       </aside>
 
       {/* Mobile top nav */}
-      <nav className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#0a0a0f]/95 backdrop-blur sm:hidden">
+      <nav className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#0a0a0f]/95 backdrop-blur min-[600px]:hidden">
         <div className="flex h-12 items-center gap-1.5 px-3">
           <Link href="/" className="flex shrink-0 items-center gap-2 pr-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600">
