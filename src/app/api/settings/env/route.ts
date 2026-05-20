@@ -17,10 +17,10 @@ import path from 'path'
 import { getDataDir } from '@/lib/config/paths'
 
 // Keys the user is allowed to save through this endpoint.
-// Covers all built-in AI provider API keys — deliberately NOT including
-// Anthropic, Linear, GitHub which must be set via .env.local / system env.
+// Sensitive infra keys (ANTHROPIC, LINEAR, GITHUB, DATABASE) are NOT here —
+// those must be set via .env.local or system environment.
 const ALLOWED_KEYS = new Set([
-  // Cloud providers
+  // ─── AI Providers ──────────────────────────────────────────────────────
   'OPENAI_API_KEY',
   'GROQ_API_KEY',
   'MISTRAL_API_KEY',
@@ -36,6 +36,9 @@ const ALLOWED_KEYS = new Set([
   'DEEPINFRA_API_KEY',
   'COHERE_API_KEY',
   'NVIDIA_API_KEY',
+  // ─── Monitoring ────────────────────────────────────────────────────────
+  'NEXT_PUBLIC_SENTRY_DSN',
+  'SENTRY_DSN',
 ])
 
 interface EnvBody {

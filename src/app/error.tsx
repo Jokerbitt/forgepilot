@@ -16,8 +16,14 @@ interface ErrorPageProps {
 
 export default function GlobalError({ error, reset }: ErrorPageProps) {
   useEffect(() => {
-    // Log to console in dev; Sentry will capture this in prod (M97)
-    console.error('[ForgePilot] Page error:', error)
+    // In dev: log to console; in prod: Sentry captures it (M97)
+    if (process.env.NODE_ENV === 'development') {
+      console.error('[ForgePilot] Page error:', error)
+    }
+    // Dynamic import — no-op when Sentry DSN is not configured
+    import('@sentry/nextjs').then(Sentry => {
+      Sentry.captureException(error)
+    }).catch(() => { /* Sentry not initialised */ })
   }, [error])
 
   return (

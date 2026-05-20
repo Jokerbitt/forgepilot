@@ -6,6 +6,53 @@ import { describeApprovalMode } from '@/lib/nba-engine/approval-policy'
 import type { PMAgentResult } from '@/lib/agent-runner/pm-agent'
 import type { AutonomousConfig } from '@/lib/config/autonomous-config'
 
+// ─── Sentry DSN Input ────────────────────────────────────────────────────────
+function SentryDsnInput() {
+  const [dsn, setDsn] = useState('')
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+
+  const handleSave = async () => {
+    if (!dsn.trim()) return
+    setStatus('saving')
+    try {
+      const res = await fetch('/api/settings/env', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'NEXT_PUBLIC_SENTRY_DSN', value: dsn.trim() }),
+      })
+      setStatus(res.ok ? 'saved' : 'error')
+      if (res.ok) {
+        setDsn('')
+        setTimeout(() => setStatus('idle'), 3000)
+      }
+    } catch {
+      setStatus('error')
+    }
+  }
+
+  return (
+    <div className="flex gap-2">
+      <input
+        type="text"
+        value={dsn}
+        onChange={e => setDsn(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') void handleSave() }}
+        placeholder="https://...@o0.ingest.sentry.io/..."
+        className="flex-1 bg-gray-950 text-white px-3 py-2 rounded border border-gray-700 focus:border-violet-500 focus:outline-none text-sm font-mono"
+      />
+      <button
+        onClick={() => void handleSave()}
+        disabled={!dsn.trim() || status === 'saving'}
+        className="px-3 py-2 rounded bg-violet-700 hover:bg-violet-600 disabled:opacity-40 text-white text-sm font-medium transition-colors"
+      >
+        {status === 'saving' ? '…' : status === 'saved' ? '✓' : status === 'error' ? '✗' : 'Speichern'}
+      </button>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface ApiKeyField {
   key: 'GITHUB_TOKEN' | 'LINEAR_API_KEY' | 'LINEAR_TEAM_ID' | 'ANTHROPIC_API_KEY'
   label: string
@@ -428,6 +475,50 @@ export default function SettingsPage() {
                 />
               </div>
             </div>
+          </div>
+
+          {/* ─── Quick-Access ─────────────────────────────────────────────── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <a
+              href="/settings/providers"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-violet-900/30 border border-violet-700/40 text-violet-300 hover:bg-violet-900/50 text-sm font-medium transition-colors"
+            >
+              ⚙ Provider &amp; Modelle verwalten
+            </a>
+            <a
+              href="/settings/ai-test"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-900/30 border border-emerald-700/40 text-emerald-300 hover:bg-emerald-900/50 text-sm font-medium transition-colors"
+            >
+              ⚡ AI direkt testen
+            </a>
+          </div>
+        </section>
+
+        {/* ─── Monitoring / Sentry ──────────────────────────────────────────── */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-gray-300">Monitoring</h2>
+            <span className="text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-500">optional</span>
+          </div>
+          <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 space-y-4">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">
+                Sentry DSN{' '}
+                <a
+                  href="https://sentry.io"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-violet-400 hover:underline"
+                >
+                  (kostenlos auf sentry.io)
+                </a>
+              </label>
+              <SentryDsnInput />
+            </div>
+            <p className="text-xs text-gray-600">
+              Wenn gesetzt, werden Fehler und Performance-Daten automatisch an Sentry gesendet.
+              10 % der Requests werden getrackt (Sampling). Kein DSN = kein Tracking.
+            </p>
           </div>
         </section>
 

@@ -1,10 +1,17 @@
-// Edge runtime Sentry initialization.
-// Required by @sentry/nextjs webpack plugin.
+/**
+ * Sentry Edge Configuration — M97
+ *
+ * Runs in Vercel Edge Runtime (middleware, edge API routes).
+ * Same DSN as server, minimal config (no Node.js APIs available).
+ */
+
 import * as Sentry from '@sentry/nextjs'
 
-if (process.env.SENTRY_DSN) {
+const dsn = process.env.SENTRY_DSN ?? process.env.NEXT_PUBLIC_SENTRY_DSN
+
+if (dsn) {
   Sentry.init({
-    dsn: process.env.SENTRY_DSN,
-    tracesSampleRate: 0.1,
+    dsn,
+    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
   })
 }
