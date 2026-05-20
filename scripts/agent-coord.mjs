@@ -108,8 +108,11 @@ function patternsOverlap(a, b) {
 }
 
 function currentBranch() {
+  // Use process.cwd() so callers from another worktree get THEIR branch,
+  // not the branch of the main checkout the script happens to live in.
+  // ROOT is the script's repo (shared across worktrees); branch is per-worktree.
   try {
-    return execSync('git branch --show-current', { cwd: ROOT, encoding: 'utf-8' }).trim() || 'detached'
+    return execSync('git branch --show-current', { cwd: process.cwd(), encoding: 'utf-8' }).trim() || 'detached'
   } catch {
     return 'detached'
   }
@@ -373,8 +376,10 @@ function cmdCheckStaged(args) {
 
   let stagedRaw = ''
   try {
+    // Use process.cwd() — the staged index belongs to the worktree the caller
+    // is in (where pre-commit fires), not the worktree the script file lives in.
     stagedRaw = execSync('git diff --cached --name-only --diff-filter=ACMRTUX', {
-      cwd: ROOT,
+      cwd: process.cwd(),
       encoding: 'utf-8',
     })
   } catch (err) {
