@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   Archive,
@@ -78,16 +78,6 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   research: 'Research',
 }
 
-const TASK_TYPE_ICONS: Record<string, string> = {
-  feature:  '✨',
-  fix:      '🔧',
-  chore:    '🔩',
-  bugfix:   '🐛',
-  docs:     '📄',
-  refactor: '♻️',
-  research: '🔍',
-}
-
 function getWorkItemId(delegation: Delegation): string {
   return delegation.contract.workItemId || delegation.contract.id || delegation.id
 }
@@ -103,6 +93,7 @@ function getDelegationGoal(delegation: Delegation): string {
 
 function DelegationsContent() {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
 
   const [delegations, setDelegations] = useState<Delegation[]>([])
@@ -133,6 +124,8 @@ function DelegationsContent() {
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>((searchParams.get('approval') as ApprovalFilter) ?? 'Alle')
   const [searchQuery, setSearchQuery] = useState<string>(searchParams.get('q') ?? '')
   const [todayOnly, setTodayOnly] = useState(searchParams.get('today') === '1')
+  const [showAllRows, setShowAllRows] = useState(false)
+  const currentSearch = searchParams.toString()
 
   // Sync filters → URL (replace, no history entry)
   useEffect(() => {
@@ -143,8 +136,12 @@ function DelegationsContent() {
     if (searchQuery)               params.set('q',        searchQuery)
     if (todayOnly)                 params.set('today',    '1')
     const qs = params.toString()
-    router.replace(qs ? `/delegations?${qs}` : '/delegations', { scroll: false })
-  }, [statusFilter, projectFilter, approvalFilter, searchQuery, todayOnly, router])
+    const nextUrl = qs ? `${pathname}?${qs}` : pathname
+    if (currentSearch !== qs) {
+      router.replace(nextUrl, { scroll: false })
+    }
+    setShowAllRows(false)
+  }, [statusFilter, projectFilter, approvalFilter, searchQuery, todayOnly, pathname, router, currentSearch])
 
   // Sort
   type SortKey = 'goal' | 'status' | 'time' | 'cost'
@@ -503,6 +500,8 @@ function DelegationsContent() {
         return sortDir === 'asc' ? cmp : -cmp
       })
     : filteredDelegations
+  const visibleDelegations = showAllRows ? sortedDelegations : sortedDelegations.slice(0, 50)
+  const hiddenRowCount = Math.max(0, sortedDelegations.length - visibleDelegations.length)
 
   const runningCount = delegations.filter(d => d.status === 'running').length
   const pendingCount = delegations.filter(d => d.status === 'pending').length
@@ -872,7 +871,7 @@ function DelegationsContent() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-800/70">
-                    {sortedDelegations.map((del, index) => {
+                    {visibleDelegations.map((del, index) => {
                       const isDone = del.status === 'completed' || del.status === 'failed' || del.status === 'cancelled'
                       const canCancel = del.status === 'pending' || del.status === 'approved'
                       const canDelete = isDone
@@ -924,7 +923,7 @@ function DelegationsContent() {
                           {/* Ticket / Goal */}
                           <td className="p-3">
                             <div className="mb-1 flex flex-wrap items-center gap-2">
-                              <span className="text-xs text-gray-600 font-mono">{del.contract.workItemId}</span>
+                              <span className="text-xs text-gray-600 font-mono">{getWorkItemId(del)}</span>
                               {del.briefId && (
                                 <Link
                                   href={`/project-briefs/${del.briefId}`}
@@ -935,13 +934,10 @@ function DelegationsContent() {
                                   ◇ {del.briefTitle ?? 'Brief'}
                                 </Link>
                               )}
-                              {del.contract.branchStrategy && TASK_TYPE_ICONS[del.contract.branchStrategy] && (
-                                <span
-                                  className="text-xs px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-400"
-                                  title={del.contract.branchStrategy}
-                                >
-                                  {TASK_TYPE_ICONS[del.contract.branchStrategy]} {del.contract.branchStrategy}
-                                </span>
+                              {del.contract.branchStrategy && TASK_TYPE_LABELS[del.contract.branchStrategy] && (
+                                <Badge className="rounded-md" tone="neutral">
+                                  {TASK_TYPE_LABELS[del.contract.branchStrategy]}
+                                </Badge>
                               )}
                               <ApprovalBadge
                                 requiresApproval={del.contract.requiresApproval}
@@ -951,7 +947,7 @@ function DelegationsContent() {
                               <VersionBadge delegationId={del.id} compact />
                             </div>
                             <div className={`text-sm font-medium ${GOAL_STYLE[del.status] || 'text-gray-200'}`}>
-                              {del.contract.goal}
+                              {getDelegationGoal(del)}
                             </div>
                             {del.note?.text && (
                               <div className="text-xs text-yellow-400/70 mt-0.5 truncate max-w-xs">
@@ -1169,6 +1165,19 @@ function DelegationsContent() {
                 <div className="text-center py-12 text-gray-600">
                   <div className="text-3xl mb-2">🔍</div>
                   <p className="text-sm">Keine Delegationen für diesen Filter</p>
+                </div>
+              )}
+              {hiddenRowCount > 0 && (
+                <div className="flex flex-col items-center justify-between gap-3 border-t border-gray-800 px-4 py-4 text-sm text-gray-400 sm:flex-row">
+                  <span>
+                    Zeige 50 von {sortedDelegations.length} Delegationen. Nutze Filter oder Suche, um die Liste zu verdichten.
+                  </span>
+                  <button
+                    onClick={() => setShowAllRows(true)}
+                    className={buttonClassName('secondary', 'min-h-8 px-3 py-1.5 text-xs')}
+                  >
+                    Alle anzeigen
+                  </button>
                 </div>
               )}
             </div>

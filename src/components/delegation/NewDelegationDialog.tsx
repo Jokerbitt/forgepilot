@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { Delegation, ExecutionRoute, OutputMode, TaskContract, TaskType } from '@/lib/models/delegation'
 import type { RiskClass } from '@/lib/models/work-item'
+import { DELEGATION_TEMPLATES, templateToContract } from '@/lib/delegations/templates'
 
 interface Props {
   onClose: () => void
@@ -28,6 +29,7 @@ export function NewDelegationDialog({ onClose, onCreate, prefillWorkItemId = '',
   const [workItemId, setWorkItemId] = useState(pc?.workItemId ?? prefillWorkItemId)
   const [dodItems, setDodItems] = useState<string[]>(pc?.definitionOfDone?.length ? pc.definitionOfDone : [''])
   const [selectedTemplate, setSelectedTemplate] = useState<typeof TEMPLATES[0] | null>(null)
+  const [selectedRichTemplate, setSelectedRichTemplate] = useState<string | null>(null)
   const [executionRoute, setExecutionRoute] = useState<ExecutionRoute>('local-agent')
   const [llmModel, setLlmModel] = useState(pc?.llmModel ?? 'claude-sonnet')
   const [maxBudgetUsd, setMaxBudgetUsd] = useState(pc?.maxBudgetUsd ?? 1.0)
@@ -44,6 +46,27 @@ export function NewDelegationDialog({ onClose, onCreate, prefillWorkItemId = '',
     setRiskClass(t.riskClass)
     setBranchStrategy(t.branch)
     setLlmModel(t.model)
+  }
+
+  const handleRichTemplateSelect = (templateId: string) => {
+    const richTemplate = DELEGATION_TEMPLATES.find(t => t.id === templateId)
+    if (!richTemplate) return
+    const contract = templateToContract(richTemplate)
+    setGoal(contract.goal)
+    setContext(contract.context ?? '')
+    setDodItems(contract.acceptanceCriteria.length ? contract.acceptanceCriteria : [''])
+    setRiskClass(contract.riskClass)
+    setBranchStrategy(contract.branchStrategy)
+    setMaxBudgetUsd(contract.maxBudgetUsd)
+    setSelectedRichTemplate(templateId)
+    // also set the simple template indicator
+    const simpleMap: Record<string, typeof TEMPLATES[0]> = {
+      'add-api-route': TEMPLATES[0], 'add-ui-component': TEMPLATES[0],
+      'extend-data-model': TEMPLATES[0], 'add-cron-job': TEMPLATES[3],
+      'fix-bug': TEMPLATES[1], 'add-tests': TEMPLATES[2],
+      'refactor-module': TEMPLATES[3], 'write-docs': TEMPLATES[2],
+    }
+    if (simpleMap[templateId]) setSelectedTemplate(simpleMap[templateId])
   }
 
   const handleDodChange = (idx: number, value: string) => {
@@ -212,32 +235,37 @@ export function NewDelegationDialog({ onClose, onCreate, prefillWorkItemId = '',
               />
             </div>
 
-            {/* Template selection */}
+            {/* Rich Template Picker */}
             <div>
               <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
-                Vorlage
+                Template wählen
               </label>
-              <div className="grid grid-cols-4 gap-2">
-                {TEMPLATES.map(t => (
+              <div className="grid grid-cols-4 gap-1.5 mb-2">
+                {DELEGATION_TEMPLATES.map(t => (
                   <button
                     key={t.id}
-                    onClick={() => handleTemplateSelect(t)}
-                    className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-xs font-medium transition-colors ${
-                      selectedTemplate?.id === t.id
-                        ? 'bg-blue-900/40 border-blue-500 text-blue-300'
+                    type="button"
+                    onClick={() => handleRichTemplateSelect(t.id)}
+                    title={t.description}
+                    className={`flex flex-col items-center gap-1 p-2.5 rounded-lg border text-xs font-medium transition-colors ${
+                      selectedRichTemplate === t.id
+                        ? 'bg-violet-900/40 border-violet-500 text-violet-300'
                         : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-600 hover:text-gray-200'
                     }`}
                   >
-                    <span className="text-xl">{t.icon}</span>
-                    {t.label}
+                    <span className="text-lg">{t.emoji}</span>
+                    <span className="text-center leading-tight">{t.name}</span>
                   </button>
                 ))}
               </div>
-              {selectedTemplate && (
-                <p className="text-xs text-gray-600 mt-2">
-                  → RiskClass {selectedTemplate.riskClass} · {selectedTemplate.branch}/ · {selectedTemplate.model}
-                </p>
-              )}
+              {selectedRichTemplate && (() => {
+                const rt = DELEGATION_TEMPLATES.find(t => t.id === selectedRichTemplate)
+                return rt ? (
+                  <p className="text-xs text-violet-400/70 bg-violet-950/30 border border-violet-900/40 rounded px-2 py-1">
+                    ✓ {rt.name} — Goal, Kontext und {rt.acceptanceCriteria.length} DoD-Kriterien wurden übernommen
+                  </p>
+                ) : null
+              })()}
             </div>
 
             {/* Expert options toggle */}
