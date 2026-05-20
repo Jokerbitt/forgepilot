@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState, useRef } from 'react'
 import { cx } from '@/components/ui/primitives'
 import type { AIProviderConfig, AIModelDef } from '@/lib/ai/providers/types'
@@ -133,7 +134,7 @@ export default function AITestPage() {
       {/* Header */}
       <div className="border-b border-white/[0.06] px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <a href="/settings" className="text-slate-500 hover:text-slate-300 text-sm transition-colors">← Settings</a>
+          <Link href="/settings" className="text-slate-500 hover:text-slate-300 text-sm transition-colors">← Settings</Link>
           <span className="text-slate-700">/</span>
           <span className="text-sm text-slate-400">AI Test</span>
         </div>
@@ -399,15 +400,15 @@ export default function AITestPage() {
             {/* Quick links */}
             <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 space-y-2">
               <p className="text-xs font-semibold text-slate-400">Provider verwalten</p>
-              <a href="/settings/providers" className="block text-xs text-violet-400 hover:text-violet-300 transition-colors">
+              <Link href="/settings/providers" className="block text-xs text-violet-400 hover:text-violet-300 transition-colors">
                 → AI Providers einrichten
-              </a>
-              <a href="/settings" className="block text-xs text-slate-500 hover:text-slate-300 transition-colors">
+              </Link>
+              <Link href="/settings" className="block text-xs text-slate-500 hover:text-slate-300 transition-colors">
                 → Settings Übersicht
-              </a>
-              <a href="/analytics" className="block text-xs text-slate-500 hover:text-slate-300 transition-colors">
+              </Link>
+              <Link href="/analytics" className="block text-xs text-slate-500 hover:text-slate-300 transition-colors">
                 → Cost Analytics
-              </a>
+              </Link>
             </div>
 
           </div>

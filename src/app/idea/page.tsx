@@ -376,9 +376,9 @@ export default function IdeaPage() {
                             {entry.status === 'running' && <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />}
                             {statusLabel}
                           </span>
-                          <a href="/orchestrations" className="text-xs text-slate-600 hover:text-violet-400 transition-colors">
+                          <Link href="/orchestrations" className="text-xs text-slate-600 hover:text-violet-400 transition-colors">
                             →
-                          </a>
+                          </Link>
                         </div>
                       </div>
                     )
@@ -469,18 +469,18 @@ export default function IdeaPage() {
                 </div>
               </div>
               <div className="mt-5 flex flex-wrap gap-3">
-                <a
+                <Link
                   href={`/project-briefs/${result.briefId}`}
                   className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium bg-violet-600 text-white hover:bg-violet-500 transition-colors"
                 >
                   <span>📋</span> Brief ansehen
-                </a>
-                <a
+                </Link>
+                <Link
                   href={`/orchestrations`}
                   className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium border border-white/[0.08] bg-white/[0.02] text-slate-300 hover:border-violet-500/30 hover:text-white transition-colors"
                 >
                   <span>🔗</span> Run ansehen
-                </a>
+                </Link>
                 <button
                   onClick={handleReset}
                   className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium border border-white/[0.06] bg-transparent text-slate-500 hover:text-slate-300 hover:border-slate-600 transition-colors"
@@ -492,7 +492,7 @@ export default function IdeaPage() {
 
             {/* Pipeline summary */}
             <div className="grid grid-cols-3 gap-3">
-              <a
+              <Link
                 href={`/project-briefs/${result.briefId}`}
                 className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 hover:border-violet-500/30 transition-colors"
               >
@@ -500,9 +500,9 @@ export default function IdeaPage() {
                 <p className="text-xs text-slate-500 mb-0.5">Project Brief</p>
                 <p className="text-sm font-medium text-white group-hover:text-violet-300 transition-colors line-clamp-2">{result.briefTitle}</p>
                 <p className="mt-2 text-xs text-violet-400 group-hover:underline">Brief öffnen →</p>
-              </a>
+              </Link>
 
-              <a
+              <Link
                 href="/work-items"
                 className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 hover:border-sky-500/30 transition-colors"
               >
@@ -511,9 +511,9 @@ export default function IdeaPage() {
                 <p className="text-sm font-medium text-white">{result.workItemCount} Aufgaben</p>
                 <p className="mt-1 text-xs text-slate-500 line-clamp-2">{result.topItem.title}</p>
                 <p className="mt-2 text-xs text-sky-400 group-hover:underline">Items ansehen →</p>
-              </a>
+              </Link>
 
-              <a
+              <Link
                 href={`/orchestrations`}
                 className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 hover:border-emerald-500/30 transition-colors"
               >
@@ -527,7 +527,7 @@ export default function IdeaPage() {
                   : <p className="mt-1 text-xs text-violet-400 animate-pulse">Agenten laufen…</p>
                 }
                 <p className="mt-2 text-xs text-emerald-400 group-hover:underline">Run ansehen →</p>
-              </a>
+              </Link>
             </div>
 
             {/* Live Run Status Widget */}
@@ -558,12 +558,12 @@ export default function IdeaPage() {
                     <span className="text-xs text-slate-500">
                       {liveRun.doneTasks}/{liveRun.totalTasks} fertig
                     </span>
-                    <a
+                    <Link
                       href="/orchestrations"
                       className="text-xs text-violet-400 hover:underline"
                     >
                       Details →
-                    </a>
+                    </Link>
                     {runIsLive && (
                       <button
                         onClick={handleAbort}

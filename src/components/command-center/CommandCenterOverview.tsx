@@ -190,9 +190,9 @@ export function CommandCenterOverview() {
               <h2 className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight text-white">{nextAction.title}</h2>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">{nextAction.detail}</p>
             </div>
-            <a href={nextAction.href} className={buttonClassName(nextAction.tone === 'blocked' ? 'destructive' : 'primary', 'shrink-0')}>
+            <Link href={nextAction.href} className={buttonClassName(nextAction.tone === 'blocked' ? 'destructive' : 'primary', 'shrink-0')}>
               {nextAction.actionLabel}
-            </a>
+            </Link>
           </div>
         </Panel>
 
@@ -204,7 +204,7 @@ export function CommandCenterOverview() {
             <MiniMetric label="Fehler" value={failed.length} tone={failed.length > 0 ? 'blocked' : 'neutral'} />
           </div>
           {(researchCompleted > 0 || researchRunning > 0) && (
-            <a href="/knowledge/research" className="mt-3 flex items-center justify-between rounded-lg border border-violet-500/20 bg-violet-500/[0.05] px-3 py-2 text-xs transition-colors hover:border-violet-500/40">
+            <Link href="/knowledge/research" className="mt-3 flex items-center justify-between rounded-lg border border-violet-500/20 bg-violet-500/[0.05] px-3 py-2 text-xs transition-colors hover:border-violet-500/40">
               <span className="text-slate-400">Research-Dokumente</span>
               <span className="flex items-center gap-2 font-semibold text-violet-400">
                 {researchRunning > 0 && (
@@ -212,7 +212,7 @@ export function CommandCenterOverview() {
                 )}
                 {researchCompleted}
               </span>
-            </a>
+            </Link>
           )}
           <div className="mt-5 border-t border-slate-800 pt-4">
             <div className="flex items-center justify-between gap-3 text-sm">
@@ -239,7 +239,7 @@ export function CommandCenterOverview() {
           <div className="mt-5 grid gap-3 md:grid-cols-3">
             {attentionItems.length > 0 ? (
               attentionItems.filter((item): item is NonNullable<typeof item> => item !== null).map(item => (
-                <a
+                <Link
                   key={item.label}
                   href={item.href}
                   className={cx('rounded-lg border bg-slate-950 p-4 transition-colors hover:border-slate-600', toneBorder(item.tone))}
@@ -249,7 +249,7 @@ export function CommandCenterOverview() {
                     <Badge tone={badgeTone(item.tone)}>{item.value}</Badge>
                   </div>
                   <p className="mt-3 text-xs leading-5 text-slate-500">{item.detail}</p>
-                </a>
+                </Link>
               ))
             ) : (
               <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 md:col-span-3">
@@ -330,7 +330,7 @@ function WorkspaceShortcuts({
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Workspace</p>
           <h2 className="mt-1 text-lg font-semibold text-white">Alles Weitere bleibt einen Klick entfernt</h2>
         </div>
-        <a href="/projects" className={buttonClassName('secondary')}>Projektübersicht</a>
+        <Link href="/projects" className={buttonClassName('secondary')}>Projektübersicht</Link>
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-4">
@@ -342,9 +342,9 @@ function WorkspaceShortcuts({
 
       <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-500">
         <span className="rounded border border-slate-800 bg-slate-950 px-2 py-1">Tests grün: {testsGreen}</span>
-        <a href="/analytics" className="rounded border border-slate-800 bg-slate-950 px-2 py-1 transition-colors hover:border-slate-600 hover:text-slate-300">Kostenanalyse</a>
-        <a href="/agents" className="rounded border border-slate-800 bg-slate-950 px-2 py-1 transition-colors hover:border-slate-600 hover:text-slate-300">Agent Control</a>
-        <a href="/settings" className="rounded border border-slate-800 bg-slate-950 px-2 py-1 transition-colors hover:border-slate-600 hover:text-slate-300">Settings</a>
+        <Link href="/analytics" className="rounded border border-slate-800 bg-slate-950 px-2 py-1 transition-colors hover:border-slate-600 hover:text-slate-300">Kostenanalyse</Link>
+        <Link href="/agents" className="rounded border border-slate-800 bg-slate-950 px-2 py-1 transition-colors hover:border-slate-600 hover:text-slate-300">Agent Control</Link>
+        <Link href="/settings" className="rounded border border-slate-800 bg-slate-950 px-2 py-1 transition-colors hover:border-slate-600 hover:text-slate-300">Settings</Link>
       </div>
     </Panel>
   )
@@ -364,13 +364,13 @@ function WorkspaceLink({
   tone?: 'success' | 'info' | 'neutral'
 }) {
   return (
-    <a href={href} className="rounded-lg border border-slate-800 bg-slate-950 p-4 transition-colors hover:border-slate-600">
+    <Link href={href} className="rounded-lg border border-slate-800 bg-slate-950 p-4 transition-colors hover:border-slate-600">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
       <p className={cx('mt-2 text-lg font-semibold', tone === 'success' ? 'text-emerald-300' : tone === 'info' ? 'text-sky-300' : 'text-white')}>
         {value}
       </p>
       <p className="mt-1 text-xs leading-5 text-slate-500">{detail}</p>
-    </a>
+    </Link>
   )
 }
 
@@ -392,11 +392,11 @@ function AgentActivityWidget({ stats }: { stats: DashboardStats | null }) {
         </div>
         <div className="flex items-center gap-3">
           {knowledge.recentCards > 0 && (
-            <a href="/knowledge" className="text-xs text-violet-400 hover:text-violet-300">
+            <Link href="/knowledge" className="text-xs text-violet-400 hover:text-violet-300">
               +{knowledge.recentCards} neue Cards
-            </a>
+            </Link>
           )}
-          <a href="/orchestrations" className={buttonClassName('ghost', 'text-xs')}>Alle Runs →</a>
+          <Link href="/orchestrations" className={buttonClassName('ghost', 'text-xs')}>Alle Runs →</Link>
         </div>
       </div>
 
@@ -407,7 +407,7 @@ function AgentActivityWidget({ stats }: { stats: DashboardStats | null }) {
             runningRuns.map(run => {
               const pct = run.taskCount > 0 ? Math.round(((run.doneTasks + run.failedTasks) / run.taskCount) * 100) : 0
               return (
-                <a key={run.id} href="/orchestrations"
+                <Link key={run.id} href="/orchestrations"
                   className="flex items-center gap-3 rounded-lg border border-sky-800/40 bg-sky-950/20 px-3 py-2.5 transition-colors hover:border-sky-700/50"
                 >
                   <span className="h-2 w-2 rounded-full bg-sky-400 animate-pulse shrink-0" />
@@ -418,18 +418,18 @@ function AgentActivityWidget({ stats }: { stats: DashboardStats | null }) {
                     </div>
                   </div>
                   <span className="shrink-0 text-xs text-slate-500 tabular-nums">{run.doneTasks}/{run.taskCount}</span>
-                </a>
+                </Link>
               )
             })
           ) : recentFinished.length > 0 ? (
             recentFinished.map(run => (
-              <a key={run.id} href="/orchestrations"
+              <Link key={run.id} href="/orchestrations"
                 className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 transition-colors hover:border-slate-700"
               >
                 <span className={cx('h-2 w-2 rounded-full shrink-0', run.status === 'done' ? 'bg-emerald-400' : 'bg-red-400')} />
                 <p className="flex-1 text-xs text-slate-400 truncate">{run.title}</p>
                 <span className="text-xs text-slate-600 capitalize">{run.status}</span>
-              </a>
+              </Link>
             ))
           ) : (
             <div className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-3">
@@ -465,7 +465,7 @@ function AgentActivityWidget({ stats }: { stats: DashboardStats | null }) {
                 <p className="text-xs font-semibold text-red-300 capitalize">{quality.topWarning.agentType} · {quality.topWarning.skillCategory}</p>
                 <p className="text-[10px] text-red-400/70 mt-0.5 truncate">{quality.topWarning.message}</p>
               </div>
-              <a href="/agents?tab=performance" className="shrink-0 text-[10px] text-red-500 hover:text-red-400">Review →</a>
+              <Link href="/agents?tab=performance" className="shrink-0 text-[10px] text-red-500 hover:text-red-400">Review →</Link>
             </div>
           ) : (
             <div className="flex items-center gap-2 rounded-lg border border-emerald-900/20 bg-emerald-950/10 px-3 py-2">
@@ -474,10 +474,10 @@ function AgentActivityWidget({ stats }: { stats: DashboardStats | null }) {
             </div>
           )}
 
-          <a href="/agents?tab=performance" className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs transition-colors hover:border-slate-700">
+          <Link href="/agents?tab=performance" className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs transition-colors hover:border-slate-700">
             <span className="text-slate-500">Performance-Dashboard</span>
             <span className="text-slate-600">→</span>
-          </a>
+          </Link>
         </div>
       </div>
     </Panel>
@@ -496,9 +496,9 @@ function PMAgentWidget({ plan }: { plan: PMAgentResult | null | undefined }) {
             <h2 className="mt-1 text-lg font-semibold text-white">PM-Agent noch nicht ausgeführt</h2>
             <p className="mt-1 text-sm text-slate-400">Analysiere Briefs, Meilensteine und Delegationen automatisch.</p>
           </div>
-          <a href="/pm-agent" className={buttonClassName('secondary', 'shrink-0')}>
+          <Link href="/pm-agent" className={buttonClassName('secondary', 'shrink-0')}>
             PM-Agent starten
-          </a>
+          </Link>
         </div>
       </Panel>
     )
@@ -527,9 +527,9 @@ function PMAgentWidget({ plan }: { plan: PMAgentResult | null | undefined }) {
           </div>
           <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-300">{plan.summary}</p>
         </div>
-        <a href="/pm-agent" className={buttonClassName('ghost', 'shrink-0 text-xs')}>
+        <Link href="/pm-agent" className={buttonClassName('ghost', 'shrink-0 text-xs')}>
           PM-Agent öffnen
-        </a>
+        </Link>
       </div>
 
       {topDelegations.length > 0 && (
@@ -563,13 +563,13 @@ function MiniMetric({ label, value, tone }: { label: string; value: number; tone
 
 function SystemLine({ label, status, href }: { label: string; status: ReadinessStatus | 'loading'; href: string }) {
   return (
-    <a href={href} className="flex items-center justify-between gap-3 rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm transition-colors hover:border-slate-600">
+    <Link href={href} className="flex items-center justify-between gap-3 rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm transition-colors hover:border-slate-600">
       <span className="text-slate-300">{label}</span>
       <span className="flex items-center gap-2 font-medium text-white">
         <StatusDot tone={status === 'ready' ? 'success' : status === 'blocked' ? 'danger' : status === 'loading' ? 'neutral' : 'warning'} />
         {status === 'loading' ? 'Lädt' : statusLabel(status)}
       </span>
-    </a>
+    </Link>
   )
 }
 
@@ -617,9 +617,9 @@ function RecentBuildsWidget({ entries }: { entries: IdeaHistoryEntry[] }) {
     <Panel className="p-5">
       <div className="flex items-center justify-between mb-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recent Builds</p>
-        <a href="/idea" className="text-xs text-violet-400 hover:text-violet-300 transition-colors">
+        <Link href="/idea" className="text-xs text-violet-400 hover:text-violet-300 transition-colors">
           + Neue Idee →
-        </a>
+        </Link>
       </div>
       <div className="space-y-2">
         {entries.map(entry => (
@@ -636,12 +636,12 @@ function RecentBuildsWidget({ entries }: { entries: IdeaHistoryEntry[] }) {
                 {entry.status === 'running' && <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />}
                 {statusLabel[entry.status]}
               </span>
-              <a
+              <Link
                 href="/orchestrations"
                 className="text-xs text-slate-600 hover:text-violet-400 transition-colors"
               >
                 Run →
-              </a>
+              </Link>
             </div>
           </div>
         ))}
@@ -727,20 +727,20 @@ function QuickActionsPanel({ activeRunCount }: { activeRunCount: number }) {
       <div className="flex items-center justify-between mb-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Quick Actions</p>
         {activeRunCount > 0 && (
-          <a href="/orchestrations" className="flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300">
+          <Link href="/orchestrations" className="flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300">
             <span className="h-1.5 w-1.5 rounded-full bg-sky-400 animate-pulse" />
             {activeRunCount} aktiv
-          </a>
+          </Link>
         )}
       </div>
       <div className="flex flex-wrap gap-3 items-center">
         {/* M67: Idea → Production Entry Point */}
-        <a
+        <Link
           href="/idea"
           className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-bold bg-violet-600 text-white hover:bg-violet-500 shadow-lg shadow-violet-500/20 transition-colors"
         >
           <span>💡</span> Idee → Produktion
-        </a>
+        </Link>
 
         {/* M63: Autonomous Pilot Button */}
         <button
@@ -760,12 +760,12 @@ function QuickActionsPanel({ activeRunCount }: { activeRunCount: number }) {
           )}
         </button>
 
-        <a
+        <Link
           href="/knowledge/research?new=1"
           className={buttonClassName('secondary', 'text-sm')}
         >
           + Neue Recherche
-        </a>
+        </Link>
         <button
           onClick={() => { void handleRunPmAgent() }}
           disabled={pmStatus === 'loading'}
@@ -781,7 +781,7 @@ function QuickActionsPanel({ activeRunCount }: { activeRunCount: number }) {
           <span className={cx('text-xs', pilotFeedbackColor)}>
             {pilotMessage}
             {pilotRunId && pilotStatus === 'success' && (
-              <a href="/orchestrations" className="ml-2 underline text-sky-400">Run ansehen</a>
+              <Link href="/orchestrations" className="ml-2 underline text-sky-400">Run ansehen</Link>
             )}
           </span>
         )}
@@ -803,7 +803,7 @@ function SystemStatsWidget({ stats }: { stats: DashboardStats | null }) {
     <Panel className="p-5">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-4">System — Heute</p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <a
+        <Link
           href="/governance"
           className="flex flex-col gap-1 rounded-lg border border-slate-800 bg-slate-950 p-4 transition-colors hover:border-slate-700"
         >
@@ -812,9 +812,9 @@ function SystemStatsWidget({ stats }: { stats: DashboardStats | null }) {
           </p>
           <p className="text-xs text-slate-500 uppercase tracking-wide">AI Aufrufe heute</p>
           <p className="text-[10px] text-slate-600">Verarbeitungen (24h)</p>
-        </a>
+        </Link>
 
-        <a
+        <Link
           href="/settings"
           className="flex flex-col gap-1 rounded-lg border border-slate-800 bg-slate-950 p-4 transition-colors hover:border-slate-700"
         >
@@ -823,7 +823,7 @@ function SystemStatsWidget({ stats }: { stats: DashboardStats | null }) {
           </p>
           <p className="text-xs text-slate-500 uppercase tracking-wide">Aktive Provider</p>
           <p className="text-[10px] text-slate-600">mit API Key konfiguriert</p>
-        </a>
+        </Link>
 
         <div className="flex flex-col gap-1 rounded-lg border border-emerald-900/30 bg-emerald-950/10 p-4">
           <p className="text-2xl font-bold tabular-nums text-emerald-400">
@@ -910,13 +910,13 @@ function FirstStepsWidget({ hasProvider, hasIdea, hasBrief, hasDelegation }: Fir
               {step.done ? '✓' : '○'}
             </span>
             {step.href && !step.done ? (
-              <a
+              <Link
                 href={step.href}
                 className="text-sm text-slate-300 hover:text-violet-300 transition-colors"
               >
                 {step.label}
                 <span className="ml-1 text-xs text-slate-600">→</span>
-              </a>
+              </Link>
             ) : (
               <span className={cx('text-sm', step.done ? 'text-slate-500 line-through' : 'text-slate-400')}>
                 {step.label}

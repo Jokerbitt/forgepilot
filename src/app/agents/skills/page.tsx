@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { cx } from '@/components/ui/primitives'
 import type { AgentProfile, AgentSkill, SkillCategory } from '@/lib/agents/agent-skills'
@@ -171,7 +172,7 @@ export default function AgentSkillLibraryPage() {
         {/* Header */}
         <div className="mb-8">
           <div className="mb-1 flex items-center gap-2 text-xs text-slate-500">
-            <a href="/agents" className="hover:text-slate-300">Agents</a>
+            <Link href="/agents" className="hover:text-slate-300">Agents</Link>
             <span>/</span>
             <span>Skill Library</span>
           </div>
