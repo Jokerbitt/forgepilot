@@ -19,8 +19,8 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [x] fix: ESLint build blocker in providers/page.tsx behoben (PR #214)
 - [ ] M111: Echter Sentry aktivieren — @sentry/nextjs konfigurieren, SENTRY_DSN in Vercel/local, global-error.tsx hinzufügen
 - [ ] M112: OpenTelemetry aktivieren — @opentelemetry Pakete, Jaeger lokal, Honeycomb prod, Spans für delegation.execute + ai.generate
-- [ ] M113: GitHub Actions Matrix-Tests — Node 20 + 22 parallel, Test-Report als PR-Kommentar, Flaky-Test-Detektion
-- [ ] M114: Dependency Security Scan — npm audit im CI, Dependabot auto-PRs, SBOM-Generierung
+- [x] M113: GitHub Actions Matrix-Tests — Node 20 + 22 parallel, Test-Report als PR-Kommentar, Flaky-Test-Detektion
+- [x] M114: Dependency Security Scan — npm audit im CI, Dependabot auto-PRs, SBOM-Generierung
 - [ ] M115: Performance Budget — Lighthouse CI pro PR, Bundle-Size-Check, Core Web Vitals Baseline
 
 ## 🔴 High Priority — Tech Quality (M100–M105)
