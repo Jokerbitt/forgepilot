@@ -10,6 +10,8 @@ interface Props {
   onCreate: (delegation: Delegation) => void
   prefillWorkItemId?: string
   prefillGoal?: string
+  prefillBriefId?: string
+  prefillBriefTitle?: string
   /** Pre-fill all fields from an existing contract (clone/template mode) */
   prefillContract?: Partial<TaskContract>
 }
@@ -21,7 +23,15 @@ const TEMPLATES = [
   { id: 'refactor', icon: '♻️', label: 'Refactor', riskClass: 'B' as RiskClass, branch: 'chore' as const,   model: 'claude-sonnet', tools: ['read_file', 'write_file', 'search_code', 'run_command'] },
 ]
 
-export function NewDelegationDialog({ onClose, onCreate, prefillWorkItemId = '', prefillGoal = '', prefillContract }: Props) {
+export function NewDelegationDialog({
+  onClose,
+  onCreate,
+  prefillWorkItemId = '',
+  prefillGoal = '',
+  prefillBriefId,
+  prefillBriefTitle,
+  prefillContract,
+}: Props) {
   const pc = prefillContract // shorthand
 
   const [goal, setGoal] = useState(pc?.goal ?? prefillGoal)
@@ -101,6 +111,8 @@ export function NewDelegationDialog({ onClose, onCreate, prefillWorkItemId = '',
       status: 'pending',
       executionRoute,
       costEstimateUsd: maxBudgetUsd * 0.5,
+      briefId: prefillBriefId,
+      briefTitle: prefillBriefTitle,
       contract: {
         id: `con-${Date.now()}`,
         workItemId: workItemId.trim() || 'MANUAL',
