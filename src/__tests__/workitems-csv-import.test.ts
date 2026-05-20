@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { NextRequest } from 'next/server'
 import { parseCSV } from '@/lib/work-items/csv-parser'
 import type { WorkItem } from '@/lib/models/work-item'
 
@@ -16,8 +17,8 @@ vi.mock('fs', () => ({
 
 import { POST } from '@/app/api/work-items/import/route'
 
-function makeReq(body: unknown): Request {
-  return new Request('http://localhost/api/work-items/import', {
+function makeReq(body: unknown): NextRequest {
+  return new NextRequest('http://localhost/api/work-items/import', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -135,7 +136,7 @@ describe('POST /api/work-items/import', () => {
   })
 
   it('returns 400 for invalid JSON body', async () => {
-    const res = await POST(new Request('http://localhost/api/work-items/import', {
+    const res = await POST(new NextRequest('http://localhost/api/work-items/import', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: 'not-json',
     }))
     expect(res.status).toBe(400)
