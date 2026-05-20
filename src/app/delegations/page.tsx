@@ -23,6 +23,7 @@ import {
   Zap,
 } from 'lucide-react'
 import type { Delegation, TaskContract } from '@/lib/models/delegation'
+import type { ProjectBrief } from '@/lib/models/project-brief'
 import { formatAge, isCreatedToday } from '@/lib/utils/delegation-age'
 import { DelegationDrawer } from '@/components/delegation/DelegationDrawer'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
@@ -106,6 +107,7 @@ function DelegationsContent() {
   )
   // Template contract pre-fill — loaded when ?template=<id> is in URL
   const [templateContract, setTemplateContract] = useState<Partial<TaskContract> | undefined>(undefined)
+  const [prefillBrief, setPrefillBrief] = useState<ProjectBrief | null>(null)
 
   // Load template contract once on mount if ?template=<id> present
   useEffect(() => {
@@ -118,6 +120,41 @@ function DelegationsContent() {
       })
       .catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const briefId = searchParams.get('briefId')
+    if (!briefId) return
+
+    fetch(`/api/project-briefs/${briefId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((brief: ProjectBrief | null) => {
+        if (!brief) return
+        setPrefillBrief(brief)
+        setTemplateContract({
+          workItemId: `BRIEF-${brief.id.slice(0, 8)}`,
+          goal: `Naechstes Arbeitspaket fuer "${brief.title}" umsetzen`,
+          context: [
+            `Projekt: ${brief.title}`,
+            `Problem: ${brief.problemStatement}`,
+            `Zielzustand: ${brief.desiredOutcome}`,
+            brief.requirements?.length ? `Requirements: ${brief.requirements.map(req => req.title).join('; ')}` : '',
+            brief.risks?.length ? `Risiken: ${brief.risks.map(risk => risk.title).join('; ')}` : '',
+          ].filter(Boolean).join('\n'),
+          definitionOfDone: [
+            'Write Scope ist eingehalten',
+            'Aenderung ist getestet oder nachvollziehbar verifiziert',
+            'Ergebnis ist im Projektkontext dokumentiert',
+          ],
+          riskClass: 'B',
+          maxBudgetUsd: 1,
+          allowedTools: ['read_file', 'write_file', 'search_code'],
+          branchStrategy: 'feature',
+          requiresApproval: false,
+          privacyMode: 'local',
+        })
+      })
+      .catch(() => {})
+  }, [searchParams])
 
   // Filters — initialised from URL params
   const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') ?? 'Alle')
@@ -1228,13 +1265,16 @@ function DelegationsContent() {
       {/* ── New Delegation Dialog ─────────────────────────────────────── */}
       {showNewDialog && (
         <NewDelegationDialog
-          onClose={() => { setShowNewDialog(false); setTemplateContract(undefined) }}
+          onClose={() => { setShowNewDialog(false); setTemplateContract(undefined); setPrefillBrief(null) }}
           onCreate={newDel => {
             applyAdd(newDel)
             setShowNewDialog(false)
             setTemplateContract(undefined)
+            setPrefillBrief(null)
           }}
           prefillContract={templateContract}
+          prefillBriefId={prefillBrief?.id}
+          prefillBriefTitle={prefillBrief?.title}
         />
       )}
     </main>

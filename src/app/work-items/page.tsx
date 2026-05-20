@@ -310,12 +310,12 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
                   <td className="hidden px-4 py-3 text-xs text-slate-500 lg:table-cell">{formatDate(item.updatedAt)}</td>
                   <td className="px-4 py-3">
                     {orchestrated.has(item.id) ? (
-                      <a
+                      <Link
                         href={`/orchestrations`}
                         className="text-xs font-medium text-violet-400 hover:underline"
                       >
                         ⚙ Orchestriert ✓
-                      </a>
+                      </Link>
                     ) : created.has(item.id) ? (
                       <Link
                         href="/delegations"
@@ -577,12 +577,12 @@ function WorkItemsPageInner() {
               <p className="mt-2 text-sm text-slate-400">Linear, GitHub und lokale Tickets — oder AI-generierte Work Packages.</p>
             </div>
             {projectId && (
-              <a
+              <Link
                 href="/work-items"
                 className="text-xs text-violet-400 hover:underline"
               >
                 ✕ Projektfilter entfernen
-              </a>
+              </Link>
             )}
           </div>
           {projectId && (
