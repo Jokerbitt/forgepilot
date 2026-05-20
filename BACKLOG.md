@@ -98,8 +98,16 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 
 ## 🔴 High Priority — Autonomy & UX (M126–M130)
 
-- [ ] M126: Linear → Auto-Delegation — webhook: Linear ticket "In Progress" → automatisch ForgePilot Delegation erstellen
+- [x] M126: Linear → Auto-Delegation — webhook: Linear ticket "In Progress" → automatisch ForgePilot Delegation erstellen
 - [x] M127: Delegation Templates — vorgefertigte Templates (Add API Route, Fix Bug, Write Tests, Refactor) für schnellere Erstellung
 - [x] M128: Multi-Provider Fallback — wenn primärer AI-Provider scheitert, automatisch auf sekundären wechseln
 - [x] M129: Delegation Cost Tracker — tatsächliche Token-Kosten pro Delegation summieren + Budget-Warnung im UI
 - [x] M130: One-Click Deploy to Vercel — /settings/deployment Seite mit Vercel-Verbindungsstatus + Env-Var-Checkliste
+
+## 🔴 High Priority — UX & Intelligence (M131–M135)
+
+- [~] M131: Enhanced Projects Dashboard — Projekt-Status-Pipeline (intake→planning→ready→in_progress→attention→completed) mit Metriken + Next-Action-CTA
+- [ ] M132: AI Cost Analytics Dashboard — /analytics Seite mit Kosten pro Provider, Trend-Charts, Budget-Übersicht + Token-Verbrauch nach Zweck
+- [ ] M133: Delegation Health Monitor — automatische Erkennung von stuck/hängengebliebenen Delegations + Retry-Empfehlung
+- [ ] M134: GitHub PR Status Integration — PR-URL + CI-Status direkt in Delegation-Detailansicht (kein Tab-Wechsel nötig)
+- [ ] M135: Webhook Event Log — alle eingehenden Webhooks (Linear, n8n) in /settings/webhooks mit Status + Replay-Button
