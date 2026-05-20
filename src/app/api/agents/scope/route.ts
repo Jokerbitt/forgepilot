@@ -16,9 +16,11 @@ export async function POST(req: Request) {
     branch?: string
     filePatterns?: string[]
     ttlMinutes?: number
+    pid?: number
+    shareBranch?: boolean
   }
 
-  const { agentId, agentType, milestone, branch, filePatterns, ttlMinutes } = body
+  const { agentId, agentType, milestone, branch, filePatterns, ttlMinutes, pid, shareBranch } = body
 
   if (!agentId || !agentType || !milestone || !branch || !filePatterns?.length) {
     return NextResponse.json(
@@ -27,6 +29,20 @@ export async function POST(req: Request) {
     )
   }
 
-  const result = claimScope(agentId, agentType, milestone, branch, filePatterns, ttlMinutes)
+  const result = claimScope(agentId, agentType, milestone, branch, filePatterns, {
+    ttlMinutes,
+    pid,
+    shareBranch,
+  })
   return NextResponse.json(result, { status: result.success ? 200 : 409 })
+}
+
+export async function DELETE(req: Request) {
+  const { searchParams } = new URL(req.url)
+  const agentId = searchParams.get('agentId')
+  if (!agentId) {
+    return NextResponse.json({ error: 'agentId query param required' }, { status: 400 })
+  }
+  const released = releaseScope(agentId)
+  return NextResponse.json({ released, agentId })
 }

@@ -38,6 +38,56 @@ If repo docs and NAS docs disagree, the NAS version wins for project knowledge.
 - Keep the NAS SSOT updated after meaningful product, architecture, connector, local-AI, n8n, or autonomy decisions.
 - The NAS code mirror exists so agents can inspect and coordinate from NAS, but local development may remain on `C:\Users\svenb\dev\forgepilot` for speed.
 
+## Multi-Agent Coordination (mandatory before edits)
+
+Two agents on the same branch silently overwrote each other's commits in May
+2026. To prevent recurrence, every long-running agent **must** claim scope
+before editing files and renew the lease while working.
+
+State lives in `config/agent-scope.json`. Use the CLI — no HTTP server needed:
+
+```bash
+# 1. Check whether the current branch + intended files are clear
+npm run agent:preflight -- --files "src/lib/agents/**,scripts/**"
+
+# 2. Claim the scope (writes the lock)
+npm run agent -- claim --agent claude-code-$(date +%s) \
+                       --type claude-code \
+                       --milestone M130-multi-agent \
+                       --files "src/lib/agents/**,scripts/**"
+
+# 3. Renew every ~10 minutes while you're still working
+npm run agent -- heartbeat --agent <your-id>
+
+# 4. Release when done (also happens automatically when TTL expires)
+npm run agent -- release --agent <your-id>
+
+# Anytime: who is working on what?
+npm run agent:status
+```
+
+Three layers of protection:
+
+1. **File-pattern overlap** — claiming `src/lib/agents/**` blocks any other agent from claiming files under that directory.
+2. **Branch isolation** — two agents on the same git branch are rejected by default. Both sides must explicitly pass `--share-branch` to opt in.
+3. **Heartbeat + PID liveness** — claims expire when the TTL lapses or the recorded OS process dies; no manual cleanup of crashed agents.
+
+If preflight says the branch is busy, split off a sibling branch:
+
+```bash
+git switch -c "$(git branch --show-current)__$(date +%s)"
+```
+
+REST surface for programmatic agents:
+
+```
+GET    /api/agents/scope                — list live claims
+POST   /api/agents/scope                — claim
+DELETE /api/agents/scope?agentId=…      — release
+POST   /api/agents/scope/heartbeat      — renew lease
+POST   /api/agents/scope/preflight      — read-only conflict check
+```
+
 ## Engineering Rules
 
 - TypeScript strict, no `any`.
