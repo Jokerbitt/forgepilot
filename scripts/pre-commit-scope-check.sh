@@ -19,7 +19,10 @@ if [ -z "${AGENT_ID:-}" ]; then
   exit 0
 fi
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Resolve the real script path — invoked either directly or via a symlink
+# in `.git/hooks/pre-commit`, where `$0` would otherwise resolve into `.git/`.
+SCRIPT_PATH="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$0" 2>/dev/null || echo "$0")"
+ROOT="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
 cd "$ROOT"
 
 if ! command -v node >/dev/null 2>&1; then

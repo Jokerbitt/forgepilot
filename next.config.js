@@ -24,8 +24,13 @@ if (process.env.NODE_ENV === 'development') {
     sourcemaps: {
       disable: false,
     },
-    autoInstrumentServerFunctions: true,
     hideSourceMaps: true,         // strip .map files from the deployed bundle
-    disableLogger: true,          // tree-shake Sentry debug logging in prod
+    webpack: {
+      autoInstrumentServerFunctions: true,
+      treeshake: {
+        // tree-shake Sentry debug logging in prod (was: disableLogger)
+        removeDebugLogging: true,
+      },
+    },
   })
 }
