@@ -128,10 +128,13 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [x] M144: Keyboard Shortcuts — vollständige Shortcut-Map (j/k Navigation, a Approve, c Cancel, ? Hilfe-Overlay)
 - [~] M145: Settings Import/Export — komplette Konfiguration (API Keys ausgenommen) als JSON exportieren/importieren
 
-## 🟠 Medium Priority — Intelligence & Agent UX (M146–M150)
+## 🟠 Medium Priority — Intelligence & Agent UX (M146–M153)
 
 - [~] M146: Delegation Comment Thread — Kommentare pro Delegation (Nutzer + Agent-Output) mit Timestamp
 - [~] M147: Work Item Priority Sort — Drag-and-Drop Prioritäts-Sortierung in der List-View
 - [~] M148: Project Brief Diff View — vergleiche zwei Versionen eines Briefs side-by-side
 - [~] M149: Agent Run Replay — gespeicherte Delegation-Runs wiedergeben (Context + Prompt + Response Timeline)
 - [~] M150: Smart Notification Digest — tägliche/wöchentliche Zusammenfassung aller Aktivitäten per Email (optional)
+- [~] M151: Telegram Command & Control — Bot-Integration: alle Status-Updates in Telegram, Steuerung via /approve /reject /status /runs /digest /notif
+- [~] M152: Telegram Scheduled Digest — täglicher Digest 07:00 UTC via Vercel Cron (/api/cron/telegram-digest)
+- [~] M153: Telegram Webhook Setup — /api/telegram/setup-webhook: automatisches Registrieren des Webhooks, "Webhook einrichten"-Button in Settings
