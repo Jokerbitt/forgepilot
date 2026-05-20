@@ -269,6 +269,62 @@ describe('extractKnowledge', () => {
     expect(result?.card.privacyClass).toBe('internal')
   })
 
+  it('scrubs PII and secrets from extracted card body', async () => {
+    const { extractKnowledge } = await import('./extraction')
+    const delegation = makeDelegation({
+      summaryReport: {
+        ...makeDelegation().summaryReport!,
+        keyPoints: [
+          'Contact admin@example.com before deploy',
+          'Rotate sk-proj-abcdefghijklmnopqrstuvwxyz1234567890SECRET',
+        ],
+        warnings: ['Runner endpoint is 192.168.0.136'],
+      },
+    })
+    const result = extractKnowledge(delegation)
+    expect(result?.card.body).toContain('[EMAIL_REDACTED]')
+    expect(result?.card.body).toContain('[API_KEY_REDACTED]')
+    expect(result?.card.body).toContain('[IP_REDACTED]')
+    expect(result?.card.body).not.toContain('admin@example.com')
+    expect(result?.card.body).not.toContain('sk-proj-abcdefghijklmnopqrstuvwxyz1234567890SECRET')
+    expect(result?.card.body).not.toContain('192.168.0.136')
+  })
+
+  it('scrubs PII from extracted card title', async () => {
+    const { extractKnowledge } = await import('./extraction')
+    const delegation = makeDelegation({ title: 'Fix login for admin@example.com' })
+    const result = extractKnowledge(delegation)
+    expect(result?.card.title).toBe('Fix login for [EMAIL_REDACTED]')
+  })
+
+  it('marks cloud memory cards sensitive when PII was redacted', async () => {
+    const { extractKnowledge } = await import('./extraction')
+    const delegation = makeDelegation({
+      summaryReport: {
+        ...makeDelegation().summaryReport!,
+        keyPoints: ['User email admin@example.com was present in logs'],
+      },
+    })
+    const result = extractKnowledge(delegation)
+    expect(result?.card.privacyClass).toBe('sensitive')
+    expect(result?.card.tags).toContain('pii-redacted')
+    expect(result?.card.tags).toContain('pii:email')
+  })
+
+  it('keeps local memory cards local-only even when PII was redacted', async () => {
+    const { extractKnowledge } = await import('./extraction')
+    const delegation = makeDelegation({
+      contract: { ...makeDelegation().contract, privacyMode: 'local' },
+      summaryReport: {
+        ...makeDelegation().summaryReport!,
+        keyPoints: ['Local note contained admin@example.com'],
+      },
+    })
+    const result = extractKnowledge(delegation)
+    expect(result?.card.privacyClass).toBe('local-only')
+    expect(result?.card.tags).toContain('pii-redacted')
+  })
+
   it('persists card to knowledge store (idempotent upsert)', async () => {
     const { extractKnowledge } = await import('./extraction')
     const { getCard } = await import('./store')

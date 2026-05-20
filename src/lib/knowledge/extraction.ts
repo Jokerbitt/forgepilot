@@ -1,5 +1,6 @@
 import type { Delegation } from '@/lib/models/delegation'
-import type { MemoryCard, MemoryCardType, ConfidenceLevel } from './types'
+import { scrubPII } from '@/lib/context/pii-scrubber'
+import type { MemoryCard, MemoryCardType, ConfidenceLevel, PrivacyClass } from './types'
 import { upsertCard } from './store'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -71,6 +72,24 @@ function buildTags(delegation: Delegation): string[] {
   return tags
 }
 
+function buildPiiTags(findings: Array<{ type: string }>): string[] {
+  if (findings.length === 0) return []
+
+  return [
+    'pii-redacted',
+    ...Array.from(new Set(findings.map(f => `pii:${f.type}`))),
+  ]
+}
+
+function buildPrivacyClass(delegation: Delegation, wasPiiScrubbed: boolean): PrivacyClass {
+  if (delegation.contract.privacyMode === 'local') return 'local-only'
+  return wasPiiScrubbed ? 'sensitive' : 'internal'
+}
+
+function buildTitle(delegation: Delegation): string {
+  return delegation.title || delegation.contract.goal.slice(0, 80)
+}
+
 function buildConfidence(delegation: Delegation): ConfidenceLevel {
   const report = delegation.summaryReport
   if (!report) return 'low'
@@ -101,20 +120,20 @@ export function extractKnowledge(delegation: Delegation): ExtractedKnowledge | n
   if (delegation.status !== 'completed') return null
 
   const now  = new Date().toISOString()
-  const privacyClass =
-    delegation.contract.privacyMode === 'local'
-      ? 'local-only'
-      : 'internal'
+  const titleScrub = scrubPII(buildTitle(delegation))
+  const bodyScrub = scrubPII(buildBody(delegation))
+  const piiFindings = [...titleScrub.findings, ...bodyScrub.findings]
+  const wasPiiScrubbed = titleScrub.wasModified || bodyScrub.wasModified
 
   const card: MemoryCard = {
     id:           `extraction:${delegation.id}`,
     type:         classifyCard(delegation),
-    title:        delegation.title || delegation.contract.goal.slice(0, 80),
-    body:         buildBody(delegation),
+    title:        titleScrub.scrubbed,
+    body:         bodyScrub.scrubbed,
     sourceIds:    [delegation.id],
     projectId:    delegation.briefId,
-    tags:         buildTags(delegation),
-    privacyClass,
+    tags:         [...buildTags(delegation), ...buildPiiTags(piiFindings)],
+    privacyClass: buildPrivacyClass(delegation, wasPiiScrubbed),
     confidence:   buildConfidence(delegation),
     createdAt:    now,
     updatedAt:    now,
