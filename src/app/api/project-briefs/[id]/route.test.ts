@@ -43,6 +43,19 @@ vi.mock('@/lib/project-briefs/brief-versions', () => ({
   saveSnapshot: vi.fn(),
 }))
 
+vi.mock('@/lib/repositories/projectBriefRepository', () => ({
+  createProjectBriefRepository: vi.fn(() => ({
+    findById: vi.fn(async (id: string) => id === 'abc-123' ? mockBrief : null),
+    update: vi.fn(async (id: string, patch: Record<string, unknown>) =>
+      id === 'abc-123' ? { ...mockBrief, ...patch } : null
+    ),
+    delete: vi.fn(async (id: string) => id === 'abc-123'),
+    create: vi.fn(async (input: typeof mockBrief) => input),
+    listAll: vi.fn(async () => [mockBrief]),
+    listByStatus: vi.fn(async () => [mockBrief]),
+  })),
+}))
+
 const makeParams = (id: string) => ({ params: Promise.resolve({ id }) })
 
 describe('GET /api/project-briefs/[id]', () => {

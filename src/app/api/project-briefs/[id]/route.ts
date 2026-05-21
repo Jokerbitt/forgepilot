@@ -1,8 +1,9 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
-import { findProjectBriefById, updateProjectBrief } from '@/lib/project-briefs'
+import { findProjectBriefById } from '@/lib/project-briefs'
 import { saveSnapshot } from '@/lib/project-briefs/brief-versions'
 import type { ProjectBrief } from '@/lib/models/project-brief'
+import { createProjectBriefRepository } from '@/lib/repositories/projectBriefRepository'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -11,7 +12,8 @@ interface RouteParams {
 export async function GET(_request: Request, { params }: RouteParams) {
   const { id } = await params
   try {
-    const brief = findProjectBriefById(id)
+    const repo = createProjectBriefRepository()
+    const brief = await repo.findById(id)
     if (!brief) {
       return NextResponse.json({ error: 'Project brief not found' }, { status: 404 })
     }
@@ -30,9 +32,24 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Project brief not found' }, { status: 404 })
     }
     saveSnapshot(current, 'Automatisch vor Update')
-    const updated = updateProjectBrief(id, patch)
+    const repo = createProjectBriefRepository()
+    const updated = await repo.update(id, patch)
     return NextResponse.json(updated)
   } catch {
     return NextResponse.json({ error: 'Failed to update project brief' }, { status: 500 })
+  }
+}
+
+export async function DELETE(_request: Request, { params }: RouteParams) {
+  const { id } = await params
+  try {
+    const repo = createProjectBriefRepository()
+    const deleted = await repo.delete(id)
+    if (!deleted) {
+      return NextResponse.json({ error: 'Project brief not found' }, { status: 404 })
+    }
+    return new NextResponse(null, { status: 204 })
+  } catch {
+    return NextResponse.json({ error: 'Failed to delete project brief' }, { status: 500 })
   }
 }

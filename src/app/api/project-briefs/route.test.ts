@@ -2,41 +2,54 @@ import { NextRequest } from 'next/server'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { GET, POST } from './route'
 
+const mockBuiltBrief = {
+  id: 'test-id',
+  title: 'Test',
+  status: 'in_review',
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  rawIdea: 'Test idea that is long enough',
+  problemStatement: 'Test problem statement',
+  targetAudience: 'Developers',
+  desiredOutcome: 'A working solution',
+  constraints: [],
+  scope: 'standard',
+  researchMode: 'standard',
+  privacyMode: 'local',
+  requirements: [],
+  useCases: [],
+  nonGoals: [],
+  risks: [],
+  researchRunIds: [],
+  researchBriefDraft: {
+    title: 'Research Brief: Test',
+    mode: 'standard',
+    privacyMode: 'local',
+    preferredExecutor: 'agent',
+    researchQuestions: [],
+    searchTerms: [],
+    preferredSourceTypes: [],
+    excludeCriteria: [],
+  },
+}
+
 vi.mock('@/lib/project-briefs', () => ({
   readProjectBriefs: vi.fn(() => []),
-  buildProjectBrief: vi.fn((_input, _now, id) => ({
-    id: id ?? 'test-id',
-    title: 'Test',
-    status: 'in_review',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    rawIdea: 'Test idea that is long enough',
-    problemStatement: 'Test problem statement',
-    targetAudience: 'Developers',
-    desiredOutcome: 'A working solution',
-    constraints: [],
-    scope: 'standard',
-    researchMode: 'standard',
-    privacyMode: 'local',
-    requirements: [],
-    useCases: [],
-    nonGoals: [],
-    risks: [],
-    researchRunIds: [],
-    researchBriefDraft: {
-      title: 'Research Brief: Test',
-      mode: 'standard',
-      privacyMode: 'local',
-      preferredExecutor: 'agent',
-      researchQuestions: [],
-      searchTerms: [],
-      preferredSourceTypes: [],
-      excludeCriteria: [],
-    },
-  })),
+  buildProjectBrief: vi.fn(() => mockBuiltBrief),
   saveProjectBrief: vi.fn(brief => brief),
   validateIdeaIntakeInput: vi.fn(() => ({})),
   hasIdeaIntakeErrors: vi.fn(() => false),
+}))
+
+vi.mock('@/lib/repositories/projectBriefRepository', () => ({
+  createProjectBriefRepository: vi.fn(() => ({
+    listAll: vi.fn(async () => []),
+    create: vi.fn(async (input: typeof mockBuiltBrief) => input),
+    findById: vi.fn(async () => null),
+    update: vi.fn(async () => null),
+    delete: vi.fn(async () => false),
+    listByStatus: vi.fn(async () => []),
+  })),
 }))
 
 function makeReq(body: unknown): NextRequest {
