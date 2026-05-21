@@ -11,7 +11,10 @@ interface StoredApiKeys {
   LINEAR_API_KEY?: string
   LINEAR_TEAM_ID?: string
   ANTHROPIC_API_KEY?: string
+  GROQ_API_KEY?: string
   OLLAMA_BASE_URL?: string
+  LM_STUDIO_BASE_URL?: string
+  LLM_MODE?: string
 }
 
 /**
@@ -42,7 +45,10 @@ function mergedEnv(env: EnvMap): EnvMap {
     GITHUB_REPOSITORIES: env['GITHUB_REPOSITORIES'],
     GITHUB_REPO: env['GITHUB_REPO'],
     ANTHROPIC_API_KEY: env['ANTHROPIC_API_KEY'] ?? stored.ANTHROPIC_API_KEY,
+    GROQ_API_KEY: env['GROQ_API_KEY'] ?? stored.GROQ_API_KEY,
     OLLAMA_BASE_URL: env['OLLAMA_BASE_URL'] ?? stored.OLLAMA_BASE_URL,
+    LM_STUDIO_BASE_URL: env['LM_STUDIO_BASE_URL'] ?? stored.LM_STUDIO_BASE_URL,
+    LLM_MODE: env['LLM_MODE'] ?? stored.LLM_MODE,
   }
 }
 
