@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ElementType, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ElementType, type ReactNode } from 'react'
 import type { NBAConfig } from '@/lib/nba-engine/nba-config'
 import { describeApprovalMode } from '@/lib/nba-engine/approval-policy'
 import type { PMAgentResult } from '@/lib/agent-runner/pm-agent'
@@ -75,6 +75,91 @@ function StatusPill({
     >
       {children}
     </span>
+  )
+}
+
+// ─── Settings Import/Export ──────────────────────────────────────────────────
+function SettingsImportExport() {
+  const [importStatus, setImportStatus] = useState<'idle' | 'importing' | 'success' | 'error'>('idle')
+  const [importResult, setImportResult] = useState<{ imported: string[]; skipped: string[]; errors: string[] } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const handleImport = async (file: File) => {
+    setImportStatus('importing')
+    setImportResult(null)
+    try {
+      const text = await file.text()
+      const res = await fetch('/api/settings/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: text,
+      })
+      const data = await res.json() as { ok: boolean; imported: string[]; skipped: string[]; errors: string[] }
+      setImportResult(data)
+      setImportStatus(res.ok ? 'success' : 'error')
+    } catch {
+      setImportStatus('error')
+      setImportResult(null)
+    }
+  }
+
+  return (
+    <section className="space-y-4">
+      <SectionHeading icon={Download} title="Einstellungen sichern" />
+      <div className={cx(panelClassName, 'space-y-3')}>
+        <p className="text-sm text-gray-400">
+          Exportiere alle Konfigurationen als JSON-Bundle oder importiere eine gesicherte Konfiguration.
+          API Keys werden <strong className="text-slate-200">nie</strong> exportiert.
+        </p>
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <a
+            href="/api/settings/export"
+            download
+            className={cx(secondaryButtonClassName, 'flex items-center gap-2')}
+          >
+            <Download className="h-4 w-4" />
+            Konfiguration exportieren
+          </a>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importStatus === 'importing'}
+            className={cx(secondaryButtonClassName, 'flex items-center gap-2 disabled:opacity-40')}
+          >
+            <Download className="h-4 w-4 rotate-180" />
+            {importStatus === 'importing' ? 'Importiere...' : 'Konfiguration importieren'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={e => {
+              const file = e.target.files?.[0]
+              if (file) void handleImport(file)
+              e.target.value = ''
+            }}
+          />
+        </div>
+        {importStatus === 'success' && importResult && (
+          <div className="rounded-md bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300 space-y-1">
+            <p className="font-semibold">Import erfolgreich</p>
+            {importResult.imported.length > 0 && (
+              <p>Importiert: {importResult.imported.join(', ')}</p>
+            )}
+            {importResult.skipped.length > 0 && (
+              <p className="text-slate-400">Übersprungen: {importResult.skipped.join(', ')}</p>
+            )}
+          </div>
+        )}
+        {importStatus === 'error' && (
+          <div className="rounded-md bg-red-500/10 px-3 py-2 text-xs text-red-300">
+            {importResult?.errors?.length
+              ? importResult.errors.join(' · ')
+              : 'Import fehlgeschlagen. Prüfe das Format der Datei.'}
+          </div>
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -196,6 +281,18 @@ export default function SettingsPage() {
   const [apiKeySaved, setApiKeySaved] = useState(false)
   const [confirmClearKey, setConfirmClearKey] = useState<string | null>(null)
 
+  // Telegram state
+  const [telegramEnabled, setTelegramEnabled] = useState(false)
+  const [telegramBotToken, setTelegramBotToken] = useState('')
+  const [telegramChatId, setTelegramChatId] = useState('')
+  const [telegramSeverity, setTelegramSeverity] = useState<string[]>(['warning', 'critical'])
+  const [telegramConfigured, setTelegramConfigured] = useState(false)
+  const [telegramSaving, setTelegramSaving] = useState(false)
+  const [telegramTesting, setTelegramTesting] = useState(false)
+  const [telegramTestResult, setTelegramTestResult] = useState<'ok' | 'error' | null>(null)
+  const [telegramSettingWebhook, setTelegramSettingWebhook] = useState(false)
+  const [telegramWebhookResult, setTelegramWebhookResult] = useState<'ok' | 'error' | null>(null)
+
   useEffect(() => {
     fetch('/api/settings')
       .then(res => res.json())
@@ -225,6 +322,16 @@ export default function SettingsPage() {
     fetch('/api/settings/autonomous')
       .then(res => res.json())
       .then((data: AutonomousConfig) => setAutonomousConfig(data))
+      .catch(() => null)
+    fetch('/api/telegram/config')
+      .then(res => res.json())
+      .then((data: { botToken: string; chatId: string; enabled: boolean; notifyOnSeverity: string[]; configured: boolean }) => {
+        setTelegramEnabled(data.enabled)
+        setTelegramBotToken(data.botToken)
+        setTelegramChatId(data.chatId)
+        setTelegramSeverity(data.notifyOnSeverity ?? ['warning', 'critical'])
+        setTelegramConfigured(data.configured)
+      })
       .catch(() => null)
   }, [])
 
@@ -538,6 +645,12 @@ export default function SettingsPage() {
                   <path d="M12 2L2 19.5h20L12 2z" />
                 </svg>
                 Vercel Deployment
+              </a>
+              <a
+                href="/settings/notifications"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-semibold text-purple-300 hover:bg-purple-500/20 transition-colors"
+              >
+                🔔 Benachrichtigungen
               </a>
             </div>
 
@@ -1052,6 +1165,9 @@ export default function SettingsPage() {
           </section>
         )}
 
+        {/* Settings Import/Export */}
+        <SettingsImportExport />
+
         {/* Datenschutz Section — Art. 20 DSGVO */}
         <section className="space-y-4">
           <SectionHeading icon={Lock} title="Datenschutz" badge={<StatusPill>DSGVO</StatusPill>} />
@@ -1080,6 +1196,179 @@ export default function SettingsPage() {
             <p className="text-xs text-gray-600">
               Das ZIP enthält: processing-ledger.json, delegations.json, project-briefs.json, metadata.json + README.
             </p>
+          </div>
+        </section>
+
+        {/* ── Telegram Bot ──────────────────────────────────────────────── */}
+        <section>
+          <SectionHeading
+            icon={Bot}
+            title="Telegram Bot"
+          />
+          <p className="text-sm text-slate-400 mb-4">Status-Updates und Befehle direkt in Telegram empfangen und senden</p>
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 space-y-4">
+            {/* Enable toggle */}
+            <label className="flex items-center gap-3 cursor-pointer">
+              <div
+                onClick={() => setTelegramEnabled(e => !e)}
+                className={`relative h-6 w-11 rounded-full transition-colors ${telegramEnabled ? 'bg-violet-600' : 'bg-slate-700'}`}
+              >
+                <span className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${telegramEnabled ? 'translate-x-5' : ''}`} />
+              </div>
+              <span className="text-sm font-medium text-slate-200">Telegram-Integration aktiviert</span>
+            </label>
+
+            {/* Bot Token */}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-400">Bot Token</label>
+              <input
+                type="password"
+                value={telegramBotToken}
+                onChange={e => setTelegramBotToken(e.target.value)}
+                placeholder={telegramConfigured ? '(gesetzt — leer lassen zum Beibehalten)' : '123456789:AABBccDDeeFfGgHhIiJj...'}
+                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-violet-500"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Bot erstellen via <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-violet-400 hover:underline">@BotFather</a> auf Telegram
+              </p>
+            </div>
+
+            {/* Chat ID */}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-400">Chat ID</label>
+              <input
+                type="text"
+                value={telegramChatId}
+                onChange={e => setTelegramChatId(e.target.value)}
+                placeholder="z.B. 123456789 oder @dein_channel"
+                className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-violet-500"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Deine Chat-ID herausfinden: starte <code className="bg-slate-800 px-1 rounded">@userinfobot</code> auf Telegram
+              </p>
+            </div>
+
+            {/* Severity filter */}
+            <div>
+              <label className="mb-2 block text-xs font-medium text-slate-400">Benachrichtigungen weiterleiten bei Schweregrad</label>
+              <div className="flex flex-wrap gap-3">
+                {(['info', 'warning', 'critical'] as const).map(sev => (
+                  <label key={sev} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={telegramSeverity.includes(sev)}
+                      onChange={e => {
+                        setTelegramSeverity(prev =>
+                          e.target.checked ? [...prev, sev] : prev.filter(s => s !== sev),
+                        )
+                      }}
+                      className="rounded border-slate-600 bg-slate-800 accent-violet-500"
+                    />
+                    <span className="text-sm text-slate-300 capitalize">{sev}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Webhook URL info */}
+            <div className="rounded-lg border border-slate-700 bg-slate-800/50 px-3 py-2">
+              <p className="text-xs text-slate-500 mb-1">Webhook URL (für @BotFather / setWebhook):</p>
+              <code className="text-xs text-violet-300">{'https://[deine-domain]/api/telegram/webhook'}</code>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={async () => {
+                  setTelegramSaving(true)
+                  try {
+                    await fetch('/api/telegram/config', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        botToken: telegramBotToken,
+                        chatId: telegramChatId,
+                        enabled: telegramEnabled,
+                        notifyOnSeverity: telegramSeverity,
+                      }),
+                    })
+                    setTelegramConfigured(true)
+                  } finally {
+                    setTelegramSaving(false)
+                  }
+                }}
+                disabled={telegramSaving}
+                className="rounded-lg border border-violet-600/60 bg-violet-700/20 px-4 py-2 text-sm font-medium text-violet-300 hover:bg-violet-700/30 disabled:opacity-50"
+              >
+                {telegramSaving ? 'Speichert…' : '💾 Speichern'}
+              </button>
+              <button
+                onClick={async () => {
+                  setTelegramTesting(true)
+                  setTelegramTestResult(null)
+                  try {
+                    const res = await fetch('/api/telegram/test', { method: 'POST' })
+                    const data = await res.json() as { ok: boolean }
+                    setTelegramTestResult(data.ok ? 'ok' : 'error')
+                  } catch {
+                    setTelegramTestResult('error')
+                  } finally {
+                    setTelegramTesting(false)
+                    setTimeout(() => setTelegramTestResult(null), 4000)
+                  }
+                }}
+                disabled={telegramTesting || !telegramConfigured}
+                className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-40"
+              >
+                {telegramTesting ? 'Sende…' : '📨 Test senden'}
+              </button>
+              {telegramTestResult === 'ok' && (
+                <span className="rounded-full bg-emerald-900/40 px-3 py-1 text-xs text-emerald-400">✅ Nachricht gesendet</span>
+              )}
+              {telegramTestResult === 'error' && (
+                <span className="rounded-full bg-red-900/40 px-3 py-1 text-xs text-red-400">❌ Fehler — Token/ChatID prüfen</span>
+              )}
+              <button
+                onClick={async () => {
+                  setTelegramSettingWebhook(true)
+                  setTelegramWebhookResult(null)
+                  try {
+                    const res = await fetch('/api/telegram/setup-webhook', { method: 'POST' })
+                    const data = await res.json() as { ok: boolean; webhookUrl?: string; error?: string }
+                    setTelegramWebhookResult(data.ok ? 'ok' : 'error')
+                  } catch {
+                    setTelegramWebhookResult('error')
+                  } finally {
+                    setTelegramSettingWebhook(false)
+                    setTimeout(() => setTelegramWebhookResult(null), 5000)
+                  }
+                }}
+                disabled={telegramSettingWebhook || !telegramConfigured}
+                className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-40"
+              >
+                {telegramSettingWebhook ? 'Richtet ein…' : '🔗 Webhook einrichten'}
+              </button>
+              {telegramWebhookResult === 'ok' && (
+                <span className="rounded-full bg-emerald-900/40 px-3 py-1 text-xs text-emerald-400">✅ Webhook registriert</span>
+              )}
+              {telegramWebhookResult === 'error' && (
+                <span className="rounded-full bg-red-900/40 px-3 py-1 text-xs text-red-400">❌ Webhook-Fehler — NEXT_PUBLIC_BASE_URL prüfen</span>
+              )}
+            </div>
+
+            {/* Available commands */}
+            <details className="group">
+              <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-300">▶ Verfügbare Bot-Befehle</summary>
+              <div className="mt-2 rounded-lg bg-slate-800 px-3 py-2 font-mono text-xs text-slate-400 space-y-1">
+                <p>/help — alle Befehle</p>
+                <p>/status — Delegationen &amp; Benachrichtigungen</p>
+                <p>/runs — letzte 5 Agent Runs</p>
+                <p>/digest — Aktivitäts-Zusammenfassung</p>
+                <p>/approve &lt;id&gt; — Delegation genehmigen</p>
+                <p>/reject &lt;id&gt; — Delegation ablehnen</p>
+                <p>/notif — ungelesene Benachrichtigungen</p>
+              </div>
+            </details>
           </div>
         </section>
 

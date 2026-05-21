@@ -1,6 +1,7 @@
 import type { AgentProfile } from '@/lib/models/agent-profile'
 import type { Delegation, TaskContract } from '@/lib/models/delegation'
 import type { PMAgentResult } from '@/lib/agent-runner/pm-agent'
+import { buildRetryPlan, type FailureCause } from '@/lib/delegations/retry'
 import type { ScopeClaim } from './scope-lock'
 
 type TaskSkill = NonNullable<TaskContract['skillCategory']>
@@ -15,6 +16,20 @@ export interface AgentTaskRecommendation {
   suggestedAgentName: string | null
   reason: string
   allowedFilePatterns: string[]
+}
+
+export interface FailedDelegationRecovery {
+  delegationId: string
+  title: string
+  workItemId: string
+  executionRoute: string
+  errorMessage: string | null
+  failureCause: FailureCause
+  shouldRetry: boolean
+  retryCount: number
+  maxRetries: number
+  diagnosticMessage: string
+  updatedAt: string
 }
 
 export interface AgentControlPlaneSummary {
@@ -45,6 +60,7 @@ export interface AgentControlPlaneSummary {
     approved: number
     running: number
     failed: number
+    failedRecoveries: FailedDelegationRecovery[]
   }
   coordination: {
     recommendedParallelSlots: number
@@ -68,9 +84,13 @@ export function buildAgentControlPlaneSummary(
 
   const running = delegations.filter(delegation => delegation.status === 'running')
   const failed = delegations.filter(delegation => delegation.status === 'failed')
+  const failedRecoveries = failed
+    .sort(byNewestUpdate)
+    .slice(0, 5)
+    .map(buildFailedDelegationRecovery)
   const freeCapacity = Math.max(0, availableAgents.length - claims.length - running.length)
   const recommendedParallelSlots = Math.min(3, freeCapacity, approved.length)
-  const blockedReason = getBlockedReason({ approvedCount: approved.length, freeCapacity, failedCount: failed.length })
+  const blockedReason = getBlockedReason({ approvedCount: approved.length, freeCapacity, failedRecoveries })
 
   return {
     generatedAt: new Date().toISOString(),
@@ -100,6 +120,7 @@ export function buildAgentControlPlaneSummary(
       approved: approved.length,
       running: running.length,
       failed: failed.length,
+      failedRecoveries,
     },
     coordination: {
       recommendedParallelSlots,
@@ -118,11 +139,41 @@ function byPriorityThenAge(a: Delegation, b: Delegation): number {
   return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
 }
 
-function getBlockedReason(input: { approvedCount: number; freeCapacity: number; failedCount: number }): string | null {
-  if (input.failedCount > 0) return 'Fehlerhafte Delegationen zuerst reviewen, damit Agenten nicht auf kaputtem Kontext aufbauen.'
+function byNewestUpdate(a: Delegation, b: Delegation): number {
+  return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+}
+
+function getBlockedReason(input: {
+  approvedCount: number
+  freeCapacity: number
+  failedRecoveries: FailedDelegationRecovery[]
+}): string | null {
+  if (input.failedRecoveries.length > 0) {
+    const topFailure = input.failedRecoveries[0]
+    const action = topFailure.shouldRetry ? 'Retry vorbereiten' : 'manuell reviewen'
+    return `${input.failedRecoveries.length} fehlerhafte Delegation zuerst ${action}: ${topFailure.title} (${topFailure.failureCause}).`
+  }
   if (input.approvedCount === 0) return 'Keine freigegebenen Delegationen in der Queue.'
   if (input.freeCapacity <= 0) return 'Keine freie Agenten-Kapazitaet oder Write-Scopes sind bereits belegt.'
   return null
+}
+
+function buildFailedDelegationRecovery(delegation: Delegation): FailedDelegationRecovery {
+  const retryPlan = buildRetryPlan(delegation)
+
+  return {
+    delegationId: delegation.id,
+    title: delegation.title || delegation.contract.goal,
+    workItemId: delegation.contract.workItemId,
+    executionRoute: delegation.executionRoute,
+    errorMessage: delegation.errorMessage ?? null,
+    failureCause: retryPlan.failureCause,
+    shouldRetry: retryPlan.shouldRetry,
+    retryCount: retryPlan.retryCount,
+    maxRetries: retryPlan.maxRetries,
+    diagnosticMessage: retryPlan.diagnosticMessage,
+    updatedAt: delegation.updatedAt,
+  }
 }
 
 function recommendDelegation(

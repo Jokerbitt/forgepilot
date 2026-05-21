@@ -2,7 +2,6 @@
  * Write-Scope Lock Registry — Multi-Agent Coordination
  *
  * Prevents two agents from clobbering each other when working in parallel.
- * State stored atomically in `config/agent-scope.json`.
  *
  * Three layers of protection:
  *  1. File-pattern overlap — two agents claim the same directory → conflict
@@ -11,14 +10,44 @@
  *  3. Heartbeat / PID      — claims auto-expire when the owner stops
  *                            renewing the lease or the OS process dies.
  *
+ * Storage location:
+ *   `<git-common-dir>/forgepilot-agent-scope.json` whenever the process is
+ *   inside a git checkout — `git rev-parse --git-common-dir` resolves to the
+ *   main repo's `.git/` from any linked worktree, so all worktrees share the
+ *   same registry. Falls back to legacy `<cwd>/config/agent-scope.json` for
+ *   non-git contexts (fresh CI containers before init, etc.).
+ *
  * See `AGENTS.md` for the workflow agents must follow.
  */
 
+import { execSync } from 'node:child_process'
 import fs from 'fs'
 import path from 'path'
 import type { AgentType } from './agent-skills'
 
-const SCOPE_FILE = path.join(process.cwd(), 'config', 'agent-scope.json')
+const LEGACY_SCOPE_FILE = path.join(process.cwd(), 'config', 'agent-scope.json')
+
+function resolveScopeFile(): string {
+  try {
+    const out = execSync('git rev-parse --git-common-dir', {
+      cwd: process.cwd(),
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+    if (out) {
+      const gitCommonDir = path.isAbsolute(out) ? out : path.resolve(process.cwd(), out)
+      return path.join(gitCommonDir, 'forgepilot-agent-scope.json')
+    }
+  } catch {
+    // Not in a git repo or git binary unavailable — fall through.
+  }
+  return LEGACY_SCOPE_FILE
+}
+
+// Resolved once at module load. process.cwd() is stable for the lifetime of
+// a server/CLI invocation; tests mock `fs` so the concrete path is irrelevant
+// for assertions.
+const SCOPE_FILE = resolveScopeFile()
 
 export type ScopeStatus = 'free' | 'claimed'
 
