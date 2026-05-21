@@ -287,9 +287,10 @@ jobs:
               --head "$BRANCH" --base main)
           fi
 
-          gh pr merge "$PR_URL" --squash \
+          # --auto: waits for all required CI checks to pass before merging
+          gh pr merge "$PR_URL" --squash --auto \
             --body "🤖 Auto-merged: quality gate ✅ | Cost: ~\$0.00–\$0.04"
-          echo "✅ Merged: $PR_URL"
+          echo "✅ Auto-merge queued: $PR_URL"
 
       # ── Mark BACKLOG done (after merge — zero conflict risk) ──────────────
       - name: Mark task done in BACKLOG.md
