@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth } from '@/lib/auth/require-auth'
 import { readKnowledgeCards, findKnowledgeCardsBySource } from '@/lib/knowledge/knowledge-card'
 
 /**
@@ -10,7 +11,10 @@ import { readKnowledgeCards, findKnowledgeCardsBySource } from '@/lib/knowledge/
  * Query params:
  *   ?sourceId=xxx — filter by delegation source id
  */
-export function GET(request: NextRequest) {
+export async function GET(request: NextRequest) {
+  const authError = await requireAuth()
+  if (authError) return authError
+
   const { searchParams } = request.nextUrl
   const sourceId = searchParams.get('sourceId')
 

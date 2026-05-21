@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+// Bypass auth for unit tests — auth behaviour is tested in require-auth.test.ts
+vi.mock('@/lib/auth/require-auth', () => ({ requireAuth: vi.fn().mockResolvedValue(null) }))
+
 // Mock filesystem and path helpers so tests don't touch disk
 vi.mock('fs', () => ({
   default: {

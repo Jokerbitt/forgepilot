@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic'
+import { requireAuth } from '@/lib/auth/require-auth'
 import { exportSettingsBundle } from '@/lib/settings/settings-bundle'
 
 function berlinDateOnly(): string {
@@ -11,6 +12,9 @@ function berlinDateOnly(): string {
 }
 
 export async function GET() {
+  const authError = await requireAuth()
+  if (authError) return authError
+
   const bundle = exportSettingsBundle()
   const filename = `forgepilot-settings-${berlinDateOnly()}.json`
 
