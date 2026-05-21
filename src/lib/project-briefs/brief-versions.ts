@@ -58,7 +58,9 @@ export function saveSnapshot(brief: ProjectBrief, label?: string): BriefVersion 
   }
 
   // Trim to max versions
-  const kept = existing.slice(0, MAX_VERSIONS_PER_BRIEF - 1)
+  const kept = existing
+    .sort((a, b) => b.versionNumber - a.versionNumber)
+    .slice(0, MAX_VERSIONS_PER_BRIEF - 1)
   const others = all.filter(v => v.briefId !== brief.id)
   writeAll([...others, ...kept, version])
 

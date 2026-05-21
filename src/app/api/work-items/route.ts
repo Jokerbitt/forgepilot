@@ -13,10 +13,17 @@ type Source = 'all' | 'linear' | 'github' | 'local'
 
 const LOCAL_ITEMS_FILE = path.join(process.cwd(), 'config', 'local-items.json')
 const STATUS_OVERRIDES_FILE = path.join(process.cwd(), 'config', 'work-item-status-overrides.json')
+const PRIORITY_OVERRIDES_FILE = path.join(process.cwd(), 'config', 'work-item-priority-overrides.json')
 
 interface StatusOverride {
   id: string
   status: WorkItem['status']
+  updatedAt: string
+}
+
+interface PriorityOverride {
+  id: string
+  priority: WorkItem['priority']
   updatedAt: string
 }
 
@@ -41,17 +48,32 @@ function readStatusOverrides(): StatusOverride[] {
   }
 }
 
-function applyStatusOverrides(items: WorkItem[]): WorkItem[] {
+function readPriorityOverrides(): PriorityOverride[] {
+  try {
+    if (!fs.existsSync(PRIORITY_OVERRIDES_FILE)) return []
+    return JSON.parse(fs.readFileSync(PRIORITY_OVERRIDES_FILE, 'utf-8')) as PriorityOverride[]
+  } catch {
+    return []
+  }
+}
+
+function applyWorkItemOverrides(items: WorkItem[]): WorkItem[] {
   const overrides = new Map(readStatusOverrides().map(override => [override.id, override]))
-  if (overrides.size === 0) return items
+  const priorityOverrides = new Map(readPriorityOverrides().map(override => [override.id, override]))
+  if (overrides.size === 0 && priorityOverrides.size === 0) return items
 
   return items.map(item => {
     const override = overrides.get(item.id)
-    if (!override) return item
+    const priorityOverride = priorityOverrides.get(item.id)
+    if (!override && !priorityOverride) return item
     return {
       ...item,
-      status: override.status,
-      updatedAt: override.updatedAt,
+      ...(override ? { status: override.status } : {}),
+      ...(priorityOverride ? { priority: priorityOverride.priority } : {}),
+      updatedAt: [override?.updatedAt, priorityOverride?.updatedAt, item.updatedAt]
+        .filter(Boolean)
+        .sort()
+        .at(-1) ?? item.updatedAt,
     }
   })
 }
@@ -106,7 +128,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const effectiveItems = applyStatusOverrides(items)
+    const effectiveItems = applyWorkItemOverrides(items)
 
     effectiveItems.sort((a, b) => {
       if (a.priority !== b.priority) return a.priority - b.priority
