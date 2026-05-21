@@ -7,6 +7,7 @@ import type { ProjectBrief, Requirement, UseCase, Risk, Finding, FindingConfiden
 import type { Milestone, WorkPackage } from '@/lib/models/milestone'
 import { briefToMarkdown, briefMarkdownFilename } from '@/lib/project-briefs/markdown-export'
 import { StartDelegationButton } from '@/components/project-briefs/StartDelegationButton'
+import { BriefCriticPanel } from '@/components/brief-critic'
 
 interface Props {
   initialBrief: ProjectBrief
@@ -339,6 +340,13 @@ export function BlueprintScreen({ initialBrief }: Props) {
     })
   }
 
+  async function handleCriticApplied() {
+    const res = await fetch(`/api/project-briefs/${brief.id}`)
+    if (res.ok) {
+      const updated = await res.json() as ProjectBrief
+      setBrief(updated)
+    }
+  }
 
   function handleDownloadMarkdown() {
     const markdown = briefToMarkdown(brief)
@@ -438,6 +446,12 @@ export function BlueprintScreen({ initialBrief }: Props) {
           onDismissLinearError={() => setLinearTicketError('')}
           onDismissDelegationError={() => setDelegationError('')}
         />
+
+        {brief.status !== 'accepted' && brief.status !== 'archived' && (
+          <section className="mb-5">
+            <BriefCriticPanel briefId={brief.id} onApplied={handleCriticApplied} />
+          </section>
+        )}
 
         <section className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <MetricPanel label="Readiness" value={`${vm.readinessScore}%`} detail={vm.deliveryStage} tone={vm.readinessTone} progress={vm.readinessScore} />
