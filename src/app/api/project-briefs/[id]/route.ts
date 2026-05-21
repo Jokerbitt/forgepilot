@@ -37,6 +37,22 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     saveSnapshot(current, 'Automatisch vor Update')
     const repo = createProjectBriefRepository()
     const updated = await repo.update(id, patch)
+
+    // M217: Fire-and-forget — create Linear ticket when brief is accepted
+    if (patch.status === 'accepted' && updated) {
+      import('@/lib/linear/create-ticket').then(({ createLinearTicketForBrief }) =>
+        createLinearTicketForBrief({
+          title: updated.title,
+          description: [
+            `Problem: ${updated.problemStatement}`,
+            `Zielgruppe: ${updated.targetAudience}`,
+            `Outcome: ${updated.desiredOutcome}`,
+          ].join('\n'),
+          briefId: updated.id,
+        }),
+      ).catch(() => { /* non-critical */ })
+    }
+
     return NextResponse.json(updated)
   } catch {
     return NextResponse.json({ error: 'Failed to update project brief' }, { status: 500 })
