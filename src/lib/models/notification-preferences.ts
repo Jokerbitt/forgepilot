@@ -30,6 +30,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
     'run_complete':          true,
     'run_failed':            true,
     'delegation_approved':   true,
+    'delegation_pending':    true,
     'brief_ready':           true,
     'system':                true,
   },
@@ -47,6 +48,7 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   'run_complete':          'Agent-Run abgeschlossen',
   'run_failed':            'Agent-Run fehlgeschlagen',
   'delegation_approved':   'Delegation freigegeben',
+  'delegation_pending':    'Delegation wartet auf Freigabe',
   'brief_ready':           'Project Brief bereit',
   'system':                'Systemmeldungen',
 }

@@ -7,6 +7,18 @@ import { readNotifications, getUnreadCount } from '@/lib/notifications/notificat
 import { getRuns } from '@/lib/agent-runs/store'
 import { buildDigest } from '@/lib/digest/digest-builder'
 
+export interface TelegramCallbackQuery {
+  id: string
+  from: { id: number; username?: string }
+  message?: {
+    message_id: number
+    chat: { id: number }
+    text?: string
+  }
+  /** callback_data from the button, e.g. "approve_abc123" or "reject_abc123" */
+  data?: string
+}
+
 export interface TelegramUpdate {
   update_id: number
   message?: {
@@ -16,6 +28,8 @@ export interface TelegramUpdate {
     text?: string
     date: number
   }
+  /** Button press from an inline keyboard */
+  callback_query?: TelegramCallbackQuery
 }
 
 const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
@@ -139,9 +153,60 @@ function cmdNotif(): string {
   return `🔔 *Ungelesene Benachrichtigungen*\n\n${lines.join('\n\n')}`
 }
 
+// ── Callback query handler (inline keyboard button presses) ──────────────────
+
+export interface CallbackResult {
+  /** Toast text shown in the Telegram client after button press */
+  toast: string
+  /** Updated message text to replace the original message */
+  editedText: string
+}
+
+export function handleCallbackQuery(cbq: TelegramCallbackQuery): CallbackResult | null {
+  const cfg = readTelegramConfig()
+  if (!cfg) return null
+
+  // Security: verify chat ID from callback_query
+  const chatId = cbq.message?.chat.id.toString() ?? cbq.from.id.toString()
+  if (chatId !== cfg.chatId) return null
+
+  const data = cbq.data ?? ''
+
+  if (data.startsWith('approve_')) {
+    const id = data.slice('approve_'.length)
+    const d = updateDelegationStatus(id as Delegation['id'], 'approved')
+    if (!d) {
+      return { toast: `Delegation ${id} nicht gefunden`, editedText: `❌ Delegation \`${id}\` nicht gefunden.` }
+    }
+    const title = (d.title ?? d.contract?.goal ?? id).slice(0, 60)
+    return {
+      toast: '✅ Genehmigt!',
+      editedText: `✅ *Genehmigt:* ${title}\n_Aktion ausgeführt von Telegram_`,
+    }
+  }
+
+  if (data.startsWith('reject_')) {
+    const id = data.slice('reject_'.length)
+    const d = updateDelegationStatus(id as Delegation['id'], 'cancelled')
+    if (!d) {
+      return { toast: `Delegation ${id} nicht gefunden`, editedText: `❌ Delegation \`${id}\` nicht gefunden.` }
+    }
+    const title = (d.title ?? d.contract?.goal ?? id).slice(0, 60)
+    return {
+      toast: '🚫 Abgelehnt',
+      editedText: `🚫 *Abgelehnt:* ${title}\n_Aktion ausgeführt von Telegram_`,
+    }
+  }
+
+  return null
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 export async function handleTelegramUpdate(update: TelegramUpdate): Promise<string | null> {
+  // Inline keyboard button press — handled separately by the webhook route
+  if (update.callback_query) return null
+
   const msg = update.message
   if (!msg?.text) return null
 
