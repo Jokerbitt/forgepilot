@@ -3,9 +3,10 @@
  */
 
 import { describe, it, expect, vi } from 'vitest'
+import type { ScopeClaim } from '@/lib/agents/scope-lock'
 
 const { mockGetActiveClaims } = vi.hoisted(() => ({
-  mockGetActiveClaims: vi.fn(() => []),
+  mockGetActiveClaims: vi.fn(() => [] as ScopeClaim[]),
 }))
 
 vi.mock('@/lib/agents/scope-lock', () => ({
@@ -35,7 +36,7 @@ describe('GET /api/agents/scope/stream', () => {
     mockGetActiveClaims.mockReturnValue([
       {
         agentId: 'claude-1',
-        agentType: 'backend-engineer',
+        agentType: 'claude-code',
         milestone: 'M162',
         branch: 'feature/m162',
         filePatterns: ['src/**/*.ts'],
