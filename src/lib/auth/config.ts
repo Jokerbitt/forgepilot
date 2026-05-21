@@ -1,4 +1,5 @@
 export const AUTH_DISABLED_ENV = 'FORGEPILOT_AUTH_DISABLED'
+export const DEFAULT_ADMIN_EMAIL = 'admin@forgepilot.local'
 
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on'])
 
@@ -8,7 +9,7 @@ export function isForgePilotAuthEnabled(env: NodeJS.ProcessEnv = process.env): b
 }
 
 export function isAuthConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
-  return Boolean(env.FORGEPILOT_ADMIN_PASSWORD || env.NEXTAUTH_SECRET)
+  return Boolean(env.FORGEPILOT_ADMIN_PASSWORD && env.NEXTAUTH_SECRET)
 }
 
 export function isAuthApiPath(pathname: string): boolean {

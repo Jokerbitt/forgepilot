@@ -87,7 +87,7 @@ NEXTAUTH_URL=http://localhost:3000
 
 For local development without auth (unsafe):
 ```env
-FORGEPILOT_AUTH_ENABLED=false
+FORGEPILOT_AUTH_DISABLED=true
 ```
 
 ## Health Check
