@@ -1,21 +1,6 @@
-/**
- * Inline sort logic extracted from work-items page for unit testing.
- * Mirrors the sort implementation in WorkItemsTab.
- */
 import { describe, it, expect } from 'vitest'
 import type { WorkItem } from '@/lib/models/work-item'
-
-type SortKey = 'priority' | 'title' | 'updatedAt'
-
-function sortItems(items: WorkItem[], sortKey: SortKey, sortDir: 'asc' | 'desc'): WorkItem[] {
-  return [...items].sort((a, b) => {
-    let cmp = 0
-    if (sortKey === 'priority') cmp = a.priority - b.priority
-    else if (sortKey === 'title') cmp = a.title.localeCompare(b.title)
-    else if (sortKey === 'updatedAt') cmp = a.updatedAt.localeCompare(b.updatedAt)
-    return sortDir === 'asc' ? cmp : -cmp
-  })
-}
+import { sortWorkItems } from './sort-utils'
 
 function makeItem(overrides: Partial<WorkItem> & { id: string }): WorkItem {
   return {
@@ -42,7 +27,7 @@ describe('sortItems by priority', () => {
       makeItem({ id: '2', priority: 0 }),
       makeItem({ id: '3', priority: 2 }),
     ]
-    const result = sortItems(items, 'priority', 'asc')
+    const result = sortWorkItems(items, 'priority', 'asc')
     expect(result.map(i => i.id)).toEqual(['2', '3', '1'])
   })
 
@@ -52,7 +37,7 @@ describe('sortItems by priority', () => {
       makeItem({ id: '2', priority: 3 }),
       makeItem({ id: '3', priority: 1 }),
     ]
-    const result = sortItems(items, 'priority', 'desc')
+    const result = sortWorkItems(items, 'priority', 'desc')
     expect(result.map(i => i.id)).toEqual(['2', '3', '1'])
   })
 })
@@ -64,7 +49,7 @@ describe('sortItems by title', () => {
       makeItem({ id: '2', title: 'Apple' }),
       makeItem({ id: '3', title: 'Mango' }),
     ]
-    const result = sortItems(items, 'title', 'asc')
+    const result = sortWorkItems(items, 'title', 'asc')
     expect(result.map(i => i.title)).toEqual(['Apple', 'Mango', 'Zebra'])
   })
 
@@ -73,7 +58,7 @@ describe('sortItems by title', () => {
       makeItem({ id: '1', title: 'Apple' }),
       makeItem({ id: '2', title: 'Zebra' }),
     ]
-    const result = sortItems(items, 'title', 'desc')
+    const result = sortWorkItems(items, 'title', 'desc')
     expect(result[0].title).toBe('Zebra')
   })
 })
@@ -85,7 +70,7 @@ describe('sortItems by updatedAt', () => {
       makeItem({ id: '2', updatedAt: '2026-01-01T00:00:00.000Z' }),
       makeItem({ id: '3', updatedAt: '2026-02-01T00:00:00.000Z' }),
     ]
-    const result = sortItems(items, 'updatedAt', 'asc')
+    const result = sortWorkItems(items, 'updatedAt', 'asc')
     expect(result.map(i => i.id)).toEqual(['2', '3', '1'])
   })
 
@@ -94,16 +79,16 @@ describe('sortItems by updatedAt', () => {
       makeItem({ id: '1', updatedAt: '2026-01-01T00:00:00.000Z' }),
       makeItem({ id: '2', updatedAt: '2026-03-01T00:00:00.000Z' }),
     ]
-    const result = sortItems(items, 'updatedAt', 'desc')
+    const result = sortWorkItems(items, 'updatedAt', 'desc')
     expect(result[0].id).toBe('2')
   })
 })
 
-describe('sortItems does not mutate original array', () => {
+describe('sortWorkItems does not mutate original array', () => {
   it('returns new array', () => {
     const items = [makeItem({ id: '1', priority: 2 }), makeItem({ id: '2', priority: 0 })]
     const original = [...items]
-    sortItems(items, 'priority', 'asc')
+    sortWorkItems(items, 'priority', 'asc')
     expect(items.map(i => i.id)).toEqual(original.map(i => i.id))
   })
 })
