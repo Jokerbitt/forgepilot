@@ -31,6 +31,7 @@ import {
   FolderOpen,
   Bell,
   Radio,
+  GraduationCap,
 } from 'lucide-react'
 import type { Delegation } from '@/lib/models/delegation'
 import type { AttentionItem } from '@/lib/models/attention'
@@ -54,6 +55,7 @@ const navItems: NavItem[] = [
   { href: '/projects', label: 'Plan', shortLabel: 'Plan', icon: FolderOpen, section: 'Main' },
   { href: '/delegations', label: 'Execute', shortLabel: 'Execute', icon: ListChecks, section: 'Main' },
   { href: '/knowledge', label: 'Knowledge', shortLabel: 'Knowledge', icon: BookOpen, section: 'Main' },
+  { href: '/knowledge-cards', label: 'Delegation Lessons', shortLabel: 'Lessons', icon: GraduationCap, section: 'More' },
   { href: '/model-router', label: 'System', shortLabel: 'System', icon: GitBranch, section: 'Main' },
   { href: '/inbox', label: 'Inbox', shortLabel: 'Inbox', icon: Inbox, section: 'More' },
   { href: '/notifications', label: 'Notifications', shortLabel: 'Notifs', icon: Bell, section: 'More' },
