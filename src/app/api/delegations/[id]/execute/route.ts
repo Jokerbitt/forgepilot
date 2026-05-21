@@ -25,12 +25,14 @@ import { generateText } from '@/lib/ai/text-generation'
 import { extractKnowledge } from '@/lib/knowledge/extraction'
 import { persistGrokCriticForDelegation } from '@/lib/eval/auto-grok-critic'
 import { writebackExecutionInsights } from '@/lib/knowledge/writeback'
+import { triggerChainedDelegation } from '@/lib/delegation-chain'
 import { notifyExecutionResult } from '@/lib/notifications'
 
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import { buildContextPackage } from '@/lib/knowledge/context-package'
 import type { MemoryCard } from '@/lib/knowledge/types'
 import { checkParallelCompletion } from '@/lib/delegation-parallel'
+import { broadcastEvent } from '@/app/api/events/route'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
@@ -41,6 +43,9 @@ async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Dele
     ...(report ? { summaryReport: report } : {}),
     logs: [...(current.logs ?? []), ...newLogs],
   })
+  if (statusOverride) {
+    broadcastEvent('delegation:update', { id, status: statusOverride })
+  }
 }
 
 function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[]): string {
@@ -297,6 +302,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
         logs: [...(current.logs ?? []), ...logBuffer, finalLog],
       })
       if (!finishedDelegation) return
+      broadcastEvent('delegation:update', { id, status: finalStatus })
 
       // M207: Fan-in — notify parent if this is a parallel sub-delegation
       void checkParallelCompletion(finishedDelegation)
@@ -397,6 +403,11 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
 
       // M204: fire-and-forget execution notification
       void notifyExecutionResult({ delegation: finishedDelegation, event: finalStatus })
+
+      // M206: Fire-and-forget chain trigger after successful completion
+      if (success) {
+        void triggerChainedDelegation(finishedDelegation)
+      }
       }
     })()
   })
@@ -484,6 +495,11 @@ async function runWithOllamaAgent(
 
       // M204: fire-and-forget execution notification
       void notifyExecutionResult({ delegation: finished, event: result.success ? 'completed' : 'failed' })
+
+      // M206: Fire-and-forget chain trigger after successful completion
+      if (result.success) {
+        void triggerChainedDelegation(finished)
+      }
     }
   } catch (err) {
     const msg = (err as Error).message
