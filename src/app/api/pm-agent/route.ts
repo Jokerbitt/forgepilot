@@ -9,16 +9,10 @@ import { readStoredApiKeys } from '@/lib/connectors/config'
 import { runPMAgent, type PMAgentResult } from '@/lib/agent-runner/pm-agent'
 import { appendPMHistory } from '@/lib/agent-runner/pm-history-store'
 import { saveNotification } from '@/lib/notifications/notification-store'
-import type { Delegation } from '@/lib/models/delegation'
 import type { NotificationSeverity } from '@/lib/models/notification'
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 const PM_PLAN_FILE = path.join(process.cwd(), 'config', 'pm-plan.json')
-
-function readDelegations(): Delegation[] {
-  try {
-    return JSON.parse(fs.readFileSync(path.join(process.cwd(), 'config', 'delegations.json'), 'utf-8')) as Delegation[]
-  } catch { return [] }
-}
 
 function readLastPMPlan(): PMAgentResult | null {
   try { return JSON.parse(fs.readFileSync(PM_PLAN_FILE, 'utf-8')) as PMAgentResult }
@@ -46,7 +40,8 @@ export async function POST() {
   const briefs = readProjectBriefs().filter(b => b.status !== 'archived')
   const milestones = readMilestones()
   const workPackages = readWorkPackages()
-  const delegations = readDelegations()
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+  const delegations = await repo.listByStatus()
 
   try {
     const result = await runPMAgent(briefs, milestones, workPackages, delegations, { apiKey })

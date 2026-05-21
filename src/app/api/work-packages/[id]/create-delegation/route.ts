@@ -3,27 +3,7 @@ import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { readWorkPackages } from '@/lib/knowledge/milestone-store'
 import type { Delegation } from '@/lib/models/delegation'
-import fs from 'fs'
-import path from 'path'
-
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
-
-function readDelegations(): Delegation[] {
-  try {
-    const data = fs.readFileSync(DELEGATIONS_FILE, 'utf-8')
-    return JSON.parse(data) as Delegation[]
-  } catch {
-    return []
-  }
-}
-
-function writeDelegations(delegations: Delegation[]) {
-  const dir = path.dirname(DELEGATIONS_FILE)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  const tmp = DELEGATIONS_FILE + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(delegations, null, 2), 'utf-8')
-  fs.renameSync(tmp, DELEGATIONS_FILE)
-}
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 type RouteParams = { params: Promise<{ id: string }> }
 
@@ -74,9 +54,8 @@ export async function POST(_request: Request, { params }: RouteParams) {
     updatedAt: now,
   }
 
-  const delegations = readDelegations()
-  delegations.push(delegation)
-  writeDelegations(delegations)
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+  const created = await repo.create(delegation)
 
-  return NextResponse.json({ delegationId, delegation }, { status: 201 })
+  return NextResponse.json({ delegationId: created.id, delegation: created }, { status: 201 })
 }

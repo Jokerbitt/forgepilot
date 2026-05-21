@@ -1,10 +1,7 @@
 export const dynamic = 'force-dynamic'
 
-import fs from 'fs'
-import path from 'path'
 import type { Delegation } from '@/lib/models/delegation'
-
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 /**
  * M164 — Global SSE stream for delegation list changes.
@@ -27,11 +24,10 @@ export async function GET(): Promise<Response> {
   /** Recent = running OR completed/failed within the last 5 minutes */
   const RECENT_WINDOW_MS = 5 * 60 * 1_000
 
-  function readDelegations(): Delegation[] {
+  async function fetchDelegations(): Promise<Delegation[]> {
     try {
-      const raw = fs.readFileSync(DELEGATIONS_FILE, 'utf-8')
-      const parsed = JSON.parse(raw) as unknown
-      return Array.isArray(parsed) ? (parsed as Delegation[]) : []
+      const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+      return await repo.listByStatus()
     } catch {
       return []
     }
@@ -68,9 +64,9 @@ export async function GET(): Promise<Response> {
   let lastHash = ''
 
   const stream = new ReadableStream({
-    start(controller) {
+    async start(controller) {
       // Initial snapshot
-      const initial = getRelevant(readDelegations())
+      const initial = getRelevant(await fetchDelegations())
       lastHash = stateHash(initial)
       controller.enqueue(
         sseEvent('delegations', {
@@ -82,22 +78,24 @@ export async function GET(): Promise<Response> {
 
       // Poll for changes
       pollTimer = setInterval(() => {
-        try {
-          const relevant = getRelevant(readDelegations())
-          const hash = stateHash(relevant)
-          if (hash !== lastHash) {
-            lastHash = hash
-            controller.enqueue(
-              sseEvent('delegations', {
-                delegations: relevant,
-                count: relevant.length,
-                ts: new Date().toISOString(),
-              }),
-            )
+        void (async () => {
+          try {
+            const relevant = getRelevant(await fetchDelegations())
+            const hash = stateHash(relevant)
+            if (hash !== lastHash) {
+              lastHash = hash
+              controller.enqueue(
+                sseEvent('delegations', {
+                  delegations: relevant,
+                  count: relevant.length,
+                  ts: new Date().toISOString(),
+                }),
+              )
+            }
+          } catch {
+            // repository error — keep stream alive
           }
-        } catch {
-          // file read error — keep stream alive
-        }
+        })()
       }, POLL_MS)
 
       // Heartbeat

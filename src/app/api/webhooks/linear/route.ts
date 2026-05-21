@@ -3,20 +3,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { parseLinearWebhook, verifyLinearSignature } from '@/lib/linear/webhook-parser'
 import type { LinearWebhookPayload } from '@/lib/linear/webhook-parser'
 import type { Delegation, TaskContract } from '@/lib/models/delegation'
-import { readDelegations } from '@/lib/delegations/queue'
 import { apiLogger } from '@/lib/logger'
-import fs from 'fs'
-import path from 'path'
-
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
-
-function writeDelegations(delegations: Delegation[]): void {
-  const dir = path.dirname(DELEGATIONS_FILE)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  const tmp = DELEGATIONS_FILE + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(delegations, null, 2), 'utf-8')
-  fs.renameSync(tmp, DELEGATIONS_FILE)
-}
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const rawBody = await request.text()
@@ -43,7 +31,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const { candidate } = result
-  const existing = readDelegations()
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+  const existing = await repo.listByStatus()
   const duplicate = existing.find(
     d => d.contract.workItemId === candidate.workItemId && d.status !== 'cancelled'
   )
@@ -80,12 +69,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     priority: 5 - candidate.priority, createdAt: now, updatedAt: now,
   }
 
-  writeDelegations([...existing, delegation])
-  apiLogger.info({ event: 'linear.webhook.delegation_created', workItemId: candidate.workItemId, delegationId: id }, `Auto-delegation created from ${candidate.workItemId}`)
+  const created = await repo.create(delegation)
+  apiLogger.info({ event: 'linear.webhook.delegation_created', workItemId: candidate.workItemId, delegationId: created.id }, `Auto-delegation created from ${candidate.workItemId}`)
 
   return NextResponse.json({
-    ok: true, action: 'delegation-created', delegationId: id,
-    status: delegation.status, workItemId: candidate.workItemId,
+    ok: true, action: 'delegation-created', delegationId: created.id,
+    status: created.status, workItemId: candidate.workItemId,
     riskClass: candidate.riskClass, requiresApproval: candidate.requiresApproval,
   }, { status: 201 })
 }

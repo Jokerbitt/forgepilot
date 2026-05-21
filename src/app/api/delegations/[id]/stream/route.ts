@@ -1,16 +1,14 @@
-import fs from 'fs'
-import path from 'path'
 import type { Delegation, AgentLog } from '@/lib/models/delegation'
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 export const dynamic = 'force-dynamic'
 
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
 const POLL_INTERVAL_MS = 800
 
-function readDelegation(id: string): Delegation | null {
+async function readDelegation(id: string): Promise<Delegation | null> {
   try {
-    const data = JSON.parse(fs.readFileSync(DELEGATIONS_FILE, 'utf-8')) as Delegation[]
-    return data.find(d => d.id === id) ?? null
+    const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+    return await repo.findById(id)
   } catch {
     return null
   }
@@ -24,7 +22,7 @@ function encodeSSE(event: string, data: unknown): string {
  * GET /api/delegations/[id]/stream
  *
  * Server-Sent Events stream for real-time delegation log updates.
- * Polls delegations.json every 800ms and pushes new logs to the client.
+ * Polls the repository every 800ms and pushes new logs to the client.
  * Sends a "status" event when the delegation status changes.
  * Closes the stream when the delegation reaches a terminal state.
  */
@@ -34,7 +32,7 @@ export async function GET(
 ) {
   const { id } = await params
 
-  const delegation = readDelegation(id)
+  const delegation = await readDelegation(id)
   if (!delegation) {
     return new Response('Delegation nicht gefunden', { status: 404 })
   }
@@ -43,9 +41,9 @@ export async function GET(
   let knownStatus = delegation.status
 
   const stream = new ReadableStream({
-    start(controller) {
+    async start(controller) {
       // Send initial state immediately
-      const initial = readDelegation(id)
+      const initial = await readDelegation(id)
       if (initial) {
         knownLogCount = (initial.logs ?? []).length
         knownStatus = initial.status
@@ -64,46 +62,48 @@ export async function GET(
       const terminal: Delegation['status'][] = ['completed', 'failed', 'cancelled']
 
       const poll = setInterval(() => {
-        const current = readDelegation(id)
-        if (!current) {
-          clearInterval(poll)
-          controller.close()
-          return
-        }
+        void (async () => {
+          const current = await readDelegation(id)
+          if (!current) {
+            clearInterval(poll)
+            controller.close()
+            return
+          }
 
-        const currentLogs = current.logs ?? []
+          const currentLogs = current.logs ?? []
 
-        // Send new logs since last poll
-        if (currentLogs.length > knownLogCount) {
-          const newLogs: AgentLog[] = currentLogs.slice(knownLogCount)
-          knownLogCount = currentLogs.length
-          controller.enqueue(
-            new TextEncoder().encode(encodeSSE('logs', { logs: newLogs })),
-          )
-        }
+          // Send new logs since last poll
+          if (currentLogs.length > knownLogCount) {
+            const newLogs: AgentLog[] = currentLogs.slice(knownLogCount)
+            knownLogCount = currentLogs.length
+            controller.enqueue(
+              new TextEncoder().encode(encodeSSE('logs', { logs: newLogs })),
+            )
+          }
 
-        // Send status change
-        if (current.status !== knownStatus) {
-          knownStatus = current.status
-          controller.enqueue(
-            new TextEncoder().encode(
-              encodeSSE('status', {
-                status: current.status,
-                actualCostUsd: current.actualCostUsd,
-                summaryReport: current.summaryReport,
-              }),
-            ),
-          )
-        }
+          // Send status change
+          if (current.status !== knownStatus) {
+            knownStatus = current.status
+            controller.enqueue(
+              new TextEncoder().encode(
+                encodeSSE('status', {
+                  status: current.status,
+                  actualCostUsd: current.actualCostUsd,
+                  summaryReport: current.summaryReport,
+                }),
+              ),
+            )
+          }
 
-        // Close stream on terminal state
-        if (terminal.includes(current.status)) {
-          clearInterval(poll)
-          // Small delay so client receives the final status event
-          setTimeout(() => {
-            try { controller.close() } catch { /* already closed */ }
-          }, 1500)
-        }
+          // Close stream on terminal state
+          if (terminal.includes(current.status)) {
+            clearInterval(poll)
+            // Small delay so client receives the final status event
+            setTimeout(() => {
+              try { controller.close() } catch { /* already closed */ }
+            }, 1500)
+          }
+        })()
       }, POLL_INTERVAL_MS)
 
       // Heartbeat to keep the connection alive through proxies

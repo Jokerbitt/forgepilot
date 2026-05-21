@@ -1,28 +1,17 @@
 import { type NextRequest, NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
-import type { Delegation } from '@/lib/models/delegation'
 import { syncAttentionFromDelegations } from '@/lib/attention/engine'
 import { getOpenAttentionItems, upsertAttentionItem } from '@/lib/attention/store'
 import { parseBody } from '@/lib/validation/api'
 import { AttentionItemCreateSchema } from '@/lib/validation/schemas'
 import { randomUUID } from 'crypto'
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 export const dynamic = 'force-dynamic'
 
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
-
-function readDelegations(): Delegation[] {
-  try {
-    return JSON.parse(fs.readFileSync(DELEGATIONS_FILE, 'utf-8')) as Delegation[]
-  } catch {
-    return []
-  }
-}
-
 /** GET /api/attention — sync from delegation state and return open items */
 export async function GET() {
-  const delegations = readDelegations()
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+  const delegations = await repo.listByStatus()
   syncAttentionFromDelegations(delegations)
   const items = getOpenAttentionItems()
   return NextResponse.json(items)

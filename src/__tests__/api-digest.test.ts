@@ -1,14 +1,14 @@
 /**
  * Tests for GET /api/digest
  *
- * The route reads two JSON files from disk (delegations.json,
- * knowledge-store.json) and calls getOpenAttentionItems().
- * We mock fs and the attention store so no real I/O is needed.
+ * The route uses DelegationRepository and KnowledgeCardRepository.
+ * We mock both repositories so no real I/O is needed.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { DigestEntry } from '@/lib/models/attention'
 import type { Delegation } from '@/lib/models/delegation'
+import type { MemoryCard } from '@/lib/knowledge/types'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -46,25 +46,38 @@ const DELEGATIONS: Delegation[] = [
   } as unknown as Delegation,
 ]
 
-const KNOWLEDGE_STORE = {
-  items: [
-    { createdAt: WITHIN_24H },
-    { createdAt: WITHIN_24H },
-    { createdAt: OLDER },         // outside 24h — should NOT be counted
-  ],
-}
+const KNOWLEDGE_CARDS: MemoryCard[] = [
+  { id: 'k-1', type: 'learning', title: 'Card 1', body: '', sourceIds: [], tags: [], privacyClass: 'internal', confidence: 'medium', createdAt: WITHIN_24H, updatedAt: WITHIN_24H },
+  { id: 'k-2', type: 'learning', title: 'Card 2', body: '', sourceIds: [], tags: [], privacyClass: 'internal', confidence: 'medium', createdAt: WITHIN_24H, updatedAt: WITHIN_24H },
+  { id: 'k-3', type: 'learning', title: 'Card 3', body: '', sourceIds: [], tags: [], privacyClass: 'internal', confidence: 'medium', createdAt: OLDER, updatedAt: OLDER },
+]
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-// Mock fs so the route never touches the real filesystem
-vi.mock('fs', () => ({
-  default: {
-    readFileSync: vi.fn(),
-    existsSync: vi.fn(() => true),
-    mkdirSync: vi.fn(),
-    writeFileSync: vi.fn(),
-    renameSync: vi.fn(),
-  },
+const mockListByStatus = vi.fn().mockResolvedValue(DELEGATIONS)
+const mockKnowledgeListAll = vi.fn().mockResolvedValue(KNOWLEDGE_CARDS)
+
+vi.mock('@/lib/repositories/delegationRepository', () => ({
+  createDelegationRepository: vi.fn(() => ({
+    listByStatus: mockListByStatus,
+    findById: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    listByProject: vi.fn(),
+  })),
+  SINGLE_TENANT_USER_ID: 'local-user',
+}))
+
+vi.mock('@/lib/repositories/knowledgeCardRepository', () => ({
+  createKnowledgeCardRepository: vi.fn(() => ({
+    listAll: mockKnowledgeListAll,
+    create: vi.fn(),
+    findById: vi.fn(),
+    listByDelegation: vi.fn(),
+    listByType: vi.fn(),
+    upsert: vi.fn(),
+  })),
 }))
 
 vi.mock('@/lib/attention/store', () => ({
@@ -73,20 +86,8 @@ vi.mock('@/lib/attention/store', () => ({
 
 // ─── Imports after mocks ──────────────────────────────────────────────────────
 
-import fs from 'fs'
 import { getOpenAttentionItems } from '@/lib/attention/store'
 import { GET } from '@/app/api/digest/route'
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function setupFsMock(delegations: Delegation[] = DELEGATIONS): void {
-  vi.mocked(fs.readFileSync).mockImplementation((filePath: unknown) => {
-    const p = filePath as string
-    if (p.includes('delegations.json')) return JSON.stringify(delegations)
-    if (p.includes('knowledge-store.json')) return JSON.stringify(KNOWLEDGE_STORE)
-    throw new Error(`Unexpected readFileSync call for: ${p}`)
-  })
-}
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
@@ -95,7 +96,8 @@ describe('GET /api/digest', () => {
     vi.clearAllMocks()
     // Freeze time so the 24h window is deterministic
     vi.setSystemTime(NOW)
-    setupFsMock()
+    mockListByStatus.mockResolvedValue(DELEGATIONS)
+    mockKnowledgeListAll.mockResolvedValue(KNOWLEDGE_CARDS)
     vi.mocked(getOpenAttentionItems).mockReturnValue([])
   })
 
@@ -169,27 +171,18 @@ describe('GET /api/digest', () => {
     expect(Number.isNaN(new Date(body.generatedAt).getTime())).toBe(false)
   })
 
-  it('returns zeros when delegations.json is missing / unreadable', async () => {
-    vi.mocked(fs.readFileSync).mockImplementation((filePath: unknown) => {
-      const p = filePath as string
-      if (p.includes('delegations.json')) throw new Error('ENOENT')
-      if (p.includes('knowledge-store.json')) return JSON.stringify({ items: [] })
-      throw new Error(`Unexpected: ${p}`)
-    })
+  it('returns zeros when delegation repository fails', async () => {
+    mockListByStatus.mockRejectedValue(new Error('DB error'))
     const response = await GET()
+    expect(response.status).toBe(200)
     const body = await response.json() as DigestEntry
     expect(body.delegationsCompleted).toBe(0)
     expect(body.prsCreated).toEqual([])
     expect(body.totalCostUsd).toBe(0)
   })
 
-  it('returns 0 knowledge cards when knowledge-store.json is missing', async () => {
-    vi.mocked(fs.readFileSync).mockImplementation((filePath: unknown) => {
-      const p = filePath as string
-      if (p.includes('delegations.json')) return JSON.stringify([])
-      if (p.includes('knowledge-store.json')) throw new Error('ENOENT')
-      throw new Error(`Unexpected: ${p}`)
-    })
+  it('returns 0 knowledge cards when knowledge card repository fails', async () => {
+    mockKnowledgeListAll.mockRejectedValue(new Error('DB error'))
     const response = await GET()
     const body = await response.json() as DigestEntry
     expect(body.newKnowledgeCards).toBe(0)

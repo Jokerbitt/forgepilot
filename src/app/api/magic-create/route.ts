@@ -6,6 +6,7 @@ import type { WorkItem, RiskClass } from '@/lib/models/work-item'
 import type { Delegation } from '@/lib/models/delegation'
 import { getNBAConfig } from '@/lib/nba-engine/nba-config'
 import { shouldRequireApproval } from '@/lib/nba-engine/approval-policy'
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 interface MagicCreateBody {
   mode?: 'manual' | 'delegation' | 'magic'
@@ -21,7 +22,6 @@ interface MagicCreateBody {
 }
 
 const LOCAL_ITEMS_FILE = path.join(process.cwd(), 'config', 'local-items.json')
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
 
 function estimateMinutesFromText(text: string): number {
   const lengthScore = Math.min(120, Math.max(30, text.trim().length * 2))
@@ -122,20 +122,10 @@ export async function POST(request: NextRequest) {
         updatedAt: new Date().toISOString()
       }
 
-      let delegations: Delegation[] = []
+      const delegationRepo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+      const created = await delegationRepo.create(newDelegation)
 
-      if (fs.existsSync(DELEGATIONS_FILE)) {
-        delegations = JSON.parse(fs.readFileSync(DELEGATIONS_FILE, 'utf8')) as Delegation[]
-      }
-
-      delegations.push(newDelegation)
-      const dir = path.dirname(DELEGATIONS_FILE)
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-      const tmpDel = DELEGATIONS_FILE + '.tmp'
-      fs.writeFileSync(tmpDel, JSON.stringify(delegations, null, 2))
-      fs.renameSync(tmpDel, DELEGATIONS_FILE)
-
-      return NextResponse.json({ success: true, item: newDelegation })
+      return NextResponse.json({ success: true, item: created })
     } else {
       // Magic create
       const { prompt, projectId, milestone } = body

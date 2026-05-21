@@ -1,20 +1,8 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
-import type { Delegation } from '@/lib/models/delegation'
 import { readStoredApiKeys } from '@/lib/connectors/config'
 import { runPreflight } from '@/lib/preflight'
-
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
-
-function readDelegations(): Delegation[] {
-  try {
-    return JSON.parse(fs.readFileSync(DELEGATIONS_FILE, 'utf-8')) as Delegation[]
-  } catch {
-    return []
-  }
-}
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 export async function POST(req: Request) {
   let body: { delegationId: string }
@@ -29,7 +17,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'delegationId required' }, { status: 400 })
   }
 
-  const delegation = readDelegations().find(d => d.id === delegationId)
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+  const delegation = await repo.findById(delegationId)
   if (!delegation) {
     return NextResponse.json({ error: `Delegation ${delegationId} not found` }, { status: 404 })
   }
