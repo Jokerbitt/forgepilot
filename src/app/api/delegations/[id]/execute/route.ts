@@ -23,6 +23,7 @@ import { recordOutcome } from '@/lib/agents/skill-evolver'
 import { generateText } from '@/lib/ai/text-generation'
 import { extractKnowledge } from '@/lib/knowledge/extraction'
 import { persistGrokCriticForDelegation } from '@/lib/eval/auto-grok-critic'
+import { writebackExecutionInsights } from '@/lib/knowledge/writeback'
 
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import { buildContextPackage } from '@/lib/knowledge/context-package'
@@ -346,7 +347,13 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       }
 
       if (success && report) {
-        persistGrokCriticForDelegation(finishedDelegation, report).catch(() => {})
+        persistGrokCriticForDelegation(finishedDelegation, report)
+          .then(criticScore => {
+            if (criticScore) {
+              void writebackExecutionInsights({ ...finishedDelegation, criticScore })
+            }
+          })
+          .catch(() => {})
       }
 
       // Completion attention item
