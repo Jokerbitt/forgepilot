@@ -744,6 +744,7 @@ export default function DelegationDetailPage() {
                   ? true  // assume configured client-side; API returns 503 if not
                   : false
                 }
+                initialScore={d.criticScore}
               />
             )}
           </div>

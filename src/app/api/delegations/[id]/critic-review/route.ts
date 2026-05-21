@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { runGrokCritic, runGrokCodeReview } from '@/lib/eval/grok-critic'
 import type { GrokCriticResult, CodeReviewResult } from '@/lib/eval/grok-critic'
+import { mapGrokResultToCriticScore } from '@/lib/eval/auto-grok-critic'
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 type ReviewType = 'delegation' | 'code'
@@ -23,23 +24,13 @@ type RouteParams = { params: Promise<{ id: string }> }
  * Body: { output: string, type: 'delegation' | 'code', filePath?: string, diff?: string }
  *
  * Calls runGrokCritic() or runGrokCodeReview() and returns the result.
- * Returns 503 if XAI_API_KEY is not configured.
+ * Persists delegation critic results when the review succeeds.
  */
 export async function POST(
   request: Request,
   { params }: RouteParams,
 ) {
   const { id } = await params
-
-  if (!process.env.XAI_API_KEY) {
-    return NextResponse.json(
-      {
-        error: 'Grok not configured',
-        hint: 'Add XAI_API_KEY to .env.local to enable Grok Critic review',
-      },
-      { status: 503 },
-    )
-  }
 
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
   const delegation = await repo.findById(id)
@@ -86,10 +77,11 @@ export async function POST(
 
   if (!result) {
     return NextResponse.json(
-      { error: 'Grok critic review failed — check server logs' },
+      { error: 'Grok critic review failed — check provider configuration and server logs' },
       { status: 502 },
     )
   }
 
+  await repo.update(id, { criticScore: mapGrokResultToCriticScore(result) })
   return NextResponse.json(result)
 }

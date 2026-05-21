@@ -131,6 +131,10 @@ class PostgresDelegationRepository implements DelegationRepository {
         autoOrchestrate: input.autoOrchestrate ?? false,
         priority: input.priority ?? null,
         briefId: input.briefId ?? null,
+        criticScore:
+          input.criticScore != null
+            ? (input.criticScore as unknown as Record<string, unknown>)
+            : null,
         createdAt,
         updatedAt,
       })
