@@ -9,6 +9,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { getToken } from 'next-auth/jwt'
+import { isForgePilotAuthEnabled, shouldProtectPath } from '@/lib/auth/config'
 
 /** Header name read on the request and echoed on the response. */
 export const REQUEST_ID_HEADER = 'x-request-id'
@@ -26,18 +28,49 @@ function newRequestId(): string {
   return Array.from({ length: 22 }, () => Math.floor(Math.random() * 36).toString(36)).join('')
 }
 
-export function middleware(request: NextRequest): NextResponse {
+function requestIdFor(request: NextRequest): string {
   const incoming = request.headers.get(REQUEST_ID_HEADER)
-  const requestId = incoming && VALID_REQUEST_ID.test(incoming) ? incoming : newRequestId()
+  return incoming && VALID_REQUEST_ID.test(incoming) ? incoming : newRequestId()
+}
 
-  // Forward the (possibly minted) header to downstream handlers …
+function nextWithRequestId(request: NextRequest): NextResponse {
+  const requestId = requestIdFor(request)
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set(REQUEST_ID_HEADER, requestId)
-
-  // … and mirror it back to the client.
   const response = NextResponse.next({ request: { headers: requestHeaders } })
   response.headers.set(REQUEST_ID_HEADER, requestId)
   return response
+}
+
+function decorateResponse(request: NextRequest, response: NextResponse): NextResponse {
+  response.headers.set(REQUEST_ID_HEADER, requestIdFor(request))
+  return response
+}
+
+export async function middleware(request: NextRequest): Promise<NextResponse> {
+  if (!isForgePilotAuthEnabled()) {
+    return nextWithRequestId(request)
+  }
+
+  const { pathname } = request.nextUrl
+  if (!shouldProtectPath(pathname)) {
+    return nextWithRequestId(request)
+  }
+
+  const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET })
+  if (token) return nextWithRequestId(request)
+
+  if (pathname.startsWith('/api/')) {
+    return decorateResponse(
+      request,
+      NextResponse.json({ error: 'Unauthorized', authRequired: true }, { status: 401 }),
+    )
+  }
+
+  const loginUrl = request.nextUrl.clone()
+  loginUrl.pathname = '/login'
+  loginUrl.searchParams.set('callbackUrl', request.nextUrl.pathname + request.nextUrl.search)
+  return decorateResponse(request, NextResponse.redirect(loginUrl))
 }
 
 /**
