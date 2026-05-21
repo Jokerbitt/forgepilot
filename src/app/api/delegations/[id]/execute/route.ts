@@ -25,6 +25,7 @@ import { generateText } from '@/lib/ai/text-generation'
 import { extractKnowledge } from '@/lib/knowledge/extraction'
 import { persistGrokCriticForDelegation } from '@/lib/eval/auto-grok-critic'
 import { writebackExecutionInsights } from '@/lib/knowledge/writeback'
+import { triggerChainedDelegation } from '@/lib/delegation-chain'
 
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import { buildContextPackage } from '@/lib/knowledge/context-package'
@@ -389,6 +390,11 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
         actionUrl: `/delegations/${id}`,
         createdAt: new Date().toISOString(),
       })
+
+      // M206: Fire-and-forget chain trigger after successful completion
+      if (success) {
+        void triggerChainedDelegation(finishedDelegation)
+      }
       }
     })()
   })
@@ -470,6 +476,11 @@ async function runWithOllamaAgent(
         actionUrl: `/delegations/${id}`,
         createdAt: new Date().toISOString(),
       })
+
+      // M206: Fire-and-forget chain trigger after successful completion
+      if (result.success) {
+        void triggerChainedDelegation(finished)
+      }
     }
   } catch (err) {
     const msg = (err as Error).message
@@ -552,6 +563,11 @@ End with a one-line DONE: <summary> statement.`,
       actionUrl: `/delegations/${id}`,
       createdAt: new Date().toISOString(),
     })
+
+    // M206: Fire-and-forget chain trigger after successful completion
+    if (finished) {
+      void triggerChainedDelegation(finished)
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     const errLog: AgentLog = {

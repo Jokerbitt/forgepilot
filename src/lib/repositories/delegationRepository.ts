@@ -89,6 +89,10 @@ function rowToDelegation(row: DbDelegation): Delegation {
       row.logs != null
         ? (row.logs as unknown as Delegation['logs'])
         : undefined,
+    chainNextId: row.chainNextId ?? undefined,
+    chainPrevId: row.chainPrevId ?? undefined,
+    chainPosition: row.chainPosition ?? undefined,
+    chainTotal: row.chainTotal ?? undefined,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }
@@ -135,6 +139,10 @@ class PostgresDelegationRepository implements DelegationRepository {
           input.criticScore != null
             ? (input.criticScore as unknown as Record<string, unknown>)
             : null,
+        chainNextId: input.chainNextId ?? null,
+        chainPrevId: input.chainPrevId ?? null,
+        chainPosition: input.chainPosition ?? null,
+        chainTotal: input.chainTotal ?? null,
         createdAt,
         updatedAt,
       })
@@ -210,6 +218,10 @@ class PostgresDelegationRepository implements DelegationRepository {
                   : null,
             }
           : {}),
+        ...(patch.chainNextId !== undefined ? { chainNextId: patch.chainNextId ?? null } : {}),
+        ...(patch.chainPrevId !== undefined ? { chainPrevId: patch.chainPrevId ?? null } : {}),
+        ...(patch.chainPosition !== undefined ? { chainPosition: patch.chainPosition ?? null } : {}),
+        ...(patch.chainTotal !== undefined ? { chainTotal: patch.chainTotal ?? null } : {}),
         updatedAt: now,
       })
       .where(eq(delegations.id, id))

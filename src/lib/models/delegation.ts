@@ -85,6 +85,8 @@ export interface TaskContract {
   allowedFilePatterns?: string[]
   /** Parent orchestrated run ID — set when created by orchestrator */
   orchestratedRunId?: string
+  /** M206: If true, auto-approve and execute the next chained delegation when this completes */
+  autoChain?: boolean
   createdAt: string
 }
 
@@ -122,6 +124,14 @@ export interface Delegation {
   traceId?: string
   /** M181: Grok Critic score — automatically populated after successful execution */
   criticScore?: CriticScore
+  /** M206: ID of the next delegation to trigger after this one completes */
+  chainNextId?: string
+  /** M206: ID of the delegation that triggered this one */
+  chainPrevId?: string
+  /** M206: Position in the chain (1-based) */
+  chainPosition?: number
+  /** M206: Total number of steps in the chain */
+  chainTotal?: number
   createdAt: string
   updatedAt: string
 }
