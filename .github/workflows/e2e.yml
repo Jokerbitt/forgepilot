@@ -15,12 +15,14 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npx playwright install chromium --with-deps
+      - name: Build app
+        run: npm run build
       - name: Start app
-        run: npm run build && npm start &
+        run: npm start &
         env:
           NODE_ENV: production
       - name: Wait for app
-        run: npx wait-on http://localhost:3000 --timeout 30000
+        run: npx wait-on http://localhost:3000 --timeout 120000
       - run: npm run e2e
         env:
           E2E_BASE_URL: http://localhost:3000
