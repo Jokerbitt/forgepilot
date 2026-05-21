@@ -1,72 +1,38 @@
 'use client'
+import { Component, type ReactNode } from 'react'
 
-/**
- * React Error Boundary Component — M96
- *
- * Wraps critical UI sections to catch runtime errors without crashing
- * the entire page. Used for AI widgets, delegation cards, charts.
- *
- * Usage:
- *   <ErrorBoundary fallback={<p>Widget unavailable</p>}>
- *     <AIWidget />
- *   </ErrorBoundary>
- */
-
-import React from 'react'
-
-interface ErrorBoundaryProps {
-  children: React.ReactNode
-  fallback?: React.ReactNode
-  label?: string  // Used in error message for debugging
+interface Props {
+  children: ReactNode
+  fallback?: ReactNode
 }
 
-interface ErrorBoundaryState {
+interface State {
   hasError: boolean
   error: Error | null
 }
 
-export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
+export class ErrorBoundary extends Component<Props, State> {
+  constructor(props: Props) {
     super(props)
     this.state = { hasError: false, error: null }
   }
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error }
   }
 
-  override componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error(`[ErrorBoundary:${this.props.label ?? 'unknown'}]`, error, info.componentStack)
+  componentDidCatch(error: Error) {
+    console.error('[ErrorBoundary]', error)
   }
 
-  override render() {
+  render() {
     if (this.state.hasError) {
-      if (this.props.fallback) return this.props.fallback
-
-      return (
-        <div className="rounded-lg border border-red-900/30 bg-red-950/10 px-4 py-3 text-sm text-red-400">
-          <span className="font-medium">Widget nicht verfügbar</span>
-          {process.env.NODE_ENV === 'development' && this.state.error && (
-            <p className="mt-1 text-xs text-red-600 font-mono">{this.state.error.message}</p>
-          )}
+      return this.props.fallback ?? (
+        <div className="rounded-lg border border-rose-500/20 bg-rose-500/[0.04] p-4 text-sm text-rose-300">
+          Dieser Bereich konnte nicht geladen werden.
         </div>
       )
     }
-
     return this.props.children
   }
-}
-
-/** Functional convenience wrapper for the class-based ErrorBoundary */
-export function withErrorBoundary<P extends object>(
-  Component: React.ComponentType<P>,
-  label?: string,
-): React.ComponentType<P> {
-  const Wrapped = (props: P) => (
-    <ErrorBoundary label={label}>
-      <Component {...props} />
-    </ErrorBoundary>
-  )
-  Wrapped.displayName = `WithErrorBoundary(${Component.displayName ?? Component.name})`
-  return Wrapped
 }

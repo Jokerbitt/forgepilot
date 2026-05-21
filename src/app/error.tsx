@@ -1,76 +1,53 @@
 'use client'
 
-/**
- * Global Error Boundary — M96
- *
- * Next.js 14 App Router: this file is automatically used as an error boundary
- * for all pages. It must be a Client Component.
- */
-
 import { useEffect } from 'react'
 import Link from 'next/link'
 
-interface ErrorPageProps {
+export default function GlobalError({
+  error,
+  reset,
+}: {
   error: Error & { digest?: string }
   reset: () => void
-}
-
-export default function GlobalError({ error, reset }: ErrorPageProps) {
+}) {
   useEffect(() => {
-    // In dev: log to console; in prod: Sentry captures it (M97)
-    if (process.env.NODE_ENV === 'development') {
-      console.error('[ForgePilot] Page error:', error)
-    }
-    // Dynamic import — no-op when Sentry DSN is not configured
-    import('@sentry/nextjs').then(Sentry => {
-      Sentry.captureException(error)
-    }).catch(() => { /* Sentry not initialised */ })
+    // Log to console in dev; will be replaced by Sentry in M193
+    console.error('[GlobalError]', error)
   }, [error])
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
-      <div className="max-w-md w-full text-center space-y-6">
-
-        <div className="text-5xl">⚠️</div>
-
-        <div>
-          <h1 className="text-xl font-semibold text-white mb-2">Etwas ist schiefgelaufen</h1>
-          <p className="text-sm text-slate-400">
-            Ein unerwarteter Fehler ist aufgetreten. Die Seite konnte nicht geladen werden.
-          </p>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-zinc-950 p-8">
+      <div className="flex flex-col items-center gap-4 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full border border-rose-500/30 bg-rose-500/10">
+          <span className="text-2xl">⚠</span>
         </div>
-
+        <h1 className="text-2xl font-semibold text-white">Etwas ist schiefgelaufen</h1>
+        <p className="max-w-md text-sm text-slate-400">
+          Ein unerwarteter Fehler ist aufgetreten. Du kannst die Seite neu laden oder zur Startseite wechseln.
+        </p>
         {process.env.NODE_ENV === 'development' && (
-          <details className="text-left bg-slate-900 border border-red-900/40 rounded-lg p-4">
-            <summary className="text-xs text-red-400 cursor-pointer font-mono mb-2">
-              Stack Trace (nur in Entwicklung sichtbar)
-            </summary>
-            <pre className="text-xs text-slate-400 overflow-auto max-h-48 whitespace-pre-wrap">
+          <details className="mt-2 max-w-lg text-left">
+            <summary className="cursor-pointer text-xs text-slate-500">Fehlerdetails (Dev)</summary>
+            <pre className="mt-2 overflow-auto rounded-lg border border-white/[0.06] bg-black/40 p-3 text-xs text-rose-300">
               {error.message}
-              {error.stack ? `\n\n${error.stack}` : ''}
+              {error.stack && '\n\n' + error.stack}
             </pre>
           </details>
         )}
-
-        {error.digest && (
-          <p className="text-xs text-slate-600 font-mono">Error ID: {error.digest}</p>
-        )}
-
-        <div className="flex gap-3 justify-center">
-          <button
-            onClick={reset}
-            className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            ↺ Seite neu laden
-          </button>
-          <Link
-            href="/"
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg transition-colors"
-          >
-            ← Command Center
-          </Link>
-        </div>
-
+      </div>
+      <div className="flex gap-3">
+        <button
+          onClick={reset}
+          className="rounded-lg border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
+        >
+          Neu laden
+        </button>
+        <Link
+          href="/"
+          className="rounded-lg border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
+        >
+          Startseite
+        </Link>
       </div>
     </div>
   )
