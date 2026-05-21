@@ -95,7 +95,7 @@ Add any OpenAI-compatible provider via Settings → Providers — no code change
 **Infrastructure**
 - Multi-provider with hot-swap (no restart needed)
 - PostgreSQL persistence (Drizzle ORM) with local Docker or any hosted Postgres
-- Mandatory auth — secure by default, even on localhost
+- Mandatory auth — secure by default, even on localhost; only `FORGEPILOT_AUTH_DISABLED=true` bypasses it for isolated local development
 - Command Center with next-best-action focus
 - Basic project and delegation overview
 - JSON export / import

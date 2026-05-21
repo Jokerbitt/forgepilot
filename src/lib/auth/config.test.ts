@@ -6,23 +6,24 @@ describe('isForgePilotAuthEnabled', () => {
     expect(isForgePilotAuthEnabled({} as unknown as NodeJS.ProcessEnv)).toBe(true)
   })
 
-  it('remains enabled when set to a truthy value', () => {
-    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_ENABLED: 'true' } as unknown as NodeJS.ProcessEnv)).toBe(true)
-    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_ENABLED: '1' } as unknown as NodeJS.ProcessEnv)).toBe(true)
-    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_ENABLED: 'yes' } as unknown as NodeJS.ProcessEnv)).toBe(true)
-    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_ENABLED: 'on' } as unknown as NodeJS.ProcessEnv)).toBe(true)
+  it('remains enabled when the explicit disable flag is absent or false-like', () => {
+    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_DISABLED: '' } as unknown as NodeJS.ProcessEnv)).toBe(true)
+    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_DISABLED: 'false' } as unknown as NodeJS.ProcessEnv)).toBe(true)
+    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_DISABLED: '0' } as unknown as NodeJS.ProcessEnv)).toBe(true)
+    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_DISABLED: 'no' } as unknown as NodeJS.ProcessEnv)).toBe(true)
+    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_DISABLED: 'off' } as unknown as NodeJS.ProcessEnv)).toBe(true)
   })
 
-  it('is disabled when explicitly set to a falsy value', () => {
-    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_ENABLED: 'false' } as unknown as NodeJS.ProcessEnv)).toBe(false)
-    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_ENABLED: '0' } as unknown as NodeJS.ProcessEnv)).toBe(false)
-    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_ENABLED: 'no' } as unknown as NodeJS.ProcessEnv)).toBe(false)
-    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_ENABLED: 'off' } as unknown as NodeJS.ProcessEnv)).toBe(false)
+  it('is disabled only when explicitly set to a truthy disable value', () => {
+    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_DISABLED: 'true' } as unknown as NodeJS.ProcessEnv)).toBe(false)
+    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_DISABLED: '1' } as unknown as NodeJS.ProcessEnv)).toBe(false)
+    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_DISABLED: 'yes' } as unknown as NodeJS.ProcessEnv)).toBe(false)
+    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_DISABLED: 'on' } as unknown as NodeJS.ProcessEnv)).toBe(false)
   })
 
   it('is case-insensitive', () => {
-    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_ENABLED: 'FALSE' } as unknown as NodeJS.ProcessEnv)).toBe(false)
-    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_ENABLED: 'True' } as unknown as NodeJS.ProcessEnv)).toBe(true)
+    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_DISABLED: 'TRUE' } as unknown as NodeJS.ProcessEnv)).toBe(false)
+    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_DISABLED: 'False' } as unknown as NodeJS.ProcessEnv)).toBe(true)
   })
 })
 

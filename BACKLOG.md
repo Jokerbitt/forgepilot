@@ -172,7 +172,7 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 ## 🔴 High Priority — Quality & Market-Readiness (M165–M170)
 
 - [x] M165: Grok Dual-Critic — xAI Grok als unabhängiger Evaluator: runGrokCritic() + runGrokCodeReview() + mergeCriticScores(); POST /api/eval/critic; graceful degradation wenn kein XAI_API_KEY
-- [ ] M166: Auth Layer (NextAuth) — Login/Session für Single-User und Vorbereitung Multi-Tenant; schützt alle /api/* Routes hinter Session-Check
+- [x] M166: Auth Layer (NextAuth) — Login/Session für Single-User; Auth ist standardmaessig aktiv und nur per `FORGEPILOT_AUTH_DISABLED=true` bewusst abschaltbar
 - [ ] M167: Onboarding Wizard — 3-Step-Flow: Provider konfigurieren → erste Idee eingeben → erste Delegation starten; für Erstnutzer ohne Docs-Lesen
 - [ ] M168: SaaS-Readiness Audit — Auth, Multi-Tenancy-Plan, Billing-Hook, DSGVO-Consent-Flow, Pricing-Page Wireframe
 - [x] M169: End-to-End Smoke Tests — Playwright: Login → Idee → Brief → Delegation → Approve → Run (Critical Happy Path)
