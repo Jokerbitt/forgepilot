@@ -76,6 +76,18 @@ describe('saveSnapshot', () => {
     const v2 = saveSnapshot(brief)
     expect(v2.versionNumber).toBe(v1.versionNumber + 1)
   })
+
+  it('keeps only the newest 20 versions per brief', () => {
+    const brief = makeBrief()
+    for (let index = 0; index < 22; index += 1) {
+      saveSnapshot({ ...brief, title: `Version ${index}` })
+    }
+
+    const versions = getBriefVersions('brief-1')
+    expect(versions).toHaveLength(20)
+    expect(versions[0].versionNumber).toBe(22)
+    expect(versions.at(-1)?.versionNumber).toBe(3)
+  })
 })
 
 describe('getBriefVersions', () => {
