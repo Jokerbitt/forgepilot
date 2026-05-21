@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { GrokCriticResult } from '@/lib/eval/grok-critic'
+import type { CriticScore } from '@/lib/models/delegation'
 
 interface GrokCriticCardProps {
   delegationId: string
@@ -9,6 +10,7 @@ interface GrokCriticCardProps {
   agentOutput: string
   /** If false, show "not configured" placeholder */
   grokConfigured: boolean
+  initialScore?: CriticScore
 }
 
 const GRADE_COLORS: Record<string, string> = {
@@ -23,6 +25,36 @@ const VERDICT_STYLES: Record<string, string> = {
   PASS: 'bg-emerald-900/40 text-emerald-300 border-emerald-800',
   NEEDS_REVISION: 'bg-yellow-900/40 text-yellow-300 border-yellow-800',
   FAIL: 'bg-red-900/40 text-red-300 border-red-800',
+}
+
+function gradeFromScore(score: number): GrokCriticResult['overallGrade'] {
+  if (score >= 90) return 'A'
+  if (score >= 80) return 'B'
+  if (score >= 70) return 'C'
+  if (score >= 60) return 'D'
+  return 'F'
+}
+
+function initialScoreToResult(score: CriticScore): GrokCriticResult {
+  const verdictMap: Record<CriticScore['verdict'], GrokCriticResult['verdict']> = {
+    approved: 'PASS',
+    'needs-revision': 'NEEDS_REVISION',
+    rejected: 'FAIL',
+  }
+  const average = Math.round((score.correctness + score.efficiency + score.drift) / 3)
+
+  return {
+    correctnessScore: score.correctness,
+    efficiencyScore: score.efficiency,
+    driftScore: score.drift,
+    overallGrade: gradeFromScore(average),
+    criteriaHit: [],
+    issues: [],
+    verdict: verdictMap[score.verdict],
+    reason: score.summary,
+    providerId: 'stored',
+    evaluatedAt: score.runAt,
+  }
 }
 
 function ScoreBar({ value, label }: { value: number; label: string }) {
@@ -49,8 +81,10 @@ function ScoreBar({ value, label }: { value: number; label: string }) {
   )
 }
 
-export function GrokCriticCard({ delegationId, agentOutput, grokConfigured }: GrokCriticCardProps) {
-  const [result, setResult] = useState<GrokCriticResult | null>(null)
+export function GrokCriticCard({ delegationId, agentOutput, grokConfigured, initialScore }: GrokCriticCardProps) {
+  const [result, setResult] = useState<GrokCriticResult | null>(
+    initialScore ? initialScoreToResult(initialScore) : null,
+  )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
