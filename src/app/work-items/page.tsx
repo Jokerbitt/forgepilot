@@ -94,6 +94,18 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
   const [orchestrating, setOrchestrating] = useState<string | null>(null)
   const [orchestrated, setOrchestrated] = useState<Map<string, string>>(new Map()) // itemId → runId
   const [csvImportOpen, setCsvImportOpen] = useState(false)
+  type SortKey = 'priority' | 'title' | 'updatedAt'
+  const [sortKey, setSortKey] = useState<SortKey>('priority')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
   const [view, setView] = useState<'list' | 'kanban'>('list')
 
   const load = useCallback((isSyncClick = false) => {
@@ -201,9 +213,16 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
   }
 
   const searchLower = search.toLowerCase()
-  const filtered = items
+  const filtered = [...items
     .filter(i => !sourceFilter || i.source === sourceFilter)
     .filter(i => !searchLower || i.title.toLowerCase().includes(searchLower) || i.id.toLowerCase().includes(searchLower))
+  ].sort((a, b) => {
+    let cmp = 0
+    if (sortKey === 'priority') cmp = a.priority - b.priority
+    else if (sortKey === 'title') cmp = a.title.localeCompare(b.title)
+    else if (sortKey === 'updatedAt') cmp = a.updatedAt.localeCompare(b.updatedAt)
+    return sortDir === 'asc' ? cmp : -cmp
+  })
 
   const sources = Array.from(new Set(items.map(i => i.source))) as WorkItemSource[]
   const exportParams = new URLSearchParams()
@@ -313,11 +332,26 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-800 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <th className="px-4 py-3">Ticket</th>
+                <th
+                  className="cursor-pointer select-none px-4 py-3 hover:text-slate-300"
+                  onClick={() => toggleSort('title')}
+                >
+                  Ticket{sortKey === 'title' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                </th>
                 <th className="hidden px-4 py-3 sm:table-cell">Quelle</th>
-                <th className="hidden px-4 py-3 md:table-cell">Priorität</th>
+                <th
+                  className="hidden cursor-pointer select-none px-4 py-3 hover:text-slate-300 md:table-cell"
+                  onClick={() => toggleSort('priority')}
+                >
+                  Priorität{sortKey === 'priority' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                </th>
                 <th className="px-4 py-3">Risk</th>
-                <th className="hidden px-4 py-3 lg:table-cell">Aktualisiert</th>
+                <th
+                  className="hidden cursor-pointer select-none px-4 py-3 hover:text-slate-300 lg:table-cell"
+                  onClick={() => toggleSort('updatedAt')}
+                >
+                  Aktualisiert{sortKey === 'updatedAt' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                </th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
