@@ -200,6 +200,54 @@ export interface LinearCreatedIssue {
   id: string
   identifier: string
   url: string
+  title?: string
+}
+
+export async function findLinearIssueByTitle(
+  config: LinearConnectorConfig,
+  input: { teamId: string; title: string },
+  fetcher: Fetcher = fetch,
+): Promise<LinearCreatedIssue | null> {
+  const apiKey = config.apiKey
+  if (!apiKey) throw new Error('LINEAR_API_KEY not configured')
+
+  const query = `
+    query FindIssueByTitle($teamId: String!, $title: String!) {
+      issues(first: 1, filter: { team: { id: { eq: $teamId } }, title: { eq: $title } }) {
+        nodes { id identifier url title }
+      }
+    }
+  `
+
+  const response = await fetcher(config.apiUrl ?? 'https://api.linear.app/graphql', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: apiKey,
+    },
+    body: JSON.stringify({
+      query,
+      variables: {
+        teamId: input.teamId,
+        title: input.title,
+      },
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Linear API error: HTTP ${response.status}`)
+  }
+
+  const payload = await response.json() as {
+    data?: { issues?: { nodes?: LinearCreatedIssue[] } }
+    errors?: unknown[]
+  }
+
+  if (payload.errors?.length) {
+    throw new Error(`Linear GraphQL error: ${JSON.stringify(payload.errors)}`)
+  }
+
+  return payload.data?.issues?.nodes?.[0] ?? null
 }
 
 export async function createLinearIssue(

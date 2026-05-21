@@ -91,6 +91,43 @@ export interface GitHubCreatedIssue {
   title: string
 }
 
+export async function findGitHubIssueByTitle(
+  config: GitHubConnectorConfig,
+  input: { owner: string; repo: string; title: string; labels?: string[] },
+  fetcher: Fetcher = fetch,
+): Promise<GitHubCreatedIssue | null> {
+  const token = config.token
+  if (!token) throw new Error('GITHUB_TOKEN not configured')
+
+  const params = new URLSearchParams({
+    state: 'open',
+    per_page: '100',
+  })
+
+  if (input.labels?.length) {
+    params.set('labels', input.labels.join(','))
+  }
+
+  const response = await fetcher(
+    `${config.apiUrl ?? 'https://api.github.com'}/repos/${input.owner}/${input.repo}/issues?${params.toString()}`,
+    {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${token}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    },
+  )
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: HTTP ${response.status}`)
+  }
+
+  const issues = await response.json() as Array<Partial<GitHubCreatedIssue>>
+  const match = issues.find(issue => issue.title === input.title && issue.id && issue.number && issue.html_url)
+  return match ? match as GitHubCreatedIssue : null
+}
+
 export async function createGitHubIssue(
   config: GitHubConnectorConfig,
   input: GitHubCreateIssueInput,

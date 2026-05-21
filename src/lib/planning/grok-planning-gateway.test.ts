@@ -106,9 +106,14 @@ describe('grok planning gateway', () => {
 
   it('creates GitHub and Linear issues when explicitly requested', async () => {
     const items = buildPlanningItems(parseGrokPlanningActionPlan(plan))
-    const fetcher = vi.fn(async (input: URL | RequestInfo) => {
+    const fetcher = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
       const url = String(input)
       if (url.includes('linear.app')) {
+        const body = JSON.parse(String(init?.body ?? '{}')) as { query?: string }
+        if (body.query?.includes('FindIssueByTitle')) {
+          return Response.json({ data: { issues: { nodes: [] } } })
+        }
+
         return Response.json({
           data: {
             issueCreate: {
@@ -117,6 +122,10 @@ describe('grok planning gateway', () => {
             },
           },
         })
+      }
+
+      if (init?.method !== 'POST') {
+        return Response.json([])
       }
 
       return Response.json({
@@ -137,6 +146,44 @@ describe('grok planning gateway', () => {
     expect(result.created).toHaveLength(2)
     expect(result.created.map(item => item.target)).toEqual(['linear', 'github'])
     expect(result.skipped).toEqual([])
+    expect(fetcher).toHaveBeenCalledTimes(4)
+  })
+
+  it('skips existing GitHub and Linear issues instead of duplicating them', async () => {
+    const items = buildPlanningItems(parseGrokPlanningActionPlan(plan))
+    const fetcher = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      const url = String(input)
+      if (url.includes('linear.app')) {
+        return Response.json({
+          data: {
+            issues: {
+              nodes: [{ id: 'lin-1', identifier: 'JOK-1', url: 'https://linear.app/test/JOK-1', title: '[P0] Verify mandatory local auth' }],
+            },
+          },
+        })
+      }
+
+      return Response.json([{
+        id: 123,
+        number: 42,
+        html_url: 'https://github.com/Jokerbitt/forgepilot/issues/42',
+        title: '[P0] Verify mandatory local auth',
+      }])
+    })
+
+    const result = await applyPlanningItems(items, {
+      mode: 'create-all',
+      fetcher,
+      linearConfig: { apiKey: 'lin_api_test', teamId: 'team-1' },
+      githubConfig: { token: 'ghp_test', owner: 'Jokerbitt', repositories: ['forgepilot'] },
+    })
+
+    expect(result.created).toEqual([])
+    expect(result.skipped).toEqual([
+      { target: 'linear', title: '[P0] Verify mandatory local auth', reason: 'Already exists: JOK-1' },
+      { target: 'github', title: '[P0] Verify mandatory local auth', reason: 'Already exists: #42' },
+    ])
+    expect(fetcher).toHaveBeenCalledTimes(2)
   })
 
   it('gives Grok a schema-only prompt without asking for secrets', () => {
