@@ -35,6 +35,7 @@
     "@opentelemetry/sdk-node": "^0.218.0",
     "@sentry/nextjs": "^10.53.1",
     "@supabase/supabase-js": "^2.106.0",
+    "cmdk": "^1.1.1",
     "drizzle-orm": "^0.45.2",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.1",
