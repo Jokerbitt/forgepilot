@@ -65,3 +65,51 @@ export const delegations = pgTable(
 
 export type DbDelegation = typeof delegations.$inferSelect
 export type NewDbDelegation = typeof delegations.$inferInsert
+
+// ─── ProjectBriefs ────────────────────────────────────────────────────────────
+
+export const projectBriefStatusEnum = pgEnum('project_brief_status', [
+  'draft', 'in_review', 'research', 'accepted', 'archived',
+])
+
+export const projectBriefs = pgTable('project_briefs', {
+  id: uuid('id').primaryKey(),
+  title: text('title').notNull(),
+  status: projectBriefStatusEnum('status').notNull().default('draft'),
+  content: jsonb('content').$type<Record<string, unknown>>().notNull().default({}),
+  version: integer('version').notNull().default(1),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('project_briefs_status_idx').on(t.status),
+  index('project_briefs_created_at_idx').on(t.createdAt),
+])
+
+export type DbProjectBrief = typeof projectBriefs.$inferSelect
+export type NewDbProjectBrief = typeof projectBriefs.$inferInsert
+
+// ─── KnowledgeCards ───────────────────────────────────────────────────────────
+
+export const knowledgeCardTypeEnum = pgEnum('knowledge_card_type', [
+  'learning', 'pattern', 'decision', 'risk', 'reference',
+])
+
+export const knowledgeCards = pgTable('knowledge_cards', {
+  id: uuid('id').primaryKey(),
+  type: knowledgeCardTypeEnum('type').notNull().default('learning'),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  source: text('source'),
+  delegationId: text('delegation_id'),
+  tags: jsonb('tags').$type<string[]>().notNull().default([]),
+  confidence: real('confidence').notNull().default(0.8),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('knowledge_cards_type_idx').on(t.type),
+  index('knowledge_cards_delegation_idx').on(t.delegationId),
+  index('knowledge_cards_created_at_idx').on(t.createdAt),
+])
+
+export type DbKnowledgeCard = typeof knowledgeCards.$inferSelect
+export type NewDbKnowledgeCard = typeof knowledgeCards.$inferInsert
