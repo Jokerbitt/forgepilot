@@ -114,6 +114,11 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 
 ## 🔴 High Priority — Product Polish (M136–M140)
 
+- [~] M136: Idea Refinement Wizard — mehrstufiger Dialog: Idee eingeben → KI generiert Fragen → Antworten fließen in Project Brief
+- [~] M137: Delegation Bulk-Actions — mehrere Delegations gleichzeitig approve/cancel/archive (Checkbox-Liste)
+- [x] M138: Notification Preferences — /settings/notifications mit granularen Einstellungen (welche Events triggern Bell)
+- [~] M139: Work Item Kanban View — /work-items als Kanban-Board (todo/in_progress/done Spalten, drag-and-drop)
+- [~] M140: API Key Rotation Alert — automatische Warnung wenn API-Key älter als 90 Tage (Badge in Settings)
 - [x] M136: Idea Refinement Wizard — mehrstufiger Dialog: Idee eingeben → KI generiert Fragen → Antworten fließen in Project Brief
 - [x] M137: Delegation Bulk-Actions — mehrere Delegations gleichzeitig approve/cancel/archive (Checkbox-Liste)
 - [x] M138: Notification Preferences — /settings/notifications mit granularen Einstellungen (welche Events triggern Bell)
