@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { eq, desc } from 'drizzle-orm'
 import type { MemoryCard, MemoryCardType, ConfidenceLevel } from '@/lib/knowledge/types'
-import { getCards, upsertCard, getCard } from '@/lib/knowledge/store'
+import { getCards, upsertCard, getCard, deleteCard } from '@/lib/knowledge/store'
 import { isDatabaseConfigured, getDb } from '@/db/index'
 import { knowledgeCards, type DbKnowledgeCard } from '@/db/schema'
 
@@ -21,6 +21,8 @@ export interface KnowledgeCardRepository {
   listByType(type: MemoryCardType): Promise<MemoryCard[]>
   /** Upsert by title+source — merges if card with same title and sourceId exists. */
   upsert(input: CreateKnowledgeCardInput): Promise<MemoryCard>
+  /** Delete a knowledge card by id. */
+  delete?(id: string): Promise<boolean>
 }
 
 // ─── Row → Domain mapper ─────────────────────────────────────────────────────
@@ -174,6 +176,15 @@ class PostgresKnowledgeCardRepository implements KnowledgeCardRepository {
 
     return this.create(input)
   }
+
+  async delete(id: string): Promise<boolean> {
+    const db = getDb()
+    const rows = await db
+      .delete(knowledgeCards)
+      .where(eq(knowledgeCards.id, id))
+      .returning({ id: knowledgeCards.id })
+    return rows.length > 0
+  }
 }
 
 // ─── JSON fallback implementation ────────────────────────────────────────────
@@ -219,6 +230,10 @@ class JsonKnowledgeCardRepository implements KnowledgeCardRepository {
     }
     upsertCard(card)
     return card
+  }
+
+  async delete(id: string): Promise<boolean> {
+    return deleteCard(id)
   }
 }
 

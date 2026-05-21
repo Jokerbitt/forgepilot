@@ -52,22 +52,6 @@ export async function generateText(options: GenerateTextOptions): Promise<Genera
   const selection = getModelSelection()
   const purpose   = options.purpose ?? 'fast'
 
-  // ── LLM_MODE override ──────────────────────────────────────────────────────
-  // Only activate when LLM_MODE is **explicitly set** in the environment.
-  // When LLM_MODE is absent (undefined), we preserve the existing config-store
-  // behaviour so that no existing functionality is changed.
-  const llmModeEnvSet = typeof process.env.LLM_MODE === 'string' && process.env.LLM_MODE.trim().length > 0
-
-  if (!options.providerId && llmModeEnvSet) {
-    const autoResult = await resolveProvider(purpose)
-    if (autoResult.providerId !== 'placeholder') {
-      return callProvider(autoResult.providerId, autoResult.model, purpose, options)
-    }
-    // placeholder = no provider available for the requested mode;
-    // fall through to config-store selection so the caller sees a meaningful error.
-  }
-  // ── end LLM_MODE override ──────────────────────────────────────────────────
-
   // Resolve primary provider + model
   const primaryProviderId = options.providerId
     ?? (purpose === 'coding' ? selection.codingProvider : selection.fastProvider)
@@ -81,6 +65,26 @@ export async function generateText(options: GenerateTextOptions): Promise<Genera
   const fallbackModelId = purpose === 'coding'
     ? selection.codingFallbackModel
     : selection.fastFallbackModel
+
+  // ── Auto-mode safety route ────────────────────────────────────────────────
+  // If LLM_MODE is explicitly set, honor it. If no mode is set but the stored
+  // primary provider is missing its required credential, fail over to the best
+  // available provider instead of breaking local-first workflows.
+  const llmModeEnvSet = typeof process.env.LLM_MODE === 'string' && process.env.LLM_MODE.trim().length > 0
+  const primaryConfig = getAllProviderConfigs().find(c => c.id === primaryProviderId)
+  const primaryMissingCredential = Boolean(
+    primaryConfig?.apiKeyRef && resolveApiKey(primaryConfig).length === 0
+  )
+
+  if (!options.providerId && (llmModeEnvSet || primaryMissingCredential)) {
+    const autoResult = await resolveProvider(purpose)
+    if (autoResult.providerId !== 'placeholder') {
+      return callProvider(autoResult.providerId, autoResult.model, purpose, options)
+    }
+    // placeholder = no provider available; fall through so the configured
+    // provider path still returns its established, specific error message.
+  }
+  // ── end auto-mode safety route ────────────────────────────────────────────
 
   const hasFallback = Boolean(
     fallbackProviderId && fallbackProviderId !== primaryProviderId

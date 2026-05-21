@@ -194,7 +194,7 @@ async function resolveAuto(purpose: 'fast' | 'coding'): Promise<ResolvedProvider
   if (lmStudioModel) {
     return {
       mode: 'auto',
-      providerId: 'lmstudio',
+      providerId: 'lm-studio',
       model: lmStudioModel,
       isFree: true,
       isLocal: true,
@@ -264,7 +264,7 @@ async function resolveLmStudioDirect(): Promise<ResolvedProvider> {
   if (model) {
     return {
       mode: 'lmstudio',
-      providerId: 'lmstudio',
+      providerId: 'lm-studio',
       model,
       isFree: true,
       isLocal: true,
