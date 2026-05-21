@@ -1,22 +1,10 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
 import { getNBAConfig } from '@/lib/nba-engine/nba-config'
-import type { Delegation } from '@/lib/models/delegation'
 import type { RiskClass } from '@/lib/models/work-item'
-
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 const RISK_ORDER: Record<RiskClass, number> = { A: 0, B: 1, C: 2 }
-
-function readDelegations(): Delegation[] {
-  try {
-    return JSON.parse(fs.readFileSync(DELEGATIONS_FILE, 'utf-8')) as Delegation[]
-  } catch {
-    return []
-  }
-}
 
 function riskWithinLimit(actual: RiskClass, max: RiskClass): boolean {
   return RISK_ORDER[actual] <= RISK_ORDER[max]
@@ -34,9 +22,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ skipped: true, reason: 'approvalMode is not autopilot' })
   }
 
-  const delegations = readDelegations()
-  const candidates = delegations.filter(d =>
-    d.status === 'approved' &&
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+  const approved = await repo.listByStatus(['approved'])
+  const candidates = approved.filter(d =>
     riskWithinLimit(d.contract.riskClass, config.autopilotMaxRiskClass) &&
     d.contract.riskClass !== 'C',
   )

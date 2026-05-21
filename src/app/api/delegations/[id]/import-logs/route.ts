@@ -1,27 +1,8 @@
 import { NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
 import type { Delegation, AgentLog } from '@/lib/models/delegation'
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 export const dynamic = 'force-dynamic'
-
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
-
-function readDelegations(): Delegation[] {
-  try {
-    return JSON.parse(fs.readFileSync(DELEGATIONS_FILE, 'utf-8')) as Delegation[]
-  } catch {
-    return []
-  }
-}
-
-function writeDelegationsAtomic(delegations: Delegation[]) {
-  const dir = path.dirname(DELEGATIONS_FILE)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  const tmp = DELEGATIONS_FILE + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(delegations, null, 2), 'utf-8')
-  fs.renameSync(tmp, DELEGATIONS_FILE)
-}
 
 /**
  * Classify a terminal output line into an AgentLog type.
@@ -47,9 +28,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  const delegations = readDelegations()
-  const idx = delegations.findIndex(d => d.id === id)
-  if (idx < 0) {
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+
+  const delegation = await repo.findById(id)
+  if (!delegation) {
     return NextResponse.json({ error: 'Delegation nicht gefunden' }, { status: 404 })
   }
 
@@ -69,13 +51,10 @@ export async function POST(
       message: line.substring(0, 500),
     }))
 
-  delegations[idx] = {
-    ...delegations[idx],
+  await repo.update(id, {
     ...(body.status ? { status: body.status } : {}),
-    logs: [...(delegations[idx].logs ?? []), ...newLogs],
-    updatedAt: ts,
-  }
+    logs: [...(delegation.logs ?? []), ...newLogs],
+  })
 
-  writeDelegationsAtomic(delegations)
   return NextResponse.json({ imported: newLogs.length })
 }

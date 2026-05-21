@@ -4,8 +4,6 @@ import { delegationLogger } from '@/lib/logger'
 import { withSpan } from '@/lib/tracing/tracer'
 import { checkRateLimit, buildRateLimitHeaders } from '@/lib/rate-limit'
 import { spawn, execSync } from 'child_process'
-import fs from 'fs'
-import path from 'path'
 import type { Delegation, AgentLog, DelegationReport } from '@/lib/models/delegation'
 import { registerProcess, unregisterProcess } from '@/lib/process-registry'
 import { readStoredApiKeys } from '@/lib/connectors/config'
@@ -25,36 +23,17 @@ import { recordOutcome } from '@/lib/agents/skill-evolver'
 import { generateText } from '@/lib/ai/text-generation'
 import { extractKnowledge } from '@/lib/knowledge/extraction'
 
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
-function readDelegations(): Delegation[] {
-  try {
-    return JSON.parse(fs.readFileSync(DELEGATIONS_FILE, 'utf-8')) as Delegation[]
-  } catch {
-    return []
-  }
-}
-
-function writeDelegationsAtomic(delegations: Delegation[]) {
-  const dir = path.dirname(DELEGATIONS_FILE)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  const tmp = DELEGATIONS_FILE + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(delegations, null, 2), 'utf-8')
-  fs.renameSync(tmp, DELEGATIONS_FILE)
-}
-
-function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
-  const delegations = readDelegations()
-  const idx = delegations.findIndex(d => d.id === id)
-  if (idx < 0) return
-  delegations[idx] = {
-    ...delegations[idx],
+async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+  const current = await repo.findById(id)
+  if (!current) return
+  await repo.update(id, {
     ...(statusOverride ? { status: statusOverride } : {}),
     ...(report ? { summaryReport: report } : {}),
-    logs: [...(delegations[idx].logs ?? []), ...newLogs],
-    updatedAt: new Date().toISOString(),
-  }
-  writeDelegationsAtomic(delegations)
+    logs: [...(current.logs ?? []), ...newLogs],
+  })
 }
 
 function buildPrompt(delegation: Delegation): string {
@@ -293,22 +272,21 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       : undefined
 
     // Only update if still running (not already cancelled)
-    const allDelegations = readDelegations()
-    const current = allDelegations.find(d => d.id === id)
-    if (current && current.status === 'running') {
-      const idx = allDelegations.findIndex(d => d.id === id)
+    void (async () => {
+      const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+      const current = await repo.findById(id)
+      if (!current || current.status !== 'running') return
+
       const finalStatus = success ? 'completed' : 'failed'
-      allDelegations[idx] = {
-        ...current,
+      const finishedDelegation = await repo.update(id, {
         status: finalStatus,
         ...(actualCost ? { actualCostUsd: actualCost } : {}),
         ...(report ? { summaryReport: report } : {}),
         logs: [...(current.logs ?? []), ...logBuffer, finalLog],
-        updatedAt: new Date().toISOString(),
-      }
-      writeDelegationsAtomic(allDelegations)
+      })
+      if (!finishedDelegation) return
 
-      const finishedDelegation = allDelegations[idx]
+      {
 
       // Record quality outcome in skill-history (feeds Performance tab)
       try {
@@ -375,7 +353,8 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
         actionUrl: `/delegations/${id}`,
         createdAt: new Date().toISOString(),
       })
-    }
+      }
+    })()
   })
 }
 
@@ -394,7 +373,7 @@ async function runWithOllamaAgent(
       type: 'error',
       message: '❌ Ollama nicht erreichbar (http://localhost:11434). Bitte `ollama serve` starten.',
     }
-    appendLogs(id, [errLog], 'failed')
+    await appendLogs(id, [errLog], 'failed')
     upsertAttentionItem({
       id: `completion:${id}`,
       type: 'delegation_failed',
@@ -409,7 +388,7 @@ async function runWithOllamaAgent(
   }
 
   const runner = new OllamaAgentRunner(id, model, process.cwd(), {
-    onLog: logs => appendLogs(id, logs),
+    onLog: logs => void appendLogs(id, logs),
   })
 
   try {
@@ -431,9 +410,10 @@ async function runWithOllamaAgent(
         }
       : undefined
 
-    appendLogs(id, [finalLog], result.success ? 'completed' : 'failed', report)
+    await appendLogs(id, [finalLog], result.success ? 'completed' : 'failed', report)
 
-    const finished = readDelegations().find(d => d.id === id)
+    const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+    const finished = await repo.findById(id)
     if (finished) {
       const label = finished.title || finished.contract.goal.slice(0, 60)
       const savedStr = result.costSavings.savedUsd > 0
@@ -462,7 +442,7 @@ async function runWithOllamaAgent(
       type: 'error',
       message: `❌ Ollama-Runner-Fehler: ${msg}`,
     }
-    appendLogs(id, [errLog], 'failed')
+    await appendLogs(id, [errLog], 'failed')
   }
 }
 
@@ -481,7 +461,7 @@ async function runWithClaudeAPI(id: string, delegation: Delegation, startTime: D
     type: 'info',
     message: '🤖 Claude API-Runner gestartet (kein CLI verfügbar — API-Modus)',
   }
-  appendLogs(id, [startLogEntry])
+  await appendLogs(id, [startLogEntry])
 
   try {
     const result = await generateText({
@@ -521,9 +501,10 @@ End with a one-line DONE: <summary> statement.`,
       timeTakenMinutes: elapsed,
     }
 
-    appendLogs(id, [...planLogs, finalLog], 'completed', report)
+    await appendLogs(id, [...planLogs, finalLog], 'completed', report)
 
-    const finished = readDelegations().find(d => d.id === id)
+    const repoForLabel = createDelegationRepository(SINGLE_TENANT_USER_ID)
+    const finished = await repoForLabel.findById(id)
     const label = finished?.title || goal.slice(0, 60)
     upsertAttentionItem({
       id: `completion:${id}`,
@@ -542,7 +523,7 @@ End with a one-line DONE: <summary> statement.`,
       type: 'error',
       message: `❌ Claude API-Runner-Fehler: ${msg}`,
     }
-    appendLogs(id, [errLog], 'failed')
+    await appendLogs(id, [errLog], 'failed')
     upsertAttentionItem({
       id: `completion:${id}`,
       type: 'delegation_failed',
@@ -594,7 +575,7 @@ function runSimulation(id: string, delegation: Delegation) {
             timeTakenMinutes: Math.round(capturedDelay / 60000),
           }
         : undefined
-      appendLogs(id, [log], isLast ? 'completed' : undefined, report)
+      void appendLogs(id, [log], isLast ? 'completed' : undefined, report)
     }, capturedDelay)
   }
 }
@@ -615,8 +596,8 @@ export async function POST(
 
   const { id } = await params
 
-  const delegations = readDelegations()
-  const delegation = delegations.find(d => d.id === id)
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+  const delegation = await repo.findById(id)
 
   if (!delegation) {
     return NextResponse.json({ error: 'Delegation nicht gefunden' }, { status: 404 })
@@ -630,7 +611,7 @@ export async function POST(
   // Auto-orchestrate: decompose into sub-tasks and run each sequentially
   if (delegation.autoOrchestrate) {
     const startLog = buildExecutionStartLog(delegation)
-    appendLogs(id, [startLog], 'running')
+    await appendLogs(id, [startLog], 'running')
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
 
@@ -661,7 +642,7 @@ export async function POST(
 
   // Immediately mark as running
   const startLog = buildExecutionStartLog(delegation)
-  appendLogs(id, [startLog], 'running')
+  await appendLogs(id, [startLog], 'running')
 
   const startTime = new Date()
   // Use focused sub-task prompt when this is part of an orchestrated run

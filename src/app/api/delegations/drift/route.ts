@@ -1,29 +1,18 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
-import type { Delegation } from '@/lib/models/delegation'
 import { analyzeDrift } from '@/lib/drift-detector'
 import { budgetToMaxTurns } from '@/lib/budget-utils'
-
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
-
-function readDelegations(): Delegation[] {
-  try {
-    return JSON.parse(fs.readFileSync(DELEGATIONS_FILE, 'utf-8')) as Delegation[]
-  } catch {
-    return []
-  }
-}
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 /** GET /api/delegations/drift?id=<delegationId> */
 export async function GET(req: Request) {
   const url = new URL(req.url)
   const id = url.searchParams.get('id')
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
 
   if (!id) {
     // Return drift analysis for all running delegations
-    const all = readDelegations().filter(d => d.status === 'running')
+    const all = await repo.listByStatus(['running'])
     const analyses = all.map(d => ({
       delegationId: d.id,
       title: d.title ?? d.contract.goal.substring(0, 60),
@@ -33,7 +22,7 @@ export async function GET(req: Request) {
     return NextResponse.json(analyses)
   }
 
-  const delegation = readDelegations().find(d => d.id === id)
+  const delegation = await repo.findById(id)
   if (!delegation) {
     return NextResponse.json({ error: `Delegation ${id} not found` }, { status: 404 })
   }

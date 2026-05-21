@@ -1,19 +1,7 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
 import type { Delegation, DelegationStatus } from '@/lib/models/delegation'
-
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
-
-function readDelegations(): Delegation[] {
-  try {
-    const data = fs.readFileSync(DELEGATIONS_FILE, 'utf-8')
-    return JSON.parse(data) as Delegation[]
-  } catch {
-    return []
-  }
-}
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 function escapeCSVField(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return ''
@@ -89,7 +77,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Invalid format. Use csv or json.' }, { status: 400 })
   }
 
-  let delegations = readDelegations()
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+  let delegations: Delegation[]
 
   // Status filter
   if (statusParam !== 'all') {
@@ -99,7 +88,9 @@ export async function GET(request: Request) {
         { status: 400 }
       )
     }
-    delegations = delegations.filter(d => d.status === statusParam)
+    delegations = await repo.listByStatus([statusParam as DelegationStatus])
+  } else {
+    delegations = await repo.listByStatus()
   }
 
   // Date range filter

@@ -10,18 +10,17 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
-import type { Delegation } from '@/lib/models/delegation'
 import { listRuns } from '@/lib/agents/orchestrated-run'
 import { getPerformanceSummaries, getDriftWarnings, seedDemoOutcomes } from '@/lib/agents/skill-evolver'
 import { getCards } from '@/lib/knowledge/store'
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
 const LEDGER_FILE = path.join(process.cwd(), 'config', 'processing-ledger.json')
 const API_KEYS_FILE = path.join(process.cwd(), 'config', 'api-keys.json')
 const TEST_RESULTS_FILE = path.join(process.cwd(), 'config', 'test-results.json')
 
 /** Known AI provider key names that indicate an active external AI provider. */
-const AI_PROVIDER_KEY_NAMES = [
+const AI_PROVIDER_KEY_NAMES: string[] = [
   'ANTHROPIC_API_KEY',
   'OPENAI_API_KEY',
   'GROQ_API_KEY',
@@ -31,13 +30,6 @@ const AI_PROVIDER_KEY_NAMES = [
   'TOGETHER_API_KEY',
   'FIREWORKS_API_KEY',
 ]
-
-function readDelegations(): Delegation[] {
-  try {
-    if (!fs.existsSync(DELEGATIONS_FILE)) return []
-    return JSON.parse(fs.readFileSync(DELEGATIONS_FILE, 'utf-8')) as Delegation[]
-  } catch { return [] }
-}
 
 function readAiCallsToday(): number {
   try {
@@ -118,7 +110,8 @@ export interface DashboardStats {
 
 export async function GET(): Promise<NextResponse<DashboardStats>> {
   // Delegations
-  const delegations = readDelegations()
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+  const delegations = await repo.listByStatus()
   const delegationStats = {
     total: delegations.length,
     running: delegations.filter(d => d.status === 'running').length,
