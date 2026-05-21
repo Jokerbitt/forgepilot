@@ -73,6 +73,8 @@ export interface TaskContract {
   definitionOfDone: string[]
   riskClass: RiskClass
   maxBudgetUsd: number
+  /** M209: If set, execution pauses when actualCostUsd exceeds this value */
+  maxCostUsd?: number
   allowedTools: string[]
   branchStrategy: 'feature' | 'fix' | 'chore'
   requiresApproval: boolean
@@ -85,6 +87,8 @@ export interface TaskContract {
   allowedFilePatterns?: string[]
   /** Parent orchestrated run ID — set when created by orchestrator */
   orchestratedRunId?: string
+  /** M206: If true, auto-approve and execute the next chained delegation when this completes */
+  autoChain?: boolean
   createdAt: string
 }
 
@@ -122,6 +126,14 @@ export interface Delegation {
   traceId?: string
   /** M181: Grok Critic score — automatically populated after successful execution */
   criticScore?: CriticScore
+  /** M206: ID of the next delegation to trigger after this one completes */
+  chainNextId?: string
+  /** M206: ID of the delegation that triggered this one */
+  chainPrevId?: string
+  /** M206: Position in the chain (1-based) */
+  chainPosition?: number
+  /** M206: Total number of steps in the chain */
+  chainTotal?: number
   /** M207: ID of parent delegation (for sub-delegations in parallel fan-out) */
   parentId?: string
   /** M207: IDs of spawned child sub-delegations */
