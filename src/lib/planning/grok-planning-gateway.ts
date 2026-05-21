@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { createHash } from 'crypto'
 import { createGitHubIssue, type GitHubConnectorConfig } from '@/lib/connectors/github'
 import { createLinearIssue, type LinearConnectorConfig } from '@/lib/connectors/linear'
 import type { Fetcher } from '@/lib/connectors/shared'
@@ -6,11 +7,43 @@ import type { Fetcher } from '@/lib/connectors/shared'
 const PRIORITIES = ['P0', 'P1', 'P2'] as const
 const OWNERS = ['codex', 'claude', 'grok', 'human'] as const
 const SYSTEMS = ['linear', 'github', 'both'] as const
+const ALLOWED_LABELS = [
+  'auth',
+  'db',
+  'docs',
+  'feature',
+  'forgepilot',
+  'grok-planning',
+  'improvement',
+  'migration',
+  'mvp',
+  'onboarding',
+  'p0',
+  'p1',
+  'p2',
+  'quality',
+  'security',
+  'tech-debt',
+  'ui',
+] as const
+
+const SECRET_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
+  { name: 'GitHub token', pattern: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}\b/ },
+  { name: 'GitHub fine-grained token', pattern: /\bgithub_pat_[A-Za-z0-9_]{20,}\b/ },
+  { name: 'Linear API token', pattern: /\blin_api_[A-Za-z0-9]{20,}\b/ },
+  { name: 'OpenAI-compatible API key', pattern: /\bsk-[A-Za-z0-9_-]{20,}\b/ },
+  { name: 'xAI API key', pattern: /\bxai-[A-Za-z0-9_-]{20,}\b/ },
+  {
+    name: 'Secret assignment',
+    pattern: /\b(?:NEXTAUTH_SECRET|FORGEPILOT_ADMIN_PASSWORD|OPENAI_API_KEY|ANTHROPIC_API_KEY|GITHUB_TOKEN|LINEAR_API_KEY)\s*[:=]\s*\S{8,}/i,
+  },
+]
 
 export type PlanningPriority = typeof PRIORITIES[number]
 export type PlanningOwner = typeof OWNERS[number]
 export type PlanningSystem = typeof SYSTEMS[number]
 export type PlanningMode = 'preview' | 'create-linear' | 'create-github' | 'create-all'
+export type PlanningLabel = typeof ALLOWED_LABELS[number]
 
 export const grokPlanningIssueSchema = z.object({
   title: z.string().trim().min(4).max(140),
@@ -78,8 +111,45 @@ export interface PlanningApplyResult {
   }>
 }
 
+export interface PlanningPayloadSafetyIssue {
+  path: string
+  message: string
+}
+
+export class PlanningPayloadSafetyError extends Error {
+  issues: PlanningPayloadSafetyIssue[]
+
+  constructor(issues: PlanningPayloadSafetyIssue[]) {
+    super('Unsafe Grok planning payload')
+    this.name = 'PlanningPayloadSafetyError'
+    this.issues = issues
+  }
+}
+
+export interface PlanningRequestSummary {
+  payloadHash: string
+  milestones: number
+  items: number
+  targetCounts: Record<'linear' | 'github', number>
+  priorityCounts: Record<PlanningPriority, number>
+  ownerCounts: Record<PlanningOwner, number>
+}
+
+export interface PlanningAudit {
+  action: 'grok-planning'
+  mode: PlanningMode
+  payloadHash: string
+  itemCount: number
+  createdCount: number
+  skippedCount: number
+  createdAt: string
+}
+
 export function parseGrokPlanningActionPlan(input: unknown): GrokPlanningActionPlan {
-  return grokPlanningActionPlanSchema.parse(input)
+  assertPayloadHasNoSecrets(input)
+  const plan = grokPlanningActionPlanSchema.parse(input)
+  assertLabelsAreAllowed(plan)
+  return plan
 }
 
 export function buildPlanningItems(plan: GrokPlanningActionPlan): PlanningItem[] {
@@ -188,6 +258,51 @@ export async function applyPlanningItems(
   return result
 }
 
+export function summarizePlanningRequest(plan: GrokPlanningActionPlan, items: PlanningItem[]): PlanningRequestSummary {
+  return {
+    payloadHash: computePlanningPayloadHash(plan),
+    milestones: plan.milestones.length,
+    items: items.length,
+    targetCounts: {
+      linear: items.filter(item => item.targetSystem === 'linear' || item.targetSystem === 'both').length,
+      github: items.filter(item => item.targetSystem === 'github' || item.targetSystem === 'both').length,
+    },
+    priorityCounts: {
+      P0: items.filter(item => item.priority === 'P0').length,
+      P1: items.filter(item => item.priority === 'P1').length,
+      P2: items.filter(item => item.priority === 'P2').length,
+    },
+    ownerCounts: {
+      codex: items.filter(item => item.owner === 'codex').length,
+      claude: items.filter(item => item.owner === 'claude').length,
+      grok: items.filter(item => item.owner === 'grok').length,
+      human: items.filter(item => item.owner === 'human').length,
+    },
+  }
+}
+
+export function buildPlanningAudit(
+  mode: PlanningMode,
+  plan: GrokPlanningActionPlan,
+  items: PlanningItem[],
+  applyResult: PlanningApplyResult,
+  now = new Date(),
+): PlanningAudit {
+  return {
+    action: 'grok-planning',
+    mode,
+    payloadHash: computePlanningPayloadHash(plan),
+    itemCount: items.length,
+    createdCount: applyResult.created.length,
+    skippedCount: applyResult.skipped.length,
+    createdAt: now.toISOString(),
+  }
+}
+
+export function computePlanningPayloadHash(payload: unknown): string {
+  return createHash('sha256').update(stableStringify(payload)).digest('hex')
+}
+
 export function renderPlanningPrompt(): string {
   return [
     'Du bist ForgePilot Planning Critic. Erzeuge ausschliesslich valides JSON.',
@@ -263,4 +378,74 @@ function normalizeLabel(label: string): string {
 
 function unique(values: string[]): string[] {
   return Array.from(new Set(values))
+}
+
+function assertLabelsAreAllowed(plan: GrokPlanningActionPlan): void {
+  const allowed = new Set<string>(ALLOWED_LABELS)
+  const issues: PlanningPayloadSafetyIssue[] = []
+
+  plan.milestones.forEach((milestone, milestoneIndex) => {
+    milestone.issues.forEach((issue, issueIndex) => {
+      issue.labels.forEach((label, labelIndex) => {
+        const normalized = normalizeLabel(label)
+        if (!allowed.has(normalized)) {
+          issues.push({
+            path: `milestones.${milestoneIndex}.issues.${issueIndex}.labels.${labelIndex}`,
+            message: `Label "${label}" is not allowed. Use one of: ${ALLOWED_LABELS.join(', ')}`,
+          })
+        }
+      })
+    })
+  })
+
+  if (issues.length > 0) {
+    throw new PlanningPayloadSafetyError(issues)
+  }
+}
+
+function assertPayloadHasNoSecrets(input: unknown): void {
+  const issues: PlanningPayloadSafetyIssue[] = []
+  scanForSecrets(input, '$', issues)
+
+  if (issues.length > 0) {
+    throw new PlanningPayloadSafetyError(issues)
+  }
+}
+
+function scanForSecrets(value: unknown, path: string, issues: PlanningPayloadSafetyIssue[]): void {
+  if (typeof value === 'string') {
+    for (const { name, pattern } of SECRET_PATTERNS) {
+      if (pattern.test(value)) {
+        issues.push({
+          path,
+          message: `${name} detected. Remove credentials from the payload and provide them via ForgePilot connector configuration.`,
+        })
+      }
+    }
+    return
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => scanForSecrets(entry, `${path}.${index}`, issues))
+    return
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    Object.entries(value).forEach(([key, entry]) => scanForSecrets(entry, `${path}.${key}`, issues))
+  }
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    return `{${Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`)
+      .join(',')}}`
+  }
+
+  return JSON.stringify(value)
 }

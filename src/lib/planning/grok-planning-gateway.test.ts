@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   applyPlanningItems,
+  buildPlanningAudit,
   buildPlanningItems,
+  computePlanningPayloadHash,
   parseGrokPlanningActionPlan,
+  PlanningPayloadSafetyError,
   renderPlanningPrompt,
+  summarizePlanningRequest,
 } from './grok-planning-gateway'
 
 const plan = {
@@ -58,6 +62,46 @@ describe('grok planning gateway', () => {
     expect(result.created).toEqual([])
     expect(result.skipped).toEqual([])
     expect(fetcher).not.toHaveBeenCalled()
+  })
+
+  it('rejects planning payloads that contain credentials', () => {
+    const unsafePlan = structuredClone(plan)
+    unsafePlan.milestones[0].issues[0].description = 'Use GITHUB_TOKEN=ghp_123456789012345678901234567890123456'
+
+    expect(() => parseGrokPlanningActionPlan(unsafePlan)).toThrow(PlanningPayloadSafetyError)
+  })
+
+  it('rejects labels outside the MVP planning allowlist', () => {
+    const invalidPlan = structuredClone(plan)
+    invalidPlan.milestones[0].issues[0].labels = ['security', 'billing']
+
+    expect(() => parseGrokPlanningActionPlan(invalidPlan)).toThrow(PlanningPayloadSafetyError)
+  })
+
+  it('creates deterministic summary and audit metadata', () => {
+    const parsed = parseGrokPlanningActionPlan(plan)
+    const items = buildPlanningItems(parsed)
+    const summary = summarizePlanningRequest(parsed, items)
+    const applyResult = { mode: 'preview' as const, created: [], skipped: [] }
+    const audit = buildPlanningAudit('preview', parsed, items, applyResult, new Date('2026-05-21T10:00:00.000Z'))
+
+    expect(summary).toMatchObject({
+      milestones: 1,
+      items: 1,
+      targetCounts: { linear: 1, github: 1 },
+      priorityCounts: { P0: 1, P1: 0, P2: 0 },
+      ownerCounts: { codex: 1, claude: 0, grok: 0, human: 0 },
+    })
+    expect(summary.payloadHash).toEqual(computePlanningPayloadHash(parsed))
+    expect(audit).toMatchObject({
+      action: 'grok-planning',
+      mode: 'preview',
+      payloadHash: summary.payloadHash,
+      itemCount: 1,
+      createdCount: 0,
+      skippedCount: 0,
+      createdAt: '2026-05-21T10:00:00.000Z',
+    })
   })
 
   it('creates GitHub and Linear issues when explicitly requested', async () => {

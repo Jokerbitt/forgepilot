@@ -5,9 +5,12 @@ import { ZodError } from 'zod'
 import { readConnectorConfigs } from '@/lib/connectors/config'
 import {
   applyPlanningItems,
+  buildPlanningAudit,
   buildPlanningItems,
   parseGrokPlanningActionPlan,
+  PlanningPayloadSafetyError,
   renderPlanningPrompt,
+  summarizePlanningRequest,
   type PlanningMode,
 } from '@/lib/planning/grok-planning-gateway'
 
@@ -57,10 +60,14 @@ export async function POST(request: Request) {
       linearConfig: configs.linear,
       githubConfig: configs.github,
     })
+    const summary = summarizePlanningRequest(plan, items)
+    const audit = buildPlanningAudit(mode, plan, items, applyResult)
 
     return NextResponse.json({
       ok: true,
       mode,
+      summary,
+      audit,
       plan,
       items,
       applyResult,
@@ -76,6 +83,13 @@ export async function POST(request: Request) {
           path: issue.path.join('.'),
           message: issue.message,
         })),
+      }, { status: 400 })
+    }
+
+    if (error instanceof PlanningPayloadSafetyError) {
+      return NextResponse.json({
+        error: 'Unsafe Grok planning payload',
+        issues: error.issues,
       }, { status: 400 })
     }
 
