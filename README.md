@@ -1,36 +1,98 @@
-# ForgePilot — Local-First AI Workflow Control Plane
+# ForgePilot
 
-> Plan, delegate, supervise and critically review AI-assisted development work without losing scope, context or control.
+> **Idea -> Delegation -> Reviewed Code.**
+>
+> The local AI workflow tool that coordinates agents and keeps their output under serious review.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-violet.svg)](./LICENSE)
 [![Tests](https://img.shields.io/badge/tests-1560%2B-brightgreen)](./src)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](./tsconfig.json)
 [![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
+
+ForgePilot turns vague ideas into structured delegations, lets local or cloud AI agents work inside a clear scope, reviews the result with an independent critic layer, and writes useful project knowledge back.
+
+It is built for solo developers, technical founders and small teams that already use tools like Claude, Cursor, Ollama or LM Studio, but want less chaos, less lost context and fewer blind AI changes.
+
+ForgePilot is **not** another all-in-one AI agent swarm. It is a focused AI workflow orchestrator with strong review and control primitives.
 
 ---
 
-## Features
+## MVP Workflow
 
-- **Idea → Brief → Requirements → Delegation → PR** — structured workflow from rough idea to reviewable agent work
-- **Multi-provider AI** — Claude, Grok, Gemini, GPT-4, Groq, Mistral, Ollama, LM Studio, and any OpenAI-compatible endpoint
-- **Grok critic** — independent AI evaluation layer that scores delegations and code reviews
-- **Local-first** — Phase-0 JSON persistence for single-user/self-hosted setups, with PostgreSQL migration work in progress
-- **Secure by default** — single-user auth gate is enabled unless explicitly disabled for isolated local development
-- **Knowledge writeback** — execution results flow back into your knowledge base automatically
-- **GDPR-by-design** — PII scrubbing, DSGVO processing ledger, erasure support
-- **Self-hosted** — Docker/NAS deployment, Vercel, or plain `npm run dev`
-- **1560+ tests** — Vitest and Playwright coverage across core flows
+### 1. Idea -> Brief
+
+Plain-text idea to structured project brief:
+
+- problem
+- goal
+- constraints
+- risks
+- useful next steps
+
+### 2. Brief -> Delegation
+
+Create precise work orders with:
+
+- goal and acceptance criteria
+- allowed file scope
+- risk class
+- token/budget limit
+- preferred model, local-first by default
+
+### 3. Delegation -> Execution
+
+Run scoped AI work with:
+
+- model routing
+- local-first execution where appropriate
+- cloud escalation for hard tasks
+- live logs
+- human approval for risky actions
+
+### 4. Grok-Critic Review
+
+Independently evaluate agent output:
+
+- correctness
+- security
+- drift from scope
+- concrete improvement suggestions
+- pass/fail verdict
+
+### 5. Knowledge Writeback
+
+Approved results are written back into project knowledge so useful context does not disappear after a chat session.
+
+### 6. GitHub PR
+
+Successful delegations can produce a pull request with review context and implementation notes.
 
 ---
 
-## What it does
+## What Makes ForgePilot Different
 
-1. **Idea → Brief** — Describe an idea in plain language, AI expands it into a structured project brief
-2. **Brief → Requirements** — AI generates prioritized requirements, use cases and risks
-3. **Requirements → Delegation** — Top work items become AI delegations with contracts
-4. **Delegation → Execution** — ForgePilot supervises scoped agent runs and keeps humans in control
-5. **Execution → Knowledge** — Results write back to your knowledge base automatically
+- **Local-first model routing**: use Ollama/LM Studio where possible, cloud models where needed.
+- **Scope and approval control**: agents get contracts, not vague prompts.
+- **Independent critic layer**: do not blindly trust the builder model.
+- **No vendor lock-in**: works with common local and cloud providers.
+- **Self-hosted by design**: runs on your machine, NAS or server.
+
+---
+
+## What Is Intentionally Not V1
+
+The current product focus is narrow on purpose. These areas are later-phase work:
+
+- full PM agent
+- full agent swarm/control-plane product
+- advanced context packages
+- complex work-item dependency management
+- billing and pricing screens
+- SaaS readiness dashboard
+- Telegram notifications
+- detailed DSGVO ledger beyond practical PII controls
+- multi-tenancy and team workspaces
+- advanced governance/policy engine
 
 ---
 
@@ -39,38 +101,14 @@
 ```bash
 git clone https://github.com/Jokerbitt/forgepilot
 cd forgepilot
+cp .env.example .env.local
 npm install
 npm run dev
 ```
 
-Open http://localhost:3000
+Open [http://localhost:3000](http://localhost:3000).
 
----
-
-## Free AI Providers (no credit card)
-
-| Provider | Setup | Speed | Best for |
-|----------|-------|-------|----------|
-| **Google Gemini** | [aistudio.google.com](https://aistudio.google.com) | Fast | Recommended default |
-| **Groq** | [console.groq.com](https://console.groq.com) | Fastest | High-volume dev |
-| **Ollama** | `ollama pull llama3.2:3b` | Local | Offline / privacy |
-
-Go to `/settings/providers` to configure.
-
----
-
-## Stack
-
-- **Next.js 15** App Router + TypeScript strict
-- **Tailwind CSS** dark theme
-- **Vitest + Playwright** — broad unit, API and smoke coverage
-- **Local-first Phase 0** — JSON runtime state under `config/*.json` for single-user use
-- **Migration path**: PostgreSQL/Drizzle work is in progress for tenant-aware persistence
-- **Optional**: Supabase, Vercel, NAS/Docker deployment
-
-## Security Defaults
-
-ForgePilot handles prompts, code context and provider credentials. Auth is therefore enabled by default.
+ForgePilot handles prompts, code context and provider credentials. Auth is enabled by default.
 
 For shared deployments, set:
 
@@ -88,79 +126,72 @@ FORGEPILOT_AUTH_DISABLED=true
 
 ---
 
-## Deployment
-
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app)
-
-Or locally with Docker:
-```bash
-docker build -t forgepilot . && docker run -p 3000:3000 forgepilot
-```
-
----
-
-## Architecture
-
-```
-forgepilot/
-├── src/
-│   ├── app/                    # Next.js 15 App Router
-│   │   ├── api/                # API routes (all Zod-validated)
-│   │   └── (pages)/            # Command Center, Delegations, Projects, ...
-│   └── lib/
-│       ├── ai/                 # Provider registry + text generation
-│       ├── context/            # Context engineer + PII scrubber
-│       ├── dsgvo/              # DSGVO processing ledger + erasure
-│       ├── eval/               # Eval harness (3D scoring)
-│       ├── knowledge/          # Knowledge cards + semantic search
-│       ├── nba-engine/         # Next Best Action engine
-│       └── validation/         # Zod schemas + parseBody() helper
-├── config/                     # Phase-0 local JSON runtime state
-└── scripts/                    # Seed, deploy, and validation scripts
-```
-
----
-
-## All AI Providers
+## Providers
 
 | Provider | Type | Env var |
 |----------|------|---------|
 | Anthropic Claude | Cloud | `ANTHROPIC_API_KEY` |
 | OpenAI | Cloud | `OPENAI_API_KEY` |
-| Google Gemini | Cloud (free tier) | `GOOGLE_API_KEY` |
-| Groq | Cloud (fast + free) | `GROQ_API_KEY` |
-| Together AI | Cloud | `TOGETHER_API_KEY` |
-| Mistral | Cloud | `MISTRAL_API_KEY` |
-| OpenRouter | Cloud (aggregator) | `OPENROUTER_API_KEY` |
-| xAI Grok | Cloud (critic) | `XAI_API_KEY` |
-| Ollama | Local (free) | `OLLAMA_BASE_URL` |
-| LM Studio | Local (free) | any OpenAI-compatible URL |
+| Google Gemini | Cloud/free tier | `GOOGLE_API_KEY` |
+| Groq | Cloud/fast free tier | `GROQ_API_KEY` |
+| xAI Grok | Cloud critic | `XAI_API_KEY` |
+| OpenRouter | Cloud aggregator | `OPENROUTER_API_KEY` |
+| Ollama | Local | `OLLAMA_BASE_URL` |
+| LM Studio | Local | OpenAI-compatible local URL |
 
-Add any OpenAI-compatible provider via `/settings/providers` — no code changes needed.
-
-### Grok Integration
-
-Grok acts as an independent **critic/evaluator** — it scores delegations, reviews code, and provides a second opinion alongside Claude. See [docs/GROK_SETUP.md](./docs/GROK_SETUP.md) for setup instructions.
+Configure providers in `/settings/providers`.
 
 ---
 
-## Contributing
+## Persistence
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, branching workflow, and how to add new providers or connectors.
+ForgePilot currently supports local JSON runtime state under `config/*.json` for single-user and self-hosted setups.
 
-**Good first issues** are labeled [`good first issue`](https://github.com/Jokerbitt/forgepilot/issues?q=label%3A%22good+first+issue%22) on GitHub.
+That is **Phase 0 persistence**, not the final SaaS architecture. PostgreSQL/Drizzle migration work is in progress to support safer concurrency, stronger queries and future tenant isolation.
 
 ---
+
+## Development
+
+```bash
+npm run dev
+npm run test:run
+npm run lint
+npm run type-check
+npm run build
+```
+
+For agent work, claim a scope before editing shared files:
+
+```bash
+npm run agent -- status
+npm run agent -- claim --agent your-agent-id --milestone M### --files "src/lib/example/**"
+npm run agent -- release --agent your-agent-id
+```
+
+---
+
+## Repository Map
+
+```text
+src/app/                  Next.js 15 pages and API routes
+src/components/           UI components and product surfaces
+src/lib/                  business logic, agents, routing, analytics, stores
+src/lib/ai/               provider routing and local/cloud model helpers
+src/lib/delegations/      queue, execution, costs, retries, health
+src/lib/eval/             evaluation harness and Grok critic
+src/lib/knowledge/        knowledge cards and writeback helpers
+config/*.json             phase-0 local runtime state
+docs/                     product, setup and review notes
+scripts/                  validation and coordination scripts
+```
+
+---
+
+## Product Direction
+
+See [Product Positioning V1](./docs/PRODUCT_POSITIONING_V1.md).
 
 ## License
 
-MIT for personal/open-source use. See [LICENSE](LICENSE).
-
----
-
-<p align="center">
-  <strong>Self-hosted · Local-first · GDPR-by-design</strong><br><br>
-  <a href="https://github.com/Jokerbitt/forgepilot/issues/new?template=feature.md">Request a Feature</a> ·
-  <a href="https://github.com/Jokerbitt/forgepilot/issues/new?template=bug.md">Report a Bug</a> ·
-  <a href="./CONTRIBUTING.md">Contribute</a>
-</p>
+MIT for personal and open-source use. See [LICENSE](./LICENSE).

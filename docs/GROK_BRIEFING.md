@@ -16,10 +16,12 @@ You are expected to be direct, skeptical, and honest. If something is wrong, say
 
 ## What ForgePilot Is
 
-ForgePilot is a **local-first AI Workflow OS** built by Sven Bittl. It turns ideas and Linear tickets into:
+ForgePilot is a **local-first AI workflow orchestrator** built by Sven Bittl. Its V1 focus is deliberately narrow: turn ideas into scoped delegations, review AI output critically, and write useful knowledge back.
+
+It turns ideas and Linear tickets into:
 1. Researched Project Briefs
 2. Structured Delegation Contracts (what an AI agent should build)
-3. Controlled AI Agent Execution (Claude Code, etc.)
+3. Controlled AI agent execution (local or cloud)
 4. GitHub Pull Requests
 5. Knowledge Writeback (learnings back into context)
 
@@ -39,7 +41,7 @@ src/app/              — Next.js pages (delegations, projects, work-items, sett
 config/*.json         — Runtime state (api-keys, nba-settings, delegations, etc.)
 ```
 
-**Current state:** 165+ milestones shipped. Tests are broad, but SaaS readiness still depends on mandatory auth, tenant-aware persistence, billing state, and UI polish.
+**Current state:** 165+ milestones shipped. Tests are broad, but V1 readiness depends on a reliable core flow: Idea -> Brief -> Delegation -> Critic Review -> PR -> Knowledge Writeback. SaaS features like billing, full multi-tenancy, PM agent and swarm UI are intentionally later-phase work.
 
 ---
 

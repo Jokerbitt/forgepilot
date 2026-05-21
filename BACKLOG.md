@@ -183,3 +183,4 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [ ] M171: JSON → PostgreSQL Dual-Write Migration Layer — vorbereitetes Repository-Pattern fuer tenant-aware Persistenz
 - [ ] M172: Billing Subscription Stub — Stripe-Readiness, Pricing-Hypothese, Customer-Portal-URL und fail-closed Webhook-Grenze ohne echte Charges
 - [x] M173: Auth Default + Honest Positioning — Auth standardmaessig aktivieren, lokalen Bypass explizit machen, README/Briefing von ueberzogenen Claims bereinigen
+- [x] M173b: Product Positioning V1 — MVP-Fokus auf Idea -> Delegation -> Reviewed Code schaerfen und explizite Nicht-MVP Features dokumentieren
