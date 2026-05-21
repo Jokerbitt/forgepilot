@@ -73,6 +73,20 @@ export const workItemSourceEnum = pgEnum('work_item_source', [
   'local',
 ])
 
+export const projectBriefStatusEnum = pgEnum('project_brief_status', [
+  'draft', 'in_review', 'accepted', 'archived',
+])
+
+export const notificationTypeEnum = pgEnum('notification_type', [
+  'pm-alert', 'research-complete', 'delegation-blocked', 'delegation_pending',
+  'milestone-at-risk', 'orchestration-complete', 'orchestration-failed',
+  'run_complete', 'run_failed', 'delegation_approved', 'brief_ready', 'system',
+])
+
+export const notificationSeverityEnum = pgEnum('notification_severity', [
+  'info', 'warning', 'critical',
+])
+
 // ─── users ────────────────────────────────────────────────────────────────────
 
 /**
@@ -264,13 +278,65 @@ export const apiKeys = pgTable(
   ],
 )
 
+// ─── project_briefs ───────────────────────────────────────────────────────────
+
+/**
+ * Stores ProjectBrief domain objects.
+ * Top-level columns for filtering; full data in `data` JSONB.
+ */
+export const projectBriefs = pgTable(
+  'project_briefs',
+  {
+    id:           uuid('id').primaryKey(),
+    userId:       uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    title:        text('title').notNull(),
+    status:       projectBriefStatusEnum('status').notNull().default('draft'),
+    scope:        text('scope').notNull().default('standard'),
+    researchMode: text('research_mode').notNull().default('standard'),
+    privacyMode:  text('privacy_mode').notNull().default('local'),
+    /** Full ProjectBrief object as JSONB — the type evolves quickly */
+    data:         jsonb('data').$type<Record<string, unknown>>().notNull(),
+    createdAt:    timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt:    timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('project_briefs_user_id_idx').on(t.userId),
+    index('project_briefs_status_idx').on(t.status),
+  ],
+)
+
+// ─── notifications ────────────────────────────────────────────────────────────
+
+export const notifications = pgTable(
+  'notifications',
+  {
+    id:        uuid('id').primaryKey().defaultRandom(),
+    userId:    uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    type:      notificationTypeEnum('type').notNull(),
+    severity:  notificationSeverityEnum('severity').notNull().default('info'),
+    title:     text('title').notNull(),
+    body:      text('body').notNull(),
+    link:      text('link'),
+    sourceId:  text('source_id'),
+    read:      boolean('read').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('notifications_user_id_idx').on(t.userId),
+    index('notifications_read_idx').on(t.read),
+    index('notifications_created_at_idx').on(t.createdAt),
+  ],
+)
+
 // ─── Relations ────────────────────────────────────────────────────────────────
 
 export const usersRelations = relations(users, ({ many }) => ({
-  projects:    many(projects),
-  delegations: many(delegations),
-  workItems:   many(workItems),
-  apiKeys:     many(apiKeys),
+  projects:       many(projects),
+  delegations:    many(delegations),
+  workItems:      many(workItems),
+  apiKeys:        many(apiKeys),
+  projectBriefs:  many(projectBriefs),
+  notifications:  many(notifications),
 }))
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -295,6 +361,14 @@ export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
   user: one(users, { fields: [apiKeys.userId], references: [users.id] }),
 }))
 
+export const projectBriefsRelations = relations(projectBriefs, ({ one }) => ({
+  user: one(users, { fields: [projectBriefs.userId], references: [users.id] }),
+}))
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, { fields: [notifications.userId], references: [users.id] }),
+}))
+
 // ─── Inferred types (use these in application code) ──────────────────────────
 
 export type User          = typeof users.$inferSelect
@@ -307,3 +381,10 @@ export type WorkItem      = typeof workItems.$inferSelect
 export type NewWorkItem   = typeof workItems.$inferInsert
 export type ApiKey        = typeof apiKeys.$inferSelect
 export type NewApiKey     = typeof apiKeys.$inferInsert
+
+// DB types for new tables — prefixed Db* to avoid collision with domain models
+// in src/lib/models/ which use the same names without prefix.
+export type DbProjectBrief    = typeof projectBriefs.$inferSelect
+export type NewProjectBrief   = typeof projectBriefs.$inferInsert
+export type DbNotification    = typeof notifications.$inferSelect
+export type NewNotification   = typeof notifications.$inferInsert
