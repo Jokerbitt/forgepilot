@@ -138,3 +138,20 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [~] M151: Telegram Command & Control — Bot-Integration: alle Status-Updates in Telegram, Steuerung via /approve /reject /status /runs /digest /notif
 - [~] M152: Telegram Scheduled Digest — täglicher Digest 07:00 UTC via Vercel Cron (/api/cron/telegram-digest)
 - [~] M153: Telegram Webhook Setup — /api/telegram/setup-webhook: automatisches Registrieren des Webhooks, "Webhook einrichten"-Button in Settings
+
+## 🟠 Medium Priority — Observability & Reliability (M154–M159)
+
+- [x] M154: Telegram Inline Keyboards — One-tap ✅ Genehmigen / ❌ Ablehnen direkt in Telegram-Nachricht für ausstehende Delegations
+- [x] M155: AI Provider Health Monitor — runHealthCheck() mit Latenz, Status-Levels (healthy/degraded/unavailable/unconfigured), failStreak, GET/POST /api/ai/providers/health, Vercel Cron alle 30 Min
+- [x] M156: Provider Health UI — /settings/providers zeigt Live-Status-Badges (●grün/●gelb/●rot) + letzte Latenz + failStreak aus Health-Cache
+- [~] M157: Notification Channels — Konfigurierbare Kanäle in /settings/notifications: Bell, Telegram, Email — pro Typ wählbar
+- [~] M158: Delegation SLA Tracker — SLA-Deadline pro Delegation (Erstellt + konfigurierbare Stunden), Badge wenn SLA verletzt
+- [~] M159: Provider Cost Tracker — Token-Verbrauch pro Provider aus Eval-Logs aggregieren, /settings/providers zeigt Kosten-Trend
+
+## 🔴 High Priority — Production-Readiness (M160–M164)
+
+- [~] M160: `/api/ready` Readiness Probe — umfassender Health-Check: Delegations-Store erreichbar, AI-Provider konfiguriert, Scope-Lock OK, Connector-Status; für Docker HEALTHCHECK + Vercel Cron
+- [x] M161: Config Backup Routine — tägliches automatisches Backup von `config/*.json` nach `config/backups/YYYY-MM-DD/`; GET /api/backup/list + POST /api/backup/restore; Vercel Cron 03:00 UTC; 7-Tage-Rotation
+- [x] M162: SSE Stream für Agent Scope — `/api/agents/scope/stream` ersetzt 5s-Polling in ScopeBoard; Live/Poll-Toggle; EventSource mit Fallback
+- [x] M163: Approval-Stack im Header — ausstehende Delegations-Genehmigungen als Sticky-Banner in Navigation (Zahl + Quick-Approve-Button) statt nur in /delegations
+- [~] M164: Delegation Live-Timeline — Live-Ansicht laufender Delegations mit Logs, Cost-Anzeige, Risk-Badge, Trace-Link; Polling durch SSE ersetzen

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import type { NotificationPreferences } from '@/lib/models/notification-preferences'
+import type { NotificationPreferences, ChannelConfig, NotificationChannel } from '@/lib/models/notification-preferences'
 import { NOTIFICATION_TYPE_LABELS, NOTIFICATION_GROUPS } from '@/lib/models/notification-preferences'
 import type { NotificationType } from '@/lib/models/notification'
 
@@ -52,7 +52,53 @@ function Toggle({ checked, onChange, disabled, label, description }: ToggleProps
   )
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Channel Badge ────────────────────────────────────────────────────────────
+
+const CHANNEL_ICONS: Record<NotificationChannel, string> = {
+  bell:     '🔔',
+  telegram: '✈️',
+  email:    '📧',
+}
+
+const CHANNEL_LABELS: Record<NotificationChannel, string> = {
+  bell:     'Bell',
+  telegram: 'Telegram',
+  email:    'E-Mail',
+}
+
+interface ChannelBadgeProps {
+  channel: NotificationChannel
+  enabled: boolean
+  onChange: (enabled: boolean) => void
+  disabled?: boolean
+}
+
+function ChannelBadge({ channel, enabled, onChange, disabled }: ChannelBadgeProps) {
+  return (
+    <button
+      type="button"
+      title={`${CHANNEL_LABELS[channel]}: ${enabled ? 'aktiviert' : 'deaktiviert'}`}
+      disabled={disabled}
+      onClick={() => !disabled && onChange(!enabled)}
+      className={[
+        'flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border transition-all',
+        enabled && !disabled
+          ? 'bg-blue-900/40 border-blue-500/40 text-blue-300'
+          : 'bg-gray-800/40 border-gray-700/40 text-gray-600',
+        disabled ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer hover:opacity-80',
+      ].join(' ')}
+    >
+      <span>{CHANNEL_ICONS[channel]}</span>
+      <span className="hidden sm:inline">{CHANNEL_LABELS[channel]}</span>
+    </button>
+  )
+}
+
+// ���── Main Page ────────────────────────────────────────────────────────────────
+
+const ALL_CHANNELS: NotificationChannel[] = ['bell', 'telegram', 'email']
+
+const DEFAULT_CHANNEL: ChannelConfig = { bell: true, telegram: true, email: false }
 
 export default function NotificationSettingsPage() {
   const [prefs, setPrefs] = useState<NotificationPreferences | null>(null)
@@ -101,6 +147,16 @@ export default function NotificationSettingsPage() {
     const types = { ...prefs.types, [type]: value }
     setPrefs(prev => prev ? { ...prev, types } : prev)
     void savePrefs({ types: { [type]: value } as Record<NotificationType, boolean> })
+  }
+
+  function handleChannelToggle(type: NotificationType, channel: NotificationChannel, value: boolean) {
+    if (!prefs) return
+    const currentChannels = prefs.channels ?? {}
+    const typeChannels = currentChannels[type] ?? { ...DEFAULT_CHANNEL }
+    const updatedTypeChannels: ChannelConfig = { ...typeChannels, [channel]: value }
+    const channels = { ...currentChannels, [type]: updatedTypeChannels }
+    setPrefs(prev => prev ? { ...prev, channels } : prev)
+    void savePrefs({ channels: { [type]: updatedTypeChannels } as Record<NotificationType, ChannelConfig> })
   }
 
   const allTypesEnabled = prefs
@@ -169,11 +225,34 @@ export default function NotificationSettingsPage() {
               </div>
             </section>
 
+            {/* Channel legend */}
+            <section>
+              <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                Kanäle
+              </h2>
+              <div className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-4">
+                <div className="flex flex-wrap gap-3">
+                  {ALL_CHANNELS.map(ch => (
+                    <div key={ch} className="flex items-center gap-1.5 text-xs text-gray-400">
+                      <span>{CHANNEL_ICONS[ch]}</span>
+                      <span className="font-medium text-gray-300">{CHANNEL_LABELS[ch]}</span>
+                      {ch === 'email' && (
+                        <span className="text-[10px] bg-gray-800 border border-gray-700 rounded px-1 text-gray-500">bald</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-600 mt-2">
+                  Konfiguriere pro Ereignistyp auf welchem Kanal du benachrichtigt wirst.
+                </p>
+              </div>
+            </section>
+
             {/* Per-type settings */}
             <section>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-                  Ereignistypen
+                  Ereignistypen & Kanäle
                 </h2>
                 <button
                   onClick={() => handleToggleAll(!allTypesEnabled)}
@@ -196,16 +275,55 @@ export default function NotificationSettingsPage() {
                       </span>
                     </div>
                     <div className="divide-y divide-gray-800/60">
-                      {group.types.map(type => (
-                        <div key={type} className="px-5 py-3.5">
-                          <Toggle
-                            checked={prefs.types[type] ?? true}
-                            onChange={v => handleTypeToggle(type, v)}
-                            disabled={prefs.muteAll}
-                            label={NOTIFICATION_TYPE_LABELS[type]}
-                          />
-                        </div>
-                      ))}
+                      {group.types.map(type => {
+                        const typeEnabled = prefs.types[type] ?? true
+                        const channelCfg: ChannelConfig = prefs.channels?.[type] ?? { ...DEFAULT_CHANNEL }
+                        return (
+                          <div key={type} className="px-5 py-3.5 flex items-center gap-3">
+                            {/* On/off toggle (compact) */}
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={typeEnabled}
+                              disabled={prefs.muteAll}
+                              onClick={() => handleTypeToggle(type, !typeEnabled)}
+                              className={[
+                                'w-8 h-5 rounded-full transition-colors focus:outline-none shrink-0',
+                                typeEnabled && !prefs.muteAll ? 'bg-blue-600' : 'bg-gray-700',
+                                prefs.muteAll ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer',
+                              ].join(' ')}
+                            >
+                              <span
+                                className={[
+                                  'block w-3 h-3 bg-white rounded-full shadow transition-transform mx-1',
+                                  typeEnabled ? 'translate-x-3' : 'translate-x-0',
+                                ].join(' ')}
+                              />
+                            </button>
+
+                            {/* Label */}
+                            <span className={[
+                              'flex-1 text-sm',
+                              typeEnabled && !prefs.muteAll ? 'text-gray-200' : 'text-gray-600',
+                            ].join(' ')}>
+                              {NOTIFICATION_TYPE_LABELS[type]}
+                            </span>
+
+                            {/* Channel badges */}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {ALL_CHANNELS.map(ch => (
+                                <ChannelBadge
+                                  key={ch}
+                                  channel={ch}
+                                  enabled={channelCfg[ch]}
+                                  disabled={prefs.muteAll || !typeEnabled}
+                                  onChange={v => handleChannelToggle(type, ch, v)}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 ))}

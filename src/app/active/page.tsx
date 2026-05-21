@@ -15,6 +15,7 @@ import type { LiveAgentState } from '@/lib/models/live-agent'
 import { ElapsedTimer } from '@/components/shared/ElapsedTimer'
 import { cx } from '@/components/ui/primitives'
 import { AgentStatusMatrix } from '@/components/delegation/AgentStatusMatrix'
+import { DelegationLiveTimeline } from '@/components/delegation/DelegationLiveTimeline'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -759,6 +760,9 @@ function ActiveRunsContent() {
             </Link>
           </div>
         </div>
+
+        {/* M164: Live Timeline — SSE-based, replaces per-section polling */}
+        <DelegationLiveTimeline maxItems={5} showModeToggle />
 
         {/* System status bar + Agent Status Matrix */}
         <div className="space-y-2">

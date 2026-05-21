@@ -18,8 +18,9 @@ export interface TokenUsage {
 }
 
 export interface CostSavings {
+  /** Token breakdown (legacy format) */
   tokensUsed: TokenUsage
-  /** What Claude Sonnet would have cost for the same tokens */
+  /** Legacy field name — prefer cloudEquivalentUsd */
   claudeEquivalentUsd: number
   /** Actual cost (0 for Ollama) */
   actualCostUsd: number
@@ -27,6 +28,12 @@ export interface CostSavings {
   savedUsd: number
   /** Which model ran locally */
   localModel: string
+  /** M159: cloud-equivalent cost — newer name for claudeEquivalentUsd */
+  cloudEquivalentUsd?: number
+  /** M159: input token count — newer alternative to tokensUsed.promptTokens */
+  inputTokens?: number
+  /** M159: output token count — newer alternative to tokensUsed.completionTokens */
+  outputTokens?: number
 }
 
 export interface DelegationReport {
@@ -101,6 +108,8 @@ export interface Delegation {
   note?: DelegationNote
   /** When true, execute route auto-orchestrates into sub-tasks */
   autoOrchestrate?: boolean
+  /** M164: OpenTelemetry trace ID for this delegation execution */
+  traceId?: string
   createdAt: string
   updatedAt: string
 }

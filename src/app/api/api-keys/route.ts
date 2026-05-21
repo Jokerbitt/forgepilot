@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
+import { recordKeySet, removeKeyMeta } from '@/lib/api-keys/rotation-tracker'
 
 const API_KEYS_FILE = path.join(process.cwd(), 'config', 'api-keys.json')
 
@@ -91,8 +92,10 @@ export async function POST(request: Request) {
     if (typeof v === 'string') {
       if (v === '') {
         delete merged[key]
+        removeKeyMeta(key)
       } else {
         merged[key] = v
+        recordKeySet(key, v)
       }
     }
   }

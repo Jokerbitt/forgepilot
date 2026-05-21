@@ -76,6 +76,30 @@ vi.mock('@/lib/writeback/summary', () => ({
   })),
 }))
 
+// Mock AI plan generation to prevent real API calls (avoids 5s timeout)
+vi.mock('@/lib/pilot/ai-plan', () => ({
+  generateExecutionPlan: vi.fn(() =>
+    Promise.resolve({
+      summary: 'Implement feature X in 3 steps',
+      steps: ['Analyse codebase', 'Write implementation', 'Add tests'],
+      estimatedComplexity: 'medium' as const,
+      suggestedApproach: 'TDD with incremental commits',
+      provider: 'anthropic',
+      model: 'claude-haiku-4-5',
+      inputTokens: 100,
+      outputTokens: 200,
+    }),
+  ),
+  buildFallbackPlan: vi.fn(() => ({
+    summary: 'Static fallback plan',
+    steps: ['Analyse', 'Implement', 'Test'],
+    estimatedComplexity: 'low' as const,
+    suggestedApproach: 'Direct implementation',
+    provider: 'fallback',
+    model: 'none',
+  })),
+}))
+
 import { runPilot } from './orchestrator'
 
 beforeEach(() => { vi.clearAllMocks() })

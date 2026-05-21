@@ -8,10 +8,17 @@ import type { NotificationPreferences } from '@/lib/models/notification-preferen
 
 export const dynamic = 'force-dynamic'
 
+const ChannelConfigSchema = z.object({
+  bell:     z.boolean().optional(),
+  telegram: z.boolean().optional(),
+  email:    z.boolean().optional(),
+})
+
 const UpdatePrefsSchema = z.object({
-  muteAll: z.boolean().optional(),
+  muteAll:   z.boolean().optional(),
   showBadge: z.boolean().optional(),
-  types: z.record(z.string(), z.boolean()).optional(),
+  types:     z.record(z.string(), z.boolean()).optional(),
+  channels:  z.record(z.string(), ChannelConfigSchema).optional(),
 })
 
 export async function GET() {
