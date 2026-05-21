@@ -17,6 +17,7 @@ import { AgentRunReplayView } from '@/components/delegation/AgentRunReplayView'
 import { GrokCriticCard } from '@/components/delegation/GrokCriticCard'
 import { DelegationPipelineBreadcrumb } from '@/components/delegation/DelegationPipelineBreadcrumb'
 import { KnowledgeWritebackPanel } from '@/components/delegation/KnowledgeWritebackPanel'
+import { KnowledgeCardList } from '@/components/knowledge'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
   switch (status) {
@@ -659,6 +660,24 @@ export default function DelegationDetailPage() {
         {/* ── Knowledge Writeback ───────────────────────────────────────── */}
         {(d.status === 'completed' || d.status === 'failed') && (
           <KnowledgeWritebackPanel delegationId={id} />
+        )}
+
+        {/* ── Gelerntes Wissen (full KnowledgeCardList with delegation link) ── */}
+        {d.status === 'completed' && (
+          <section className="bg-gray-900 border border-emerald-900/30 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">
+                Gelerntes Wissen
+              </h2>
+              <a
+                href="/knowledge-cards"
+                className="text-xs text-emerald-600 hover:text-emerald-400 transition-colors"
+              >
+                Alle Wissenskarten →
+              </a>
+            </div>
+            <KnowledgeCardList delegationId={id} />
+          </section>
         )}
 
         {/* ── PR Details (wenn PR vorhanden) ────────────────────────────── */}
