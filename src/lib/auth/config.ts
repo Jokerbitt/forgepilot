@@ -1,12 +1,10 @@
-export const AUTH_ENABLED_ENV = 'FORGEPILOT_AUTH_ENABLED'
+export const AUTH_DISABLED_ENV = 'FORGEPILOT_AUTH_DISABLED'
 
-const FALSE_VALUES = new Set(['0', 'false', 'no', 'off'])
+const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on'])
 
 export function isForgePilotAuthEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  const raw = String(env[AUTH_ENABLED_ENV] ?? '').trim().toLowerCase()
-  // Disabled only when explicitly set to a falsy value
-  if (raw !== '' && FALSE_VALUES.has(raw)) return false
-  return true // enabled by default
+  const raw = String(env[AUTH_DISABLED_ENV] ?? '').trim().toLowerCase()
+  return !TRUE_VALUES.has(raw)
 }
 
 export function isAuthConfigured(env: NodeJS.ProcessEnv = process.env): boolean {

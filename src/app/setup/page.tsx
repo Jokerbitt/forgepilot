@@ -73,11 +73,11 @@ NEXTAUTH_SECRET=<output von: openssl rand -base64 32>`}</code>
             .
           </div>
 
-          {/* Footer: disable auth hint */}
+          {/* Footer: explicit local-only bypass hint */}
           <p className="text-xs leading-5 text-slate-600">
-            Auth deaktivieren (nur lokale Entwicklung):{' '}
+            Unsicherer Dev-Bypass nur fuer isolierte lokale Tests:{' '}
             <code className="rounded bg-slate-950 px-1 py-0.5 text-slate-400">
-              FORGEPILOT_AUTH_ENABLED=false
+              FORGEPILOT_AUTH_DISABLED=true
             </code>
           </p>
         </section>
