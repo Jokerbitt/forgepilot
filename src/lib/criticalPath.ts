@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import { fetchIssueRelations, type IssueWithRelations } from '@/lib/linear/relations'
 
 export interface CriticalPathIssue {
   id: string
@@ -7,6 +8,7 @@ export interface CriticalPathIssue {
   priority: number
   status: string
   estimate?: number
+  identifier?: string
 }
 
 export interface CriticalPathResult {
@@ -21,6 +23,7 @@ interface RawIssue {
   priority: number
   status: string
   estimate?: number
+  identifier?: string
   blocks?: string[]
   blockedBy?: string[]
 }
@@ -234,11 +237,61 @@ function toPathIssue(issue: RawIssue): CriticalPathIssue {
   if (issue.estimate !== undefined) {
     result.estimate = issue.estimate
   }
+  if (issue.identifier !== undefined) {
+    result.identifier = issue.identifier
+  }
   return result
 }
 
-export async function computeCriticalPath(): Promise<CriticalPathResult> {
+/**
+ * Convert IssueWithRelations (from Linear GraphQL) to RawIssue for graph computation.
+ */
+function linearIssueToRaw(issue: IssueWithRelations): RawIssue {
+  const blocks: string[] = []
+  const blockedBy: string[] = []
+
+  for (const rel of issue.relations) {
+    if (rel.type === 'blocks') {
+      blocks.push(rel.relatedIssue.id)
+    } else if (rel.type === 'blocked_by') {
+      blockedBy.push(rel.relatedIssue.id)
+    }
+  }
+
+  return {
+    id: issue.id,
+    identifier: issue.identifier,
+    title: issue.title,
+    priority: issue.priority,
+    status: issue.status,
+    blocks,
+    blockedBy,
+  }
+}
+
+const DEFAULT_TEAM_ID = process.env.LINEAR_TEAM_ID ?? 'ab4affe2-d4b1-466c-9b03-ce1244bf0d01'
+
+export async function computeCriticalPath(teamId?: string): Promise<CriticalPathResult> {
   try {
+    const apiKey = process.env.LINEAR_API_KEY
+
+    // When LINEAR_API_KEY is set, try to fetch live data from Linear
+    if (apiKey) {
+      const resolvedTeamId = teamId ?? DEFAULT_TEAM_ID
+      const linearIssues = await fetchIssueRelations(resolvedTeamId)
+
+      if (linearIssues.length > 0) {
+        const rawIssues = linearIssues.map(linearIssueToRaw)
+
+        if (!hasDependencies(rawIssues)) {
+          return fallbackPrioritySort(rawIssues)
+        }
+
+        return computeGraphCriticalPath(rawIssues)
+      }
+    }
+
+    // Fallback: load from local config file
     const issues = loadIssues()
 
     if (issues.length === 0) {
