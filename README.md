@@ -145,6 +145,29 @@ For a cautious migration, start with `FORGEPILOT_DELEGATION_STORAGE=dual`: Forge
 
 ---
 
+## Storage & Persistenz
+
+ForgePilot unterstützt drei Storage-Modi (env var `STORAGE_MODE`):
+
+| Modus | Geeignet für | Anforderungen |
+|---|---|---|
+| `json` (Default) | Entwicklung, lokaler Test, Bootstrap | keine |
+| `dual` | Migration zu PostgreSQL | `DATABASE_URL` |
+| `postgres` | Produktion | `DATABASE_URL` |
+
+**JSON ist kein Production-Persistenzpfad** — kein ACID, Race Conditions bei parallelen Schreibzugriffen möglich.
+
+```bash
+# Status prüfen
+curl http://localhost:3000/api/storage-status
+
+# Migration (dry-run zuerst)
+npx tsx scripts/backfill-json-to-postgres.ts --dry-run
+npx tsx scripts/backfill-json-to-postgres.ts
+```
+
+---
+
 ## Stack
 
 - **Next.js 15** App Router, TypeScript strict
