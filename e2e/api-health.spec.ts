@@ -17,8 +17,9 @@ test.describe('API Health', () => {
     const res = await request.get('/api/dashboard/stats')
     expect(res.status()).toBe(200)
     const body = await res.json()
-    expect(typeof body.delegations).toBe('number')
-    expect(typeof body.workItems).toBe('number')
+    expect(typeof body.delegations.total).toBe('number')
+    expect(typeof body.delegations.running).toBe('number')
+    expect(typeof body.system.testsGreen).toBe('number')
   })
 
   test('GET /api/settings returns settings', async ({ request }) => {
