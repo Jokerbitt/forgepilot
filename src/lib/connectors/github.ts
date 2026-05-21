@@ -51,7 +51,7 @@ export const githubConnectorManifest: ConnectorManifest = {
   name: 'GitHub',
   category: 'code',
   authType: 'api-key',
-  capabilities: ['read-items', 'read-prs', 'read-ci'],
+  capabilities: ['read-items', 'read-prs', 'read-ci', 'write-items'],
   configSchema: {
     token: {
       type: 'secret',
@@ -74,6 +74,59 @@ export const githubConnectorManifest: ConnectorManifest = {
     },
   },
   docsUrl: 'https://docs.github.com/en/rest',
+}
+
+export interface GitHubCreateIssueInput {
+  owner: string
+  repo: string
+  title: string
+  body?: string
+  labels?: string[]
+}
+
+export interface GitHubCreatedIssue {
+  id: number
+  number: number
+  html_url: string
+  title: string
+}
+
+export async function createGitHubIssue(
+  config: GitHubConnectorConfig,
+  input: GitHubCreateIssueInput,
+  fetcher: Fetcher = fetch,
+): Promise<GitHubCreatedIssue> {
+  const token = config.token
+  if (!token) throw new Error('GITHUB_TOKEN not configured')
+
+  const response = await fetcher(
+    `${config.apiUrl ?? 'https://api.github.com'}/repos/${input.owner}/${input.repo}/issues`,
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      body: JSON.stringify({
+        title: input.title,
+        body: input.body,
+        labels: input.labels,
+      }),
+    },
+  )
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: HTTP ${response.status}`)
+  }
+
+  const issue = await response.json() as Partial<GitHubCreatedIssue>
+  if (!issue.id || !issue.number || !issue.html_url || !issue.title) {
+    throw new Error('GitHub did not return a created issue')
+  }
+
+  return issue as GitHubCreatedIssue
 }
 
 export async function getGitHubConnectorHealth(
