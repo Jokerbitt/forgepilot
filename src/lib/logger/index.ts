@@ -57,6 +57,9 @@ export const orchestrationLogger = logger.child({ module: 'orchestration' })
 /** Logger for API routes and HTTP layer */
 export const apiLogger = logger.child({ module: 'api' })
 
+/** Logger for Telegram bot integration */
+export const telegramLogger = logger.child({ module: 'telegram' })
+
 // ─── Typed log event helpers ─────────────────────────────────────────────────
 
 /** Log an AI provider call result */
