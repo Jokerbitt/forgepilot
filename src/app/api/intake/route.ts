@@ -8,30 +8,43 @@ import {
   splitConstraintLines,
 } from '@/lib/project-briefs'
 import type { IdeaIntakeInput } from '@/lib/models/project-brief'
+import { verifyWebhookSignature } from '@/lib/webhooks/hmac'
 
 export async function POST(request: NextRequest) {
-  let body: Record<string, unknown>
+  const rawBody = await request.text()
+  const signature =
+    request.headers.get('x-forgepilot-signature') ??
+    request.headers.get('x-hub-signature-256') // also support GitHub-style header
+
+  const secret = process.env.INTAKE_WEBHOOK_SECRET
+  if (!verifyWebhookSignature(rawBody, signature, secret)) {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+  }
+
+  let body: unknown
   try {
-    body = await request.json() as Record<string, unknown>
+    body = JSON.parse(rawBody)
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const constraints = Array.isArray(body.constraints)
-    ? (body.constraints as string[]).map(String)
-    : typeof body.constraints === 'string'
-      ? splitConstraintLines(body.constraints)
+  const typedBody = body as Record<string, unknown>
+
+  const constraints = Array.isArray(typedBody.constraints)
+    ? (typedBody.constraints as string[]).map(String)
+    : typeof typedBody.constraints === 'string'
+      ? splitConstraintLines(typedBody.constraints)
       : []
 
   const input: IdeaIntakeInput = {
-    title:            String(body.title ?? ''),
-    rawIdea:          String(body.rawIdea ?? body.raw_idea ?? body.idea ?? ''),
-    problemStatement: String(body.problemStatement ?? body.problem_statement ?? body.problem ?? ''),
-    targetAudience:   String(body.targetAudience ?? body.target_audience ?? body.audience ?? ''),
-    desiredOutcome:   String(body.desiredOutcome ?? body.desired_outcome ?? body.outcome ?? ''),
-    scope:            (body.scope as IdeaIntakeInput['scope']) ?? 'standard',
-    researchMode:     (body.researchMode ?? body.research_mode) as IdeaIntakeInput['researchMode'] ?? 'standard',
-    privacyMode:      (body.privacyMode ?? body.privacy_mode) as IdeaIntakeInput['privacyMode'] ?? 'local',
+    title:            String(typedBody.title ?? ''),
+    rawIdea:          String(typedBody.rawIdea ?? typedBody.raw_idea ?? typedBody.idea ?? ''),
+    problemStatement: String(typedBody.problemStatement ?? typedBody.problem_statement ?? typedBody.problem ?? ''),
+    targetAudience:   String(typedBody.targetAudience ?? typedBody.target_audience ?? typedBody.audience ?? ''),
+    desiredOutcome:   String(typedBody.desiredOutcome ?? typedBody.desired_outcome ?? typedBody.outcome ?? ''),
+    scope:            (typedBody.scope as IdeaIntakeInput['scope']) ?? 'standard',
+    researchMode:     (typedBody.researchMode ?? typedBody.research_mode) as IdeaIntakeInput['researchMode'] ?? 'standard',
+    privacyMode:      (typedBody.privacyMode ?? typedBody.privacy_mode) as IdeaIntakeInput['privacyMode'] ?? 'local',
     constraints,
   }
 
