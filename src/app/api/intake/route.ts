@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   buildProjectBrief,
   saveProjectBrief,
+  updateProjectBrief,
   validateIdeaIntakeInput,
   hasIdeaIntakeErrors,
   splitConstraintLines,
@@ -56,5 +57,58 @@ export async function POST(request: NextRequest) {
   const brief = buildProjectBrief(input)
   saveProjectBrief(brief)
 
-  return NextResponse.json(brief, { status: 201 })
+  const autoDelegate = typedBody.autoDelegate === true || typedBody.auto_delegate === true
+  if (!autoDelegate) {
+    return NextResponse.json(brief, { status: 201 })
+  }
+
+  // Step 1: Accept the brief
+  updateProjectBrief(brief.id, { status: 'accepted' })
+  const acceptedBrief = { ...brief, status: 'accepted' as const }
+
+  // Step 2: Create delegation
+  const { createDelegationFromBrief } = await import('@/lib/delegation-creation')
+  let delegation = await createDelegationFromBrief(acceptedBrief)
+
+  const autoApprove = typedBody.autoApprove !== false && typedBody.auto_approve !== false // default true
+  const autoExecute = typedBody.autoExecute === true || typedBody.auto_execute === true
+
+  // Step 3: Auto-approve (if Risk A/B — never auto-approve Risk C)
+  if (autoApprove && delegation.contract.riskClass !== 'C') {
+    const { createDelegationRepository, SINGLE_TENANT_USER_ID } = await import('@/lib/repositories/delegationRepository')
+    const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+    const log = {
+      timestamp: new Date().toISOString(),
+      type: 'success' as const,
+      message: 'Delegation auto-approved via intake pipeline.',
+    }
+    delegation = await repo.update(delegation.id, {
+      status: 'approved',
+      approvalId: `intake-auto-${Date.now()}`,
+      contract: { ...delegation.contract, requiresApproval: false },
+      logs: [...(delegation.logs ?? []), log],
+    }) ?? delegation
+  }
+
+  // Step 4: Trigger execution (fire-and-forget)
+  if (autoExecute && delegation.status === 'approved') {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+    fetch(`${baseUrl}/api/delegations/${delegation.id}/execute`, { method: 'POST' })
+      .catch(() => { /* non-critical — execution can be triggered manually */ })
+  }
+
+  return NextResponse.json(
+    {
+      brief: acceptedBrief,
+      delegation,
+      pipeline: {
+        briefCreated: true,
+        briefAccepted: true,
+        delegationCreated: true,
+        delegationApproved: autoApprove && delegation.status === 'approved',
+        executionTriggered: autoExecute && delegation.status === 'approved',
+      },
+    },
+    { status: 201 },
+  )
 }
