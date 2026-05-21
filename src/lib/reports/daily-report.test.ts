@@ -141,10 +141,13 @@ describe('buildDailyReport', () => {
     expect(report.status.quality.knowledgeWritebacks).toBe(1)
     expect(report.markdown).toContain('ForgePilot Daily Report')
     expect(report.assistantRouting.recommended.providerId).toBe('anthropic')
+    expect(report.firstRealValueLoop.progressPct).toBeGreaterThanOrEqual(80)
+    expect(report.firstRealValueLoop.currentStep.id).toBe('writeback')
     expect(report.prompts.some(prompt => prompt.target === 'assistant-auto')).toBe(true)
     expect(report.prompts.some(prompt => prompt.title === 'Coding validation pass')).toBe(true)
     expect(report.markdown).toContain('Coding validation pass')
     expect(report.markdown).toContain('## Assistant Routing')
+    expect(report.markdown).toContain('## First Real Value Loop')
   })
 
   it('raises critical risk when auth is disabled', () => {
@@ -161,6 +164,7 @@ describe('buildDailyReport', () => {
     expect(report.executiveVerdict.status).toBe('red')
     expect(report.risks.map(risk => risk.id)).toContain('auth-disabled')
     expect(report.nextActions[0]?.id).toBe('secure-local-auth')
+    expect(report.firstRealValueLoop.currentStep.id).toBe('brief')
   })
 
   it('flags JSON primary storage and low critic coverage', () => {
@@ -168,7 +172,7 @@ describe('buildDailyReport', () => {
       now,
       storageMode: 'json',
       authDisabled: false,
-      projectBriefs: [],
+      projectBriefs: [brief({ status: 'accepted' })],
       knowledgeCards: [],
       attentionItems: [],
       delegations: [
@@ -182,6 +186,8 @@ describe('buildDailyReport', () => {
       expect.arrayContaining(['json-primary-storage', 'failed-delegations', 'low-critic-coverage']),
     )
     expect(report.nextActions.map(action => action.id)).toContain('postgres-cutover-checklist')
+    expect(report.firstRealValueLoop.currentStep.id).toBe('pr')
+    expect(report.firstRealValueLoop.currentStep.status).toBe('active')
   })
 
   it('detects stale running delegations and open attention items', () => {
@@ -222,6 +228,7 @@ describe('renderDailyReportMarkdown', () => {
 
     const markdown = renderDailyReportMarkdown(report)
     expect(markdown).toContain('## Executive Verdict')
+    expect(markdown).toContain('## First Real Value Loop')
     expect(markdown).toContain('## Assistant Routing')
     expect(markdown).toContain('## Top Risks')
     expect(markdown).toContain('## Next Actions')
