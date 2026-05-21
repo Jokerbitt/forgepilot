@@ -10,6 +10,9 @@ import { delegations, type DbDelegation } from '@/db/schema'
 export { SINGLE_TENANT_USER_ID }
 
 const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
+const STORAGE_MODE_ENV = 'FORGEPILOT_DELEGATION_STORAGE'
+
+export type DelegationStorageMode = 'json' | 'postgres' | 'dual'
 
 // ─── JSON helpers (fallback) ──────────────────────────────────────────────────
 
@@ -232,6 +235,52 @@ class PostgresDelegationRepository implements DelegationRepository {
   }
 }
 
+// ─── Dual-write migration implementation ────────────────────────────────────
+
+class DualWriteDelegationRepository implements DelegationRepository {
+  constructor(
+    private readonly primary: DelegationRepository,
+    private readonly replica: DelegationRepository
+  ) {}
+
+  async create(input: CreateDelegationInput): Promise<Delegation> {
+    const created = await this.primary.create(input)
+    await this.replica.create(created)
+    return created
+  }
+
+  async findById(id: string): Promise<Delegation | null> {
+    return this.primary.findById(id)
+  }
+
+  async update(id: string, patch: UpdateDelegationInput): Promise<Delegation | null> {
+    const updated = await this.primary.update(id, patch)
+    if (updated) {
+      const replicated = await this.replica.update(id, updated)
+      if (!replicated) {
+        await this.replica.create(updated)
+      }
+    }
+    return updated
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const deleted = await this.primary.delete(id)
+    if (deleted) {
+      await this.replica.delete(id)
+    }
+    return deleted
+  }
+
+  async listByStatus(statuses?: DelegationStatus[]): Promise<Delegation[]> {
+    return this.primary.listByStatus(statuses)
+  }
+
+  async listByProject(briefId: string): Promise<Delegation[]> {
+    return this.primary.listByProject(briefId)
+  }
+}
+
 // ─── JSON fallback implementation ────────────────────────────────────────────
 
 class JsonDelegationRepository implements DelegationRepository {
@@ -294,9 +343,35 @@ class JsonDelegationRepository implements DelegationRepository {
 
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
+export function getDelegationStorageMode(
+  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>
+): DelegationStorageMode {
+  const configured = String(env[STORAGE_MODE_ENV] ?? '').trim().toLowerCase()
+  if (configured === 'json' || configured === 'postgres' || configured === 'dual') {
+    return configured
+  }
+  return env.DATABASE_URL ? 'postgres' : 'json'
+}
+
 export function createDelegationRepository(_userId: string): DelegationRepository {
-  if (isDatabaseConfigured()) {
+  const mode = getDelegationStorageMode()
+
+  if (mode === 'dual') {
+    if (!isDatabaseConfigured()) {
+      throw new Error('DATABASE_URL is required when FORGEPILOT_DELEGATION_STORAGE=dual')
+    }
+    return new DualWriteDelegationRepository(
+      new JsonDelegationRepository(),
+      new PostgresDelegationRepository()
+    )
+  }
+
+  if (mode === 'postgres') {
+    if (!isDatabaseConfigured()) {
+      throw new Error('DATABASE_URL is required when FORGEPILOT_DELEGATION_STORAGE=postgres')
+    }
     return new PostgresDelegationRepository()
   }
+
   return new JsonDelegationRepository()
 }
