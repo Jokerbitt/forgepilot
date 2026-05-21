@@ -106,6 +106,9 @@ npm run db:migrate
 
 # One-time backfill from JSON files to Postgres
 FORGEPILOT_DELEGATION_STORAGE=dual npm run db:backfill
+
+# Verify JSON and Postgres core V1 stores are aligned before switching reads
+npm run db:verify-cutover
 ```
 
-For a cautious migration, start with `FORGEPILOT_DELEGATION_STORAGE=dual`: ForgePilot keeps JSON as the primary read path and mirrors writes to Postgres. After validation, switch to `FORGEPILOT_DELEGATION_STORAGE=postgres`.
+For a cautious migration, start with `FORGEPILOT_DELEGATION_STORAGE=dual`: ForgePilot keeps JSON as the primary read path and mirrors writes to Postgres. After `npm run db:verify-cutover` passes, switch to `FORGEPILOT_DELEGATION_STORAGE=postgres` or `STORAGE_MODE=postgres`.

@@ -27,6 +27,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:backfill": "tsx scripts/backfill-json-to-postgres.ts",
+    "db:verify-cutover": "tsx scripts/verify-postgres-cutover.ts",
     "seed": "tsx scripts/seed-demo.ts",
     "seed:clean": "rm -f config/local-items.json config/delegations.json config/orchestrated-runs.json && npm run seed"
   },

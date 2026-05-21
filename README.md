@@ -134,6 +134,7 @@ npm run dev
 docker-compose up -d
 npm run db:push
 FORGEPILOT_DELEGATION_STORAGE=dual npm run db:backfill  # one-time migration if needed
+npm run db:verify-cutover
 ```
 
 **Any hosted Postgres** (Supabase, Neon, Railway, Fly.io)
@@ -164,6 +165,7 @@ curl http://localhost:3000/api/storage-status
 # Migration (dry-run zuerst)
 npx tsx scripts/backfill-json-to-postgres.ts --dry-run
 npx tsx scripts/backfill-json-to-postgres.ts
+npm run db:verify-cutover
 ```
 
 ---
