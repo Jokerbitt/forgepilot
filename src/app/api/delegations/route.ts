@@ -44,6 +44,14 @@ export async function GET(request: NextRequest) {
 
   let delegations = (await repo.listByStatus(statusFilter)).map(backfillTitle)
 
+  // Optional briefId filter: ?briefId=xxx → only delegations linked to that brief
+  const briefIdParam = request.nextUrl.searchParams.get('briefId')
+  if (briefIdParam) {
+    delegations = delegations.filter(
+      d => d.briefId === briefIdParam || d.contract.workItemId === briefIdParam
+    )
+  }
+
   // Optional limit: ?limit=50
   const limit = request.nextUrl.searchParams.get('limit')
   if (limit) {
