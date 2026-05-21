@@ -13,6 +13,7 @@ import { AutopilotReadinessBadge } from '@/components/delegation/AutopilotReadin
 import { LiveLogViewer } from '@/components/delegation/LiveLogViewer'
 import { DelegationTimeline } from '@/components/delegation/DelegationTimeline'
 import { DelegationCommentThread } from '@/components/delegation/DelegationCommentThread'
+import { AgentRunReplayView } from '@/components/delegation/AgentRunReplayView'
 
 const STATUS_COLORS: Record<string, string> = {
   pending:   'bg-yellow-900/50 text-yellow-400 border-yellow-700',
@@ -717,6 +718,9 @@ export default function DelegationDetailPage() {
             />
           </div>
         </div>
+
+        {/* Agent Run Replay */}
+        <AgentRunReplayView delegationId={id} />
 
         {/* Allowed Tools */}
         {d.contract.allowedTools?.length > 0 && (

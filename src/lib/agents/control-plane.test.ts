@@ -114,11 +114,18 @@ describe('buildAgentControlPlaneSummary', () => {
     const summary = buildAgentControlPlaneSummary(
       [agent({ id: 'backend-engineer' })],
       [],
-      [delegation({ status: 'failed', errorMessage: 'Tests failed' })],
+      [delegation({ status: 'failed', errorMessage: 'TypeScript compilation failed: missing type on CsvRow.priority' })],
     )
 
     expect(summary.coordination.canStartMoreWork).toBe(false)
-    expect(summary.coordination.blockedReason).toContain('Fehlerhafte Delegationen')
+    expect(summary.coordination.blockedReason).toContain('type-error')
+    expect(summary.queue.failedRecoveries[0]).toMatchObject({
+      delegationId: 'del-1',
+      failureCause: 'type-error',
+      shouldRetry: true,
+      retryCount: 0,
+    })
+    expect(summary.queue.failedRecoveries[0].diagnosticMessage).toContain('TypeScript')
   })
 
   it('surfaces the current PM agent plan as steering context', () => {
