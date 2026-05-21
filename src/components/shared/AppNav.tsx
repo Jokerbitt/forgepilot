@@ -31,6 +31,7 @@ import {
   FolderOpen,
   Bell,
   Radio,
+  CreditCard,
 } from 'lucide-react'
 import type { Delegation } from '@/lib/models/delegation'
 import type { AttentionItem } from '@/lib/models/attention'
@@ -73,6 +74,7 @@ const navItems: NavItem[] = [
   { href: '/idea', label: 'Idea → Production', shortLabel: 'Idea', icon: Lightbulb, section: 'More' },
   { href: '/pilot', label: 'E2E Pilot', shortLabel: 'Pilot', icon: FlaskConical, section: 'More' },
   { href: '/digest', label: 'Aktivitäts-Digest', shortLabel: 'Digest', icon: Bell, section: 'Utility' },
+  { href: '/settings/billing', label: 'Billing', shortLabel: 'Billing', icon: CreditCard, section: 'Utility' },
   { href: '/settings', label: 'Settings', shortLabel: 'Settings', icon: Settings, section: 'Utility' },
 ]
 
