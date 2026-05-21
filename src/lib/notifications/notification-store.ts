@@ -2,6 +2,20 @@ import fs from 'fs'
 import path from 'path'
 import type { Notification } from '@/lib/models/notification'
 
+/** Fire-and-forget: forward notification to Telegram if configured */
+async function forwardToTelegram(notification: Notification): Promise<void> {
+  try {
+    const { isTelegramEnabled, readTelegramConfig } = await import('@/lib/telegram/config')
+    if (!isTelegramEnabled()) return
+    const cfg = readTelegramConfig()
+    if (!cfg) return
+    if (!cfg.notifyOnSeverity.includes(notification.severity as 'info' | 'warning' | 'critical')) return
+    const { sendTelegramMessage, formatNotification } = await import('@/lib/telegram/bot')
+    const text = formatNotification(notification)
+    await sendTelegramMessage(text, { parseMode: 'Markdown', disableWebPagePreview: true })
+  } catch { /* non-fatal — Telegram errors must never crash the notification store */ }
+}
+
 const NOTIFICATIONS_FILE = path.join(process.cwd(), 'config', 'notifications.json')
 
 function read(): Notification[] {
@@ -35,6 +49,7 @@ export function saveNotification(notification: Notification): void {
     return
   }
   write(notifications)
+  void forwardToTelegram(notification)
 }
 
 export function readNotifications(): Notification[] {

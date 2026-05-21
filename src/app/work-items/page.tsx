@@ -3,10 +3,11 @@
 import { useEffect, useState, useCallback, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import type { WorkItem, WorkItemSource } from '@/lib/models/work-item'
+import type { WorkItem, WorkItemSource, WorkItemStatus } from '@/lib/models/work-item'
 import { Badge, StatusDot, cx } from '@/components/ui/primitives'
 import { BlockedByBadge } from '@/components/work-items/BlockedByBadge'
 import { CSVImport } from '@/components/work-items/CSVImport'
+import { KanbanBoard } from '@/components/work-items/KanbanBoard'
 
 // ─── helpers ─────────────────────────────────────────────────────
 
@@ -105,6 +106,7 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
       setSortDir('asc')
     }
   }
+  const [view, setView] = useState<'list' | 'kanban'>('list')
 
   const load = useCallback((isSyncClick = false) => {
     if (isSyncClick) setSyncing(true)
@@ -197,6 +199,19 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
     }
   }
 
+  const handleStatusChange = async (itemId: string, newStatus: WorkItemStatus) => {
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, status: newStatus, updatedAt: new Date().toISOString() } : i))
+    try {
+      await fetch(`/api/work-items/${itemId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+    } catch {
+      load()
+    }
+  }
+
   const searchLower = search.toLowerCase()
   const filtered = [...items
     .filter(i => !sourceFilter || i.source === sourceFilter)
@@ -210,6 +225,11 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
   })
 
   const sources = Array.from(new Set(items.map(i => i.source))) as WorkItemSource[]
+  const exportParams = new URLSearchParams()
+  exportParams.set('cached', '1')
+  if (sourceFilter) exportParams.set('source', sourceFilter)
+  if (projectId) exportParams.set('projectId', projectId)
+  const exportHref = `/api/work-items/export?${exportParams.toString()}`
 
   return (
     <div>
@@ -245,6 +265,20 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
           ))}
         </div>
         <div className="ml-auto flex items-center gap-3">
+          <div className="flex gap-1 rounded-lg border border-slate-700 bg-slate-800/60 p-1">
+            <button
+              onClick={() => setView('list')}
+              className={cx('rounded px-2.5 py-1 text-xs font-medium transition-colors', view === 'list' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300')}
+            >
+              ☰ Liste
+            </button>
+            <button
+              onClick={() => setView('kanban')}
+              className={cx('rounded px-2.5 py-1 text-xs font-medium transition-colors', view === 'kanban' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300')}
+            >
+              ⊞ Kanban
+            </button>
+          </div>
           {lastSync && (
             <p className="text-xs text-slate-600">
               Sync {lastSync.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
@@ -256,6 +290,12 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
           >
             ↑ CSV Import
           </button>
+          <a
+            href={exportHref}
+            className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-300 transition-colors hover:border-slate-600 hover:bg-slate-800 hover:text-white"
+          >
+            ↓ CSV Export
+          </a>
           <button
             onClick={() => load(true)}
             disabled={syncing}
@@ -278,6 +318,8 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
 
       {loading ? (
         <p className="py-8 text-center text-sm text-slate-500">Lade Work Items…</p>
+      ) : view === 'kanban' ? (
+        <KanbanBoard items={filtered} onStatusChange={handleStatusChange} />
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-8 text-center">
           <p className="text-sm font-medium text-white">Keine Work Items</p>
