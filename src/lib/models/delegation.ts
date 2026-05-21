@@ -88,6 +88,16 @@ export interface TaskContract {
   createdAt: string
 }
 
+/** M181: Grok Critic result stored after successful execution */
+export interface CriticScore {
+  correctness: number   // 0-100
+  efficiency: number    // 0-100
+  drift: number         // 0-100 (lower = more drift)
+  verdict: 'approved' | 'needs-revision' | 'rejected'
+  summary: string
+  runAt: string         // ISO timestamp
+}
+
 export interface Delegation {
   id: string
   title: string
@@ -110,6 +120,8 @@ export interface Delegation {
   autoOrchestrate?: boolean
   /** M164: OpenTelemetry trace ID for this delegation execution */
   traceId?: string
+  /** M181: Grok Critic score — automatically populated after successful execution */
+  criticScore?: CriticScore
   createdAt: string
   updatedAt: string
 }

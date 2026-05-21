@@ -53,6 +53,7 @@ export const delegations = pgTable(
     autoOrchestrate: boolean('auto_orchestrate').notNull().default(false),
     priority: integer('priority'),
     briefId: text('brief_id'),
+    criticScore: jsonb('critic_score').$type<Record<string, unknown>>(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
