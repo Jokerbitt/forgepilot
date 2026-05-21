@@ -1,4 +1,5 @@
 import { readTelegramConfig, isTelegramEnabled } from '@/lib/telegram/config'
+import { telegramLogger } from '@/lib/logger'
 
 const TELEGRAM_API = 'https://api.telegram.org/bot'
 
@@ -81,11 +82,11 @@ export async function sendTelegramMessage(
     })
     const data = await res.json() as { ok: boolean; description?: string }
     if (!data.ok) {
-      console.warn('[telegram] sendMessage failed:', data.description)
+      telegramLogger.warn({ event: 'telegram.send_failed', description: data.description }, 'sendMessage failed')
     }
     return data.ok
   } catch (err) {
-    console.warn('[telegram] sendMessage error:', err instanceof Error ? err.message : err)
+    telegramLogger.warn({ event: 'telegram.send_error', error: err instanceof Error ? err.message : String(err) }, 'sendMessage error')
     return false
   }
 }
