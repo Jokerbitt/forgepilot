@@ -14,9 +14,7 @@ import { readProjectBriefs } from '@/lib/project-briefs'
 import { readMilestones, readWorkPackages } from '@/lib/knowledge/milestone-store'
 import type { ResearchDocument } from '@/lib/models/research'
 import type { ProjectBrief } from '@/lib/models/project-brief'
-import fs from 'fs'
-import path from 'path'
-import type { Delegation } from '@/lib/models/delegation'
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,16 +48,6 @@ interface SSEError {
 
 function encodeSSE(data: SSEStep | SSEDone | SSEError): string {
   return `data: ${JSON.stringify(data)}\n\n`
-}
-
-function readDelegations(): Delegation[] {
-  try {
-    return JSON.parse(
-      fs.readFileSync(path.join(process.cwd(), 'config', 'delegations.json'), 'utf-8'),
-    ) as Delegation[]
-  } catch {
-    return []
-  }
 }
 
 const BRIEF_FROM_RESEARCH_SYSTEM_PROMPT = `You are a product manager who turns research documents into structured project briefs.
@@ -291,7 +279,8 @@ Create a project brief that turns these research findings into an actionable pro
           const briefs = readProjectBriefs().filter(b => b.status !== 'archived')
           const milestones = readMilestones()
           const workPackages = readWorkPackages()
-          const delegations = readDelegations()
+          const delegationRepo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+          const delegations = await delegationRepo.listByStatus()
 
           const pmResult = await runPMAgent(briefs, milestones, workPackages, delegations, { apiKey })
 

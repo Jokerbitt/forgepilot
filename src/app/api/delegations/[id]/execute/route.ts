@@ -25,6 +25,8 @@ import { extractKnowledge } from '@/lib/knowledge/extraction'
 import { persistGrokCriticForDelegation } from '@/lib/eval/auto-grok-critic'
 
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
+import { buildContextPackage } from '@/lib/knowledge/context-package'
+import type { MemoryCard } from '@/lib/knowledge/types'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
@@ -37,7 +39,7 @@ async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Dele
   })
 }
 
-function buildPrompt(delegation: Delegation): string {
+function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[]): string {
   const c = delegation.contract
   const slug = c.workItemId.replace(/[^a-z0-9-]/gi, '-').toLowerCase()
   const branch = `${c.branchStrategy}/${slug}-task`
@@ -47,12 +49,17 @@ function buildPrompt(delegation: Delegation): string {
 
   const dod = (c.definitionOfDone ?? [])
     .filter(Boolean)
-    .map((d, i) => `- [ ] ${d}`)
+    .map((d) => `- [ ] ${d}`)
     .join('\n') || '- [ ] Task erfolgreich abgeschlossen'
 
+  const contextCardsBlock =
+    contextCards && contextCards.length > 0
+      ? `\n## Relevant Knowledge\n${contextCards.map(card => `- **${card.title}** (${card.type}): ${card.body}`).join('\n')}\n`
+      : ''
+
   const context = c.context?.trim()
-    ? `\n## Context\n${c.context.trim()}\n`
-    : ''
+    ? `\n## Context\n${c.context.trim()}\n${contextCardsBlock}`
+    : contextCardsBlock
 
   const skillBlock = buildSkillBlock(c.skillCategory, c.allowedFilePatterns)
 
@@ -648,10 +655,27 @@ export async function POST(
   await appendLogs(id, [startLog], 'running')
 
   const startTime = new Date()
+
+  // Build context package from knowledge cards — non-critical, never blocks execution
+  let contextCards: MemoryCard[] | undefined
+  try {
+    const pkg = await buildContextPackage(delegation.contract.goal, {
+      workItemId: delegation.contract.workItemId,
+      delegationId: delegation.id,
+      maxCards: 4,
+    })
+    if (pkg.cards.length > 0) {
+      contextCards = pkg.cards
+      delegationLogger.info({ event: 'context.package', cardCount: pkg.cards.length, tokenEstimate: pkg.tokenEstimate })
+    }
+  } catch {
+    // Non-critical — never block execution
+  }
+
   // Use focused sub-task prompt when this is part of an orchestrated run
   const prompt = delegation.contract.orchestratedRunId
     ? buildSubTaskPrompt(delegation)
-    : buildPrompt(delegation)
+    : buildPrompt(delegation, contextCards)
 
   // OTel: trace execution start + routing decision
   const mode = delegation.executionRoute === 'ollama-agent'

@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
 import type { MemoryCard } from '@/lib/knowledge/types'
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
+import { createProjectBriefRepository } from '@/lib/repositories/projectBriefRepository'
 
 const CONFIG_DIR = join(process.cwd(), 'config')
 
@@ -75,18 +77,11 @@ export async function GET(req: NextRequest): Promise<NextResponse<SearchResponse
   const results: SearchResult[] = []
 
   // ── Project Briefs ───────────────────────────────────────────────
-  interface RawBrief {
-    id: string
-    title?: string
-    description?: string
-    problemStatement?: string
-    rawIdea?: string
-  }
-  const briefs = readJson<RawBrief>('project-briefs.json')
+  const briefRepo = createProjectBriefRepository(SINGLE_TENANT_USER_ID)
+  const briefs = await briefRepo.listAll()
   for (const brief of briefs) {
     if (
       matches(brief.title, query) ||
-      matches(brief.description, query) ||
       matches(brief.problemStatement, query) ||
       matches(brief.rawIdea, query)
     ) {
@@ -102,22 +97,12 @@ export async function GET(req: NextRequest): Promise<NextResponse<SearchResponse
   }
 
   // ── Delegations ──────────────────────────────────────────────────
-  interface RawDelegation {
-    id: string
-    title?: string
-    contract?: {
-      goal?: string
-      workItemId?: string
-      context?: string
-      agentId?: string
-    }
-    executionRoute?: string
-  }
-  const delegations = readJson<RawDelegation>('delegations.json')
+  const delegationRepo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+  const delegations = await delegationRepo.listByStatus()
   for (const del of delegations) {
     const goal = del.contract?.goal ?? ''
     const workItemId = del.contract?.workItemId ?? ''
-    const agentId = del.contract?.agentId ?? del.executionRoute ?? ''
+    const agentId = del.executionRoute ?? ''
     if (
       matches(del.title, query) ||
       matches(goal, query) ||

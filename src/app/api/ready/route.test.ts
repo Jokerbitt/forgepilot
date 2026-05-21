@@ -4,10 +4,25 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+// ── Repository mock ────────────────────────────────────────────────────────────
+
+const mockListByStatus = vi.fn().mockResolvedValue([])
+
+vi.mock('@/lib/repositories/delegationRepository', () => ({
+  createDelegationRepository: vi.fn(() => ({
+    listByStatus: mockListByStatus,
+    findById: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    listByProject: vi.fn(),
+  })),
+  SINGLE_TENANT_USER_ID: 'local-user',
+}))
+
 // ── fs mock ────────────────────────────────────────────────────────────────────
 
-const { mockStatSync, mockExistsSync, mockWriteFileSync, mockUnlinkSync, mockReadFileSync } = vi.hoisted(() => ({
-  mockStatSync:      vi.fn(),
+const { mockExistsSync, mockWriteFileSync, mockUnlinkSync, mockReadFileSync } = vi.hoisted(() => ({
   mockExistsSync:    vi.fn(() => true),
   mockWriteFileSync: vi.fn(),
   mockUnlinkSync:    vi.fn(),
@@ -16,7 +31,6 @@ const { mockStatSync, mockExistsSync, mockWriteFileSync, mockUnlinkSync, mockRea
 
 vi.mock('fs', () => ({
   default: {
-    statSync:      mockStatSync,
     existsSync:    mockExistsSync,
     writeFileSync: mockWriteFileSync,
     unlinkSync:    mockUnlinkSync,
@@ -36,7 +50,7 @@ import { GET } from './route'
 beforeEach(() => {
   vi.clearAllMocks()
   // default: all good
-  mockStatSync.mockReturnValue({ size: 4096 })
+  mockListByStatus.mockResolvedValue([])
   mockExistsSync.mockReturnValue(true)
   mockWriteFileSync.mockImplementation(() => {})
   mockUnlinkSync.mockImplementation(() => {})
@@ -64,7 +78,7 @@ describe('GET /api/ready', () => {
   })
 
   it('returns 503 with status=not_ready when delegation store is inaccessible', async () => {
-    mockStatSync.mockImplementation(() => { throw new Error('ENOENT') })
+    mockListByStatus.mockRejectedValue(new Error('DB connection failed'))
     const res = await GET()
     expect(res.status).toBe(503)
     const body = await res.json() as { status: string; checks: { name: string; status: string }[] }

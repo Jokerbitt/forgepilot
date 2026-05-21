@@ -5,7 +5,7 @@
  * Returns HTTP 200 when all critical checks pass, HTTP 503 when any check fails.
  *
  * Checks performed:
- *   1. Config store accessible (delegations.json readable)
+ *   1. Delegation store accessible (repository reachable — DB or JSON)
  *   2. AI provider configured (at least one provider with API key or local)
  *   3. Scope lock file accessible (agent coordination)
  *   4. Notifications store accessible
@@ -19,6 +19,7 @@ import fs from 'fs'
 import path from 'path'
 import { NextResponse } from 'next/server'
 import { getAllProviderConfigs } from '@/lib/ai/providers/config-store'
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -51,13 +52,12 @@ const CONFIG_DIR = path.join(process.cwd(), 'config')
 // ── Individual checks ─────────────────────────────────────────────────────────
 
 async function checkDelegationStore(): Promise<Omit<CheckResult, 'durationMs'>> {
-  const file = path.join(CONFIG_DIR, 'delegations.json')
   try {
-    const stat = fs.statSync(file)
-    const sizeKb = Math.round(stat.size / 1024)
-    return { name: 'delegation_store', status: 'pass', message: `OK (${sizeKb} KB)` }
+    const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+    const all = await repo.listByStatus([])
+    return { name: 'delegation_store', status: 'pass', message: `OK (${all.length} delegations)` }
   } catch {
-    return { name: 'delegation_store', status: 'fail', message: 'config/delegations.json not accessible' }
+    return { name: 'delegation_store', status: 'fail', message: 'Delegation store not accessible' }
   }
 }
 

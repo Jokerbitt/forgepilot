@@ -6,24 +6,9 @@ import type { WorkItem } from '@/lib/models/work-item'
 import type { Delegation } from '@/lib/models/delegation'
 import { decomposeWithAI } from '@/lib/agents/ai-decomposer'
 import { createRun } from '@/lib/agents/orchestrated-run'
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
 const LOCAL_ITEMS_FILE = path.join(process.cwd(), 'config', 'local-items.json')
-
-function readDelegations(): Delegation[] {
-  try {
-    if (!fs.existsSync(DELEGATIONS_FILE)) return []
-    return JSON.parse(fs.readFileSync(DELEGATIONS_FILE, 'utf-8')) as Delegation[]
-  } catch { return [] }
-}
-
-function writeDelegations(delegations: Delegation[]): void {
-  const dir = path.dirname(DELEGATIONS_FILE)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  const tmp = DELEGATIONS_FILE + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(delegations, null, 2))
-  fs.renameSync(tmp, DELEGATIONS_FILE)
-}
 
 function readLocalItems(): WorkItem[] {
   try {
@@ -60,7 +45,7 @@ export async function POST() {
 
   const item = candidates[0]
 
-  // 2. Create delegation
+  // 2. Create delegation via repository
   const now = new Date().toISOString()
   const delegation: Delegation = {
     id: `del-autopilot-${Date.now()}`,
@@ -86,13 +71,12 @@ export async function POST() {
     },
   }
 
-  const delegations = readDelegations()
-  delegations.push(delegation)
-  writeDelegations(delegations)
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+  const created = await repo.create(delegation)
 
   // 3. Decompose + create orchestration run
-  const tasks = await decomposeWithAI(delegation.contract.goal, undefined)
-  const run = createRun(delegation.id, delegation.title, delegation.contract.goal, tasks)
+  const tasks = await decomposeWithAI(created.contract.goal, undefined)
+  const run = createRun(created.id, created.title, created.contract.goal, tasks)
 
-  return NextResponse.json({ delegation, run, taskCount: tasks.length }, { status: 201 })
+  return NextResponse.json({ delegation: created, run, taskCount: tasks.length }, { status: 201 })
 }

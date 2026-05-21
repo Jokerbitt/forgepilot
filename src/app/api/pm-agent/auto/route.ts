@@ -6,16 +6,8 @@ import { readStoredApiKeys } from '@/lib/connectors/config'
 import { runPMAgent } from '@/lib/agent-runner/pm-agent'
 import { readLastPMPlan, writePMPlan, isPlanStale } from '@/lib/agent-runner/pm-plan-store'
 import { appendPMHistory } from '@/lib/agent-runner/pm-history-store'
-import type { Delegation } from '@/lib/models/delegation'
 import { getNBAConfig, saveNBAConfig } from '@/lib/nba-engine/nba-config'
-import fs from 'fs'
-import path from 'path'
-
-function readDelegations(): Delegation[] {
-  try {
-    return JSON.parse(fs.readFileSync(path.join(process.cwd(), 'config', 'delegations.json'), 'utf-8')) as Delegation[]
-  } catch { return [] }
-}
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 export async function POST() {
   const config = getNBAConfig()
@@ -41,7 +33,8 @@ export async function POST() {
   const briefs = readProjectBriefs().filter(b => b.status !== 'archived')
   const milestones = readMilestones()
   const workPackages = readWorkPackages()
-  const delegations = readDelegations()
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+  const delegations = await repo.listByStatus()
 
   try {
     const result = await runPMAgent(briefs, milestones, workPackages, delegations, { apiKey })

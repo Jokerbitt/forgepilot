@@ -1,7 +1,5 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
 import type { Delegation } from '@/lib/models/delegation'
 import { z } from 'zod'
 import { parseBody, isValidationError } from '@/lib/validation/api'
@@ -29,27 +27,6 @@ const DelegationInputSchema = z.object({
   autoOrchestrate: z.boolean().optional(),
   dataSubjectId:   z.string().optional(),
 }).passthrough()  // allow extra fields from existing clients
-
-// Keep DELEGATIONS_FILE + read/write for PUT and DELETE bulk operations
-// that are not yet migrated to the repository
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
-
-function readDelegations(): Delegation[] {
-  try {
-    const data = fs.readFileSync(DELEGATIONS_FILE, 'utf-8')
-    return JSON.parse(data) as Delegation[]
-  } catch (e) {
-    return []
-  }
-}
-
-function writeDelegations(delegations: Delegation[]) {
-  const dir = path.dirname(DELEGATIONS_FILE)
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true })
-  }
-  fs.writeFileSync(DELEGATIONS_FILE, JSON.stringify(delegations, null, 2), 'utf-8')
-}
 
 function backfillTitle(d: Delegation): Delegation {
   if (d.title) return d
@@ -149,24 +126,23 @@ export async function DELETE(request: Request) {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
     const statuses = searchParams.get('statuses')
+    const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
 
     if (id) {
       // Single delete by id
-      const delegations = readDelegations()
-      const exists = delegations.some(d => d.id === id)
-      if (!exists) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-      writeDelegations(delegations.filter(d => d.id !== id))
+      const deleted = await repo.delete(id)
+      if (!deleted) return NextResponse.json({ error: 'Not found' }, { status: 404 })
       return NextResponse.json({ success: true, deleted: 1 })
     }
 
     if (statuses) {
       // Bulk delete by status list (comma-separated)
-      const statusList = statuses.split(',').map(s => s.trim())
-      const delegations = readDelegations()
-      const remaining = delegations.filter(d => !statusList.includes(d.status))
-      const deletedCount = delegations.length - remaining.length
-      writeDelegations(remaining)
-      return NextResponse.json({ success: true, deleted: deletedCount })
+      const statusList = statuses.split(',').map(s => s.trim()) as Delegation['status'][]
+      const toDelete = await repo.listByStatus(statusList)
+      for (const d of toDelete) {
+        await repo.delete(d.id)
+      }
+      return NextResponse.json({ success: true, deleted: toDelete.length })
     }
 
     return NextResponse.json({ error: 'Missing id or statuses param' }, { status: 400 })
@@ -181,18 +157,14 @@ export async function PUT(request: Request) {
     if (!Array.isArray(updates)) {
       return NextResponse.json({ error: 'Expected an array of delegations' }, { status: 400 })
     }
-    
-    const delegations = readDelegations()
-    
+
+    const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+
     // Bulk update
     for (const update of updates) {
-      const index = delegations.findIndex(d => d.id === update.id)
-      if (index >= 0) {
-        delegations[index] = { ...delegations[index], ...update, updatedAt: new Date().toISOString() }
-      }
+      await repo.update(update.id, update)
     }
-    
-    writeDelegations(delegations)
+
     return NextResponse.json({ success: true, count: updates.length })
   } catch (e) {
     return NextResponse.json({ error: 'Failed to bulk update delegations' }, { status: 500 })

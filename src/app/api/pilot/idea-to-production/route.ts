@@ -29,9 +29,9 @@ import { decomposeWithAI } from '@/lib/agents/ai-decomposer'
 import { createRun } from '@/lib/agents/orchestrated-run'
 import { generateText, stripJsonCodeFence } from '@/lib/ai/text-generation'
 import { appendIdeaHistory } from '@/lib/pilot/idea-history-store'
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 const LOCAL_ITEMS_FILE = path.join(process.cwd(), 'config', 'local-items.json')
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
 
 // ─── File helpers ──────────────────────────────────────────────────────────
 
@@ -48,21 +48,6 @@ function writeLocalItems(items: WorkItem[]): void {
   const tmp = LOCAL_ITEMS_FILE + '.tmp'
   fs.writeFileSync(tmp, JSON.stringify(items, null, 2))
   fs.renameSync(tmp, LOCAL_ITEMS_FILE)
-}
-
-function readDelegations(): Delegation[] {
-  try {
-    if (!fs.existsSync(DELEGATIONS_FILE)) return []
-    return JSON.parse(fs.readFileSync(DELEGATIONS_FILE, 'utf-8')) as Delegation[]
-  } catch { return [] }
-}
-
-function writeDelegations(delegations: Delegation[]): void {
-  const dir = path.dirname(DELEGATIONS_FILE)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  const tmp = DELEGATIONS_FILE + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(delegations, null, 2))
-  fs.renameSync(tmp, DELEGATIONS_FILE)
 }
 
 // ─── AI: Expand idea → IdeaIntakeInput ────────────────────────────────────
@@ -218,13 +203,12 @@ export async function POST(req: Request) {
     },
   }
 
-  const delegations = readDelegations()
-  delegations.push(delegation)
-  writeDelegations(delegations)
+  const delegationRepo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+  const createdDelegation = await delegationRepo.create(delegation)
 
   // Step 7: Decompose → Orchestrated Run
-  const tasks = await decomposeWithAI(delegation.contract.goal, brief.problemStatement)
-  const run = createRun(delegation.id, delegation.title, delegation.contract.goal, tasks)
+  const tasks = await decomposeWithAI(createdDelegation.contract.goal, brief.problemStatement)
+  const run = createRun(createdDelegation.id, createdDelegation.title, createdDelegation.contract.goal, tasks)
 
   // Step 8: Append to Idea History
   appendIdeaHistory({
@@ -244,7 +228,7 @@ export async function POST(req: Request) {
     briefTitle: brief.title,
     workItemCount: newItems.length,
     topItem,
-    delegation,
+    delegation: createdDelegation,
     run,
     taskCount: tasks.length,
   }, { status: 201 })
