@@ -29,6 +29,13 @@ export interface RecordPlanningAuditInput {
   warnings: string[]
 }
 
+export interface PlanningAuditStats {
+  total: number
+  last24h: number
+  byMode: Record<string, number>
+  byOutcome: Record<string, number>
+}
+
 const MAX_RECORDS = 500
 
 function getAuditFile(override?: string): string {
@@ -82,6 +89,27 @@ export function recordPlanningAudit(input: RecordPlanningAuditInput, file?: stri
 export function listPlanningAuditRecords(limit = 50, file?: string): PlanningAuditRecord[] {
   const store = readStore(file)
   return store.records.slice(0, Math.max(0, limit))
+}
+
+export function getPlanningAuditStats(file?: string): PlanningAuditStats {
+  const records = readStore(file).records
+  const yesterday = Date.now() - 24 * 60 * 60 * 1000
+  const stats: PlanningAuditStats = {
+    total: records.length,
+    last24h: 0,
+    byMode: {},
+    byOutcome: {},
+  }
+
+  for (const record of records) {
+    if (new Date(record.recordedAt).getTime() >= yesterday) {
+      stats.last24h += 1
+    }
+    stats.byMode[record.mode] = (stats.byMode[record.mode] ?? 0) + 1
+    stats.byOutcome[record.outcome] = (stats.byOutcome[record.outcome] ?? 0) + 1
+  }
+
+  return stats
 }
 
 function inferOutcome(audit: PlanningAudit): PlanningAuditRecord['outcome'] {

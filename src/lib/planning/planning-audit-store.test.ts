@@ -2,7 +2,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { describe, expect, it } from 'vitest'
-import { listPlanningAuditRecords, recordPlanningAudit } from './planning-audit-store'
+import { getPlanningAuditStats, listPlanningAuditRecords, recordPlanningAudit } from './planning-audit-store'
 
 function auditFile(): string {
   return path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'forgepilot-planning-audit-')), 'planning-audit-log.json')
@@ -70,6 +70,12 @@ describe('planning audit store', () => {
       skippedCount: 1,
     })
     expect(records[1]).toMatchObject({ outcome: 'preview', warnings: ['Preview only'] })
+
+    expect(getPlanningAuditStats(file)).toMatchObject({
+      total: 2,
+      byMode: { preview: 1, 'create-all': 1 },
+      byOutcome: { preview: 1, partial: 1 },
+    })
   })
 
   it('recovers from corrupt audit files', () => {
