@@ -85,7 +85,7 @@ FORGEPILOT_ADMIN_PASSWORD=a-strong-password-min-12-chars
 NEXTAUTH_URL=http://localhost:3000
 ```
 
-For local development without auth (unsafe):
+For isolated local development without auth (unsafe, ignored in production):
 ```env
 FORGEPILOT_AUTH_DISABLED=true
 ```

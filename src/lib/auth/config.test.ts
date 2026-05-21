@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { isForgePilotAuthEnabled, isAuthConfigured, shouldProtectPath } from './config'
+import {
+  isForgePilotAuthEnabled,
+  isAuthBypassAllowed,
+  isAuthConfigured,
+  isProductionRuntime,
+  shouldProtectPath,
+} from './config'
 
 describe('isForgePilotAuthEnabled', () => {
   it('is enabled by default when no env var is set', () => {
@@ -24,6 +30,53 @@ describe('isForgePilotAuthEnabled', () => {
   it('is case-insensitive', () => {
     expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_DISABLED: 'TRUE' } as unknown as NodeJS.ProcessEnv)).toBe(false)
     expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_DISABLED: 'False' } as unknown as NodeJS.ProcessEnv)).toBe(true)
+  })
+
+  it('stays enabled in production even when the bypass flag is accidentally set', () => {
+    expect(
+      isForgePilotAuthEnabled({
+        FORGEPILOT_AUTH_DISABLED: 'true',
+        NODE_ENV: 'production',
+      } as unknown as NodeJS.ProcessEnv),
+    ).toBe(true)
+    expect(
+      isForgePilotAuthEnabled({
+        FORGEPILOT_AUTH_DISABLED: 'true',
+        VERCEL_ENV: 'production',
+      } as unknown as NodeJS.ProcessEnv),
+    ).toBe(true)
+  })
+})
+
+describe('isProductionRuntime', () => {
+  it('detects production from NODE_ENV and VERCEL_ENV', () => {
+    expect(isProductionRuntime({ NODE_ENV: 'production' } as unknown as NodeJS.ProcessEnv)).toBe(true)
+    expect(isProductionRuntime({ NODE_ENV: 'prod' } as unknown as NodeJS.ProcessEnv)).toBe(true)
+    expect(isProductionRuntime({ VERCEL_ENV: 'production' } as unknown as NodeJS.ProcessEnv)).toBe(true)
+  })
+
+  it('treats local, test, development, and Vercel preview as non-production', () => {
+    expect(isProductionRuntime({ NODE_ENV: 'development' } as unknown as NodeJS.ProcessEnv)).toBe(false)
+    expect(isProductionRuntime({ NODE_ENV: 'test' } as unknown as NodeJS.ProcessEnv)).toBe(false)
+    expect(isProductionRuntime({ VERCEL_ENV: 'preview' } as unknown as NodeJS.ProcessEnv)).toBe(false)
+  })
+})
+
+describe('isAuthBypassAllowed', () => {
+  it('allows explicit bypass only outside production', () => {
+    expect(isAuthBypassAllowed({ FORGEPILOT_AUTH_DISABLED: 'true' } as unknown as NodeJS.ProcessEnv)).toBe(true)
+    expect(
+      isAuthBypassAllowed({
+        FORGEPILOT_AUTH_DISABLED: 'true',
+        NODE_ENV: 'production',
+      } as unknown as NodeJS.ProcessEnv),
+    ).toBe(false)
+    expect(
+      isAuthBypassAllowed({
+        FORGEPILOT_AUTH_DISABLED: 'true',
+        VERCEL_ENV: 'production',
+      } as unknown as NodeJS.ProcessEnv),
+    ).toBe(false)
   })
 })
 
