@@ -3,8 +3,15 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { ProjectBrief, Requirement, UseCase, Risk } from '@/lib/models/project-brief'
+import { AIErrorMessage } from '@/components/ui/AIErrorMessage'
 
 type StudioStep = 'input' | 'loading' | 'edit' | 'done'
+
+interface NoAIProviderError {
+  error: 'no_ai_provider'
+  message: string
+  settingsUrl?: string
+}
 
 interface GeneratedStructure {
   requirements: Requirement[]
@@ -58,13 +65,27 @@ async function createBrief(title: string, description: string): Promise<ProjectB
   return res.json() as Promise<ProjectBrief>
 }
 
+function isNoAIProviderError(body: unknown): body is NoAIProviderError {
+  return (
+    body !== null &&
+    typeof body === 'object' &&
+    (body as Record<string, unknown>).error === 'no_ai_provider'
+  )
+}
+
 async function generateStructure(id: string): Promise<GeneratedStructure> {
   const res = await fetch(`/api/project-briefs/${id}/generate-structure`, {
     method: 'POST',
   })
   if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: string }
-    throw new Error(body.error ?? 'Fehler beim Generieren der Struktur')
+    const body = await res.json().catch(() => ({})) as Record<string, unknown>
+    if (isNoAIProviderError(body)) {
+      // Re-throw as a tagged error so the caller can distinguish it
+      const err = new Error(body.message)
+      err.name = 'NoAIProviderError'
+      throw err
+    }
+    throw new Error(typeof body.error === 'string' ? body.error : 'Fehler beim Generieren der Struktur')
   }
   return res.json() as Promise<GeneratedStructure>
 }
@@ -93,6 +114,7 @@ export function BriefStudioFlow() {
   const [description, setDescription] = useState('')
   const [inputError, setInputError] = useState<string | null>(null)
   const [generationError, setGenerationError] = useState<string | null>(null)
+  const [noAIProvider, setNoAIProvider] = useState(false)
   const [generated, setGenerated] = useState<GeneratedStructure | null>(null)
   const [editable, setEditable] = useState<EditableStructure | null>(null)
   const [finalBrief, setFinalBrief] = useState<ProjectBrief | null>(null)
@@ -109,6 +131,7 @@ export function BriefStudioFlow() {
     }
     setInputError(null)
     setGenerationError(null)
+    setNoAIProvider(false)
     setStep('loading')
 
     try {
@@ -118,7 +141,11 @@ export function BriefStudioFlow() {
       setEditable(toEditable(structure))
       setStep('edit')
     } catch (err) {
-      setGenerationError(err instanceof Error ? err.message : 'Unbekannter Fehler')
+      if (err instanceof Error && err.name === 'NoAIProviderError') {
+        setNoAIProvider(true)
+      } else {
+        setGenerationError(err instanceof Error ? err.message : 'Unbekannter Fehler')
+      }
       setStep('input')
     }
   }
@@ -231,7 +258,13 @@ export function BriefStudioFlow() {
       {/* Step 1: Input */}
       {step === 'input' && (
         <div className="rounded-xl border border-gray-800 bg-gray-900/70 p-5 shadow-xl space-y-4">
-          {generationError && (
+          {noAIProvider && (
+            <AIErrorMessage
+              error="Kein KI-Anbieter konfiguriert. Starte Ollama oder setze einen API Key."
+              settingsUrl="/settings"
+            />
+          )}
+          {generationError && !noAIProvider && (
             <div className="rounded-lg border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-300">
               {generationError}
             </div>
@@ -283,9 +316,10 @@ export function BriefStudioFlow() {
       {step === 'edit' && editable && generated && (
         <div className="space-y-4">
           {generated.source === 'fallback' && (
-            <div className="rounded-lg border border-yellow-900 bg-yellow-950/30 px-4 py-3 text-sm text-yellow-300">
-              Kein AI-Anbieter konfiguriert — Platzhalter-Struktur generiert. Bearbeite die Inhalte nach Bedarf.
-            </div>
+            <AIErrorMessage
+              error="Kein KI-Anbieter konfiguriert — Platzhalter-Struktur generiert. Bearbeite die Inhalte nach Bedarf oder konfiguriere einen KI-Anbieter."
+              settingsUrl="/settings"
+            />
           )}
 
           {/* Requirements */}
@@ -405,7 +439,7 @@ export function BriefStudioFlow() {
           <div className="flex justify-between items-center pt-2">
             <button
               type="button"
-              onClick={() => setStep('input')}
+              onClick={() => { setStep('input'); setGenerationError(null); setNoAIProvider(false) }}
               className="rounded-lg border border-gray-700 px-4 py-2 text-sm font-semibold text-gray-300 hover:border-gray-500 transition-colors"
             >
               ← Zurück

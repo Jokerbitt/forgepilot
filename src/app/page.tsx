@@ -5,6 +5,7 @@ import { NoAIProviderBanner } from '@/components/shared/NoAIProviderBanner'
 import { CommandCenterOverview, CommandCenterPrinciples } from '@/components/command-center/CommandCenterOverview'
 import { OnboardingBanner } from '@/components/command-center/OnboardingBanner'
 import { OnboardingBanner as OnboardingWizardBanner } from '@/components/onboarding/OnboardingBanner'
+import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist'
 import { buttonClassName } from '@/components/ui/primitives'
 import { CriticalPathWidget } from '@/components/critical-path'
 import { MissionControlPanel } from '@/components/mission-control'
@@ -31,6 +32,8 @@ export default function Home() {
             </Link>
           </div>
         </header>
+
+        <OnboardingChecklist />
 
         <MissionControlPanel />
 
