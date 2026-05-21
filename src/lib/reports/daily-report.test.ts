@@ -189,6 +189,7 @@ describe('buildDailyReport', () => {
     expect(report.firstRealValueLoop.progressPct).toBe(100)
     expect(report.firstRealValueLoop.currentStep.id).toBe('writeback')
     expect(report.firstRealValueLoop.currentStep.status).toBe('done')
+    expect(report.firstRealValueLoop.currentStep.href).toBe('/idea')
   })
 
   it('raises critical risk when auth is disabled', () => {

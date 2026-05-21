@@ -311,6 +311,7 @@ function buildFirstRealValueLoop(status: DailyReport['status']): DailyReportFirs
         ...steps[steps.length - 1],
         label: 'Loop complete',
         action: 'Run the next small real ticket through the full loop and compare time saved.',
+        href: '/idea',
       }
     : steps.find(step => step.status === 'blocked')
     ?? steps.find(step => step.status === 'active')

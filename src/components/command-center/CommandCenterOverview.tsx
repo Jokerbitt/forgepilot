@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, CheckCircle, Clipboard, Clock, FileText, Play, ShieldCheck, Sparkles } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CheckCircle, Clipboard, Clock, FileText, Play, ShieldCheck, Sparkles } from 'lucide-react'
 import type { Delegation } from '@/lib/models/delegation'
 import type { DashboardStats } from '@/app/api/dashboard/stats/route'
 import type { DailyReport } from '@/lib/reports/daily-report'
@@ -352,6 +352,7 @@ function DailyCriticReportCard({
     : report?.executiveVerdict.status === 'yellow'
       ? 'border-amber-500/25 bg-amber-500/10 text-amber-200'
       : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
+  const loopStep = report?.firstRealValueLoop.currentStep
 
   async function copyMarkdown() {
     if (!report?.markdown) return
@@ -482,6 +483,15 @@ function DailyCriticReportCard({
               </Link>
             ))}
           </div>
+          {loopStep && (
+            <Link
+              href={loopStep.href}
+              className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-300/35 hover:bg-emerald-400/15"
+            >
+              Naechste Aktion oeffnen
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          )}
         </div>
       )}
 
