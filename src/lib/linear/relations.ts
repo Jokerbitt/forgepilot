@@ -5,7 +5,14 @@
  * Uses native fetch, no SDK. Fail-open: returns [] on any error.
  */
 
+import { readStoredApiKeys } from '@/lib/connectors/config'
+
 const LINEAR_API = 'https://api.linear.app/graphql'
+
+/** Returns the Linear API key from env or config/api-keys.json (UI-stored). */
+function getLinearApiKey(): string {
+  return process.env.LINEAR_API_KEY ?? readStoredApiKeys().LINEAR_API_KEY ?? ''
+}
 
 export interface IssueRelation {
   id: string
@@ -116,7 +123,7 @@ export async function fetchIssueRelations(
   teamId: string,
   limit = 100,
 ): Promise<IssueWithRelations[]> {
-  const apiKey = process.env.LINEAR_API_KEY
+  const apiKey = getLinearApiKey()
   if (!apiKey) {
     return []
   }
@@ -168,7 +175,7 @@ export async function fetchBlockingRelations(
 ): Promise<IssueRelation[]> {
   if (issueIds.length === 0) return []
 
-  const apiKey = process.env.LINEAR_API_KEY
+  const apiKey = getLinearApiKey()
   if (!apiKey) return []
 
   try {
