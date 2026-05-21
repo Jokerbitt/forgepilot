@@ -280,6 +280,7 @@ export default function SettingsPage() {
   const [apiKeySaving, setApiKeySaving] = useState(false)
   const [apiKeySaved, setApiKeySaved] = useState(false)
   const [confirmClearKey, setConfirmClearKey] = useState<string | null>(null)
+  const [staleKeys, setStaleKeys] = useState<Record<string, number>>({})
 
   // Telegram state
   const [telegramEnabled, setTelegramEnabled] = useState(false)
@@ -322,6 +323,16 @@ export default function SettingsPage() {
     fetch('/api/settings/autonomous')
       .then(res => res.json())
       .then((data: AutonomousConfig) => setAutonomousConfig(data))
+      .catch(() => null)
+    fetch('/api/api-keys/rotation-status')
+      .then(res => res.json())
+      .then((data: { keys: Array<{ keyName: string; ageDays: number; isStale: boolean }> }) => {
+        const map: Record<string, number> = {}
+        for (const k of data.keys) {
+          if (k.isStale) map[k.keyName] = k.ageDays
+        }
+        setStaleKeys(map)
+      })
       .catch(() => null)
     fetch('/api/telegram/config')
       .then(res => res.json())
@@ -487,7 +498,13 @@ export default function SettingsPage() {
           <SectionHeading
             icon={KeyRound}
             title="API Keys & Verbindungen"
-            badge={apiKeySaved ? <StatusPill tone="success"><Check className="h-3 w-3" /> Gespeichert</StatusPill> : null}
+            badge={
+              apiKeySaved
+                ? <StatusPill tone="success"><Check className="h-3 w-3" /> Gespeichert</StatusPill>
+                : Object.keys(staleKeys).length > 0
+                ? <StatusPill tone="warning"><AlertTriangle className="h-3 w-3" /> Rotation empfohlen</StatusPill>
+                : null
+            }
           />
           <div className={cx(panelClassName, 'space-y-4')}>
             <p className="text-sm text-gray-400">
@@ -538,6 +555,12 @@ export default function SettingsPage() {
                   className={cx(inputClassName, 'font-mono')}
                 />
                 <p className="text-xs text-gray-500 mt-1">{hint}</p>
+                {staleKeys[key] !== undefined && (
+                  <p className="text-xs text-amber-400 mt-1 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                    Zuletzt gesetzt vor {staleKeys[key]} Tagen — Rotation empfohlen (&gt;90 Tage).
+                  </p>
+                )}
                 {key === 'ANTHROPIC_API_KEY' && isMaxActive && (
                   <p className="text-xs text-green-400 mt-1">Nicht nötig bei Max-Subscription — claude CLI nutzt die OAuth-Session.</p>
                 )}
