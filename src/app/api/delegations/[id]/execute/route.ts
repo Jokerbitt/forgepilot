@@ -24,7 +24,7 @@ import { recordOutcome } from '@/lib/agents/skill-evolver'
 import { generateText } from '@/lib/ai/text-generation'
 import { extractKnowledge } from '@/lib/knowledge/extraction'
 import { persistGrokCriticForDelegation } from '@/lib/eval/auto-grok-critic'
-import { writebackExecutionInsights } from '@/lib/knowledge/writeback'
+import { writebackExecutionInsights, writebackDelegationKnowledge } from '@/lib/knowledge/writeback'
 import { notifyExecutionResult } from '@/lib/notifications'
 import { checkBudget, wouldExceedBudget } from '@/lib/budget/guard'
 
@@ -410,6 +410,11 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
         extractKnowledge(finishedDelegation).catch(() => {
           // Non-critical — never block execution
         })
+      }
+
+      // M220: Knowledge Writeback — fire-and-forget
+      if (success) {
+        void writebackDelegationKnowledge(finishedDelegation, fullOutput).catch(() => {})
       }
 
       if (success && report) {
