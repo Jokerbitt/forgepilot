@@ -96,6 +96,7 @@ export default function IdeaPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const historyPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const queryPrompt = searchParams.get('prompt')?.trim() ?? ''
+  const hasAssistantPrompt = Boolean(queryPrompt)
 
   /** M136: Create project brief from refined wizard output and navigate to it */
   const handleWizardBriefReady = useCallback(async (rawIdea: string, brief: RefinedBriefDraft) => {
@@ -324,6 +325,24 @@ export default function IdeaPage() {
         {/* Input Box */}
         {stage === 'idle' || stage === 'error' ? (
           <div className="w-full space-y-4">
+            {hasAssistantPrompt && (
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-5 py-4 shadow-lg shadow-emerald-950/20">
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-sm text-emerald-300">
+                    ✓
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-emerald-200">
+                      Daily Report hat den nächsten Schritt vorbereitet
+                    </p>
+                    <p className="mt-1 text-sm leading-relaxed text-emerald-100/70">
+                      Der Vorschlag ist bereits eingefügt. Prüfe ihn kurz, passe Details an und erstelle daraus den nächsten fokussierten Brief.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className={cx(
               'relative w-full rounded-2xl border transition-all duration-200',
               idea.trim()
@@ -365,7 +384,7 @@ export default function IdeaPage() {
                     )}
                   >
                     <span>🚀</span>
-                    Build It
+                    {hasAssistantPrompt ? 'Brief aus Vorschlag erstellen' : 'Build It'}
                   </button>
                 </div>
               </div>
