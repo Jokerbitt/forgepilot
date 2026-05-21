@@ -2,6 +2,7 @@ import { createKnowledgeCardRepository } from '@/lib/repositories/knowledgeCardR
 import { SINGLE_TENANT_USER_ID } from '@/lib/repositories/base'
 import type { MemoryCard } from '@/lib/knowledge/types'
 import { withSpan } from '@/lib/tracing/tracer'
+import { getCardWithRelated } from './graph'
 
 export interface ContextPackageResult {
   cards: MemoryCard[]
@@ -42,13 +43,38 @@ export async function buildContextPackage(
           .slice(0, maxCards)
           .map(s => s.card)
 
-        const tokenEstimate = top.reduce((acc, c) => acc + Math.ceil((c.title.length + c.body.length) / 4), 0)
-        const sources = [...new Set(top.flatMap(c => c.sourceIds).filter(Boolean))]
+        // Expand top cards with their related cards (1 level deep)
+        const topIds = new Set(top.map(c => c.id))
+        const expandedCards: MemoryCard[] = [...top]
 
-        span.setAttribute('context.cards_found', top.length)
+        try {
+          const expansions = await Promise.allSettled(
+            top.map(c => getCardWithRelated(c.id))
+          )
+          for (const exp of expansions) {
+            if (exp.status !== 'fulfilled') continue
+            for (const related of exp.value) {
+              if (!topIds.has(related.id)) {
+                // Find the full MemoryCard for the related card (already fetched by repo)
+                const relatedCard = allCards.find(c => c.id === related.id)
+                if (relatedCard) {
+                  topIds.add(relatedCard.id)
+                  expandedCards.push(relatedCard)
+                }
+              }
+            }
+          }
+        } catch {
+          // silently skip — original top cards are always returned
+        }
+
+        const tokenEstimate = expandedCards.reduce((acc, c) => acc + Math.ceil((c.title.length + c.body.length) / 4), 0)
+        const sources = [...new Set(expandedCards.flatMap(c => c.sourceIds).filter(Boolean))]
+
+        span.setAttribute('context.cards_found', expandedCards.length)
         span.setAttribute('context.token_estimate', tokenEstimate)
 
-        return { cards: top, tokenEstimate, sources }
+        return { cards: expandedCards, tokenEstimate, sources }
       }
     )
   } catch {

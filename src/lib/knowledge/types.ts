@@ -42,6 +42,7 @@ export interface MemoryCard {
   confidence: ConfidenceLevel
   createdAt: string
   updatedAt: string
+  relatedCardIds?: string[]  // IDs of related cards
 }
 
 export interface KnowledgeStore {
