@@ -16,6 +16,7 @@ import { DelegationCommentThread } from '@/components/delegation/DelegationComme
 import { AgentRunReplayView } from '@/components/delegation/AgentRunReplayView'
 import { GrokCriticCard } from '@/components/delegation/GrokCriticCard'
 import { DelegationPipelineBreadcrumb } from '@/components/delegation/DelegationPipelineBreadcrumb'
+import { KnowledgeWritebackPanel } from '@/components/delegation/KnowledgeWritebackPanel'
 
 const STATUS_COLORS: Record<string, string> = {
   pending:   'bg-gray-800 text-gray-400 border-gray-600',
@@ -136,6 +137,7 @@ export default function DelegationDetailPage() {
 
   const [creatingPR, setCreatingPR] = useState(false)
   const [prError, setPrError] = useState<string | null>(null)
+  const [logsExpanded, setLogsExpanded] = useState(false)
 
   // M134: GitHub CI status
   const [prStatus, setPrStatus] = useState<{
@@ -430,18 +432,110 @@ export default function DelegationDetailPage() {
             </div>
           </div>
 
-          {/* Timing */}
-          <div className="mt-4 pt-4 border-t border-gray-800 flex flex-wrap gap-4 text-xs text-gray-500">
+          {/* ── Metrics Tiles (above-the-fold trust layer) ──────────── */}
+          <div className="mt-4 pt-4 border-t border-gray-800 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+
+            {/* Status tile */}
+            <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Status</span>
+              <span className={`text-xs font-bold ${STATUS_COLORS[d.status]?.split(' ')[1] ?? 'text-gray-400'}`}>
+                {STATUS_LABELS[d.status] || d.status}
+              </span>
+              {d.status === 'running' && (
+                <ElapsedTimer startedAt={d.updatedAt || d.createdAt} className="text-[10px] text-green-400 font-mono" />
+              )}
+              {isDone && d.summaryReport && (
+                <span className="text-[10px] text-gray-600 font-mono">{formatCompletedDuration(d.createdAt, d.updatedAt)}</span>
+              )}
+            </div>
+
+            {/* Risk tile */}
+            <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Risiko</span>
+              <span className={`text-xs font-bold ${RISK_COLORS[d.contract.riskClass]?.split(' ')[1] ?? 'text-gray-400'}`}>
+                Risk {d.contract.riskClass}
+              </span>
+              <span className="text-[10px] text-gray-600">{d.executionRoute}</span>
+            </div>
+
+            {/* Cost tile */}
+            <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Kosten</span>
+              {d.actualCostUsd != null ? (
+                <span className="text-xs font-bold text-yellow-400 font-mono">${d.actualCostUsd.toFixed(4)}</span>
+              ) : (
+                <span className="text-xs font-bold text-gray-400 font-mono">–</span>
+              )}
+              <span className="text-[10px] text-gray-600 font-mono">Budget: ${d.contract.maxBudgetUsd.toFixed(2)}</span>
+            </div>
+
+            {/* PR tile */}
+            <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">PR</span>
+              {d.summaryReport?.prUrl ? (
+                <a
+                  href={d.summaryReport.prUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1"
+                >
+                  ⎇ #{d.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? ''}
+                </a>
+              ) : (
+                <span className="text-xs text-gray-600">Kein PR</span>
+              )}
+              {prStatus && (
+                <span className={`text-[10px] font-medium ${
+                  prStatus.state === 'merged' ? 'text-violet-400' :
+                  prStatus.state === 'closed' ? 'text-gray-500' :
+                  'text-emerald-500'
+                }`}>
+                  {prStatus.state === 'merged' ? 'Merged' : prStatus.state === 'closed' ? 'Closed' : 'Open'}
+                  {prStatus.ciState === 'success' ? ' · CI ✓' : prStatus.ciState === 'failure' ? ' · CI ✗' : ''}
+                </span>
+              )}
+            </div>
+
+            {/* Grok Critic tile */}
+            <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Critic</span>
+              {d.criticScore ? (
+                <>
+                  <span className={`text-xs font-bold ${
+                    d.criticScore.verdict === 'approved' ? 'text-emerald-400' :
+                    d.criticScore.verdict === 'needs-revision' ? 'text-yellow-400' :
+                    'text-red-400'
+                  }`}>
+                    {d.criticScore.verdict === 'approved' ? '✓ OK' :
+                     d.criticScore.verdict === 'needs-revision' ? '⚠ Revision' : '✗ Abgelehnt'}
+                  </span>
+                  <span className="text-[10px] text-gray-600">
+                    {Math.round((d.criticScore.correctness + d.criticScore.efficiency + d.criticScore.drift) / 3)}pts
+                  </span>
+                </>
+              ) : d.status === 'completed' ? (
+                <span className="text-xs text-gray-600 italic">Ausstehend</span>
+              ) : (
+                <span className="text-xs text-gray-700">–</span>
+              )}
+            </div>
+          </div>
+
+          {/* ── Simulation-mode info ─────────────────────────────────── */}
+          {(d.executionRoute === 'direct-chat' || d.executionRoute === 'n8n') && d.status === 'pending' && (
+            <div className="mt-3 flex items-start gap-2 rounded-lg border border-blue-900/40 bg-blue-950/20 px-3 py-2.5 text-xs text-blue-300/80">
+              <span className="shrink-0 mt-0.5">ℹ</span>
+              <span>
+                Diese Delegation läuft im <strong>Simulations-Modus</strong> (Route: {d.executionRoute}).
+                Für echte Ausführung Claude CLI oder einen lokalen Agenten konfigurieren.
+              </span>
+            </div>
+          )}
+
+          {/* ── Timing ───────────────────────────────────────────────── */}
+          <div className="mt-3 flex flex-wrap gap-4 text-[10px] text-gray-700">
             <span>Erstellt: {new Date(d.createdAt).toLocaleString('de-DE')}</span>
             <span>Aktualisiert: {new Date(d.updatedAt).toLocaleString('de-DE')}</span>
-            {d.status === 'running' && (
-              <ElapsedTimer startedAt={d.updatedAt || d.createdAt} className="text-green-400 font-mono" />
-            )}
-            {isDone && d.summaryReport && (
-              <span className="text-green-400/70 font-mono">
-                Dauer: {formatCompletedDuration(d.createdAt, d.updatedAt)}
-              </span>
-            )}
           </div>
         </div>
 
@@ -552,7 +646,100 @@ export default function DelegationDetailPage() {
           </div>
         )}
 
-        {/* ── Two-column: Contract + Logs ───────────────────────────────── */}
+        {/* ── Knowledge Writeback ───────────────────────────────────────── */}
+        {(d.status === 'completed' || d.status === 'failed') && (
+          <KnowledgeWritebackPanel delegationId={id} />
+        )}
+
+        {/* ── PR Details (wenn PR vorhanden) ────────────────────────────── */}
+        {d.summaryReport?.prUrl && (
+          <div className="bg-gray-900 border border-emerald-900/30 rounded-xl p-4">
+            <h2 className="text-xs font-semibold text-emerald-600 uppercase tracking-wider mb-3">Pull Request</h2>
+            <div className="flex flex-wrap items-start gap-4">
+              <div className="flex-1 min-w-0">
+                <a href={d.summaryReport.prUrl} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400 hover:text-emerald-300 transition-colors">
+                  ⎇ PR #{d.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? ''} auf GitHub öffnen
+                </a>
+                {prStatusLoading && (
+                  <span className="ml-3 text-[10px] text-gray-600">CI-Status wird geladen…</span>
+                )}
+              </div>
+              {prStatus && !prStatusLoading && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded border ${
+                    prStatus.state === 'merged' ? 'bg-violet-950/40 text-violet-400 border-violet-800' :
+                    prStatus.state === 'closed' ? 'bg-gray-900 text-gray-500 border-gray-700' :
+                    'bg-emerald-950/40 text-emerald-400 border-emerald-800'
+                  }`}>
+                    {prStatus.state === 'merged' ? '⎇ Merged' : prStatus.state === 'closed' ? '⊘ Closed' : '⎇ Open'}
+                  </span>
+                  <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded border ${
+                    prStatus.ciState === 'success' ? 'bg-green-950/40 text-green-400 border-green-800' :
+                    prStatus.ciState === 'failure' ? 'bg-red-950/40 text-red-400 border-red-800' :
+                    prStatus.ciState === 'pending' ? 'bg-yellow-950/40 text-yellow-400 border-yellow-800' :
+                    'bg-gray-900 text-gray-500 border-gray-700'
+                  }`}>
+                    {prStatus.ciState === 'success' ? '✓ CI grün' :
+                     prStatus.ciState === 'failure' ? '✗ CI fehlgeschlagen' :
+                     prStatus.ciState === 'pending' ? '⏳ CI läuft' : '○ CI unbekannt'}
+                  </span>
+                </div>
+              )}
+            </div>
+            {prStatus?.ciChecks && prStatus.ciChecks.length > 0 && (
+              <div className="mt-3 flex flex-col gap-0.5">
+                {prStatus.ciChecks.slice(0, 6).map((check, i) => (
+                  <a key={i} href={check.url} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-[10px] text-gray-500 hover:text-gray-300 transition-colors">
+                    <span className={
+                      check.conclusion === 'success' ? 'text-green-500' :
+                      check.conclusion === 'failure' ? 'text-red-500' :
+                      check.status === 'in_progress' ? 'text-yellow-500' : 'text-gray-600'
+                    }>
+                      {check.conclusion === 'success' ? '✓' : check.conclusion === 'failure' ? '✗' : check.status === 'in_progress' ? '⏳' : '○'}
+                    </span>
+                    <span className="truncate max-w-[300px]">{check.name}</span>
+                  </a>
+                ))}
+                {prStatus.ciChecks.length > 6 && (
+                  <span className="text-[10px] text-gray-600">+{prStatus.ciChecks.length - 6} weitere…</span>
+                )}
+              </div>
+            )}
+            {d.summaryReport.keyPoints.length > 0 && (
+              <ul className="mt-3 pt-3 border-t border-gray-800 space-y-1">
+                {d.summaryReport.keyPoints.map((pt, i) => (
+                  <li key={i} className="text-sm text-green-400/80 flex items-start gap-1.5">
+                    <span className="text-green-700 mt-0.5 shrink-0">•</span> {pt}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {/* ── Grok Critic Review (full card, wenn completed) ─────────────── */}
+        {d.status === 'completed' && (
+          <GrokCriticCard
+            delegationId={id}
+            agentOutput={
+              d.summaryReport
+                ? [
+                    ...(d.summaryReport.keyPoints ?? []),
+                    ...(d.summaryReport.changes ?? []),
+                  ].join('\n')
+                : d.contract.goal
+            }
+            grokConfigured={typeof process !== 'undefined'
+              ? true  // assume configured client-side; API returns 503 if not
+              : false
+            }
+            initialScore={d.criticScore}
+          />
+        )}
+
+        {/* ── Two-column: Contract + Details ────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           {/* Contract Details */}
@@ -634,8 +821,8 @@ export default function DelegationDetailPage() {
               </div>
             )}
 
-            {/* Summary Report */}
-            {d.summaryReport && (
+            {/* Summary Report keyPoints — only if no prUrl (prUrl case handled above) */}
+            {d.summaryReport && !d.summaryReport.prUrl && (
               <div className="bg-gray-900 border border-green-900/40 rounded-xl p-4">
                 <h2 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Ergebnis</h2>
                 <ul className="space-y-1">
@@ -645,62 +832,6 @@ export default function DelegationDetailPage() {
                     </li>
                   ))}
                 </ul>
-                {d.summaryReport.prUrl && (
-                  <div className="mt-3 flex flex-col gap-2">
-                    <a href={d.summaryReport.prUrl} target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors">
-                      ⎇ PR #{d.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? ''} öffnen
-                    </a>
-                    {prStatusLoading && (
-                      <span className="text-[10px] text-gray-600">CI-Status wird geladen…</span>
-                    )}
-                    {prStatus && !prStatusLoading && (
-                      <div className="flex flex-col gap-1.5">
-                        {/* PR state + CI summary */}
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border ${
-                            prStatus.state === 'merged' ? 'bg-violet-950/40 text-violet-400 border-violet-800' :
-                            prStatus.state === 'closed' ? 'bg-gray-900 text-gray-500 border-gray-700' :
-                            'bg-emerald-950/40 text-emerald-400 border-emerald-800'
-                          }`}>
-                            {prStatus.state === 'merged' ? '⎇ Merged' : prStatus.state === 'closed' ? '⊘ Closed' : '⎇ Open'}
-                          </span>
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border ${
-                            prStatus.ciState === 'success' ? 'bg-green-950/40 text-green-400 border-green-800' :
-                            prStatus.ciState === 'failure' ? 'bg-red-950/40 text-red-400 border-red-800' :
-                            prStatus.ciState === 'pending' ? 'bg-yellow-950/40 text-yellow-400 border-yellow-800' :
-                            'bg-gray-900 text-gray-500 border-gray-700'
-                          }`}>
-                            {prStatus.ciState === 'success' ? '✓ CI grün' :
-                             prStatus.ciState === 'failure' ? '✗ CI fehlgeschlagen' :
-                             prStatus.ciState === 'pending' ? '⏳ CI läuft' : '○ CI unbekannt'}
-                          </span>
-                        </div>
-                        {/* Individual check runs (collapsed summary) */}
-                        {prStatus.ciChecks.length > 0 && (
-                          <div className="flex flex-col gap-0.5">
-                            {prStatus.ciChecks.slice(0, 6).map((check, i) => (
-                              <a key={i} href={check.url} target="_blank" rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 text-[10px] text-gray-500 hover:text-gray-300 transition-colors">
-                                <span className={
-                                  check.conclusion === 'success' ? 'text-green-500' :
-                                  check.conclusion === 'failure' ? 'text-red-500' :
-                                  check.status === 'in_progress' ? 'text-yellow-500' : 'text-gray-600'
-                                }>
-                                  {check.conclusion === 'success' ? '✓' : check.conclusion === 'failure' ? '✗' : check.status === 'in_progress' ? '⏳' : '○'}
-                                </span>
-                                <span className="truncate max-w-[200px]">{check.name}</span>
-                              </a>
-                            ))}
-                            {prStatus.ciChecks.length > 6 && (
-                              <span className="text-[10px] text-gray-600">+{prStatus.ciChecks.length - 6} weitere…</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             )}
 
@@ -713,40 +844,51 @@ export default function DelegationDetailPage() {
             )}
           </div>
 
-          {/* Live Agent Logs + Grok Critic (stacked in right column) */}
+          {/* Right column: Logs (collapsed by default) */}
           <div className="space-y-4">
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                Agent Logs
-              </h2>
-              <LiveLogViewer
-                delegationId={id}
-                initialLogs={d.logs ?? []}
-                initialStatus={d.status}
-                initialCostEstimate={d.contract.maxBudgetUsd}
-                onStatusChange={handleLiveStatusChange}
-              />
+            {/* ── Execution Log (collapsed by default) ─────────────── */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setLogsExpanded(prev => !prev)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800/50 transition-colors"
+              >
+                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                  <span className={`h-1.5 w-1.5 rounded-full ${d.status === 'running' ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`} />
+                  Execution Log
+                  {d.logs && d.logs.length > 0 && (
+                    <span className="ml-1 text-[10px] text-gray-700 font-mono normal-case">{d.logs.length} Einträge</span>
+                  )}
+                </h2>
+                <span className="text-xs text-gray-600">{logsExpanded ? '▲ Einklappen' : '▼ Logs anzeigen'}</span>
+              </button>
+              {logsExpanded && (
+                <div className="px-4 pb-4">
+                  <LiveLogViewer
+                    delegationId={id}
+                    initialLogs={d.logs ?? []}
+                    initialStatus={d.status}
+                    initialCostEstimate={d.contract.maxBudgetUsd}
+                    onStatusChange={handleLiveStatusChange}
+                  />
+                </div>
+              )}
+              {!logsExpanded && d.status === 'running' && (
+                <div className="px-4 pb-3">
+                  {/* Always render LiveLogViewer when running so status changes are received */}
+                  <div className="hidden">
+                    <LiveLogViewer
+                      delegationId={id}
+                      initialLogs={d.logs ?? []}
+                      initialStatus={d.status}
+                      initialCostEstimate={d.contract.maxBudgetUsd}
+                      onStatusChange={handleLiveStatusChange}
+                    />
+                  </div>
+                  <p className="text-xs text-green-400/60 italic">Agent läuft — Logs anzeigen um Details zu sehen.</p>
+                </div>
+              )}
             </div>
-
-            {/* Grok Critic — only visible when completed */}
-            {d.status === 'completed' && (
-              <GrokCriticCard
-                delegationId={id}
-                agentOutput={
-                  d.summaryReport
-                    ? [
-                        ...(d.summaryReport.keyPoints ?? []),
-                        ...(d.summaryReport.changes ?? []),
-                      ].join('\n')
-                    : d.contract.goal
-                }
-                grokConfigured={typeof process !== 'undefined'
-                  ? true  // assume configured client-side; API returns 503 if not
-                  : false
-                }
-                initialScore={d.criticScore}
-              />
-            )}
           </div>
         </div>
 
