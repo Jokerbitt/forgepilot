@@ -6,6 +6,7 @@ import { OnboardingBanner } from '@/components/command-center/OnboardingBanner'
 import { OnboardingBanner as OnboardingWizardBanner } from '@/components/onboarding/OnboardingBanner'
 import { buttonClassName } from '@/components/ui/primitives'
 import { CriticalPathWidget } from '@/components/critical-path'
+import { MissionControlPanel } from '@/components/mission-control'
 
 export default function Home() {
   return (
@@ -29,6 +30,8 @@ export default function Home() {
             </Link>
           </div>
         </header>
+
+        <MissionControlPanel />
 
         <div className="mb-5">
           <CommandCenterPrinciples />
