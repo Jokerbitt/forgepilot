@@ -1,7 +1,9 @@
 export const dynamic = 'force-dynamic'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { decomposeWithAI } from '@/lib/agents/ai-decomposer'
 import { createRun, listRuns } from '@/lib/agents/orchestrated-run'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { CreateOrchestratedRunSchema } from '@/lib/validation/schemas'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -10,19 +12,11 @@ export async function GET(req: Request) {
   return NextResponse.json({ runs, count: runs.length })
 }
 
-export async function POST(req: Request) {
-  const body = await req.json() as {
-    delegationId: string
-    delegationTitle: string
-    goal: string
-    context?: string
-    useAI?: boolean
-  }
+export async function POST(req: NextRequest) {
+  const body = await parseBody(req, CreateOrchestratedRunSchema)
+  if (isValidationError(body)) return body
 
   const { delegationId, delegationTitle, goal, context } = body
-  if (!delegationId || !goal) {
-    return NextResponse.json({ error: 'delegationId and goal are required' }, { status: 400 })
-  }
 
   // AI decomposition with pattern-based fallback
   const tasks = await decomposeWithAI(goal, context)

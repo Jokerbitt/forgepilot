@@ -15,6 +15,7 @@ import { getProviderInstance } from '@/lib/ai/providers/registry'
 import type { AIProviderConfig } from '@/lib/ai/providers/types'
 import { logProcessing } from '@/lib/dsgvo/processing-ledger'
 import { aiLogger } from '@/lib/logger'
+import { withSpan } from '@/lib/tracing/tracer'
 
 type ModelPurpose = 'fast' | 'coding'
 
@@ -110,49 +111,54 @@ async function callProvider(
     throw new AIProviderConfigurationError(`Provider instance for "${providerId}" not registered.`)
   }
 
-  return Sentry.startSpan(
-    { name: 'ai.generate', op: 'ai', attributes: { provider: providerId, model: modelId } },
-    async () => {
-      const t0 = Date.now()
+  return withSpan('ai.generate', { provider: providerId, model: modelId }, (span) =>
+    Sentry.startSpan(
+      { name: 'ai.generate', op: 'ai', attributes: { provider: providerId, model: modelId } },
+      async () => {
+        const t0 = Date.now()
 
-      const result = await provider.generateText({
-        system: options.system,
-        prompt: options.prompt,
-        maxTokens: options.maxTokens,
-        model: modelId,
-        apiKey,
-        baseUrl,
-      })
+        const result = await provider.generateText({
+          system: options.system,
+          prompt: options.prompt,
+          maxTokens: options.maxTokens,
+          model: modelId,
+          apiKey,
+          baseUrl,
+        })
 
-      const durationMs = Date.now() - t0
-      aiLogger.info({
-        event: 'ai.generate',
-        provider: providerId,
-        model: modelId,
-        inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens,
-        durationMs,
-      })
+        const durationMs = Date.now() - t0
+        span.setAttribute('ai.input_tokens', result.inputTokens ?? 0)
+        span.setAttribute('ai.output_tokens', result.outputTokens ?? 0)
+        span.setAttribute('ai.duration_ms', durationMs)
+        aiLogger.info({
+          event: 'ai.generate',
+          provider: providerId,
+          model: modelId,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+          durationMs,
+        })
 
-      // DSGVO Art. 30 — log every AI processing event (fire-and-forget)
-      void logProcessing({
-        purpose:      `generateText:${purpose}`,
-        dataTypes:    ['user-prompt', 'system-prompt'],
-        providerId,
-        modelId,
-        legalBasis:   'legitimate-interest',
-        inputTokens:  result.inputTokens,
-        piiRedacted:  false,  // PII scrubbing happens upstream in context-engineer
-      })
+        // DSGVO Art. 30 — log every AI processing event (fire-and-forget)
+        void logProcessing({
+          purpose:      `generateText:${purpose}`,
+          dataTypes:    ['user-prompt', 'system-prompt'],
+          providerId,
+          modelId,
+          legalBasis:   'legitimate-interest',
+          inputTokens:  result.inputTokens,
+          piiRedacted:  false,  // PII scrubbing happens upstream in context-engineer
+        })
 
-      return {
-        text: result.text,
-        provider: result.providerId,
-        model: result.model,
-        inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens,
-      }
-    },
+        return {
+          text: result.text,
+          provider: result.providerId,
+          model: result.model,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+        }
+      },
+    )
   )
 }
 

@@ -1,24 +1,12 @@
 export const dynamic = 'force-dynamic'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { embed, classify, summarize, compressContext } from '@/lib/ai/ollama-workloads'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { AIWorkloadSchema } from '@/lib/validation/schemas'
 
-type WorkloadType = 'embed' | 'classify' | 'summarize' | 'compress'
-
-interface WorkloadRequest {
-  workload: WorkloadType
-  text: string
-  labels?: string[]
-  targetTokens?: number
-  maxSentences?: number
-  model?: string
-}
-
-export async function POST(req: Request) {
-  const body = await req.json() as Partial<WorkloadRequest>
-
-  if (!body.workload || !body.text) {
-    return NextResponse.json({ error: 'workload and text required' }, { status: 400 })
-  }
+export async function POST(req: NextRequest) {
+  const body = await parseBody(req, AIWorkloadSchema)
+  if (isValidationError(body)) return body
 
   try {
     switch (body.workload) {

@@ -1,4 +1,6 @@
 import { timingSafeEqual } from 'node:crypto'
+import { logger } from '@/lib/logger'
+import { DEFAULT_ADMIN_EMAIL } from './config'
 
 export interface ForgePilotUser {
   id: string
@@ -20,14 +22,15 @@ export async function validateAdminCredentials(
   password: string | undefined,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<ForgePilotUser | null> {
-  const configuredEmail = env.FORGEPILOT_ADMIN_EMAIL?.trim()
+  const configuredEmail = env.FORGEPILOT_ADMIN_EMAIL?.trim() || DEFAULT_ADMIN_EMAIL
   const configuredPassword = env.FORGEPILOT_ADMIN_PASSWORD
 
   // V1 note: Password is stored as plaintext in .env.local — no DB hash needed yet.
   // Warn at runtime if the configured password is too short to be secure.
   if (configuredPassword && configuredPassword.length < 12) {
-    console.warn(
-      '[ForgePilot] FORGEPILOT_ADMIN_PASSWORD is shorter than 12 characters — use a stronger password',
+    logger.warn(
+      { event: 'auth.weak_password' },
+      'FORGEPILOT_ADMIN_PASSWORD is shorter than 12 characters — use a stronger password',
     )
   }
 

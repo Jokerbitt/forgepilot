@@ -168,3 +168,43 @@ describe('checkRateLimit', () => {
     expect(rateLimiterStore.size).toBeGreaterThan(0)
   })
 })
+
+// ─── getTierForPath (M189) ────────────────────────────────────────────────────
+
+describe('getTierForPath', () => {
+  it('returns expensive for exact expensive route', async () => {
+    const { getTierForPath } = await import('@/lib/rate-limit')
+    expect(getTierForPath('/api/delegations/[id]/execute')).toBe('expensive')
+  })
+
+  it('returns expensive for dynamic segment in expensive route', async () => {
+    const { getTierForPath } = await import('@/lib/rate-limit')
+    expect(getTierForPath('/api/delegations/abc123/execute')).toBe('expensive')
+  })
+
+  it('returns standard for unmatched route', async () => {
+    const { getTierForPath } = await import('@/lib/rate-limit')
+    expect(getTierForPath('/api/delegations')).toBe('standard')
+  })
+
+  it('returns auth for auth routes', async () => {
+    const { getTierForPath } = await import('@/lib/rate-limit')
+    expect(getTierForPath('/api/auth/signin')).toBe('auth')
+  })
+
+  it('returns expensive for critic-review route with dynamic id', async () => {
+    const { getTierForPath } = await import('@/lib/rate-limit')
+    expect(getTierForPath('/api/delegations/xyz/critic-review')).toBe('expensive')
+  })
+
+  it('returns expensive for research-run route with dynamic id', async () => {
+    const { getTierForPath } = await import('@/lib/rate-limit')
+    expect(getTierForPath('/api/project-briefs/brief-42/research-run')).toBe('expensive')
+  })
+
+  it('returns standard for unknown api routes', async () => {
+    const { getTierForPath } = await import('@/lib/rate-limit')
+    expect(getTierForPath('/api/settings')).toBe('standard')
+    expect(getTierForPath('/api/connectors')).toBe('standard')
+  })
+})

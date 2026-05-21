@@ -2,6 +2,8 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { getCards } from '@/lib/knowledge/store'
 import type { MemoryCard } from '@/lib/knowledge/types'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { KnowledgeContextPackageSchema } from '@/lib/validation/schemas'
 
 /** Rough token estimate: ~4 chars per token */
 function estimateTokens(text: string): number {
@@ -49,16 +51,13 @@ interface ContextPackageBody {
  * Uses keyword matching. Respects maxCards (default 5) and ~2000 token budget.
  */
 export async function POST(req: Request) {
-  const body = await req.json() as Partial<ContextPackageBody>
+  const parsed = await parseBody(req, KnowledgeContextPackageSchema)
+  if (isValidationError(parsed)) return parsed
 
-  if (!body.goal?.trim()) {
-    return NextResponse.json({ error: 'goal is required' }, { status: 400 })
-  }
-
-  const maxCards = Math.min(Math.max(1, body.maxCards ?? 5), 20)
+  const maxCards = Math.min(Math.max(1, parsed.maxCards ?? 5), 20)
   const MAX_TOKENS = 2000
 
-  const goalTerms = body.goal.toLowerCase().split(/\s+/).filter(t => t.length >= 3)
+  const goalTerms = parsed.goal.toLowerCase().split(/\s+/).filter(t => t.length >= 3)
 
   const allCards = getCards()
 
@@ -70,11 +69,11 @@ export async function POST(req: Request) {
 
   // If delegationId provided, boost cards that reference that delegation
   const boostedIds = new Set<string>()
-  if (body.delegationId) {
+  if (parsed.delegationId) {
     for (const { card } of scored) {
       if (
-        card.sourceIds.includes(body.delegationId) ||
-        card.tags.some(t => t.includes(body.delegationId!))
+        card.sourceIds.includes(parsed.delegationId) ||
+        card.tags.some(t => t.includes(parsed.delegationId!))
       ) {
         boostedIds.add(card.id)
       }

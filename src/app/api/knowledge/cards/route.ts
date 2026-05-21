@@ -1,8 +1,10 @@
 export const dynamic = 'force-dynamic'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { getCards, upsertCard, deleteCard, queryCards } from '@/lib/knowledge/store'
 import type { MemoryCard } from '@/lib/knowledge/types'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { KnowledgeCardSchema } from '@/lib/validation/schemas'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -15,23 +17,22 @@ export async function GET(req: Request) {
   return NextResponse.json(getCards(projectId))
 }
 
-export async function POST(req: Request) {
-  const body = await req.json() as Partial<MemoryCard>
-  if (!body.type || !body.title || !body.body) {
-    return NextResponse.json({ error: 'type, title, body required' }, { status: 400 })
-  }
+export async function POST(req: NextRequest) {
+  const result = await parseBody(req, KnowledgeCardSchema)
+  if (isValidationError(result)) return result
+
   const now = new Date().toISOString()
   const card: MemoryCard = {
-    id: body.id ?? randomUUID(),
-    type: body.type,
-    title: body.title,
-    body: body.body,
-    sourceIds: body.sourceIds ?? [],
-    projectId: body.projectId,
-    tags: body.tags ?? [],
-    privacyClass: body.privacyClass ?? 'internal',
-    confidence: body.confidence ?? 'medium',
-    createdAt: body.createdAt ?? now,
+    id: result.id ?? randomUUID(),
+    type: result.type,
+    title: result.title,
+    body: result.body,
+    sourceIds: result.sourceIds ?? [],
+    projectId: result.projectId,
+    tags: result.tags ?? [],
+    privacyClass: result.privacyClass ?? 'internal',
+    confidence: result.confidence ?? 'medium',
+    createdAt: result.createdAt ?? now,
     updatedAt: now,
   }
   return NextResponse.json(upsertCard(card), { status: 201 })

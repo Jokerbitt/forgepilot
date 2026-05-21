@@ -256,6 +256,394 @@ export const DelegationVersionSchema = z.object({
 
 export type DelegationVersionInput = z.infer<typeof DelegationVersionSchema>
 
+// ─── Delegation Patch ────────────────────────────────────────────────────────
+
+export const PatchDelegationSchema = z.object({
+  status:     z.enum(['pending', 'approved', 'running', 'completed', 'failed', 'cancelled']).optional(),
+  agentRunId: z.string().optional(),
+})
+
+export type PatchDelegationInput = z.infer<typeof PatchDelegationSchema>
+
+// ─── Delegation Escalate ─────────────────────────────────────────────────────
+
+export const EscalateSchema = z.object({
+  problem:        z.string().min(1, 'problem required'),
+  options:        z.array(z.string()).optional(),
+  recommendation: z.string().optional(),
+})
+
+export type EscalateInput = z.infer<typeof EscalateSchema>
+
+// ─── Import Logs ─────────────────────────────────────────────────────────────
+
+export const ImportLogsSchema = z.object({
+  output: z.string().min(1, 'output required'),
+  status: z.enum(['pending', 'approved', 'running', 'completed', 'failed', 'cancelled']).optional(),
+})
+
+export type ImportLogsInput = z.infer<typeof ImportLogsSchema>
+
+// ─── Delegation Preflight ────────────────────────────────────────────────────
+
+export const DelegationPreflightSchema = z.object({
+  delegationId: z.string().min(1, 'delegationId required'),
+})
+
+export type DelegationPreflightInput = z.infer<typeof DelegationPreflightSchema>
+
+// ─── Knowledge Card ──────────────────────────────────────────────────────────
+
+export const KnowledgeCardSchema = z.object({
+  id:           z.string().optional(),
+  type:         z.enum(['decision', 'pattern', 'learning', 'risk', 'requirement', 'context']),
+  title:        z.string().min(1, 'title required').max(200),
+  body:         z.string().min(1, 'body required'),
+  sourceIds:    z.array(z.string()).optional(),
+  projectId:    z.string().optional(),
+  tags:         z.array(z.string()).optional(),
+  privacyClass: z.enum(['public', 'internal', 'sensitive', 'local-only']).optional(),
+  confidence:   z.enum(['high', 'medium', 'low']).optional(),
+  createdAt:    z.string().optional(),
+})
+
+export type KnowledgeCardInput = z.infer<typeof KnowledgeCardSchema>
+
+// ─── Knowledge Source ────────────────────────────────────────────────────────
+
+export const KnowledgeSourceSchema = z.object({
+  id:                z.string().optional(),
+  type:              z.enum(['nas', 'markdown', 'linear', 'github', 'agent-run', 'obsidian', 'manual']),
+  name:              z.string().min(1, 'name required').max(200),
+  path:              z.string().min(1, 'path required'),
+  hash:              z.string().optional(),
+  privacyClass:      z.enum(['public', 'internal', 'sensitive', 'local-only']).optional(),
+  lastFetched:       z.string().optional(),
+  freshnessTtlHours: z.number().int().min(0).optional(),
+  isStale:           z.boolean().optional(),
+  metadata:          z.record(z.string(), z.string()).optional(),
+})
+
+export type KnowledgeSourceInput = z.infer<typeof KnowledgeSourceSchema>
+
+// ─── Research Document ───────────────────────────────────────────────────────
+
+export const ResearchDocumentSchema = z.object({
+  topic:                  z.string().min(3, 'topic required').max(500),
+  question:               z.string().max(1000).optional(),
+  relatedWorkItemId:      z.string().optional(),
+  relatedProjectBriefId:  z.string().optional(),
+  tags:                   z.array(z.string()).optional(),
+})
+
+export type ResearchDocumentInput = z.infer<typeof ResearchDocumentSchema>
+
+// ─── Context Package (knowledge/context-package) ─────────────────────────────
+
+export const KnowledgeContextPackageSchema = z.object({
+  goal:          z.string().min(3, 'goal required'),
+  workItemId:    z.string().optional(),
+  delegationId:  z.string().optional(),
+  maxCards:      z.number().int().min(1).max(20).optional(),
+})
+
+export type KnowledgeContextPackageInput = z.infer<typeof KnowledgeContextPackageSchema>
+
+// ─── Context Package (context-packages) ─────────────────────────────────────
+
+export const BuildContextPackageSchema = z.object({
+  workItemId: z.string().min(1, 'workItemId required'),
+  title:      z.string().min(1, 'title required').max(200),
+  objective:  z.string().min(1, 'objective required'),
+})
+
+export type BuildContextPackageInput = z.infer<typeof BuildContextPackageSchema>
+
+// ─── Orchestrated Run ────────────────────────────────────────────────────────
+
+export const CreateOrchestratedRunSchema = z.object({
+  delegationId:    z.string().min(1, 'delegationId required'),
+  delegationTitle: z.string().min(1).max(200).optional(),
+  goal:            z.string().min(1, 'goal required'),
+  context:         z.string().optional(),
+  useAI:           z.boolean().optional(),
+})
+
+export type CreateOrchestratedRunInput = z.infer<typeof CreateOrchestratedRunSchema>
+
+// ─── Scope Lock ──────────────────────────────────────────────────────────────
+
+export const ScopeLockClaimSchema = z.object({
+  agentId:      z.string().min(1, 'agentId required'),
+  agentType:    z.string().min(1, 'agentType required'),
+  milestone:    z.string().min(1, 'milestone required'),
+  branch:       z.string().min(1, 'branch required'),
+  filePatterns: z.array(z.string()).min(1, 'filePatterns required'),
+  ttlMinutes:   z.number().int().min(1).optional(),
+  pid:          z.number().int().optional(),
+  shareBranch:  z.boolean().optional(),
+})
+
+export type ScopeLockClaimInput = z.infer<typeof ScopeLockClaimSchema>
+
+export const ScopeLockHeartbeatSchema = z.object({
+  agentId:    z.string().min(1, 'agentId required'),
+  ttlMinutes: z.number().int().min(1).optional(),
+})
+
+export type ScopeLockHeartbeatInput = z.infer<typeof ScopeLockHeartbeatSchema>
+
+export const ScopeLockPreflightSchema = z.object({
+  branch:       z.string().min(1, 'branch required'),
+  filePatterns: z.array(z.string()).min(1, 'filePatterns required'),
+  agentId:      z.string().optional(),
+})
+
+export type ScopeLockPreflightInput = z.infer<typeof ScopeLockPreflightSchema>
+
+// ─── Agent Validate ──────────────────────────────────────────────────────────
+
+export const AgentValidateSchema = z.object({
+  agentId:     z.string().optional(),
+  milestone:   z.string().optional(),
+  testPattern: z.string().optional(),
+})
+
+export type AgentValidateInput = z.infer<typeof AgentValidateSchema>
+
+// ─── Agent Optimize ──────────────────────────────────────────────────────────
+
+export const AgentOptimizeSchema = z.object({
+  task: z.object({
+    id:                 z.string(),
+    title:              z.string(),
+    description:        z.string(),
+    acceptanceCriteria: z.array(z.string()),
+    skillCategory:      z.enum(['api-route', 'ui-component', 'data-model', 'test', 'refactor', 'infrastructure', 'documentation']),
+    assignedAgentType:  z.enum(['claude-code', 'codex', 'antigravity', 'general']),
+    filePatterns:       z.array(z.string()),
+    effort:             z.enum(['S', 'M', 'L']),
+    dependsOn:          z.array(z.string()),
+    order:              z.number().int(),
+  }),
+  agentType:       z.string().min(1, 'agentType required'),
+  testsPassed:     z.boolean(),
+  typeErrorCount:  z.number().int().min(0),
+  lintErrorCount:  z.number().int().min(0),
+  filesChanged:    z.number().int().min(0),
+  retryCount:      z.number().int().min(0).optional(),
+  durationMinutes: z.number().min(0).optional(),
+})
+
+export type AgentOptimizeInput = z.infer<typeof AgentOptimizeSchema>
+
+// ─── Agent Profile ───────────────────────────────────────────────────────────
+
+export const AgentProfileSchema = z.object({
+  id:          z.string().min(1, 'id required'),
+  role:        z.string().min(1, 'role required'),
+  displayName: z.string().min(1, 'displayName required'),
+}).passthrough()
+
+export type AgentProfileInput = z.infer<typeof AgentProfileSchema>
+
+// ─── AI Chat Test ────────────────────────────────────────────────────────────
+
+export const ChatTestSchema = z.object({
+  providerId:   z.string().min(1, 'providerId required'),
+  modelId:      z.string().min(1, 'modelId required'),
+  prompt:       z.string().min(1, 'prompt required'),
+  systemPrompt: z.string().optional(),
+  maxTokens:    z.number().int().min(1).max(8192).optional(),
+})
+
+export type ChatTestInput = z.infer<typeof ChatTestSchema>
+
+// ─── AI Workload ─────────────────────────────────────────────────────────────
+
+export const AIWorkloadSchema = z.object({
+  workload:      z.enum(['embed', 'classify', 'summarize', 'compress']),
+  text:          z.string().min(1, 'text required'),
+  labels:        z.array(z.string()).optional(),
+  targetTokens:  z.number().int().min(1).optional(),
+  maxSentences:  z.number().int().min(1).optional(),
+  model:         z.string().optional(),
+})
+
+export type AIWorkloadInput = z.infer<typeof AIWorkloadSchema>
+
+// ─── API Keys ────────────────────────────────────────────────────────────────
+
+export const ApiKeysUpdateSchema = z.record(
+  z.string(),
+  z.string(),
+)
+
+export type ApiKeysUpdate = z.infer<typeof ApiKeysUpdateSchema>
+
+// ─── Model Router ────────────────────────────────────────────────────────────
+
+export const ModelRouterTaskSchema = z.object({
+  taskId:      z.string().min(1, 'taskId required'),
+  workload:    z.string().min(1, 'workload required'),
+  privacyMode: z.string().min(1, 'privacyMode required'),
+}).passthrough()
+
+export type ModelRouterTaskInput = z.infer<typeof ModelRouterTaskSchema>
+
+export const ModelProfileSchema = z.object({
+  id:        z.string().min(1, 'id required'),
+  provider:  z.string().min(1, 'provider required'),
+  modelName: z.string().min(1, 'modelName required'),
+}).passthrough()
+
+export type ModelProfileInput = z.infer<typeof ModelProfileSchema>
+
+// ─── PM Agent Auto (PATCH) ───────────────────────────────────────────────────
+
+export const PMAgentAutoPatchSchema = z.object({
+  autoPmAgent: z.boolean(),
+})
+
+export type PMAgentAutoPatch = z.infer<typeof PMAgentAutoPatchSchema>
+
+// ─── Work Item Dependencies ───────────────────────────────────────────────────
+
+export const WorkItemDependenciesSchema = z.object({
+  blockedBy: z.array(z.string()),
+})
+
+export type WorkItemDependenciesInput = z.infer<typeof WorkItemDependenciesSchema>
+
+// ─── Project Brief Patch ──────────────────────────────────────────────────────
+
+export const ProjectBriefPatchSchema = z.object({
+  title:            z.string().min(3).max(200).optional(),
+  status:           z.enum(['draft', 'in_review', 'accepted', 'archived']).optional(),
+  rawIdea:          z.string().optional(),
+  problemStatement: z.string().optional(),
+  targetAudience:   z.string().optional(),
+  desiredOutcome:   z.string().optional(),
+  constraints:      z.array(z.string()).optional(),
+  nonGoals:         z.array(z.string()).optional(),
+  scope:            z.enum(['minimal', 'standard', 'full']).optional(),
+  researchMode:     z.enum(['quick', 'standard', 'deep']).optional(),
+  privacyMode:      z.enum(['local', 'hybrid', 'cloud']).optional(),
+}).passthrough()
+
+export type ProjectBriefPatch = z.infer<typeof ProjectBriefPatchSchema>
+
+// ─── Project Brief Requirements ───────────────────────────────────────────────
+
+export const RequirementAddSchema = z.object({
+  title:       z.string().min(3, 'title required').max(200),
+  description: z.string().min(3, 'description required'),
+  type:        z.enum(['functional', 'non-functional', 'constraint', 'assumption']).optional(),
+  priority:    z.enum(['must', 'should', 'could', 'wont']).optional(),
+})
+
+export type RequirementAddInput = z.infer<typeof RequirementAddSchema>
+
+// ─── Pilot Route ─────────────────────────────────────────────────────────────
+
+export const PilotInputSchema = z.object({
+  workItemId: z.string().min(1, 'workItemId required'),
+  title:      z.string().min(1, 'title required').max(200),
+  goal:       z.string().min(5, 'goal required'),
+}).passthrough()
+
+export type PilotInput = z.infer<typeof PilotInputSchema>
+
+// ─── Idea to Production ──────────────────────────────────────────────────────
+
+export const IdeaToProductionSchema = z.object({
+  idea: z.string().min(5, 'idea required').max(2000),
+})
+
+export type IdeaToProductionInput = z.infer<typeof IdeaToProductionSchema>
+
+// ─── PR Review ───────────────────────────────────────────────────────────────
+
+export const PRReviewSchema = z.object({
+  prNumber:      z.number().int().min(1, 'prNumber must be a positive integer'),
+  delegationId:  z.string().optional(),
+  expectedScope: z.array(z.string()).optional(),
+})
+
+export type PRReviewInput = z.infer<typeof PRReviewSchema>
+
+// ─── From Research ───────────────────────────────────────────────────────────
+
+export const FromResearchSchema = z.object({
+  researchId: z.string().min(1, 'researchId required'),
+})
+
+export type FromResearchInput = z.infer<typeof FromResearchSchema>
+
+// ─── Full Cycle ───────────────────────────────────────────────────────────────
+
+export const FullCycleSchema = z.object({
+  topic:    z.string().trim().min(1, 'topic required').max(500),
+  question: z.string().max(1000).optional(),
+})
+
+export type FullCycleInput = z.infer<typeof FullCycleSchema>
+
+// ─── Policy ───────────────────────────────────────────────────────────────────
+
+export const PolicyEvalSchema = z.object({
+  id:        z.string().min(1, 'id required'),
+  goal:      z.string().min(1, 'goal required'),
+  riskClass: RiskClassSchema,
+}).passthrough()
+
+export type PolicyEvalInput = z.infer<typeof PolicyEvalSchema>
+
+// ─── Telegram Send ───────────────────────────────────────────────────────────
+
+export const TelegramSendSchema = z.object({
+  text: z.string().min(1, 'text required').max(4096),
+})
+
+export type TelegramSendInput = z.infer<typeof TelegramSendSchema>
+
+// ─── Agent Run Patch ─────────────────────────────────────────────────────────
+
+export const AgentRunPatchSchema = z.record(z.string(), z.unknown())
+
+export type AgentRunPatch = z.infer<typeof AgentRunPatchSchema>
+
+// ─── Orchestrated Run Patch ───────────────────────────────────────────────────
+
+export const OrchestratedRunPatchSchema = z.object({
+  taskId:    z.string().optional(),
+  status:    z.string().optional(),
+  result:    z.record(z.string(), z.unknown()).optional(),
+  runStatus: z.string().optional(),
+})
+
+export type OrchestratedRunPatch = z.infer<typeof OrchestratedRunPatchSchema>
+
+// ─── Settings Autonomous ─────────────────────────────────────────────────────
+
+export const AutonomousConfigSchema = z.object({
+  enabled:                 z.boolean().optional(),
+  autoApproveDelegations:  z.boolean().optional(),
+  autoExecuteOnApproval:   z.boolean().optional(),
+  riskThreshold:           z.enum(['low', 'medium', 'high']).optional(),
+})
+
+export type AutonomousConfigInput = z.infer<typeof AutonomousConfigSchema>
+
+// ─── Settings Env ────────────────────────────────────────────────────────────
+
+export const EnvKeySchema = z.object({
+  key:   z.string().min(1, 'key required'),
+  value: z.string().min(1, 'value required'),
+})
+
+export type EnvKeyInput = z.infer<typeof EnvKeySchema>
+
 // ─── Project Brief ────────────────────────────────────────────────────────────
 
 export const ProjectBriefSchema = z.object({

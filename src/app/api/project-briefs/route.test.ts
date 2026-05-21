@@ -74,7 +74,7 @@ const validInput = {
 
 describe('GET /api/project-briefs', () => {
   it('returns an array', async () => {
-    const res = await GET()
+    const res = await GET(new NextRequest('http://localhost/api/project-briefs'))
     expect(res.status).toBe(200)
     const data = await res.json()
     expect(Array.isArray(data)).toBe(true)

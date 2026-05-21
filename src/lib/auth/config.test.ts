@@ -32,15 +32,15 @@ describe('isAuthConfigured', () => {
     expect(isAuthConfigured({} as unknown as NodeJS.ProcessEnv)).toBe(false)
   })
 
-  it('returns true when FORGEPILOT_ADMIN_PASSWORD is set', () => {
-    expect(isAuthConfigured({ FORGEPILOT_ADMIN_PASSWORD: 'secret123' } as unknown as NodeJS.ProcessEnv)).toBe(true)
+  it('returns false when only FORGEPILOT_ADMIN_PASSWORD is set', () => {
+    expect(isAuthConfigured({ FORGEPILOT_ADMIN_PASSWORD: 'secret123' } as unknown as NodeJS.ProcessEnv)).toBe(false)
   })
 
-  it('returns true when NEXTAUTH_SECRET is set', () => {
-    expect(isAuthConfigured({ NEXTAUTH_SECRET: 'some-secret' } as unknown as NodeJS.ProcessEnv)).toBe(true)
+  it('returns false when only NEXTAUTH_SECRET is set', () => {
+    expect(isAuthConfigured({ NEXTAUTH_SECRET: 'some-secret' } as unknown as NodeJS.ProcessEnv)).toBe(false)
   })
 
-  it('returns true when both are set', () => {
+  it('returns true when both admin password and NEXTAUTH_SECRET are set', () => {
     expect(
       isAuthConfigured({
         FORGEPILOT_ADMIN_PASSWORD: 'secret123',

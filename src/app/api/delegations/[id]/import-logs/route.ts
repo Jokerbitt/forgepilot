@@ -1,6 +1,8 @@
-import { NextResponse } from 'next/server'
-import type { Delegation, AgentLog } from '@/lib/models/delegation'
+import { NextRequest, NextResponse } from 'next/server'
+import type { AgentLog } from '@/lib/models/delegation'
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { ImportLogsSchema } from '@/lib/validation/schemas'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,7 +26,7 @@ function classifyLine(line: string): AgentLog['type'] {
  * Useful for importing output from a claude CLI session run outside ForgePilot.
  */
 export async function POST(
-  req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
@@ -35,10 +37,8 @@ export async function POST(
     return NextResponse.json({ error: 'Delegation nicht gefunden' }, { status: 404 })
   }
 
-  const body = await req.json() as { output: string; status?: Delegation['status'] }
-  if (!body.output || typeof body.output !== 'string') {
-    return NextResponse.json({ error: 'output (string) required' }, { status: 400 })
-  }
+  const body = await parseBody(req, ImportLogsSchema)
+  if (isValidationError(body)) return body
 
   const ts = new Date().toISOString()
   const newLogs: AgentLog[] = body.output
@@ -52,7 +52,7 @@ export async function POST(
     }))
 
   await repo.update(id, {
-    ...(body.status ? { status: body.status } : {}),
+    ...(body.status !== undefined ? { status: body.status } : {}),
     logs: [...(delegation.logs ?? []), ...newLogs],
   })
 

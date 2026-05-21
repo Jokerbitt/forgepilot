@@ -15,6 +15,8 @@ import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 import { getDataDir } from '@/lib/config/paths'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { EnvKeySchema } from '@/lib/validation/schemas'
 
 // Keys the user is allowed to save through this endpoint.
 // Sensitive infra keys (ANTHROPIC, LINEAR, GITHUB, DATABASE) are NOT here —
@@ -41,11 +43,6 @@ const ALLOWED_KEYS = new Set([
   'SENTRY_DSN',
 ])
 
-interface EnvBody {
-  key: string
-  value: string
-}
-
 function apiKeysPath(): string {
   return path.join(getDataDir(), 'api-keys.json')
 }
@@ -68,36 +65,10 @@ function writeApiKeys(keys: Record<string, string>): void {
 }
 
 export async function POST(request: Request) {
-  let body: EnvBody
+  const bodyResult = await parseBody(request, EnvKeySchema)
+  if (isValidationError(bodyResult)) return bodyResult
 
-  try {
-    body = await request.json() as EnvBody
-  } catch {
-    return NextResponse.json({ ok: false, error: 'Invalid JSON body' }, { status: 400 })
-  }
-
-  const { key, value } = body
-
-  if (typeof key !== 'string' || typeof value !== 'string') {
-    return NextResponse.json(
-      { ok: false, error: 'Both key and value must be strings' },
-      { status: 400 },
-    )
-  }
-
-  if (!key.trim()) {
-    return NextResponse.json(
-      { ok: false, error: 'Key must not be empty' },
-      { status: 400 },
-    )
-  }
-
-  if (!value.trim()) {
-    return NextResponse.json(
-      { ok: false, error: 'Value must not be empty' },
-      { status: 400 },
-    )
-  }
+  const { key, value } = bodyResult
 
   if (!ALLOWED_KEYS.has(key)) {
     return NextResponse.json(

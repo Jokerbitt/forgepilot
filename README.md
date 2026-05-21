@@ -51,7 +51,7 @@ Knowledge Writeback  →  GitHub PR
 git clone https://github.com/Jokerbitt/forgepilot
 cd forgepilot
 cp .env.example .env.local
-# Edit .env.local: set FORGEPILOT_ADMIN_PASSWORD + at least one AI provider key
+# Edit .env.local: set NEXTAUTH_SECRET (openssl rand -base64 32) + FORGEPILOT_ADMIN_PASSWORD + at least one AI provider key
 npm install
 # With Postgres (optional):
 docker-compose up -d postgres

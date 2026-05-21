@@ -24,4 +24,13 @@ describe('validateAdminCredentials', () => {
     await expect(validateAdminCredentials('other@forgepilot.local', 'secret-pass', env)).resolves.toBeNull()
     await expect(validateAdminCredentials('owner@forgepilot.local', 'secret-pass', {} as unknown as NodeJS.ProcessEnv)).resolves.toBeNull()
   })
+
+  it('uses the documented default admin email when none is configured', async () => {
+    await expect(validateAdminCredentials('admin@forgepilot.local', 'secret-pass', {
+      FORGEPILOT_ADMIN_PASSWORD: 'secret-pass',
+    } as unknown as NodeJS.ProcessEnv)).resolves.toMatchObject({
+      email: 'admin@forgepilot.local',
+      role: 'owner',
+    })
+  })
 })

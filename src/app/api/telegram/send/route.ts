@@ -1,13 +1,14 @@
 export const dynamic = 'force-dynamic'
 import { type NextRequest, NextResponse } from 'next/server'
 import { sendTelegramMessage } from '@/lib/telegram/bot'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { TelegramSendSchema } from '@/lib/validation/schemas'
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json() as { text?: string }
-    if (!body.text || typeof body.text !== 'string') {
-      return NextResponse.json({ ok: false, error: 'text is required' }, { status: 400 })
-    }
+    const body = await parseBody(req, TelegramSendSchema)
+    if (isValidationError(body)) return body
+
     const ok = await sendTelegramMessage(body.text, { parseMode: 'Markdown', disableWebPagePreview: true })
     return NextResponse.json({ ok })
   } catch (err) {

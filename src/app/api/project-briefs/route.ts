@@ -7,9 +7,14 @@ import { parseBody, isValidationError } from '@/lib/validation/api'
 import { ProjectBriefSchema } from '@/lib/validation/schemas'
 import { createProjectBriefRepository } from '@/lib/repositories/projectBriefRepository'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const status = new URL(request.url).searchParams.get('status')
     const repo = createProjectBriefRepository()
+    if (status) {
+      const briefs = await repo.listByStatus(status as Parameters<typeof repo.listByStatus>[0])
+      return NextResponse.json(briefs)
+    }
     const briefs = await repo.listAll()
     return NextResponse.json(briefs)
   } catch {

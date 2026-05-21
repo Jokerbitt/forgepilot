@@ -1,29 +1,30 @@
 export const dynamic = 'force-dynamic'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { getSources, upsertSource, deleteSource } from '@/lib/knowledge/store'
 import type { KnowledgeSource } from '@/lib/knowledge/types'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { KnowledgeSourceSchema } from '@/lib/validation/schemas'
 
 export async function GET() {
   return NextResponse.json(getSources())
 }
 
-export async function POST(req: Request) {
-  const body = await req.json() as Partial<KnowledgeSource>
-  if (!body.type || !body.name || !body.path) {
-    return NextResponse.json({ error: 'type, name, path required' }, { status: 400 })
-  }
+export async function POST(req: NextRequest) {
+  const result = await parseBody(req, KnowledgeSourceSchema)
+  if (isValidationError(result)) return result
+
   const source: KnowledgeSource = {
-    id: body.id ?? randomUUID(),
-    type: body.type,
-    name: body.name,
-    path: body.path,
-    hash: body.hash ?? '',
-    privacyClass: body.privacyClass ?? 'internal',
-    lastFetched: body.lastFetched ?? new Date().toISOString(),
-    freshnessTtlHours: body.freshnessTtlHours ?? 24,
-    isStale: body.isStale ?? false,
-    metadata: body.metadata ?? {},
+    id: result.id ?? randomUUID(),
+    type: result.type,
+    name: result.name,
+    path: result.path,
+    hash: result.hash ?? '',
+    privacyClass: result.privacyClass ?? 'internal',
+    lastFetched: result.lastFetched ?? new Date().toISOString(),
+    freshnessTtlHours: result.freshnessTtlHours ?? 24,
+    isStale: result.isStale ?? false,
+    metadata: result.metadata ?? {},
   }
   return NextResponse.json(upsertSource(source), { status: 201 })
 }

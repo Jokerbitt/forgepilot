@@ -8,6 +8,7 @@ import type { Delegation, AgentLog, DelegationReport } from '@/lib/models/delega
 import { registerProcess, unregisterProcess } from '@/lib/process-registry'
 import { readStoredApiKeys } from '@/lib/connectors/config'
 import { postLinearCompletionComment } from '@/lib/connectors/linear-writeback'
+import { createGitHubPRIfNeeded } from '@/lib/github/pr-creator'
 import { upsertAttentionItem } from '@/lib/attention/store'
 import {
   buildExecutionStartLog,
@@ -23,6 +24,7 @@ import { recordOutcome } from '@/lib/agents/skill-evolver'
 import { generateText } from '@/lib/ai/text-generation'
 import { extractKnowledge } from '@/lib/knowledge/extraction'
 import { persistGrokCriticForDelegation } from '@/lib/eval/auto-grok-critic'
+import { writebackExecutionInsights } from '@/lib/knowledge/writeback'
 
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import { buildContextPackage } from '@/lib/knowledge/context-package'
@@ -338,6 +340,24 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
         postLinearCompletionComment(finishedDelegation).catch(() => {})
       }
 
+      // M197: Auto-PR creation — fire-and-forget
+      if (success) {
+        void createGitHubPRIfNeeded(finishedDelegation, fullOutput).then(async (result) => {
+          if (result.prUrl) {
+            const prRepo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+            await prRepo.update(finishedDelegation.id, {
+              summaryReport: {
+                keyPoints: finishedDelegation.summaryReport?.keyPoints ?? [],
+                changes: finishedDelegation.summaryReport?.changes ?? [],
+                timeTakenMinutes: finishedDelegation.summaryReport?.timeTakenMinutes ?? 0,
+                ...finishedDelegation.summaryReport,
+                prUrl: result.prUrl,
+              },
+            })
+          }
+        })
+      }
+
       // M116: Auto-Knowledge Extraction — fire-and-forget
       if (success) {
         extractKnowledge(finishedDelegation).catch(() => {
@@ -346,7 +366,13 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       }
 
       if (success && report) {
-        persistGrokCriticForDelegation(finishedDelegation, report).catch(() => {})
+        persistGrokCriticForDelegation(finishedDelegation, report)
+          .then(criticScore => {
+            if (criticScore) {
+              void writebackExecutionInsights({ ...finishedDelegation, criticScore })
+            }
+          })
+          .catch(() => {})
       }
 
       // Completion attention item

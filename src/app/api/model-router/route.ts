@@ -1,8 +1,10 @@
 export const dynamic = 'force-dynamic'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { routeTask } from '@/lib/model-router/router'
 import { saveDecision, getDecisions } from '@/lib/model-router/store'
 import type { RouteTaskInput } from '@/lib/model-router/types'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { ModelRouterTaskSchema } from '@/lib/validation/schemas'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -10,14 +12,10 @@ export async function GET(req: Request) {
   return NextResponse.json(getDecisions(taskId))
 }
 
-export async function POST(req: Request) {
-  const body = await req.json() as Partial<RouteTaskInput>
-  if (!body.taskId || !body.workload || !body.privacyMode) {
-    return NextResponse.json(
-      { error: 'taskId, workload, privacyMode required' },
-      { status: 400 },
-    )
-  }
+export async function POST(req: NextRequest) {
+  const body = await parseBody(req, ModelRouterTaskSchema)
+  if (isValidationError(body)) return body
+
   const decision = routeTask(body as RouteTaskInput)
   saveDecision(decision)
   return NextResponse.json(decision, { status: 201 })

@@ -15,6 +15,8 @@ import { readMilestones, readWorkPackages } from '@/lib/knowledge/milestone-stor
 import type { ResearchDocument } from '@/lib/models/research'
 import type { ProjectBrief } from '@/lib/models/project-brief'
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
+import { isValidationError } from '@/lib/validation/api'
+import { FullCycleSchema } from '@/lib/validation/schemas'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -72,11 +74,25 @@ Respond ONLY with valid JSON (no markdown fences):
 // ─── Main Handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: Request): Promise<Response> {
-  const body = await req.json().catch(() => ({})) as Partial<FullCycleRequest>
-
-  if (!body.topic?.trim()) {
+  let rawBody: unknown
+  try {
+    rawBody = await req.json()
+  } catch {
     return new Response(
-      JSON.stringify({ error: 'topic is required' }),
+      JSON.stringify({ error: 'Invalid JSON body' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
+
+  const parsed = FullCycleSchema.safeParse(rawBody)
+  if (!parsed.success) {
+    const fields: Record<string, string> = {}
+    for (const issue of parsed.error.issues) {
+      const key = issue.path.join('.') || '_root'
+      if (!fields[key]) fields[key] = issue.message
+    }
+    return new Response(
+      JSON.stringify({ error: 'Validation failed', fields }),
       { status: 400, headers: { 'Content-Type': 'application/json' } },
     )
   }
@@ -90,8 +106,8 @@ export async function POST(req: Request): Promise<Response> {
     )
   }
 
-  const topic = body.topic.trim()
-  const question = body.question?.trim() || undefined
+  const topic = parsed.data.topic
+  const question = parsed.data.question || undefined
 
   const encoder = new TextEncoder()
   const stream = new ReadableStream({

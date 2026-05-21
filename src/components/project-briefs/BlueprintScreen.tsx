@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import type { ProjectBrief, Requirement, UseCase, Risk, Finding, FindingConfidence, ResearchRun } from '@/lib/models/project-brief'
 import type { Milestone, WorkPackage } from '@/lib/models/milestone'
 import { briefToMarkdown, briefMarkdownFilename } from '@/lib/project-briefs/markdown-export'
+import { StartDelegationButton } from '@/components/project-briefs/StartDelegationButton'
 
 interface Props {
   initialBrief: ProjectBrief
@@ -406,6 +407,7 @@ export function BlueprintScreen({ initialBrief }: Props) {
                   <ActionButton onClick={handleDelegate} disabled={delegating} tone="primary">
                     {delegating ? 'Erstelle Delegation' : 'Delegation starten'}
                   </ActionButton>
+                  <StartDelegationButton briefId={brief.id} briefTitle={brief.title} />
                 </>
               )}
               <ActionButton onClick={handleCreateLinearTicket} disabled={ticketing} tone="secondary">

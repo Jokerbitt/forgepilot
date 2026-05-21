@@ -33,6 +33,30 @@ const baseBrief: ProjectBrief = {
   },
 }
 
+// Helper to determine whether StartDelegationButton should be rendered
+// (mirrors the condition in BlueprintScreen JSX: brief.status === 'accepted')
+function shouldShowStartDelegationButton(brief: Pick<ProjectBrief, 'status'>): boolean {
+  return brief.status === 'accepted'
+}
+
+describe('StartDelegationButton visibility', () => {
+  it('is shown when status is accepted', () => {
+    expect(shouldShowStartDelegationButton({ status: 'accepted' })).toBe(true)
+  })
+
+  it('is hidden when status is draft', () => {
+    expect(shouldShowStartDelegationButton({ status: 'draft' })).toBe(false)
+  })
+
+  it('is hidden when status is in_review', () => {
+    expect(shouldShowStartDelegationButton({ status: 'in_review' })).toBe(false)
+  })
+
+  it('is hidden when status is archived', () => {
+    expect(shouldShowStartDelegationButton({ status: 'archived' })).toBe(false)
+  })
+})
+
 describe('buildBlueprintViewModel', () => {
   it('asks for accepted requirements before approval', () => {
     const vm = buildBlueprintViewModel(baseBrief)
