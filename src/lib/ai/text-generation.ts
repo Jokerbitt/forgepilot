@@ -18,6 +18,7 @@ import { aiLogger } from '@/lib/logger'
 import { withSpan } from '@/lib/tracing/tracer'
 import { withRetry } from './retry'
 import { withFallback } from './fallback'
+import { resolveProvider } from './auto-router'
 
 type ModelPurpose = 'fast' | 'coding'
 
@@ -50,6 +51,22 @@ export class AIProviderConfigurationError extends Error {
 export async function generateText(options: GenerateTextOptions): Promise<GenerateTextResult> {
   const selection = getModelSelection()
   const purpose   = options.purpose ?? 'fast'
+
+  // ── LLM_MODE override ──────────────────────────────────────────────────────
+  // Only activate when LLM_MODE is **explicitly set** in the environment.
+  // When LLM_MODE is absent (undefined), we preserve the existing config-store
+  // behaviour so that no existing functionality is changed.
+  const llmModeEnvSet = typeof process.env.LLM_MODE === 'string' && process.env.LLM_MODE.trim().length > 0
+
+  if (!options.providerId && llmModeEnvSet) {
+    const autoResult = await resolveProvider(purpose)
+    if (autoResult.providerId !== 'placeholder') {
+      return callProvider(autoResult.providerId, autoResult.model, purpose, options)
+    }
+    // placeholder = no provider available for the requested mode;
+    // fall through to config-store selection so the caller sees a meaningful error.
+  }
+  // ── end LLM_MODE override ──────────────────────────────────────────────────
 
   // Resolve primary provider + model
   const primaryProviderId = options.providerId
