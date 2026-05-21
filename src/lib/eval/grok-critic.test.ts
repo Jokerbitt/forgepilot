@@ -77,8 +77,17 @@ vi.mock('@/lib/ai/text-generation', () => ({
   stripJsonCodeFence: (value: string) => value.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim(),
 }))
 
+vi.mock('@/lib/ai/providers/config-store', () => ({
+  getModelSelection: () => ({
+    codingProvider: 'xai',
+    codingModel: 'grok-3-mini',
+    fastProvider: 'ollama',
+    fastModel: 'llama3.2:3b',
+  }),
+}))
+
 describe('runGrokCritic', async () => {
-  const { runGrokCritic } = await import('./grok-critic')
+  const { getCriticProviderPlan, runGrokCritic } = await import('./grok-critic')
 
   const sampleInput = {
     delegationTitle: 'Add CSV export endpoint',
@@ -89,12 +98,14 @@ describe('runGrokCritic', async () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    delete process.env.FORGEPILOT_CRITIC_MODE
+    delete process.env.FORGEPILOT_CRITIC_PROVIDER
+    delete process.env.FORGEPILOT_CRITIC_MODEL
+    delete process.env.FORGEPILOT_CRITIC_PROVIDERS
   })
 
   it('returns null when all critic providers throw', async () => {
-    mockGenerateText
-      .mockRejectedValueOnce(new Error('Provider "xai" not found'))
-      .mockRejectedValueOnce(new Error('Ollama unavailable'))
+    mockGenerateText.mockRejectedValue(new Error('No provider available'))
     const result = await runGrokCritic(sampleInput)
     expect(result).toBeNull()
   })
@@ -131,6 +142,7 @@ describe('runGrokCritic', async () => {
   })
 
   it('falls back to local Ollama when xAI is unavailable', async () => {
+    process.env.FORGEPILOT_CRITIC_PROVIDERS = 'xai:grok-3-mini,ollama:qwen2.5-coder:14b'
     const mockResponse = {
       correctnessScore: 78,
       efficiencyScore: 82,
@@ -160,7 +172,32 @@ describe('runGrokCritic', async () => {
     }))
   })
 
+  it('supports arbitrary critic provider chains from env', () => {
+    const plan = getCriticProviderPlan({
+      FORGEPILOT_CRITIC_MODE: 'auto',
+      FORGEPILOT_CRITIC_PROVIDERS: 'openrouter=qwen/qwen-2.5-72b-instruct:free,lm-studio=local-model,custom-critic=my-model',
+    })
+
+    expect(plan.mode).toBe('auto')
+    expect(plan.candidates.slice(0, 3)).toEqual([
+      { providerId: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free' },
+      { providerId: 'lm-studio', model: 'local-model' },
+      { providerId: 'custom-critic', model: 'my-model' },
+    ])
+  })
+
+  it('single mode uses only the configured critic provider', () => {
+    const plan = getCriticProviderPlan({
+      FORGEPILOT_CRITIC_MODE: 'single',
+      FORGEPILOT_CRITIC_PROVIDER: 'anthropic',
+      FORGEPILOT_CRITIC_MODEL: 'claude-opus-4-5',
+    })
+
+    expect(plan.candidates).toEqual([{ providerId: 'anthropic', model: 'claude-opus-4-5' }])
+  })
+
   it('retries once when local critic returns invalid JSON', async () => {
+    process.env.FORGEPILOT_CRITIC_PROVIDERS = 'ollama:qwen2.5-coder:14b'
     const mockResponse = {
       correctnessScore: 88,
       efficiencyScore: 80,

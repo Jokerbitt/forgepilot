@@ -11,38 +11,156 @@
  */
 
 import { generateText, stripJsonCodeFence, type GenerateTextResult } from '@/lib/ai/text-generation'
+import { getModelSelection } from '@/lib/ai/providers/config-store'
 import { logger } from '@/lib/logger'
 
 const log = logger.child({ module: 'grok-critic' })
 
 const DEFAULT_LOCAL_CRITIC_MODEL = 'qwen2.5-coder:14b'
+const CRITIC_MODE_ENV = 'FORGEPILOT_CRITIC_MODE'
+const CRITIC_PROVIDERS_ENV = 'FORGEPILOT_CRITIC_PROVIDERS'
+const LEGACY_CRITIC_PROVIDER_ENV = 'FORGEPILOT_CRITIC_PROVIDER'
+const LEGACY_CRITIC_MODEL_ENV = 'FORGEPILOT_CRITIC_MODEL'
 
 interface CriticProviderCandidate {
   providerId: string
   model?: string
 }
 
-function getCriticProviderCandidates(): CriticProviderCandidate[] {
-  const configuredProvider = process.env.FORGEPILOT_CRITIC_PROVIDER?.trim()
-  const configuredModel = process.env.FORGEPILOT_CRITIC_MODEL?.trim()
-  const candidates: CriticProviderCandidate[] = []
+function parseCriticProviderList(value: string | undefined): CriticProviderCandidate[] {
+  if (!value) return []
 
-  if (configuredProvider) {
-    candidates.push({ providerId: configuredProvider, model: configuredModel || undefined })
+  return value
+    .split(',')
+    .map(entry => entry.trim())
+    .filter(Boolean)
+    .map(entry => {
+      const equalsIdx = entry.indexOf('=')
+      if (equalsIdx > 0) {
+        return {
+          providerId: entry.slice(0, equalsIdx).trim(),
+          model: entry.slice(equalsIdx + 1).trim() || undefined,
+        }
+      }
+
+      const colonIdx = entry.indexOf(':')
+      if (colonIdx > 0) {
+        return {
+          providerId: entry.slice(0, colonIdx).trim(),
+          model: entry.slice(colonIdx + 1).trim() || undefined,
+        }
+      }
+
+      return { providerId: entry }
+    })
+    .filter(candidate => Boolean(candidate.providerId))
+}
+
+function addCandidate(candidates: CriticProviderCandidate[], candidate: CriticProviderCandidate): void {
+  if (!candidate.providerId) return
+  candidates.push(candidate)
+}
+
+function getCriticProviderCandidates(
+  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>
+): CriticProviderCandidate[] {
+  const mode = String(env[CRITIC_MODE_ENV] ?? 'auto').trim().toLowerCase()
+  const configuredModel = env[LEGACY_CRITIC_MODEL_ENV]?.trim()
+  const candidates: CriticProviderCandidate[] = []
+  const explicitCandidates = parseCriticProviderList(env[CRITIC_PROVIDERS_ENV])
+
+  for (const candidate of explicitCandidates) addCandidate(candidates, candidate)
+
+  const configuredProvider = env[LEGACY_CRITIC_PROVIDER_ENV]?.trim()
+  if (configuredProvider && !explicitCandidates.length) {
+    addCandidate(candidates, { providerId: configuredProvider, model: configuredModel || undefined })
   }
 
-  candidates.push(
-    { providerId: 'xai' },
-    { providerId: 'ollama', model: configuredModel || DEFAULT_LOCAL_CRITIC_MODEL },
-  )
+  if (mode === 'single') {
+    return dedupeCriticCandidates(candidates.length > 0 ? candidates : [{ providerId: 'xai', model: configuredModel || undefined }])
+  }
 
+  try {
+    const selection = getModelSelection()
+    addCandidate(candidates, { providerId: selection.codingProvider, model: selection.codingModel })
+    if (selection.codingFallbackProvider) {
+      addCandidate(candidates, {
+        providerId: selection.codingFallbackProvider,
+        model: selection.codingFallbackModel,
+      })
+    }
+    addCandidate(candidates, { providerId: selection.fastProvider, model: selection.fastModel })
+    if (selection.fastFallbackProvider) {
+      addCandidate(candidates, {
+        providerId: selection.fastFallbackProvider,
+        model: selection.fastFallbackModel,
+      })
+    }
+  } catch (err) {
+    log.warn({ event: 'critic.model_selection_unavailable', reason: err instanceof Error ? err.message : String(err) })
+  }
+
+  for (const candidate of [
+    { providerId: 'xai', model: 'grok-3-mini' },
+    { providerId: 'anthropic', model: 'claude-sonnet-4-5' },
+    { providerId: 'openai', model: 'o3-mini' },
+    { providerId: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free' },
+    { providerId: 'groq', model: 'llama-3.3-70b-versatile' },
+    { providerId: 'deepseek', model: 'deepseek-reasoner' },
+    { providerId: 'gemini', model: 'gemini-1.5-pro' },
+    { providerId: 'ollama', model: DEFAULT_LOCAL_CRITIC_MODEL },
+    { providerId: 'lm-studio', model: 'local-model' },
+  ]) {
+    addCandidate(candidates, candidate)
+  }
+
+  return dedupeCriticCandidates(candidates)
+}
+
+function dedupeCriticCandidates(candidates: CriticProviderCandidate[]): CriticProviderCandidate[] {
   const seen = new Set<string>()
   return candidates.filter(candidate => {
-    const key = `${candidate.providerId}:${candidate.model ?? ''}`
-    if (seen.has(key)) return false
+    const providerId = candidate.providerId.trim()
+    const model = candidate.model?.trim()
+    const key = `${providerId}:${model ?? ''}`
+    if (!providerId || seen.has(key)) return false
     seen.add(key)
+    candidate.providerId = providerId
+    candidate.model = model || undefined
     return true
   })
+}
+
+function describeCriticConfig(env: Record<string, string | undefined> = process.env as Record<string, string | undefined>): string {
+  const mode = String(env[CRITIC_MODE_ENV] ?? 'auto').trim().toLowerCase()
+  const providers = getCriticProviderCandidates(env)
+    .map(candidate => candidate.model ? `${candidate.providerId}:${candidate.model}` : candidate.providerId)
+    .join(', ')
+
+  return `${mode || 'auto'} (${providers})`
+}
+
+export function getCriticProviderPlan(env?: Record<string, string | undefined>): {
+  mode: string
+  candidates: CriticProviderCandidate[]
+  description: string
+} {
+  const source = env ?? process.env as Record<string, string | undefined>
+  const mode = String(source[CRITIC_MODE_ENV] ?? 'auto').trim().toLowerCase() || 'auto'
+  const candidates = getCriticProviderCandidates(source)
+  return {
+    mode,
+    candidates,
+    description: describeCriticConfig(source),
+  }
+}
+
+function buildCriticUnavailableMessage(): string {
+  return (
+    'No critic provider returned valid JSON. Configure ' +
+    `${CRITIC_PROVIDERS_ENV}="xai:grok-3-mini,anthropic:claude-sonnet-4-5,ollama:qwen2.5-coder:14b" ` +
+    `or leave ${CRITIC_MODE_ENV}=auto to try configured cloud providers and local Ollama/LM Studio.`
+  )
 }
 
 async function generateCriticJson(options: {
@@ -73,7 +191,7 @@ async function generateCriticJson(options: {
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error(String(lastError ?? 'No critic provider available'))
+  throw lastError instanceof Error ? lastError : new Error(buildCriticUnavailableMessage())
 }
 
 async function generateParsedCriticJson<T>(options: {
@@ -115,7 +233,7 @@ Your previous response was invalid JSON. Retry with compact JSON only. Escape al
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error(String(lastError ?? 'Critic returned invalid JSON'))
+  throw lastError instanceof Error ? lastError : new Error(buildCriticUnavailableMessage())
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
