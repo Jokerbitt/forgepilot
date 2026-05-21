@@ -30,6 +30,7 @@ import { notifyExecutionResult } from '@/lib/notifications'
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import { buildContextPackage } from '@/lib/knowledge/context-package'
 import type { MemoryCard } from '@/lib/knowledge/types'
+import { checkParallelCompletion } from '@/lib/delegation-parallel'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
@@ -297,6 +298,9 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       })
       if (!finishedDelegation) return
 
+      // M207: Fan-in — notify parent if this is a parallel sub-delegation
+      void checkParallelCompletion(finishedDelegation)
+
       {
 
       // Record quality outcome in skill-history (feeds Performance tab)
@@ -455,6 +459,9 @@ async function runWithOllamaAgent(
     const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
     const finished = await repo.findById(id)
     if (finished) {
+      // M207: Fan-in — notify parent if this is a parallel sub-delegation
+      void checkParallelCompletion(finished)
+
       const label = finished.title || finished.contract.goal.slice(0, 60)
       const savedStr = result.costSavings.savedUsd > 0
         ? ` · 💰 $${result.costSavings.savedUsd.toFixed(4)} gespart`
