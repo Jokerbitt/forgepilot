@@ -13,6 +13,7 @@ import {
   summarizePlanningRequest,
   type PlanningMode,
 } from '@/lib/planning/grok-planning-gateway'
+import { recordPlanningAudit } from '@/lib/planning/planning-audit-store'
 
 const MODES = new Set<PlanningMode>(['preview', 'create-linear', 'create-github', 'create-all'])
 const CONFIRMATION_HEADER = 'x-forgepilot-confirm'
@@ -62,16 +63,19 @@ export async function POST(request: Request) {
     })
     const summary = summarizePlanningRequest(plan, items)
     const audit = buildPlanningAudit(mode, plan, items, applyResult)
+    const warnings = buildWarnings(mode, applyResult.skipped.length)
+    const auditRecord = recordPlanningAudit({ audit, summary, applyResult, warnings })
 
     return NextResponse.json({
       ok: true,
       mode,
       summary,
       audit,
+      auditRecordId: auditRecord.id,
       plan,
       items,
       applyResult,
-      warnings: buildWarnings(mode, applyResult.skipped.length),
+      warnings,
     }, {
       headers: { 'cache-control': 'no-store' },
     })
