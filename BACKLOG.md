@@ -130,7 +130,7 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 
 ## 🟠 Medium Priority — Intelligence & Agent UX (M146–M153)
 
-- [~] M146: Delegation Comment Thread — Kommentare pro Delegation (Nutzer + Agent-Output) mit Timestamp
+- [x] M146: Delegation Comment Thread — Kommentare pro Delegation (Nutzer + Agent-Output) mit Timestamp
 - [~] M147: Work Item Priority Sort — Drag-and-Drop Prioritäts-Sortierung in der List-View
 - [~] M148: Project Brief Diff View — vergleiche zwei Versionen eines Briefs side-by-side
 - [~] M149: Agent Run Replay — gespeicherte Delegation-Runs wiedergeben (Context + Prompt + Response Timeline)

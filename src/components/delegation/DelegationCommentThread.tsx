@@ -54,14 +54,21 @@ export function DelegationCommentThread({ delegationId }: DelegationCommentThrea
   const [comments, setComments] = useState<DelegationComment[]>([])
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
+    setLoading(true)
+    setError(null)
     void fetch(`/api/delegations/${delegationId}/comments`)
-      .then(res => res.json())
-      .then((data: { comments: DelegationComment[] }) => setComments(data.comments))
-      .catch(() => null)
+      .then(async res => {
+        if (!res.ok) throw new Error('Failed to load comments')
+        return res.json() as Promise<{ comments: DelegationComment[] }>
+      })
+      .then((data) => setComments(Array.isArray(data.comments) ? data.comments : []))
+      .catch(() => setError('Kommentare konnten nicht geladen werden.'))
+      .finally(() => setLoading(false))
   }, [delegationId])
 
   useEffect(() => {
@@ -94,13 +101,23 @@ export function DelegationCommentThread({ delegationId }: DelegationCommentThrea
   }
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
-      <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-        Kommentare ({comments.length})
-      </h2>
+    <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-4 shadow-sm shadow-black/10 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            Kommentare ({comments.length})
+          </h2>
+          <p className="mt-1 text-xs text-slate-600">Review-Notizen und Agenten-Output bleiben an dieser Delegation nachvollziehbar.</p>
+        </div>
+        {loading && <span className="text-xs text-slate-500">Lädt...</span>}
+      </div>
 
       {/* Thread list */}
-      {comments.length === 0 ? (
+      {loading ? (
+        <div className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-4 text-center text-xs text-slate-500">
+          Kommentare werden geladen...
+        </div>
+      ) : comments.length === 0 ? (
         <p className="text-xs text-slate-600 italic">Noch keine Kommentare — füge den ersten hinzu.</p>
       ) : (
         <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
@@ -121,6 +138,7 @@ export function DelegationCommentThread({ delegationId }: DelegationCommentThrea
           }}
           placeholder="Kommentar schreiben… (⌘↵ zum Senden)"
           rows={2}
+          maxLength={4000}
           className="flex-1 resize-none rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-600 outline-none focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/20"
         />
         <button
@@ -131,7 +149,10 @@ export function DelegationCommentThread({ delegationId }: DelegationCommentThrea
           {sending ? '…' : 'Senden'}
         </button>
       </div>
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+        {error ? <p className="text-red-400">{error}</p> : <p>Cmd/Ctrl + Enter sendet den Kommentar.</p>}
+        <span>{draft.length}/4000</span>
+      </div>
     </div>
   )
 }
