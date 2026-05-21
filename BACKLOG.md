@@ -126,7 +126,7 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [x] M142: Global Search — Cmd+K Palette: Work Items, Delegations, Project Briefs, Navigations-Shortcuts
 - [~] M143: CSV Export — Work Items + Delegations als CSV-Download (/api/work-items/export, /api/delegations/export)
 - [x] M144: Keyboard Shortcuts — vollständige Shortcut-Map (j/k Navigation, a Approve, c Cancel, ? Hilfe-Overlay)
-- [~] M145: Settings Import/Export — komplette Konfiguration (API Keys ausgenommen) als JSON exportieren/importieren
+- [x] M145: Settings Import/Export — komplette Konfiguration (API Keys ausgenommen) als JSON exportieren/importieren
 
 ## 🟠 Medium Priority — Intelligence & Agent UX (M146–M153)
 
@@ -154,4 +154,4 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [x] M161: Config Backup Routine — tägliches automatisches Backup von `config/*.json` nach `config/backups/YYYY-MM-DD/`; GET /api/backup/list + POST /api/backup/restore; Vercel Cron 03:00 UTC; 7-Tage-Rotation
 - [x] M162: SSE Stream für Agent Scope — `/api/agents/scope/stream` ersetzt 5s-Polling in ScopeBoard; Live/Poll-Toggle; EventSource mit Fallback
 - [x] M163: Approval-Stack im Header — ausstehende Delegations-Genehmigungen als Sticky-Banner in Navigation (Zahl + Quick-Approve-Button) statt nur in /delegations
-- [~] M164: Delegation Live-Timeline — Live-Ansicht laufender Delegations mit Logs, Cost-Anzeige, Risk-Badge, Trace-Link; Polling durch SSE ersetzen
+- [x] M164: Delegation Live-Timeline — Live-Ansicht laufender Delegations mit Logs, Cost-Anzeige, Risk-Badge, Trace-Link; Polling durch SSE ersetzen
