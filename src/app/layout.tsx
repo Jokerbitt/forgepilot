@@ -5,6 +5,7 @@ import { AppNav } from '@/components/shared/AppNav'
 import { GlobalKeyboardHandler } from '@/components/shared/GlobalKeyboardHandler'
 import { GlobalSearch } from '@/components/search/GlobalSearch'
 import { themeScriptContent } from '@/lib/theme/theme-store'
+import { PendingApprovalsBar } from '@/components/shared/PendingApprovalsBar'
 
 export const metadata: Metadata = {
   title: 'ForgePilot',
@@ -29,6 +30,7 @@ export default function RootLayout({
           <GlobalKeyboardHandler />
           <GlobalSearch />
           <div className="min-[600px]:pl-56 lg:pl-64">
+            <PendingApprovalsBar />
             {children}
           </div>
         </ToastProvider>
