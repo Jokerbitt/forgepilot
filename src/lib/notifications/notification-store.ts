@@ -2,6 +2,37 @@ import fs from 'fs'
 import path from 'path'
 import type { Notification } from '@/lib/models/notification'
 
+/** Fire-and-forget: forward notification to Telegram if configured + channel enabled */
+async function forwardToTelegram(notification: Notification): Promise<void> {
+  try {
+    // M157: respect per-type telegram channel preference
+    const { readNotificationPreferences, isChannelEnabled } = await import('./preferences-store')
+    const prefs = readNotificationPreferences()
+    if (!isChannelEnabled(prefs, notification.type, 'telegram')) return
+
+    const { isTelegramEnabled, readTelegramConfig } = await import('@/lib/telegram/config')
+    if (!isTelegramEnabled()) return
+    const cfg = readTelegramConfig()
+    if (!cfg) return
+    if (!cfg.notifyOnSeverity.includes(notification.severity as 'info' | 'warning' | 'critical')) return
+    const { sendTelegramMessage, formatNotification, delegationApprovalKeyboard } = await import('@/lib/telegram/bot')
+    const text = formatNotification(notification)
+
+    // For delegation_pending notifications: attach inline Approve/Reject keyboard
+    const isDelegationPending =
+      notification.type === 'delegation_pending' && typeof notification.link === 'string'
+    const delegationId = isDelegationPending
+      ? notification.link!.split('/').pop()
+      : undefined
+
+    await sendTelegramMessage(text, {
+      parseMode: 'Markdown',
+      disableWebPagePreview: true,
+      replyMarkup: delegationId ? delegationApprovalKeyboard(delegationId) : undefined,
+    })
+  } catch { /* non-fatal — Telegram errors must never crash the notification store */ }
+}
+
 const NOTIFICATIONS_FILE = path.join(process.cwd(), 'config', 'notifications.json')
 
 function read(): Notification[] {
@@ -35,6 +66,7 @@ export function saveNotification(notification: Notification): void {
     return
   }
   write(notifications)
+  void forwardToTelegram(notification)
 }
 
 export function readNotifications(): Notification[] {

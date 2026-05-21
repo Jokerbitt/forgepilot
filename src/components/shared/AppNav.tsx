@@ -71,6 +71,7 @@ const navItems: NavItem[] = [
   { href: '/analytics', label: 'Cost Analytics', shortLabel: 'Analytics', icon: BarChart3, section: 'More' },
   { href: '/idea', label: 'Idea → Production', shortLabel: 'Idea', icon: Lightbulb, section: 'More' },
   { href: '/pilot', label: 'E2E Pilot', shortLabel: 'Pilot', icon: FlaskConical, section: 'More' },
+  { href: '/digest', label: 'Aktivitäts-Digest', shortLabel: 'Digest', icon: Bell, section: 'Utility' },
   { href: '/settings', label: 'Settings', shortLabel: 'Settings', icon: Settings, section: 'Utility' },
 ]
 

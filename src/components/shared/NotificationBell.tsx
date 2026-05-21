@@ -22,6 +22,7 @@ const TYPE_ICON: Record<NotificationType, string> = {
   run_complete: '✅',
   run_failed: '❌',
   delegation_approved: '✓',
+  delegation_pending: '⏳',
   brief_ready: '📋',
   system: 'ℹ️',
   'pm-alert': '🚨',

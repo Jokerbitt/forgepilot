@@ -72,12 +72,7 @@ function buildCSV(items: WorkItem[]): string {
 }
 
 function isoDateOnly(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Berlin',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date())
+  return new Date().toISOString().slice(0, 10)
 }
 
 async function loadWorkItems(source: SourceFilter, cached: boolean): Promise<{ items: WorkItem[]; errors: string[] }> {

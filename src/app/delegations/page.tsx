@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback, Suspense } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo, Suspense } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
+  AlertTriangle,
   Archive,
   Bot,
   CalendarDays,
@@ -15,6 +16,7 @@ import {
   ListChecks,
   Play,
   Plus,
+  RefreshCw,
   RotateCcw,
   Search,
   SlidersHorizontal,
@@ -33,6 +35,7 @@ import { AutopilotReadinessPill } from '@/components/delegation/AutopilotReadine
 import { VersionBadge } from '@/components/delegation/VersionBadge'
 import { Badge, EmptyState, Metric, Panel, buttonClassName, cx } from '@/components/ui/primitives'
 import { checkBudget, formatCostUsd } from '@/lib/delegations/cost-format'
+import { SlaBadge } from '@/components/shared/SlaBadge'
 
 type ApprovalFilter = 'Alle' | 'approval-required' | 'auto-approved' | 'risk-blocked'
 
@@ -101,6 +104,7 @@ function DelegationsContent() {
   const [delegations, setDelegations] = useState<Delegation[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDelegation, setSelectedDelegation] = useState<Delegation | null>(null)
+  const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set())
   // ?new=1 or ?template=<id> auto-opens the dialog on mount
   const [showNewDialog, setShowNewDialog] = useState(
     searchParams.get('new') === '1' || !!searchParams.get('template')
@@ -344,6 +348,35 @@ function DelegationsContent() {
     await fetch(`/api/delegations/${id}/cancel`, { method: 'POST' })
   }
 
+  const handleRetryDelegation = async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    const delegation = delegations.find(d => d.id === id)
+    if (!delegation || (delegation.status !== 'failed' && delegation.status !== 'cancelled')) return
+
+    setRetryingIds(prev => new Set(prev).add(id))
+    try {
+      const res = await fetch(`/api/delegations/${id}/retry`, { method: 'POST' })
+      if (!res.ok) {
+        await loadDelegations()
+        return
+      }
+
+      applyUpdate({
+        ...delegation,
+        status: 'pending',
+        errorMessage: undefined,
+        updatedAt: new Date().toISOString(),
+      })
+      await loadDelegations()
+    } finally {
+      setRetryingIds(prev => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }
+  }
+
   const handleRowDelete = async (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
     await fetch(`/api/delegations?id=${id}`, { method: 'DELETE' })
@@ -458,6 +491,61 @@ function DelegationsContent() {
     loadDelegations()
   }
 
+  // ── Bulk Cancel (selected pending/approved/running) ──────────────────────
+  const handleSelectionBatchCancel = async () => {
+    if (selectedIds.size === 0) return
+    const ids = Array.from(selectedIds)
+    const now = new Date().toISOString()
+
+    const cancellable = delegations.filter(
+      d => selectedIds.has(d.id) && (d.status === 'pending' || d.status === 'approved' || d.status === 'running')
+    )
+    if (cancellable.length === 0) return
+
+    // Optimistic update
+    cancellable.forEach(del => {
+      applyUpdate({
+        ...del,
+        status: 'cancelled',
+        logs: [...(del.logs ?? []), { timestamp: now, type: 'info', message: 'Bulk-abgebrochen.' }],
+        updatedAt: now,
+      })
+    })
+
+    // Persist via individual cancel calls
+    await Promise.all(
+      cancellable.map(del =>
+        fetch(`/api/delegations/${del.id}/cancel`, { method: 'POST' })
+      )
+    )
+
+    setSelectedIds(new Set())
+    loadDelegations()
+  }
+
+  // ── Bulk Archive (selected completed/failed/cancelled) ───────────────────
+  const handleSelectionBatchArchive = async () => {
+    if (selectedIds.size === 0) return
+    const archivable = delegations.filter(
+      d => selectedIds.has(d.id) && (d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled')
+    )
+    if (archivable.length === 0) return
+
+    // Optimistic removal from list
+    const archivableIds = new Set(archivable.map(d => d.id))
+    setDelegations(prev => prev.filter(d => !archivableIds.has(d.id)))
+
+    // Persist via individual delete calls
+    await Promise.all(
+      archivable.map(del =>
+        fetch(`/api/delegations/${del.id}`, { method: 'DELETE' })
+      )
+    )
+
+    setSelectedIds(new Set())
+    loadDelegations()
+  }
+
   // ── Drag & Drop ─────────────────────────────────────────────────────────
   const handleDragStart = (index: number) => setDraggedIndex(index)
 
@@ -543,10 +631,16 @@ function DelegationsContent() {
 
   const runningCount = delegations.filter(d => d.status === 'running').length
   const pendingCount = delegations.filter(d => d.status === 'pending').length
+  const failedCount = delegations.filter(d => d.status === 'failed').length
   const completedCount = delegations.filter(d => d.status === 'completed').length
   const approvalRequiredCount = delegations.filter(d => d.contract.requiresApproval).length
   const autoApprovedCount = delegations.filter(d => !d.contract.requiresApproval).length
   const riskBlockedCount = delegations.filter(d => d.contract.riskClass === 'C').length
+  const recoveryCandidate = useMemo(() => {
+    return delegations
+      .filter(d => d.status === 'failed')
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0] ?? null
+  }, [delegations])
 
   // Cost stats
   const totalEstimated = delegations.reduce((sum, d) => sum + (d.costEstimateUsd || 0), 0)
@@ -663,6 +757,64 @@ function DelegationsContent() {
             </button>
           </div>
         </header>
+
+        {/* ── Recovery Gate ───────────────────────────────────────────── */}
+        {!loading && recoveryCandidate && (
+          <Panel className="overflow-hidden border-rose-500/20 bg-rose-500/[0.06]">
+            <div className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex min-w-0 gap-3">
+                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-rose-500/25 bg-rose-500/10 text-rose-300">
+                  <AlertTriangle size={18} />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone="danger">Recovery Gate</Badge>
+                    <span className="text-xs font-medium text-slate-500">
+                      {failedCount} fehlerhafte Delegation{failedCount !== 1 ? 'en' : ''} blockieren neue Parallelstarts
+                    </span>
+                  </div>
+                  <h2 className="mt-2 truncate text-sm font-semibold text-white">
+                    {getDelegationGoal(recoveryCandidate)}
+                  </h2>
+                  <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-400">
+                    {recoveryCandidate.errorMessage ?? 'Kein Fehlertext gespeichert. Bitte Logs prüfen, bevor weitere Agenten starten.'}
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                    <span className="font-mono">{recoveryCandidate.id}</span>
+                    <span>{recoveryCandidate.executionRoute}</span>
+                    <span>
+                      aktualisiert {new Date(recoveryCandidate.updatedAt).toLocaleString('de-DE', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <button
+                  onClick={e => {
+                    e.stopPropagation()
+                    setSelectedDelegation(recoveryCandidate)
+                  }}
+                  className={buttonClassName('secondary', 'min-h-9 text-xs')}
+                >
+                  Details prüfen
+                </button>
+                <button
+                  onClick={e => handleRetryDelegation(recoveryCandidate.id, e)}
+                  disabled={retryingIds.has(recoveryCandidate.id)}
+                  className={buttonClassName('primary', 'min-h-9 text-xs')}
+                >
+                  <RefreshCw size={14} className={cx(retryingIds.has(recoveryCandidate.id) && 'animate-spin')} />
+                  Retry einreihen
+                </button>
+              </div>
+            </div>
+          </Panel>
+        )}
 
         {/* ── Cost / Stats Summary ──────────────────────────────────── */}
         {!loading && delegations.length > 0 && (
@@ -935,7 +1087,7 @@ function DelegationsContent() {
                                   checked={selectedIds.has(del.id)}
                                   onChange={() => toggleSelect(del.id)}
                                   className="cursor-pointer accent-green-500"
-                                  title="Auswählen"
+                                  title="Auswählen (freigeben/abbrechen)"
                                 />
                                 <span
                                   draggable
@@ -945,6 +1097,22 @@ function DelegationsContent() {
                                   ⋮⋮
                                 </span>
                               </div>
+                            ) : (del.status === 'approved' || del.status === 'running') ? (
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(del.id)}
+                                onChange={() => toggleSelect(del.id)}
+                                className="cursor-pointer accent-red-500"
+                                title="Auswählen (abbrechen)"
+                              />
+                            ) : (del.status === 'completed' || del.status === 'failed' || del.status === 'cancelled') ? (
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(del.id)}
+                                onChange={() => toggleSelect(del.id)}
+                                className="cursor-pointer accent-gray-500"
+                                title="Auswählen (archivieren)"
+                              />
                             ) : !isDone ? (
                               <span
                                 draggable
@@ -1022,6 +1190,9 @@ function DelegationsContent() {
                                 <div className="text-xs text-gray-600 mt-0.5">
                                   {new Date(del.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
                                 </div>
+                                <div className="mt-1">
+                                  <SlaBadge delegation={del} />
+                                </div>
                               </div>
                             ) : del.status === 'completed' && del.summaryReport ? (
                               <div>
@@ -1054,6 +1225,9 @@ function DelegationsContent() {
                                   </div>
                                   <div className="text-xs text-gray-700 mt-0.5">
                                     {new Date(del.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                  </div>
+                                  <div className="mt-1">
+                                    <SlaBadge delegation={del} />
                                   </div>
                                 </div>
                               )
@@ -1145,11 +1319,12 @@ function DelegationsContent() {
                                   {/* Retry — failed/cancelled */}
                                   {(del.status === 'failed' || del.status === 'cancelled') && (
                                     <button
-                                      onClick={e => handleStatusChange(del.id, 'pending', e)}
+                                      onClick={e => handleRetryDelegation(del.id, e)}
+                                      disabled={retryingIds.has(del.id)}
                                       className="text-xs bg-blue-900/50 text-blue-400 hover:bg-blue-900 px-2 py-1 rounded border border-blue-900/50 transition-colors"
                                       title="Erneut starten"
                                     >
-                                      🔄
+                                      <RefreshCw size={13} className={cx(retryingIds.has(del.id) && 'animate-spin')} />
                                     </button>
                                   )}
 
@@ -1230,27 +1405,54 @@ function DelegationsContent() {
         )}
       </div>
 
-      {/* ── Floating Batch-Approve Bar ─────────────────────────────────── */}
-      {selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 rounded-xl border border-gray-700 bg-gray-900/95 px-5 py-3 shadow-2xl shadow-black/60 backdrop-blur">
-          <span className="text-sm text-gray-300">
-            <span className="font-semibold text-white">{selectedIds.size}</span> ausgewählt
-          </span>
-          <button
-            onClick={handleSelectionBatchApprove}
-            className="flex items-center gap-1.5 rounded-lg bg-green-700 px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-green-600"
-          >
-            Alle freigeben ▶
-          </button>
-          <button
-            onClick={() => setSelectedIds(new Set())}
-            className="rounded px-2 py-1 text-sm text-gray-500 transition-colors hover:text-white"
-            title="Auswahl aufheben"
-          >
-            ✕
-          </button>
-        </div>
-      )}
+      {/* ── Floating Bulk Action Bar ───────────────────────────────────── */}
+      {selectedIds.size > 0 && (() => {
+        const selectedDels = delegations.filter(d => selectedIds.has(d.id))
+        const canApprove = selectedDels.some(d => d.status === 'pending' && d.contract.riskClass !== 'C')
+        const canCancel = selectedDels.some(d => d.status === 'pending' || d.status === 'approved' || d.status === 'running')
+        const canArchive = selectedDels.some(d => d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled')
+        return (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-xl border border-gray-700 bg-gray-900/95 px-4 py-3 shadow-2xl shadow-black/60 backdrop-blur">
+            <span className="text-sm text-gray-300 mr-1">
+              <span className="font-semibold text-white">{selectedIds.size}</span> ausgewählt
+            </span>
+            {canApprove && (
+              <button
+                onClick={() => void handleSelectionBatchApprove()}
+                className="flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-green-600"
+                title="Auswahl genehmigen (Risk Class C ausgeschlossen)"
+              >
+                ✓ Freigeben
+              </button>
+            )}
+            {canCancel && (
+              <button
+                onClick={() => void handleSelectionBatchCancel()}
+                className="flex items-center gap-1.5 rounded-lg bg-red-900 px-3 py-1.5 text-xs font-semibold text-red-200 transition-colors hover:bg-red-800"
+                title="Auswahl abbrechen (pending/approved/running)"
+              >
+                ✕ Abbrechen
+              </button>
+            )}
+            {canArchive && (
+              <button
+                onClick={() => void handleSelectionBatchArchive()}
+                className="flex items-center gap-1.5 rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-semibold text-gray-200 transition-colors hover:bg-gray-600"
+                title="Auswahl archivieren (completed/failed/cancelled löschen)"
+              >
+                🗑 Archivieren
+              </button>
+            )}
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="rounded px-2 py-1 text-sm text-gray-500 transition-colors hover:text-white ml-1"
+              title="Auswahl aufheben"
+            >
+              ✕
+            </button>
+          </div>
+        )
+      })()}
 
       {/* ── Delegation Drawer ──────────────────────────────────────────── */}
       {selectedDelegation && (

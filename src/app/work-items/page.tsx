@@ -3,10 +3,11 @@
 import { useEffect, useState, useCallback, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import type { WorkItem, WorkItemSource } from '@/lib/models/work-item'
+import type { WorkItem, WorkItemSource, WorkItemStatus } from '@/lib/models/work-item'
 import { Badge, StatusDot, cx } from '@/components/ui/primitives'
 import { BlockedByBadge } from '@/components/work-items/BlockedByBadge'
 import { CSVImport } from '@/components/work-items/CSVImport'
+import { KanbanBoard } from '@/components/work-items/KanbanBoard'
 
 // ─── helpers ─────────────────────────────────────────────────────
 
@@ -128,6 +129,19 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
   const [orchestrating, setOrchestrating] = useState<string | null>(null)
   const [orchestrated, setOrchestrated] = useState<Map<string, string>>(new Map()) // itemId → runId
   const [csvImportOpen, setCsvImportOpen] = useState(false)
+  type SortKey = 'priority' | 'title' | 'updatedAt'
+  const [sortKey, setSortKey] = useState<SortKey>('priority')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+  const [view, setView] = useState<'list' | 'kanban'>('list')
 
   const load = useCallback((isSyncClick = false) => {
     if (isSyncClick) setSyncing(true)
@@ -220,10 +234,30 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
     }
   }
 
+  const handleStatusChange = async (itemId: string, newStatus: WorkItemStatus) => {
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, status: newStatus, updatedAt: new Date().toISOString() } : i))
+    try {
+      await fetch(`/api/work-items/${itemId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+    } catch {
+      load()
+    }
+  }
+
   const searchLower = search.toLowerCase()
-  const filtered = items
+  const filtered = [...items
     .filter(i => !sourceFilter || i.source === sourceFilter)
     .filter(i => !searchLower || i.title.toLowerCase().includes(searchLower) || i.id.toLowerCase().includes(searchLower))
+  ].sort((a, b) => {
+    let cmp = 0
+    if (sortKey === 'priority') cmp = a.priority - b.priority
+    else if (sortKey === 'title') cmp = a.title.localeCompare(b.title)
+    else if (sortKey === 'updatedAt') cmp = a.updatedAt.localeCompare(b.updatedAt)
+    return sortDir === 'asc' ? cmp : -cmp
+  })
 
   const sources = Array.from(new Set(items.map(i => i.source))) as WorkItemSource[]
   const exportParams = new URLSearchParams()
@@ -266,6 +300,20 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
           ))}
         </div>
         <div className="ml-auto flex items-center gap-3">
+          <div className="flex gap-1 rounded-lg border border-slate-700 bg-slate-800/60 p-1">
+            <button
+              onClick={() => setView('list')}
+              className={cx('rounded px-2.5 py-1 text-xs font-medium transition-colors', view === 'list' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300')}
+            >
+              ☰ Liste
+            </button>
+            <button
+              onClick={() => setView('kanban')}
+              className={cx('rounded px-2.5 py-1 text-xs font-medium transition-colors', view === 'kanban' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300')}
+            >
+              ⊞ Kanban
+            </button>
+          </div>
           {lastSync && (
             <p className="text-xs text-slate-600">
               Sync {lastSync.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
@@ -305,6 +353,8 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
 
       {loading ? (
         <p className="py-8 text-center text-sm text-slate-500">Lade Work Items…</p>
+      ) : view === 'kanban' ? (
+        <KanbanBoard items={filtered} onStatusChange={handleStatusChange} />
       ) : filtered.length === 0 ? (
         <div className="rounded-xl border border-slate-800 bg-slate-900 p-8 text-center">
           <p className="text-sm font-medium text-white">Keine Work Items</p>
@@ -317,11 +367,26 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-800 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <th className="px-4 py-3">Ticket</th>
+                <th
+                  className="cursor-pointer select-none px-4 py-3 hover:text-slate-300"
+                  onClick={() => toggleSort('title')}
+                >
+                  Ticket{sortKey === 'title' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                </th>
                 <th className="hidden px-4 py-3 sm:table-cell">Quelle</th>
-                <th className="hidden px-4 py-3 md:table-cell">Priorität</th>
+                <th
+                  className="hidden cursor-pointer select-none px-4 py-3 hover:text-slate-300 md:table-cell"
+                  onClick={() => toggleSort('priority')}
+                >
+                  Priorität{sortKey === 'priority' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                </th>
                 <th className="px-4 py-3">Risk</th>
-                <th className="hidden px-4 py-3 lg:table-cell">Aktualisiert</th>
+                <th
+                  className="hidden cursor-pointer select-none px-4 py-3 hover:text-slate-300 lg:table-cell"
+                  onClick={() => toggleSort('updatedAt')}
+                >
+                  Aktualisiert{sortKey === 'updatedAt' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                </th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
