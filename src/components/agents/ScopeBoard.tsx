@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Clock, GitBranch, RefreshCw, Users } from 'lucide-react'
 import { Badge, Metric, Panel, StatusDot, buttonClassName, cx } from '@/components/ui/primitives'
 
@@ -22,7 +22,10 @@ interface ScopeResponse {
   count: number
 }
 
-const REFRESH_MS = 5_000
+/** M162: SSE stream URL — replaces polling */
+const STREAM_URL  = '/api/agents/scope/stream'
+/** Fallback polling interval (used when SSE is paused by user) */
+const REFRESH_MS  = 5_000
 
 function minutesUntil(iso: string, now: Date): number {
   return Math.max(0, Math.round((new Date(iso).getTime() - now.getTime()) / 60_000))
@@ -52,6 +55,8 @@ export function ScopeBoard() {
   const [error, setError] = useState<string | null>(null)
   const [now, setNow] = useState<Date>(new Date())
   const [autoRefresh, setAutoRefresh] = useState(true)
+  const [liveMode, setLiveMode] = useState(true)  // M162: SSE vs polling
+  const esRef = useRef<EventSource | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -68,17 +73,52 @@ export function ScopeBoard() {
     }
   }, [])
 
+  // ── M162: SSE connection ───────────────────────────────────────────────────
   useEffect(() => {
-    void load()
+    if (!autoRefresh || !liveMode) {
+      // Close SSE if user turned off auto-refresh or switched to poll mode
+      esRef.current?.close()
+      esRef.current = null
+      return
+    }
+
+    const es = new EventSource(STREAM_URL)
+    esRef.current = es
+
+    es.addEventListener('claims', (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data as string) as ScopeResponse
+        setClaims(data.claims ?? [])
+        setError(null)
+        setNow(new Date())
+        if (loading) setLoading(false)
+      } catch { /* ignore parse errors */ }
+    })
+
+    es.onerror = () => {
+      // On SSE error, fall back to polling and try to reconnect
+      setLiveMode(false)
+      void load()
+    }
+
+    return () => {
+      es.close()
+      esRef.current = null
+    }
+  }, [autoRefresh, liveMode, load, loading])
+
+  // ── Fallback: poll when SSE is disabled ────────────────────────────────────
+  useEffect(() => {
+    void load()  // initial load
   }, [load])
 
   useEffect(() => {
-    if (!autoRefresh) return
+    if (!autoRefresh || liveMode) return  // SSE handles it
     const id = window.setInterval(() => {
       void load()
     }, REFRESH_MS)
     return () => window.clearInterval(id)
-  }, [autoRefresh, load])
+  }, [autoRefresh, liveMode, load])
 
   // ── Derived metrics ────────────────────────────────────────────────────
   const total = claims.length
@@ -111,10 +151,24 @@ export function ScopeBoard() {
           </h1>
           <p className="page-description">
             Live-Snapshot von <code className="rounded bg-white/5 px-1 text-[11px]">config/agent-scope.json</code>.
-            Aktualisiert alle {REFRESH_MS / 1000} s wenn Auto-Refresh an ist.
+            {liveMode && autoRefresh
+              ? ' Echtzeit-Stream (SSE) aktiv.'
+              : ` Aktualisiert alle ${REFRESH_MS / 1000} s.`}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {/* M162: SSE/Poll toggle */}
+          <button
+            onClick={() => setLiveMode(v => !v)}
+            title={liveMode ? 'Wechseln zu Polling-Modus' : 'Wechseln zu SSE-Modus (Echtzeit)'}
+            className={cx(
+              buttonClassName('secondary', 'min-h-8 px-3 py-1.5 text-xs'),
+              liveMode && autoRefresh && 'border-violet-500/40 text-violet-200',
+            )}
+          >
+            <StatusDot tone={liveMode && autoRefresh ? 'success' : 'neutral'} pulse={liveMode && autoRefresh} />
+            {liveMode ? 'Live' : 'Poll'}
+          </button>
           <button
             onClick={() => setAutoRefresh(v => !v)}
             className={cx(
@@ -123,7 +177,7 @@ export function ScopeBoard() {
             )}
           >
             <StatusDot tone={autoRefresh ? 'success' : 'neutral'} pulse={autoRefresh} />
-            Auto-Refresh
+            Auto
           </button>
           <button
             onClick={() => void load()}

@@ -108,6 +108,8 @@ export interface Delegation {
   note?: DelegationNote
   /** When true, execute route auto-orchestrates into sub-tasks */
   autoOrchestrate?: boolean
+  /** M164: OpenTelemetry trace ID for this delegation execution */
+  traceId?: string
   createdAt: string
   updatedAt: string
 }
