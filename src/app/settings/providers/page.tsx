@@ -5,6 +5,64 @@ import { useEffect, useState, useCallback } from 'react'
 import { cx } from '@/components/ui/primitives'
 import type { AIProviderConfig, AIModelSelection, AIModelDef } from '@/lib/ai/providers/types'
 
+// ─── Provider Health Types ────────────────────────────────────────────────────
+
+type ProviderHealthStatus = 'healthy' | 'degraded' | 'unavailable' | 'unconfigured'
+
+interface ProviderHealthEntry {
+  providerId: string
+  status: ProviderHealthStatus
+  latencyMs?: number
+  checkedAt: string
+  error?: string
+  failStreak: number
+}
+
+interface HealthReport {
+  checkedAt: string | null
+  providers: ProviderHealthEntry[]
+  summary: { total: number; healthy: number; degraded: number; unavailable: number; unconfigured: number }
+}
+
+const HEALTH_DOT: Record<ProviderHealthStatus, string> = {
+  healthy:      'bg-emerald-400',
+  degraded:     'bg-amber-400 animate-pulse',
+  unavailable:  'bg-red-400 animate-pulse',
+  unconfigured: 'bg-slate-600',
+}
+
+const HEALTH_LABEL: Record<ProviderHealthStatus, string> = {
+  healthy:      'erreichbar',
+  degraded:     'langsam',
+  unavailable:  'nicht erreichbar',
+  unconfigured: 'kein API-Key',
+}
+
+// ─── Cost Tracker Types (M159) ───────────────────────────────────────────────
+
+interface ProviderCostEntry {
+  providerId: string
+  delegationCount: number
+  totalCostUsd: number
+  cloudEquivalentUsd: number
+  totalSavedUsd: number
+  totalTokens: number
+  lastModel: string | null
+  costTrend7d: number | null
+}
+
+interface CostReport {
+  generatedAt: string
+  entries: ProviderCostEntry[]
+  totals: {
+    delegationCount: number
+    totalCostUsd: number
+    cloudEquivalentUsd: number
+    totalSavedUsd: number
+    totalTokens: number
+  }
+}
+
 // ─── Quick-Setup Banner (generic, reusable) ───────────────────────────────────
 
 interface QuickSetupBannerProps {
@@ -444,6 +502,7 @@ function BaseUrlEditor({
 function ProviderCard({
   provider,
   selection,
+  healthEntry,
   onToggle,
   onTest,
   onSelectModel,
@@ -452,6 +511,7 @@ function ProviderCard({
 }: {
   provider: ProviderWithStatus
   selection: AIModelSelection
+  healthEntry?: ProviderHealthEntry
   onToggle: (id: string, enabled: boolean) => void
   onTest: (id: string) => Promise<void>
   onSelectModel: (purpose: 'fast' | 'coding', providerId: string, modelId: string) => void
@@ -502,6 +562,21 @@ function ProviderCard({
               limit={provider.freeTier.limit}
               unverified={provider.freeTier.verification?.status === 'unverified'}
             />
+          )}
+          {/* Health status badge */}
+          {healthEntry && (
+            <span
+              title={`${HEALTH_LABEL[healthEntry.status]}${healthEntry.latencyMs != null ? ` · ${healthEntry.latencyMs}ms` : ''}${healthEntry.failStreak > 0 ? ` · ${healthEntry.failStreak}× Fehler` : ''}`}
+              className="flex items-center gap-1 shrink-0"
+            >
+              <span className={cx('h-1.5 w-1.5 rounded-full', HEALTH_DOT[healthEntry.status])} />
+              {healthEntry.latencyMs != null && healthEntry.status !== 'unconfigured' && (
+                <span className="text-[10px] text-slate-500 font-mono">{healthEntry.latencyMs}ms</span>
+              )}
+              {healthEntry.failStreak >= 2 && (
+                <span className="text-[10px] text-red-400">↯{healthEntry.failStreak}</span>
+              )}
+            </span>
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -974,9 +1049,13 @@ const QUICK_SETUP_CONFIGS: Record<string, {
 }
 
 export default function ProvidersPage() {
-  const [data, setData]     = useState<ProvidersData | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved]   = useState(false)
+  const [data, setData]                                       = useState<ProvidersData | null>(null)
+  const [saving, setSaving]                                   = useState(false)
+  const [saved, setSaved]                                     = useState(false)
+  const [health, setHealth]                                   = useState<Record<string, ProviderHealthEntry>>({})
+  const [healthLoading, setHealthLoading]                     = useState(false)
+  const [healthCheckedAt, setHealthCheckedAt]                 = useState<string | null>(null)
+  const [costReport, setCostReport]                           = useState<CostReport | null>(null)
 
   const load = useCallback(() => {
     fetch('/api/ai/providers')
@@ -985,7 +1064,38 @@ export default function ProvidersPage() {
       .catch(() => null)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  const loadHealth = useCallback(() => {
+    fetch('/api/ai/providers/health')
+      .then(r => r.json())
+      .then((d: HealthReport) => {
+        const map: Record<string, ProviderHealthEntry> = {}
+        for (const e of d.providers ?? []) map[e.providerId] = e
+        setHealth(map)
+        setHealthCheckedAt(d.checkedAt)
+      })
+      .catch(() => null)
+  }, [])
+
+  const loadCostReport = useCallback(() => {
+    fetch('/api/analytics/costs')
+      .then(r => r.json())
+      .then((d: { providerSavings?: CostReport }) => {
+        if (d.providerSavings) setCostReport(d.providerSavings)
+      })
+      .catch(() => null)
+  }, [])
+
+  const handleRunHealthCheck = async () => {
+    setHealthLoading(true)
+    try {
+      await fetch('/api/ai/providers/health', { method: 'POST' })
+      loadHealth()
+    } finally {
+      setHealthLoading(false)
+    }
+  }
+
+  useEffect(() => { load(); loadHealth(); loadCostReport() }, [load, loadHealth, loadCostReport])
 
   const save = async (update: { provider?: Partial<AIProviderConfig> & { id: string }; selection?: AIModelSelection }) => {
     setSaving(true)
@@ -1053,6 +1163,18 @@ export default function ProvidersPage() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-[10px] text-slate-600">{data.providers.length} Provider · {freeTierProviders.length} mit Free Tier · {freeModelCount} kostenlose Modelle</span>
+          {healthCheckedAt && (
+            <span className="text-[10px] text-slate-600">
+              Health {new Date(healthCheckedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          <button
+            onClick={() => { void handleRunHealthCheck() }}
+            disabled={healthLoading}
+            className="text-[10px] px-2 py-0.5 rounded border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-slate-400 hover:text-white transition-colors disabled:opacity-40"
+          >
+            {healthLoading ? '⏳' : '⚡ Health Check'}
+          </button>
           {saved && <span className="text-xs text-emerald-400">✓ Gespeichert</span>}
           {saving && <span className="text-xs text-slate-500">Speichern…</span>}
         </div>
@@ -1093,6 +1215,95 @@ export default function ProvidersPage() {
           </div>
         </div>
 
+        {/* M159: Provider Cost Summary */}
+        {costReport && costReport.totals.delegationCount > 0 && (
+          <section>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
+              💸 Kosten & Einsparungen
+            </p>
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] divide-y divide-white/[0.04]">
+              {/* Totals row */}
+              <div className="grid grid-cols-4 gap-2 px-4 py-3 text-center">
+                <div>
+                  <p className="text-[10px] text-slate-600 uppercase tracking-wide mb-0.5">Delegierungen</p>
+                  <p className="text-sm font-semibold text-white">{costReport.totals.delegationCount}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-600 uppercase tracking-wide mb-0.5">Kosten (Cloud)</p>
+                  <p className="text-sm font-semibold text-white">
+                    {costReport.totals.cloudEquivalentUsd < 0.01
+                      ? '< $0.01'
+                      : `$${costReport.totals.cloudEquivalentUsd.toFixed(3)}`}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-600 uppercase tracking-wide mb-0.5">Tatsächlich</p>
+                  <p className="text-sm font-semibold text-white">
+                    {costReport.totals.totalCostUsd === 0 ? '$0' : `$${costReport.totals.totalCostUsd.toFixed(4)}`}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-600 uppercase tracking-wide mb-0.5">Erspart</p>
+                  <p className={cx(
+                    'text-sm font-semibold',
+                    costReport.totals.totalSavedUsd > 0 ? 'text-emerald-400' : 'text-slate-400',
+                  )}>
+                    {costReport.totals.totalSavedUsd > 0
+                      ? `$${costReport.totals.totalSavedUsd.toFixed(3)}`
+                      : '$0'}
+                  </p>
+                </div>
+              </div>
+              {/* Per-route rows */}
+              {costReport.entries.slice(0, 5).map(e => (
+                <div key={e.providerId} className="flex items-center gap-3 px-4 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-mono text-slate-300 truncate">{e.providerId}</p>
+                    {e.lastModel && (
+                      <p className="text-[10px] text-slate-600 truncate">{e.lastModel}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4 text-right shrink-0">
+                    <div>
+                      <p className="text-[10px] text-slate-600">Runs</p>
+                      <p className="text-xs text-slate-400">{e.delegationCount}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-600">Tokens</p>
+                      <p className="text-xs text-slate-400">
+                        {e.totalTokens >= 1_000_000
+                          ? `${(e.totalTokens / 1_000_000).toFixed(1)}M`
+                          : e.totalTokens >= 1_000
+                          ? `${(e.totalTokens / 1_000).toFixed(1)}K`
+                          : String(e.totalTokens)}
+                      </p>
+                    </div>
+                    {e.totalSavedUsd > 0 && (
+                      <div>
+                        <p className="text-[10px] text-slate-600">Gespart</p>
+                        <p className="text-xs text-emerald-400">
+                          ${e.totalSavedUsd.toFixed(3)}
+                        </p>
+                      </div>
+                    )}
+                    {e.costTrend7d != null && (
+                      <div>
+                        <p className="text-[10px] text-slate-600">7d Trend</p>
+                        <p className={cx(
+                          'text-xs',
+                          e.costTrend7d > 0 ? 'text-amber-400' : 'text-emerald-400',
+                        )}>
+                          {e.costTrend7d > 0 ? '+' : ''}{e.costTrend7d}%
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Cloud providers */}
         <section>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
@@ -1104,6 +1315,7 @@ export default function ProvidersPage() {
                 key={p.id}
                 provider={p}
                 selection={activeSelection}
+                healthEntry={health[p.id]}
                 onToggle={handleToggle}
                 onTest={async () => {}}
                 onSelectModel={handleSelectModel}
@@ -1128,6 +1340,7 @@ export default function ProvidersPage() {
                 key={p.id}
                 provider={p}
                 selection={activeSelection}
+                healthEntry={health[p.id]}
                 onToggle={handleToggle}
                 onTest={async () => {}}
                 onSelectModel={handleSelectModel}

@@ -2,6 +2,7 @@ export type NotificationType =
   | 'pm-alert'
   | 'research-complete'
   | 'delegation-blocked'
+  | 'delegation_pending'
   | 'milestone-at-risk'
   | 'orchestration-complete'
   | 'orchestration-failed'
