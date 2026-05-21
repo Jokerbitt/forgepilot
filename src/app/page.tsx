@@ -23,7 +23,7 @@ export default function Home() {
               Reduziert auf Entscheidung, Ausfuehrung und Review. Alles Weitere bleibt bewusst zweitrangig.
             </p>
           </div>
-          <div className="flex shrink-0 flex-row gap-2">
+          <div className="flex shrink-0 flex-row flex-wrap gap-2">
             <Link href="/idea" className={buttonClassName('secondary')}>
               Neue Idee
             </Link>

@@ -687,7 +687,7 @@ function DelegationsContent() {
               {delegations.length} Delegation{delegations.length !== 1 ? 'en' : ''} gesamt
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Bulk delete confirm */}
             {terminalCount > 0 && (
               confirmBulkDelete ? (
@@ -939,7 +939,7 @@ function DelegationsContent() {
               </div>
 
               {/* Today filter toggle */}
-              <div className="flex items-center gap-1.5 pl-4 border-l border-gray-800">
+              <div className="flex items-center gap-1.5 sm:pl-4 sm:border-l sm:border-gray-800">
                 <button
                   onClick={() => setTodayOnly(v => !v)}
                   className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
@@ -954,14 +954,14 @@ function DelegationsContent() {
               </div>
 
               {/* Search input */}
-              <div className="flex items-center gap-2 pl-4 border-l border-gray-800 ml-auto">
+              <div className="flex w-full items-center gap-2 sm:w-auto sm:pl-4 sm:border-l sm:border-gray-800 sm:ml-auto">
                 <input
                   ref={searchInputRef}
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Suchen… [/]"
-                  className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 w-44 transition-colors"
+                  className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 w-full sm:w-44 transition-colors"
                 />
                 {searchQuery && (
                   <button

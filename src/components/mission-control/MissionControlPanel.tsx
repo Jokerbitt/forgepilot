@@ -89,15 +89,15 @@ export function MissionControlPanel() {
     <section aria-label="Mission Control" className="mb-6 rounded-xl border border-gray-700 bg-gray-900 overflow-hidden">
       {/* ── Nächste Aktion ── */}
       {focus.nextBestAction ? (
-        <div className="flex items-center justify-between border-l-4 border-blue-500 bg-gray-900 px-5 py-4">
-          <div>
+        <div className="flex flex-col gap-3 border-l-4 border-blue-500 bg-gray-900 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wider text-blue-400">🎯 Nächste Aktion</p>
             <p className="mt-0.5 text-base font-semibold text-white">{focus.nextBestAction.title}</p>
             <p className="mt-0.5 text-sm text-gray-400">{focus.nextBestAction.reason}</p>
           </div>
           <Link
             href={focus.nextBestAction.href}
-            className="ml-4 shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 transition-colors"
+            className="self-start rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-500 transition-colors sm:self-auto sm:shrink-0"
           >
             → Öffnen
           </Link>
@@ -127,7 +127,7 @@ export function MissionControlPanel() {
       <div className="border-t border-gray-700" />
 
       {/* ── Blocker + Freigaben ── */}
-      <div className="grid grid-cols-2 divide-x divide-gray-700">
+      <div className="grid grid-cols-1 divide-y divide-gray-700 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
         {/* Blocker */}
         <div className="px-5 py-4">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">🚧 Blocker</p>
@@ -180,8 +180,8 @@ export function MissionControlPanel() {
       <div className="border-t border-gray-700" />
 
       {/* ── Health-Footer ── */}
-      <div className="flex items-center justify-between px-5 py-3 bg-gray-950">
-        <div className="flex items-center gap-2 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 bg-gray-950">
+        <div className="flex min-w-0 items-center gap-2 text-sm">
           <StatusIcon status={health.status} />
           <span className="text-gray-400">System:</span>
           <span className={health.status === 'ok' ? 'text-green-400' : health.status === 'warn' ? 'text-yellow-400' : 'text-red-400'}>
