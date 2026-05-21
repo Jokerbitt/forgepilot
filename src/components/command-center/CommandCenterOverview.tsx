@@ -7,12 +7,14 @@ import { AlertTriangle, CheckCircle, Clipboard, Clock, FileText, Play, ShieldChe
 import type { Delegation } from '@/lib/models/delegation'
 import type { DashboardStats } from '@/app/api/dashboard/stats/route'
 import type { DailyReport } from '@/lib/reports/daily-report'
+import type { ProjectBrief } from '@/lib/models/project-brief'
 import { StatusDot, buttonClassName, cx } from '@/components/ui/primitives'
 
 interface FocusedData {
   delegations: Delegation[]
   stats: DashboardStats | null
   report: DailyReport | null
+  acceptedBriefs: ProjectBrief[]
 }
 
 interface NextAction {
@@ -40,17 +42,18 @@ function latestTime(delegation: Delegation): string {
 }
 
 export function CommandCenterOverview() {
-  const [data, setData] = useState<FocusedData>({ delegations: [], stats: null, report: null })
+  const [data, setData] = useState<FocusedData>({ delegations: [], stats: null, report: null, acceptedBriefs: [] })
   const [idea, setIdea] = useState('')
 
   useEffect(() => {
     let cancelled = false
 
     async function load() {
-      const [delegationsRes, statsRes, reportRes] = await Promise.allSettled([
+      const [delegationsRes, statsRes, reportRes, acceptedBriefsRes] = await Promise.allSettled([
         fetch('/api/delegations').then(res => res.json() as Promise<Delegation[]>),
         fetch('/api/dashboard/stats').then(res => res.json() as Promise<DashboardStats>),
         fetch('/api/reports/daily').then(res => res.json() as Promise<DailyReport>),
+        fetch('/api/project-briefs?status=accepted').then(res => res.json() as Promise<ProjectBrief[]>),
       ])
 
       if (cancelled) return
@@ -64,6 +67,10 @@ export function CommandCenterOverview() {
         report: reportRes.status === 'fulfilled' && reportRes.value.version === 1
           ? reportRes.value
           : null,
+        acceptedBriefs:
+          acceptedBriefsRes.status === 'fulfilled' && Array.isArray(acceptedBriefsRes.value)
+            ? acceptedBriefsRes.value
+            : [],
       })
     }
 
@@ -75,7 +82,7 @@ export function CommandCenterOverview() {
     }
   }, [])
 
-  const { delegations, stats, report } = data
+  const { delegations, stats, report, acceptedBriefs } = data
   const failed = delegations.filter(d => d.status === 'failed')
   const pending = delegations.filter(d => d.status === 'pending')
   const approved = delegations.filter(d => d.status === 'approved')
@@ -135,7 +142,7 @@ export function CommandCenterOverview() {
   return (
     <div className="grid grid-cols-12 gap-5">
       <NextBestActionCard action={nextAction} />
-      <ActiveDelegationsCard running={running} approved={approved} pending={pending} />
+      <ActiveDelegationsCard running={running} approved={approved} pending={pending} acceptedBriefs={acceptedBriefs} />
       <SystemHealthCard stats={stats} />
       <DailyCriticReportCard report={report} stats={stats} finished={finished} />
       <QuickIdeaCard idea={idea} onIdeaChange={setIdea} href={quickIdeaHref} />
@@ -184,10 +191,12 @@ function ActiveDelegationsCard({
   running,
   approved,
   pending,
+  acceptedBriefs,
 }: {
   running: Delegation[]
   approved: Delegation[]
   pending: Delegation[]
+  acceptedBriefs: ProjectBrief[]
 }) {
   const visible = [...running, ...approved, ...pending]
     .sort((a, b) => latestTime(b).localeCompare(latestTime(a)))
@@ -220,6 +229,23 @@ function ActiveDelegationsCard({
           </div>
         )}
       </div>
+
+      {/* Accepted Briefs — ready to delegate */}
+      {acceptedBriefs.length > 0 && (
+        <div className="mt-3 border-t border-gray-800 pt-3">
+          <p className="text-xs text-gray-500 mb-2">Bereit zur Delegation:</p>
+          {acceptedBriefs.slice(0, 2).map(brief => (
+            <Link
+              key={brief.id}
+              href={`/delegations?briefId=${brief.id}&new=1`}
+              className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-800 group"
+            >
+              <span className="text-xs text-gray-300 truncate">{brief.title}</span>
+              <span className="text-xs text-violet-400 group-hover:text-violet-300">&#x2192;</span>
+            </Link>
+          ))}
+        </div>
+      )}
     </section>
   )
 }
