@@ -153,5 +153,5 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [~] M160: `/api/ready` Readiness Probe — umfassender Health-Check: Delegations-Store erreichbar, AI-Provider konfiguriert, Scope-Lock OK, Connector-Status; für Docker HEALTHCHECK + Vercel Cron
 - [x] M161: Config Backup Routine — tägliches automatisches Backup von `config/*.json` nach `config/backups/YYYY-MM-DD/`; GET /api/backup/list + POST /api/backup/restore; Vercel Cron 03:00 UTC; 7-Tage-Rotation
 - [x] M162: SSE Stream für Agent Scope — `/api/agents/scope/stream` ersetzt 5s-Polling in ScopeBoard; Live/Poll-Toggle; EventSource mit Fallback
-- [~] M163: Approval-Stack im Header — ausstehende Delegations-Genehmigungen als Sticky-Banner in Navigation (Zahl + Quick-Approve-Button) statt nur in /delegations
+- [x] M163: Approval-Stack im Header — ausstehende Delegations-Genehmigungen als Sticky-Banner in Navigation (Zahl + Quick-Approve-Button) statt nur in /delegations
 - [~] M164: Delegation Live-Timeline — Live-Ansicht laufender Delegations mit Logs, Cost-Anzeige, Risk-Badge, Trace-Link; Polling durch SSE ersetzen
