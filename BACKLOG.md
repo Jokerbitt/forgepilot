@@ -147,3 +147,11 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [~] M157: Notification Channels — Konfigurierbare Kanäle in /settings/notifications: Bell, Telegram, Email — pro Typ wählbar
 - [~] M158: Delegation SLA Tracker — SLA-Deadline pro Delegation (Erstellt + konfigurierbare Stunden), Badge wenn SLA verletzt
 - [~] M159: Provider Cost Tracker — Token-Verbrauch pro Provider aus Eval-Logs aggregieren, /settings/providers zeigt Kosten-Trend
+
+## 🔴 High Priority — Production-Readiness (M160–M164)
+
+- [~] M160: `/api/ready` Readiness Probe — umfassender Health-Check: Delegations-Store erreichbar, AI-Provider konfiguriert, Scope-Lock OK, Connector-Status; für Docker HEALTHCHECK + Vercel Cron
+- [ ] M161: Config Backup Routine — tägliches automatisches Backup von `config/*.json` nach `config/backups/YYYY-MM-DD/`; GET /api/backup/list + POST /api/backup/restore
+- [ ] M162: SSE Stream für Agent Scope — `/api/agents/scope/stream` ersetzt Polling auf /agents Seite; Server-Sent Events mit Reconnect-Logic
+- [ ] M163: Approval-Stack im Header — ausstehende Delegations-Genehmigungen als Sticky-Banner in Navigation (Zahl + Quick-Approve-Button) statt nur in /delegations
+- [ ] M164: Delegation Live-Timeline — Live-Ansicht laufender Delegations mit Logs, Cost-Anzeige, Risk-Badge, Trace-Link; Polling durch SSE ersetzen
