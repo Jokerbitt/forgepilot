@@ -30,6 +30,8 @@ import { createRun } from '@/lib/agents/orchestrated-run'
 import { generateText, stripJsonCodeFence } from '@/lib/ai/text-generation'
 import { appendIdeaHistory } from '@/lib/pilot/idea-history-store'
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { IdeaToProductionSchema } from '@/lib/validation/schemas'
 
 const LOCAL_ITEMS_FILE = path.join(process.cwd(), 'config', 'local-items.json')
 
@@ -155,10 +157,10 @@ Regeln:
 // ─── Main route ────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
-  const { idea } = await req.json() as { idea?: string }
-  if (!idea?.trim()) {
-    return NextResponse.json({ error: 'idea is required' }, { status: 400 })
-  }
+  const parsed = await parseBody(req, IdeaToProductionSchema)
+  if (isValidationError(parsed)) return parsed
+
+  const idea = parsed.idea
 
   // Step 1: Expand idea → structured fields
   const intakeInput = await expandIdea(idea.trim())

@@ -1,20 +1,18 @@
 export const dynamic = 'force-dynamic'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getProfiles, upsertProfile } from '@/lib/model-router/store'
 import type { ModelProfile } from '@/lib/models/model-router'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { ModelProfileSchema } from '@/lib/validation/schemas'
 
 export async function GET() {
   return NextResponse.json(getProfiles())
 }
 
-export async function POST(req: Request) {
-  const body = await req.json() as Partial<ModelProfile>
-  if (!body.id || !body.provider || !body.modelName) {
-    return NextResponse.json(
-      { error: 'id, provider, modelName required' },
-      { status: 400 },
-    )
-  }
+export async function POST(req: NextRequest) {
+  const body = await parseBody(req, ModelProfileSchema)
+  if (isValidationError(body)) return body
+
   const now = new Date().toISOString()
   const profile: ModelProfile = {
     executionMode: 'cloud',

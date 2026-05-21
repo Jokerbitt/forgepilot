@@ -87,15 +87,17 @@ describe('POST /api/full-cycle', () => {
   it('returns 400 when topic is missing', async () => {
     const res = await POST(makeRequest({}))
     expect(res.status).toBe(400)
-    const body = await res.json() as { error: string }
-    expect(body.error).toBe('topic is required')
+    const body = await res.json() as { error: string; fields: Record<string, string> }
+    expect(body.error).toBe('Validation failed')
+    expect(body.fields.topic).toBeTruthy()
   })
 
   it('returns 400 when topic is empty string', async () => {
     const res = await POST(makeRequest({ topic: '   ' }))
     expect(res.status).toBe(400)
-    const body = await res.json() as { error: string }
-    expect(body.error).toBe('topic is required')
+    const body = await res.json() as { error: string; fields: Record<string, string> }
+    expect(body.error).toBe('Validation failed')
+    expect(body.fields.topic).toBeTruthy()
   })
 
   it('sets SSE headers on successful stream start', async () => {

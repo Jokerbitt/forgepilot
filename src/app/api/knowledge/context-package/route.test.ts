@@ -66,7 +66,7 @@ describe('POST /api/knowledge/context-package', () => {
     const res = await POST(req)
     expect(res.status).toBe(400)
     const data = await res.json() as { error: string }
-    expect(data.error).toBe('goal is required')
+    expect(data.error).toBe('Validation failed')
   })
 
   it('returns contextCards, tokenEstimate, sources', async () => {

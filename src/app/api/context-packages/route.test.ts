@@ -107,7 +107,7 @@ describe('POST /api/context-packages', () => {
     const data = await res.json() as { error: string }
 
     expect(res.status).toBe(400)
-    expect(data.error).toContain('workItemId')
+    expect(data.error).toBe('Validation failed')
   })
 
   it('returns 400 when body is empty object', async () => {

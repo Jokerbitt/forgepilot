@@ -1,15 +1,11 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { upsertAttentionItem } from '@/lib/attention/store'
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { EscalateSchema } from '@/lib/validation/schemas'
 
 export const dynamic = 'force-dynamic'
-
-interface EscalateBody {
-  problem: string
-  options?: string[]
-  recommendation?: string
-}
 
 /**
  * POST /api/delegations/[id]/escalate
@@ -18,7 +14,7 @@ interface EscalateBody {
  * Creates an escalation AttentionItem that blocks further autonomous action.
  */
 export async function POST(
-  req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
@@ -29,10 +25,8 @@ export async function POST(
     return NextResponse.json({ error: 'Delegation nicht gefunden' }, { status: 404 })
   }
 
-  const body = await req.json() as EscalateBody
-  if (!body.problem) {
-    return NextResponse.json({ error: 'problem required' }, { status: 400 })
-  }
+  const body = await parseBody(req, EscalateSchema)
+  if (isValidationError(body)) return body
 
   const label = delegation.title || delegation.contract.goal.slice(0, 60)
 

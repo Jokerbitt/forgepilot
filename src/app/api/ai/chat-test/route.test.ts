@@ -57,8 +57,8 @@ describe('POST /api/ai/chat-test', () => {
   it('returns 400 when body is missing required fields', async () => {
     const res = await callRoute({ providerId: 'test-provider' })
     expect(res.status).toBe(400)
-    const data = await res.json() as { ok: boolean }
-    expect(data.ok).toBe(false)
+    const data = await res.json() as { error: string }
+    expect(data.error).toBe('Validation failed')
   })
 
   it('returns 404 when provider is not found', async () => {

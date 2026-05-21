@@ -1,7 +1,9 @@
 export const dynamic = 'force-dynamic'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { execSync } from 'child_process'
 import path from 'path'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { AgentValidateSchema } from '@/lib/validation/schemas'
 
 const ROOT = path.join(process.cwd())
 const NODE_PATH = '/opt/homebrew/Cellar/node@22/22.22.3/bin'
@@ -39,8 +41,10 @@ export interface AgentValidationReport {
   runAt: string
 }
 
-export async function POST(req: Request) {
-  const body = await req.json() as { agentId?: string; milestone?: string; testPattern?: string }
+export async function POST(req: NextRequest) {
+  const body = await parseBody(req, AgentValidateSchema)
+  if (isValidationError(body)) return body
+
   const { agentId, milestone, testPattern } = body
 
   const steps: ValidationResult[] = []

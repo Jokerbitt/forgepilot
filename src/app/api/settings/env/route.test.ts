@@ -59,10 +59,11 @@ describe('POST /api/settings/env', () => {
     })
 
     const res = await POST(req)
-    const data = await res.json() as { ok: boolean }
+    const data = await res.json() as { error: string; fields: Record<string, string> }
 
     expect(res.status).toBe(400)
-    expect(data.ok).toBe(false)
+    expect(data.error).toBe('Validation failed')
+    expect(data.fields.key).toBeTruthy()
   })
 
   it('returns 400 when value is an empty string', async () => {
@@ -73,10 +74,10 @@ describe('POST /api/settings/env', () => {
     })
 
     const res = await POST(req)
-    const data = await res.json() as { ok: boolean; error: string }
+    const data = await res.json() as { error: string; fields: Record<string, string> }
 
     expect(res.status).toBe(400)
-    expect(data.ok).toBe(false)
-    expect(data.error).toContain('empty')
+    expect(data.error).toBe('Validation failed')
+    expect(data.fields.value).toBeTruthy()
   })
 })

@@ -2,6 +2,8 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { findProjectBriefById, updateProjectBrief } from '@/lib/project-briefs'
 import type { Requirement, RequirementType, RequirementPriority } from '@/lib/models/project-brief'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { RequirementAddSchema } from '@/lib/validation/schemas'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -54,24 +56,16 @@ export async function POST(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Project brief not found' }, { status: 404 })
     }
 
-    const body = await request.json() as {
-      title: string
-      description: string
-      type: RequirementType
-      priority: RequirementPriority
-    }
-
-    if (!body.title?.trim() || !body.description?.trim()) {
-      return NextResponse.json({ error: 'title and description are required' }, { status: 400 })
-    }
+    const body = await parseBody(request, RequirementAddSchema)
+    if (isValidationError(body)) return body
 
     const newReq: Requirement = {
       id: `${id}-req-${Date.now()}`,
       briefId: id,
-      type: body.type ?? 'functional',
+      type: (body.type ?? 'functional') as RequirementType,
       title: body.title.trim(),
       description: body.description.trim(),
-      priority: body.priority ?? 'should',
+      priority: (body.priority ?? 'should') as RequirementPriority,
       source: 'user_input',
       findingIds: [],
       status: 'accepted', // manually added = immediately accepted

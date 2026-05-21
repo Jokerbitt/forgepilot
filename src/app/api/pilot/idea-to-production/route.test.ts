@@ -107,7 +107,7 @@ describe('POST /api/pilot/idea-to-production', () => {
     const res = await POST(makeRequest({}))
     expect(res.status).toBe(400)
     const data = await res.json() as { error: string }
-    expect(data.error).toBe('idea is required')
+    expect(data.error).toBe('Validation failed')
   })
 
   it('returns 400 when idea is empty string', async () => {
