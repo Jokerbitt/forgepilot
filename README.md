@@ -53,6 +53,9 @@ cd forgepilot
 cp .env.example .env.local
 # Edit .env.local: set FORGEPILOT_ADMIN_PASSWORD + at least one AI provider key
 npm install
+# With Postgres (optional):
+docker-compose up -d postgres
+npm run db:migrate
 npm run dev
 ```
 
