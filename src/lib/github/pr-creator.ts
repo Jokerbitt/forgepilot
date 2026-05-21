@@ -10,6 +10,8 @@ import fs from 'fs'
 import path from 'path'
 import { execSync } from 'child_process'
 import { readStoredApiKeys } from '@/lib/connectors/config'
+import { apiLogger } from '@/lib/logger'
+import type { Delegation } from '@/lib/models/delegation'
 
 export interface PRCreationOptions {
   title: string
@@ -257,4 +259,136 @@ async function applyLabels(
   } catch {
     // Non-critical — ignore
   }
+}
+
+// ── Auto-PR creation after successful execution ──────────────────────────────
+
+export interface GitHubPRResult {
+  prUrl: string | null
+  skipped: boolean
+  reason?: string
+}
+
+/**
+ * Attempt to create a GitHub draft PR for a completed delegation.
+ * Only fires when:
+ * - GITHUB_TOKEN is set (env or stored API keys)
+ * - GITHUB_REPO or GITHUB_REPOSITORY is set (format: "owner/repo")
+ * - delegation.summaryReport.prUrl is not already set
+ * - delegation.status is 'completed'
+ * - execution produced a branch name in agentOutput or contract fields
+ * Never throws.
+ */
+export async function createGitHubPRIfNeeded(
+  delegation: Delegation,
+  agentOutput?: string,
+): Promise<GitHubPRResult> {
+  // Cheap early bailouts — no credentials needed
+  if (delegation.summaryReport?.prUrl) {
+    return { prUrl: delegation.summaryReport.prUrl, skipped: true, reason: 'prUrl already set' }
+  }
+
+  if (delegation.status !== 'completed') {
+    return { prUrl: null, skipped: true, reason: 'delegation not completed' }
+  }
+
+  const stored = readStoredApiKeys()
+  const token = stored.GITHUB_TOKEN?.trim()
+    || process.env.GITHUB_TOKEN?.trim()
+    || process.env.GH_TOKEN?.trim()
+
+  const repo = process.env.GITHUB_REPO?.trim() || process.env.GITHUB_REPOSITORY?.trim()
+
+  if (!token || !repo) {
+    return { prUrl: null, skipped: true, reason: 'GITHUB_TOKEN or GITHUB_REPO not configured' }
+  }
+
+  const branchName = extractBranchName(agentOutput, delegation)
+  if (!branchName) {
+    return { prUrl: null, skipped: true, reason: 'no branch name found in output' }
+  }
+
+  try {
+    const [owner, repoName] = repo.split('/')
+    const title = delegation.title || delegation.contract.goal.slice(0, 60)
+    const body = buildPRBody(delegation)
+
+    const response = await fetch(`https://api.github.com/repos/${owner}/${repoName}/pulls`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'ForgePilot/1.0',
+      },
+      body: JSON.stringify({
+        title,
+        body,
+        head: branchName,
+        base: 'main',
+        draft: true,
+      }),
+    })
+
+    if (!response.ok) {
+      const text = await response.text()
+      apiLogger.warn(
+        { event: 'github.pr.failed', status: response.status, body: text.slice(0, 200) },
+        'GitHub PR creation failed',
+      )
+      return { prUrl: null, skipped: true, reason: `GitHub API error: ${response.status}` }
+    }
+
+    const data = (await response.json()) as { html_url: string }
+    apiLogger.info(
+      { event: 'github.pr.created', delegationId: delegation.id, prUrl: data.html_url },
+      'GitHub PR created',
+    )
+    return { prUrl: data.html_url, skipped: false }
+  } catch (error) {
+    apiLogger.error(
+      { event: 'github.pr.error', error: error instanceof Error ? error.message : String(error) },
+      'GitHub PR creation threw',
+    )
+    return {
+      prUrl: null,
+      skipped: true,
+      reason: error instanceof Error ? error.message : 'unknown error',
+    }
+  }
+}
+
+function extractBranchName(agentOutput: string | undefined, delegation: Delegation): string | null {
+  if (agentOutput) {
+    // Look for common branch patterns in agent output
+    const branchMatch = agentOutput.match(
+      /(?:branch[:\s]+|git checkout -b\s+|feature\/|fix\/)([a-zA-Z0-9/_-]+)/i,
+    )
+    if (branchMatch?.[1]) return branchMatch[1]
+  }
+  // Fall back to agentRunId if it looks like a branch name
+  if (delegation.agentRunId?.includes('/')) {
+    return delegation.agentRunId
+  }
+  // Derive from contract fields (same logic as execute route)
+  const slug = delegation.contract.workItemId.replace(/[^a-z0-9-]/gi, '-').toLowerCase()
+  const derived = `${delegation.contract.branchStrategy}/${slug}-task`
+  return derived || null
+}
+
+function buildPRBody(delegation: Delegation): string {
+  const score = delegation.criticScore
+  const scoreSection = score
+    ? `## Critic Score\n- Correctness: ${score.correctness}/100\n- Efficiency: ${score.efficiency}/100\n- Drift: ${score.drift}/100\n- Verdict: ${score.verdict}\n\n> ${score.summary}`
+    : ''
+
+  return `## Delegation: ${delegation.title || delegation.contract.goal.slice(0, 60)}
+
+Auto-created by ForgePilot after successful execution.
+
+${scoreSection}
+
+---
+*Delegation ID: \`${delegation.id}\` | Route: ${delegation.executionRoute ?? 'unknown'}*`
 }
