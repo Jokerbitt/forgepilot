@@ -5,6 +5,7 @@ import { CommandCenterOverview, CommandCenterPrinciples } from '@/components/com
 import { OnboardingBanner } from '@/components/command-center/OnboardingBanner'
 import { OnboardingBanner as OnboardingWizardBanner } from '@/components/onboarding/OnboardingBanner'
 import { buttonClassName } from '@/components/ui/primitives'
+import { CriticalPathWidget } from '@/components/critical-path'
 
 export default function Home() {
   return (
@@ -33,6 +34,10 @@ export default function Home() {
           <CommandCenterPrinciples />
         </div>
         <CommandCenterOverview />
+
+        <section className="mt-6">
+          <CriticalPathWidget />
+        </section>
 
         <section className="mt-6 space-y-4" aria-label="Setup-Hinweise">
           <ApiKeysBanner />
