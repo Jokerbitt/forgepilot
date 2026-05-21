@@ -272,6 +272,11 @@ function buildPrompts(): DailyReportPrompt[] {
       prompt: 'Review this ForgePilot Daily Report as an external critic. Focus on MVP alignment, security, persistence risk, UI professionalism and scope drift. Return Executive Verdict, Top 5 risks, next 3 tasks for Codex/Claude, and what not to build yet. Do not ask for secrets or write access.',
     },
     {
+      target: 'grok',
+      title: 'Planning gateway action JSON',
+      prompt: 'Convert this Daily Report into ForgePilot Planning Gateway JSON. Include milestones, issues, risks and doNotBuild. Prioritize P0 Auth/Security and PostgreSQL Cutover, then P1 core UX. Do not request tokens or secrets. Keep each issue scoped with owner, writeScope, acceptanceCriteria and verification.',
+    },
+    {
       target: 'codex',
       title: 'Implementation pick',
       prompt: 'Use the Daily Report to pick the highest-value P0/P1 task. Claim a narrow write scope, implement it, run type-check, focused tests, lint, full tests when risk warrants it, build, then open a PR with verification.',
@@ -323,6 +328,16 @@ export function renderDailyReportMarkdown(report: Omit<DailyReport, 'markdown'>)
   for (const prompt of report.prompts) {
     lines.push(`### ${prompt.target}: ${prompt.title}`, prompt.prompt, ``)
   }
+
+  lines.push(
+    `## Grok Planning Gateway`,
+    `- Schema/prompt endpoint: /api/planning/grok`,
+    `- Preview endpoint: POST /api/planning/grok?mode=preview`,
+    `- Create Linear issues: POST /api/planning/grok?mode=create-linear with header x-forgepilot-confirm: create-planning-items`,
+    `- Create GitHub issues: POST /api/planning/grok?mode=create-github with header x-forgepilot-confirm: create-planning-items`,
+    `- Create both: POST /api/planning/grok?mode=create-all with header x-forgepilot-confirm: create-planning-items`,
+    ``,
+  )
 
   return lines.join('\n')
 }
