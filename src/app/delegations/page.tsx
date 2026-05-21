@@ -30,6 +30,7 @@ import { formatAge, isCreatedToday } from '@/lib/utils/delegation-age'
 import { DelegationDrawer } from '@/components/delegation/DelegationDrawer'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
 import { NewDelegationDialog } from '@/components/delegation/NewDelegationDialog'
+import { QuickCreateDelegationModal } from '@/components/delegation/QuickCreateDelegationModal'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 import { CriticScorePill } from '@/components/delegation/CriticScorePill'
 import { AutopilotReadinessPill } from '@/components/delegation/AutopilotReadinessBadge'
@@ -116,10 +117,12 @@ function DelegationsContent() {
   const [loading, setLoading] = useState(true)
   const [selectedDelegation, setSelectedDelegation] = useState<Delegation | null>(null)
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set())
-  // ?new=1 or ?template=<id> auto-opens the dialog on mount
+  // ?new=1 or ?template=<id> auto-opens the full dialog on mount
   const [showNewDialog, setShowNewDialog] = useState(
     searchParams.get('new') === '1' || !!searchParams.get('template')
   )
+  // Quick-create modal — direct path, bypasses NBA recommendation flow (JOK-76)
+  const [showQuickCreate, setShowQuickCreate] = useState(false)
   // Template contract pre-fill — loaded when ?template=<id> is in URL
   const [templateContract, setTemplateContract] = useState<Partial<TaskContract> | undefined>(undefined)
   const [prefillBrief, setPrefillBrief] = useState<ProjectBrief | null>(null)
@@ -260,10 +263,11 @@ function DelegationsContent() {
 
       if (e.key === 'Escape') {
         if (selectedDelegation) { setSelectedDelegation(null); return }
+        if (showQuickCreate) { setShowQuickCreate(false); return }
         if (showNewDialog) { setShowNewDialog(false); return }
       } else if (e.key === 'n' || e.key === 'N') {
         e.preventDefault()
-        setShowNewDialog(true)
+        setShowQuickCreate(true)
       } else if (e.key === '/') {
         e.preventDefault()
         searchInputRef.current?.focus()
@@ -271,7 +275,7 @@ function DelegationsContent() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [selectedDelegation, showNewDialog])
+  }, [selectedDelegation, showNewDialog, showQuickCreate])
 
   // ── Optimistic helpers ──────────────────────────────────────────────────
   const applyUpdate = useCallback((updated: Delegation) => {
@@ -1492,7 +1496,18 @@ function DelegationsContent() {
         />
       )}
 
-      {/* ── New Delegation Dialog ─────────────────────────────────────── */}
+      {/* ── Quick Create Delegation Modal — direct path, bypasses NBA (JOK-76) */}
+      {showQuickCreate && (
+        <QuickCreateDelegationModal
+          onClose={() => setShowQuickCreate(false)}
+          onCreate={newDel => {
+            applyAdd(newDel)
+            setShowQuickCreate(false)
+          }}
+        />
+      )}
+
+      {/* ── New Delegation Dialog — full form with templates / expert options */}
       {showNewDialog && (
         <NewDelegationDialog
           onClose={() => { setShowNewDialog(false); setTemplateContract(undefined); setPrefillBrief(null) }}
