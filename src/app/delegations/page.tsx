@@ -35,6 +35,7 @@ import { AutopilotReadinessPill } from '@/components/delegation/AutopilotReadine
 import { VersionBadge } from '@/components/delegation/VersionBadge'
 import { Badge, EmptyState, Metric, Panel, buttonClassName, cx } from '@/components/ui/primitives'
 import { checkBudget, formatCostUsd } from '@/lib/delegations/cost-format'
+import { SlaBadge } from '@/components/shared/SlaBadge'
 
 type ApprovalFilter = 'Alle' | 'approval-required' | 'auto-approved' | 'risk-blocked'
 
@@ -1189,6 +1190,9 @@ function DelegationsContent() {
                                 <div className="text-xs text-gray-600 mt-0.5">
                                   {new Date(del.createdAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
                                 </div>
+                                <div className="mt-1">
+                                  <SlaBadge delegation={del} />
+                                </div>
                               </div>
                             ) : del.status === 'completed' && del.summaryReport ? (
                               <div>
@@ -1221,6 +1225,9 @@ function DelegationsContent() {
                                   </div>
                                   <div className="text-xs text-gray-700 mt-0.5">
                                     {new Date(del.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                  </div>
+                                  <div className="mt-1">
+                                    <SlaBadge delegation={del} />
                                   </div>
                                 </div>
                               )
