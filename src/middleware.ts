@@ -10,7 +10,12 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
-import { isForgePilotAuthEnabled, shouldProtectPath } from '@/lib/auth/config'
+import {
+  isForgePilotAuthEnabled,
+  isAuthConfigured,
+  shouldProtectPath,
+  isPublicOperationalPath,
+} from '@/lib/auth/config'
 
 /** Header name read on the request and echoed on the response. */
 export const REQUEST_ID_HEADER = 'x-request-id'
@@ -53,6 +58,19 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   }
 
   const { pathname } = request.nextUrl
+
+  // If auth is enabled but not yet configured → redirect to setup page
+  if (
+    !isAuthConfigured() &&
+    pathname !== '/setup' &&
+    !isPublicOperationalPath(pathname) &&
+    !pathname.startsWith('/_next/')
+  ) {
+    const setupUrl = request.nextUrl.clone()
+    setupUrl.pathname = '/setup'
+    return decorateResponse(request, NextResponse.redirect(setupUrl))
+  }
+
   if (!shouldProtectPath(pathname)) {
     return nextWithRequestId(request)
   }

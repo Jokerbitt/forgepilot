@@ -14,7 +14,7 @@ export default function LoginPage() {
           </div>
           <LoginForm />
           <p className="mt-5 text-xs leading-5 text-slate-500">
-            Aktiv wenn <code className="rounded bg-slate-950 px-1 py-0.5 text-slate-300">FORGEPILOT_AUTH_ENABLED=true</code> gesetzt ist.
+            Gesicherter Workspace — lokal und privat.
           </p>
         </section>
       </div>
