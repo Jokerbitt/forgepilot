@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ConnectorHealthBar } from '@/components/command-center/ConnectorHealthBar'
 import { ApiKeysBanner } from '@/components/shared/ApiKeysBanner'
+import { NoAIProviderBanner } from '@/components/shared/NoAIProviderBanner'
 import { CommandCenterOverview, CommandCenterPrinciples } from '@/components/command-center/CommandCenterOverview'
 import { OnboardingBanner } from '@/components/command-center/OnboardingBanner'
 import { OnboardingBanner as OnboardingWizardBanner } from '@/components/onboarding/OnboardingBanner'
@@ -43,6 +44,7 @@ export default function Home() {
         </section>
 
         <section className="mt-6 space-y-4" aria-label="Setup-Hinweise">
+          <NoAIProviderBanner />
           <ApiKeysBanner />
           <OnboardingWizardBanner />
           <OnboardingBanner />
