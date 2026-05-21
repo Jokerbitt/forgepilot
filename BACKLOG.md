@@ -132,6 +132,6 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 
 - [~] M146: Delegation Comment Thread — Kommentare pro Delegation (Nutzer + Agent-Output) mit Timestamp
 - [~] M147: Work Item Priority Sort — Drag-and-Drop Prioritäts-Sortierung in der List-View
-- [ ] M148: Project Brief Diff View — vergleiche zwei Versionen eines Briefs side-by-side
+- [x] M148: Project Brief Diff View — vergleiche zwei Versionen eines Briefs side-by-side
 - [ ] M149: Agent Run Replay — gespeicherte Delegation-Runs wiedergeben (Context + Prompt + Response Timeline)
 - [ ] M150: Smart Notification Digest — tägliche/wöchentliche Zusammenfassung aller Aktivitäten per Email (optional)

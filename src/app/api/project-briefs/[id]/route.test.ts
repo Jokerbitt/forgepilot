@@ -39,6 +39,10 @@ vi.mock('@/lib/project-briefs', () => ({
   ),
 }))
 
+vi.mock('@/lib/project-briefs/brief-versions', () => ({
+  saveSnapshot: vi.fn(),
+}))
+
 const makeParams = (id: string) => ({ params: Promise.resolve({ id }) })
 
 describe('GET /api/project-briefs/[id]', () => {
@@ -57,6 +61,7 @@ describe('GET /api/project-briefs/[id]', () => {
 
 describe('PATCH /api/project-briefs/[id]', () => {
   it('updates brief when found', async () => {
+    const { saveSnapshot } = await import('@/lib/project-briefs/brief-versions')
     const req = new Request('http://localhost', {
       method: 'PATCH',
       body: JSON.stringify({ status: 'accepted' }),
@@ -65,6 +70,7 @@ describe('PATCH /api/project-briefs/[id]', () => {
     expect(res.status).toBe(200)
     const data = await res.json()
     expect(data.status).toBe('accepted')
+    expect(saveSnapshot).toHaveBeenCalledWith(mockBrief, 'Automatisch vor Update')
   })
 
   it('returns 404 when not found', async () => {
