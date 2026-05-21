@@ -12,6 +12,7 @@ import { PipelineRunner } from '@/components/delegation/PipelineRunner'
 import { AutopilotReadinessBadge } from '@/components/delegation/AutopilotReadinessBadge'
 import { LiveLogViewer } from '@/components/delegation/LiveLogViewer'
 import { DelegationTimeline } from '@/components/delegation/DelegationTimeline'
+import { DelegationCommentThread } from '@/components/delegation/DelegationCommentThread'
 import { AgentRunReplayView } from '@/components/delegation/AgentRunReplayView'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -734,6 +735,9 @@ export default function DelegationDetailPage() {
             </div>
           </div>
         )}
+
+        {/* Comment Thread */}
+        <DelegationCommentThread delegationId={d.id} />
 
         {/* Go back */}
         <div className="pb-4">
