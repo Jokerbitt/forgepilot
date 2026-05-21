@@ -395,8 +395,8 @@ function DailyCriticReportCard({
     <section className="col-span-12 rounded-xl border border-white/[0.08] bg-white/[0.03] p-6 shadow-sm shadow-black/20 lg:col-span-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold text-white">Grok Daily Report</h3>
-          <p className="mt-1 text-xs text-slate-500">Sicherer Markdown-Handoff ohne Secrets.</p>
+          <h3 className="text-lg font-semibold text-white">Assistant Daily Report</h3>
+          <p className="mt-1 text-xs text-slate-500">LLM-neutraler Handoff ohne Secrets.</p>
         </div>
         <span className={cx('rounded-full border px-2.5 py-1 text-xs font-semibold uppercase tracking-wide', verdictTone)}>
           {report?.executiveVerdict.status ?? 'loading'}
@@ -435,6 +435,56 @@ function DailyCriticReportCard({
         </div>
       </div>
 
+      {report?.firstRealValueLoop && (
+        <div className="mt-4 rounded-lg border border-emerald-500/15 bg-emerald-500/[0.04] p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
+                First Real Value Loop
+              </p>
+              <p className="mt-1 text-sm font-medium text-white">
+                {report.firstRealValueLoop.currentStep.label}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-slate-400">
+                {report.firstRealValueLoop.currentStep.action}
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              <div className="text-lg font-semibold tabular-nums text-emerald-300">
+                {report.firstRealValueLoop.progressPct}%
+              </div>
+              <div className="text-[10px] uppercase tracking-wide text-slate-500">Loop</div>
+            </div>
+          </div>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+            <div
+              className="h-full rounded-full bg-emerald-400"
+              style={{ width: `${report.firstRealValueLoop.progressPct}%` }}
+            />
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-1.5">
+            {report.firstRealValueLoop.steps.map(step => (
+              <Link
+                key={step.id}
+                href={step.href}
+                className={cx(
+                  'rounded-md border px-2 py-1.5 text-[10px] font-medium transition-colors',
+                  step.status === 'done'
+                    ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200'
+                    : step.status === 'blocked'
+                      ? 'border-rose-500/25 bg-rose-500/10 text-rose-200'
+                      : step.status === 'active'
+                        ? 'border-cyan-500/25 bg-cyan-500/10 text-cyan-100'
+                        : 'border-white/[0.06] bg-white/[0.02] text-slate-500',
+                )}
+              >
+                {step.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
         <button
           type="button"
@@ -443,7 +493,7 @@ function DailyCriticReportCard({
           className={buttonClassName('primary', 'min-h-10 flex-1 disabled:pointer-events-none disabled:opacity-50')}
         >
           <Clipboard className="h-4 w-4" />
-          {copyState === 'copied' ? 'Kopiert' : copyState === 'failed' ? 'Manuell kopieren' : 'Fuer Grok kopieren'}
+          {copyState === 'copied' ? 'Kopiert' : copyState === 'failed' ? 'Manuell kopieren' : 'Fuer LLM kopieren'}
         </button>
         <a
           href="/api/reports/daily?format=markdown"

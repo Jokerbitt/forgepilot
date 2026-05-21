@@ -8,6 +8,7 @@ import { getCriticProviderPlan } from '@/lib/eval/grok-critic'
 export type DailyReportVerdict = 'green' | 'yellow' | 'red'
 export type DailyReportRiskSeverity = 'critical' | 'high' | 'medium' | 'low'
 export type DailyReportLLMTarget = 'assistant-auto' | 'critic-llm' | 'planning-llm' | 'coding-agent' | 'ux-agent'
+export type DailyReportLoopStepStatus = 'done' | 'active' | 'blocked' | 'pending'
 
 export interface DailyReportRisk {
   id: string
@@ -48,6 +49,21 @@ export interface DailyReportAssistantRouting {
   criticPlan: ReturnType<typeof getCriticProviderPlan>
 }
 
+export interface DailyReportLoopStep {
+  id: 'brief' | 'delegation' | 'execute' | 'pr' | 'critic' | 'writeback'
+  label: string
+  status: DailyReportLoopStepStatus
+  action: string
+  href: string
+}
+
+export interface DailyReportFirstRealValueLoop {
+  goal: string
+  progressPct: number
+  currentStep: DailyReportLoopStep
+  steps: DailyReportLoopStep[]
+}
+
 export interface DailyReport {
   version: 1
   generatedAt: string
@@ -81,6 +97,7 @@ export interface DailyReport {
   }
   risks: DailyReportRisk[]
   nextActions: DailyReportTask[]
+  firstRealValueLoop: DailyReportFirstRealValueLoop
   assistantRouting: DailyReportAssistantRouting
   prompts: DailyReportPrompt[]
   markdown: string
@@ -225,7 +242,82 @@ function buildVerdict(risks: DailyReportRisk[]): DailyReport['executiveVerdict']
   }
 }
 
-function buildNextActions(risks: DailyReportRisk[]): DailyReportTask[] {
+function buildFirstRealValueLoop(status: DailyReport['status']): DailyReportFirstRealValueLoop {
+  const hasBrief = status.projectBriefs.total > 0
+  const hasAcceptedBrief = status.projectBriefs.accepted > 0
+  const hasDelegation = status.delegations.total > 0
+  const hasExecutionStarted = status.delegations.running > 0
+    || status.delegations.completed > 0
+    || status.delegations.failed > 0
+  const hasCompletedExecution = status.delegations.completed > 0
+  const hasFailedExecution = status.delegations.failed > 0
+  const hasPr = status.quality.prsCreated > 0
+  const hasCritic = status.quality.completedDelegations > 0
+    && status.quality.criticCoveragePct >= 80
+  const hasWriteback = status.quality.knowledgeWritebacks > 0
+
+  const steps: DailyReportLoopStep[] = [
+    {
+      id: 'brief',
+      label: 'Idea -> Brief',
+      status: hasAcceptedBrief ? 'done' : hasBrief ? 'active' : 'active',
+      action: hasBrief ? 'Review and accept one project brief.' : 'Create the first focused project brief.',
+      href: hasBrief ? '/project-briefs' : '/idea',
+    },
+    {
+      id: 'delegation',
+      label: 'Brief -> Delegation',
+      status: hasDelegation ? 'done' : hasAcceptedBrief ? 'active' : 'pending',
+      action: 'Create one narrow delegation with scope, risk and acceptance criteria.',
+      href: hasAcceptedBrief ? '/delegations?new=1' : '/project-briefs',
+    },
+    {
+      id: 'execute',
+      label: 'Execute',
+      status: hasCompletedExecution ? 'done' : hasFailedExecution ? 'blocked' : hasExecutionStarted ? 'active' : hasDelegation ? 'active' : 'pending',
+      action: hasFailedExecution
+        ? 'Open the failed delegation, read the human-readable error and choose retry or escalation.'
+        : 'Start one approved delegation and verify that it produces a real result.',
+      href: hasFailedExecution ? '/delegations?filter=failed' : '/delegations',
+    },
+    {
+      id: 'pr',
+      label: 'Pull Request',
+      status: hasPr ? 'done' : hasCompletedExecution ? 'active' : 'pending',
+      action: 'Create or verify the GitHub PR with a clear summary and test plan.',
+      href: '/delegations',
+    },
+    {
+      id: 'critic',
+      label: 'Critic Review',
+      status: hasCritic ? 'done' : hasCompletedExecution ? 'active' : 'pending',
+      action: 'Run the best-available critic model and store score, verdict and repair notes.',
+      href: '/api/reports/daily?format=markdown',
+    },
+    {
+      id: 'writeback',
+      label: 'Knowledge Writeback',
+      status: hasWriteback ? 'done' : hasCritic ? 'active' : 'pending',
+      action: 'Save useful learnings and decisions into project knowledge.',
+      href: '/knowledge-cards',
+    },
+  ]
+
+  const doneCount = steps.filter(step => step.status === 'done').length
+  const currentStep = steps.find(step => step.status === 'blocked')
+    ?? steps.find(step => step.status === 'active')
+    ?? steps.find(step => step.status === 'pending')
+    ?? steps[steps.length - 1]
+
+  return {
+    goal: 'Prove one real small ticket from idea to reviewed PR and knowledge writeback.',
+    progressPct: pct(doneCount, steps.length),
+    currentStep,
+    steps,
+  }
+}
+
+function buildNextActions(risks: DailyReportRisk[], loop: DailyReportFirstRealValueLoop): DailyReportTask[] {
   const byId = new Set(risks.map(risk => risk.id))
   const actions: DailyReportTask[] = []
 
@@ -259,12 +351,12 @@ function buildNextActions(risks: DailyReportRisk[]): DailyReportTask[] {
 
   actions.push({
     id: 'first-real-value-loop',
-    title: 'Prove the first real assistant value loop',
+    title: `M3 First Real Value Loop: ${loop.currentStep.action}`,
     owner: 'codex',
     priority: 'P0',
     acceptanceCriteria: [
+      `Current step is visible in the Daily Report: ${loop.currentStep.label}.`,
       'One real small ticket flows from idea/brief to delegation, execution, tests, PR, critic review and writeback.',
-      'The UI shows the next decision/action clearly at each step.',
       'Failures produce understandable recovery actions instead of raw logs only.',
     ],
   })
@@ -381,6 +473,12 @@ export function renderDailyReportMarkdown(report: Omit<DailyReport, 'markdown'>)
     `- Storage mode: ${report.status.operations.storageMode}`,
     `- Auth disabled: ${report.status.operations.authDisabled ? 'yes' : 'no'}`,
     ``,
+    `## First Real Value Loop`,
+    `- Goal: ${report.firstRealValueLoop.goal}`,
+    `- Progress: ${report.firstRealValueLoop.progressPct}%`,
+    `- Current step: ${report.firstRealValueLoop.currentStep.label} — ${report.firstRealValueLoop.currentStep.action}`,
+    ...report.firstRealValueLoop.steps.map(step => `- [${step.status.toUpperCase()}] ${step.label}: ${step.action}`),
+    ``,
     `## Assistant Routing`,
     `- Mode: ${report.assistantRouting.mode}`,
     `- Recommended: ${report.assistantRouting.recommended.providerId ?? 'configured provider'}${report.assistantRouting.recommended.model ? ` / ${report.assistantRouting.recommended.model}` : ''}`,
@@ -465,7 +563,8 @@ export function buildDailyReport(input: BuildDailyReportInput): DailyReport {
     completedDelegations: status.quality.completedDelegations,
   })
   const executiveVerdict = buildVerdict(risks)
-  const nextActions = buildNextActions(risks)
+  const firstRealValueLoop = buildFirstRealValueLoop(status)
+  const nextActions = buildNextActions(risks, firstRealValueLoop)
   const assistantRouting = buildAssistantRouting()
   const prompts = buildPrompts()
   const withoutMarkdown = {
@@ -476,6 +575,7 @@ export function buildDailyReport(input: BuildDailyReportInput): DailyReport {
     status,
     risks,
     nextActions,
+    firstRealValueLoop,
     assistantRouting,
     prompts,
   }
