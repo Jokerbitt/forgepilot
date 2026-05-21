@@ -206,6 +206,11 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
     .filter(i => !searchLower || i.title.toLowerCase().includes(searchLower) || i.id.toLowerCase().includes(searchLower))
 
   const sources = Array.from(new Set(items.map(i => i.source))) as WorkItemSource[]
+  const exportParams = new URLSearchParams()
+  exportParams.set('cached', '1')
+  if (sourceFilter) exportParams.set('source', sourceFilter)
+  if (projectId) exportParams.set('projectId', projectId)
+  const exportHref = `/api/work-items/export?${exportParams.toString()}`
 
   return (
     <div>
@@ -266,6 +271,12 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
           >
             ↑ CSV Import
           </button>
+          <a
+            href={exportHref}
+            className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-300 transition-colors hover:border-slate-600 hover:bg-slate-800 hover:text-white"
+          >
+            ↓ CSV Export
+          </a>
           <button
             onClick={() => load(true)}
             disabled={syncing}
