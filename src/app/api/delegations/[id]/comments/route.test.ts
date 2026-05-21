@@ -3,11 +3,13 @@ import { NextRequest } from 'next/server'
 
 // ─── Store mock ──────────────────────────────────────────────────────────────
 
-const store: Array<{ id: string; delegationId: string; author: string; authorName: string; body: string; createdAt: string }> = []
+const store = vi.hoisted(() => ({
+  comments: [] as Array<{ id: string; delegationId: string; author: string; authorName: string; body: string; createdAt: string }>,
+}))
 
 vi.mock('@/lib/delegations/comments-store', () => ({
   getComments: vi.fn((delegationId: string) =>
-    store.filter(c => c.delegationId === delegationId),
+    store.comments.filter(c => c.delegationId === delegationId),
   ),
   addComment: vi.fn((input: { delegationId: string; author: string; authorName: string; body: string }) => {
     const comment = {
@@ -18,7 +20,7 @@ vi.mock('@/lib/delegations/comments-store', () => ({
       body: input.body,
       createdAt: '2026-01-01T00:00:00.000Z',
     }
-    store.push(comment)
+    store.comments.push(comment)
     return comment
   }),
 }))
@@ -46,7 +48,7 @@ function makeParams(id: string): { params: Promise<{ id: string }> } {
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
-  store.length = 0
+  store.comments.length = 0
   vi.clearAllMocks()
 })
 
@@ -59,7 +61,7 @@ describe('GET /api/delegations/[id]/comments', () => {
   })
 
   it('returns comments for the given delegation', async () => {
-    store.push({
+    store.comments.push({
       id: 'c1',
       delegationId: 'del-1',
       author: 'user',
@@ -68,7 +70,7 @@ describe('GET /api/delegations/[id]/comments', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
     })
     const res = await GET(makeGetRequest('del-1'), makeParams('del-1'))
-    const data = await res.json() as { comments: typeof store }
+    const data = await res.json() as { comments: typeof store.comments }
     expect(data.comments).toHaveLength(1)
     expect(data.comments[0].body).toBe('Looks good')
   })

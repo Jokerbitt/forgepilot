@@ -18,21 +18,19 @@ export async function GET(
     return NextResponse.json({ error: 'Brief not found' }, { status: 404 })
   }
 
-  // If no v1 specified, use the most recent saved version as "before"
   const versions = getBriefVersions(id)
-  const beforeBrief = v1Id
-    ? getBriefVersion(id, v1Id)?.snapshot
-    : versions[0]?.snapshot   // most recent = version with highest versionNumber
+  const beforeVersion = v1Id ? getBriefVersion(id, v1Id) : versions[0]
+  const beforeBrief = beforeVersion?.snapshot
 
   if (!beforeBrief) {
     return NextResponse.json(
-      { error: 'No version found for comparison. Save a snapshot first.' },
+      { error: v1Id ? 'Version v1 not found.' : 'No version found for comparison. Save a snapshot first.' },
       { status: 404 },
     )
   }
 
-  // "after" is either a specific version or the current state
-  const afterBrief = v2Id ? getBriefVersion(id, v2Id)?.snapshot : current
+  const afterVersion = v2Id ? getBriefVersion(id, v2Id) : null
+  const afterBrief = v2Id ? afterVersion?.snapshot : current
 
   if (!afterBrief) {
     return NextResponse.json({ error: 'Version v2 not found.' }, { status: 404 })
@@ -43,8 +41,20 @@ export async function GET(
 
   return NextResponse.json({
     briefId: id,
-    before: { versionId: v1Id ?? versions[0]?.versionId, savedAt: beforeBrief.updatedAt },
-    after: { versionId: v2Id ?? 'current', savedAt: afterBrief.updatedAt },
+    before: {
+      versionId: beforeVersion.versionId,
+      versionNumber: beforeVersion.versionNumber,
+      label: beforeVersion.label,
+      savedAt: beforeVersion.savedAt,
+    },
+    after: afterVersion
+      ? {
+          versionId: afterVersion.versionId,
+          versionNumber: afterVersion.versionNumber,
+          label: afterVersion.label,
+          savedAt: afterVersion.savedAt,
+        }
+      : { versionId: 'current', label: 'Aktueller Stand', savedAt: current.updatedAt },
     changedCount,
     diffs,
   })

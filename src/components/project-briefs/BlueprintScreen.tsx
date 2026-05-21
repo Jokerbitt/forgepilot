@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition, useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { ProjectBrief, Requirement, UseCase, Risk, Finding, FindingConfidence, ResearchRun } from '@/lib/models/project-brief'
@@ -25,6 +25,28 @@ interface BlueprintViewModel {
   nextActionDetail: string
   deliveryStage: string
   contextMode: string
+}
+
+interface BriefVersionView {
+  versionId: string
+  versionNumber: number
+  savedAt: string
+  label?: string
+}
+
+interface FieldDiffView {
+  field: string
+  label: string
+  before: string
+  after: string
+  changed: boolean
+}
+
+interface BriefDiffView {
+  changedCount: number
+  before: { versionId: string; versionNumber?: number; label?: string; savedAt: string }
+  after: { versionId: string; versionNumber?: number; label?: string; savedAt: string }
+  diffs: FieldDiffView[]
 }
 
 const STATUS_LABELS: Record<ProjectBrief['status'], string> = {
@@ -85,8 +107,33 @@ export function BlueprintScreen({ initialBrief }: Props) {
   const [milestonesError, setMilestonesError] = useState('')
   const [wpDelegating, setWpDelegating] = useState<Record<string, boolean>>({})
   const [wpDelegationErrors, setWpDelegationErrors] = useState<Record<string, string>>({})
+  const [versions, setVersions] = useState<BriefVersionView[]>([])
+  const [versionsLoading, setVersionsLoading] = useState(false)
+  const [savingSnapshot, setSavingSnapshot] = useState(false)
+  const [selectedBeforeVersion, setSelectedBeforeVersion] = useState('')
+  const [selectedAfterVersion, setSelectedAfterVersion] = useState('current')
+  const [briefDiff, setBriefDiff] = useState<BriefDiffView | null>(null)
+  const [diffLoading, setDiffLoading] = useState(false)
+  const [diffError, setDiffError] = useState('')
+  const [diffNotice, setDiffNotice] = useState('')
 
   const vm = useMemo(() => buildBlueprintViewModel(brief), [brief])
+
+  const loadVersions = useCallback(async () => {
+    setVersionsLoading(true)
+    try {
+      const res = await fetch(`/api/project-briefs/${brief.id}/versions`)
+      if (!res.ok) return
+      const data = await res.json() as { versions: BriefVersionView[] }
+      const nextVersions = Array.isArray(data.versions) ? data.versions : []
+      setVersions(nextVersions)
+      setSelectedBeforeVersion(current => current || nextVersions[0]?.versionId || '')
+    } finally {
+      setVersionsLoading(false)
+    }
+  }, [brief.id])
+
+  useEffect(() => { void loadVersions() }, [loadVersions])
 
   // Load existing milestones
   useEffect(() => {
@@ -113,6 +160,53 @@ export function BlueprintScreen({ initialBrief }: Props) {
     if (res.ok) {
       const updated = await res.json() as ProjectBrief
       setBrief(updated)
+      void loadVersions()
+    }
+  }
+
+  async function handleSaveSnapshot() {
+    setSavingSnapshot(true)
+    setDiffNotice('')
+    setDiffError('')
+    try {
+      const res = await fetch(`/api/project-briefs/${brief.id}/versions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: `Manueller Snapshot ${new Date().toLocaleString('de-DE')}` }),
+      })
+      if (!res.ok) {
+        const err = await res.json() as { error?: string }
+        setDiffError(err.error ?? 'Snapshot konnte nicht gespeichert werden')
+        return
+      }
+      await loadVersions()
+      setDiffNotice('Snapshot gespeichert. Du kannst ihn jetzt mit dem aktuellen Stand vergleichen.')
+    } finally {
+      setSavingSnapshot(false)
+    }
+  }
+
+  async function handleLoadDiff() {
+    if (!selectedBeforeVersion) {
+      setDiffError('Speichere zuerst einen Snapshot oder waehle eine Version aus.')
+      return
+    }
+    setDiffLoading(true)
+    setDiffError('')
+    setDiffNotice('')
+    try {
+      const params = new URLSearchParams({ v1: selectedBeforeVersion })
+      if (selectedAfterVersion !== 'current') params.set('v2', selectedAfterVersion)
+      const res = await fetch(`/api/project-briefs/${brief.id}/diff?${params.toString()}`)
+      if (!res.ok) {
+        const err = await res.json() as { error?: string }
+        setDiffError(err.error ?? 'Diff konnte nicht geladen werden')
+        setBriefDiff(null)
+        return
+      }
+      setBriefDiff(await res.json() as BriefDiffView)
+    } finally {
+      setDiffLoading(false)
     }
   }
 
@@ -382,6 +476,22 @@ export function BlueprintScreen({ initialBrief }: Props) {
             ))}
           </div>
         </section>
+
+        <BriefDiffPanel
+          versions={versions}
+          versionsLoading={versionsLoading}
+          selectedBeforeVersion={selectedBeforeVersion}
+          selectedAfterVersion={selectedAfterVersion}
+          savingSnapshot={savingSnapshot}
+          diffLoading={diffLoading}
+          diff={briefDiff}
+          error={diffError}
+          notice={diffNotice}
+          onBeforeChange={setSelectedBeforeVersion}
+          onAfterChange={setSelectedAfterVersion}
+          onSaveSnapshot={handleSaveSnapshot}
+          onLoadDiff={handleLoadDiff}
+        />
 
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.08fr_1.6fr_1.08fr]">
           <aside className="space-y-5">
@@ -708,6 +818,166 @@ function contextModeLabel(mode: ProjectBrief['privacyMode']): string {
   if (mode === 'local') return 'local-only'
   if (mode === 'hybrid') return 'hybrid'
   return 'cloud-approved'
+}
+
+function BriefDiffPanel({
+  versions,
+  versionsLoading,
+  selectedBeforeVersion,
+  selectedAfterVersion,
+  savingSnapshot,
+  diffLoading,
+  diff,
+  error,
+  notice,
+  onBeforeChange,
+  onAfterChange,
+  onSaveSnapshot,
+  onLoadDiff,
+}: {
+  versions: BriefVersionView[]
+  versionsLoading: boolean
+  selectedBeforeVersion: string
+  selectedAfterVersion: string
+  savingSnapshot: boolean
+  diffLoading: boolean
+  diff: BriefDiffView | null
+  error: string
+  notice: string
+  onBeforeChange: (value: string) => void
+  onAfterChange: (value: string) => void
+  onSaveSnapshot: () => void
+  onLoadDiff: () => void
+}) {
+  const changedDiffs = diff?.diffs.filter(item => item.changed) ?? []
+  const visibleDiffs = changedDiffs.length > 0 ? changedDiffs : diff?.diffs.slice(0, 4) ?? []
+
+  return (
+    <section className="mb-5 border border-slate-800 bg-slate-900/50 p-4">
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Versionen & Diff</p>
+          <h2 className="mt-1 text-lg font-semibold text-white">Brief-Änderungen nachvollziehen</h2>
+          <p className="mt-1 max-w-2xl text-sm text-slate-400">
+            Snapshots halten wichtige Brief-Zustaende fest, bevor Research, Review oder Freigabe den Scope veraendern.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <ActionButton onClick={onSaveSnapshot} disabled={savingSnapshot || versionsLoading} tone="secondary">
+            {savingSnapshot ? 'Speichere' : 'Snapshot speichern'}
+          </ActionButton>
+          <ActionButton onClick={onLoadDiff} disabled={diffLoading || !selectedBeforeVersion} tone="primary">
+            {diffLoading ? 'Vergleiche' : 'Diff anzeigen'}
+          </ActionButton>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1fr_auto]">
+        <label className="block">
+          <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Vorher</span>
+          <select
+            value={selectedBeforeVersion}
+            onChange={event => onBeforeChange(event.target.value)}
+            disabled={versions.length === 0}
+            className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none focus:border-sky-500 disabled:text-slate-600"
+          >
+            {versions.length === 0 ? (
+              <option value="">Noch kein Snapshot</option>
+            ) : (
+              versions.map(version => (
+                <option key={version.versionId} value={version.versionId}>
+                  {formatVersionLabel(version)}
+                </option>
+              ))
+            )}
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Nachher</span>
+          <select
+            value={selectedAfterVersion}
+            onChange={event => onAfterChange(event.target.value)}
+            className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 outline-none focus:border-sky-500"
+          >
+            <option value="current">Aktueller Stand</option>
+            {versions.map(version => (
+              <option key={version.versionId} value={version.versionId}>
+                {formatVersionLabel(version)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="flex items-end">
+          <span className="rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-400">
+            {versionsLoading ? 'lade Versionen' : `${versions.length} Versionen`}
+          </span>
+        </div>
+      </div>
+
+      {notice && <p className="mt-3 border border-sky-800 bg-sky-950/30 px-3 py-2 text-sm text-sky-200">{notice}</p>}
+      {error && <p className="mt-3 border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-200">{error}</p>}
+
+      {diff && (
+        <div className="mt-4 border-t border-slate-800 pt-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium text-white">
+              {diff.changedCount === 0 ? 'Keine geaenderten Felder' : `${diff.changedCount} geaenderte Felder`}
+            </p>
+            <p className="text-xs text-slate-500">
+              {formatDiffEndpoint(diff.before)} → {formatDiffEndpoint(diff.after)}
+            </p>
+          </div>
+          <div className="space-y-3">
+            {visibleDiffs.map(item => (
+              <div key={item.field} className="border border-slate-800 bg-slate-950">
+                <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2">
+                  <span className="text-sm font-medium text-slate-200">{item.label}</span>
+                  <span className={`rounded px-2 py-0.5 text-xs ${item.changed ? 'bg-amber-950 text-amber-300' : 'bg-slate-900 text-slate-500'}`}>
+                    {item.changed ? 'geaendert' : 'unveraendert'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2">
+                  <DiffCell label="Vorher" value={item.before} />
+                  <DiffCell label="Nachher" value={item.after} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function DiffCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border-t border-slate-800 p-3 md:border-t-0 md:border-r md:last:border-r-0">
+      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-600">{label}</p>
+      <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-5 text-slate-300">
+        {value || '—'}
+      </pre>
+    </div>
+  )
+}
+
+function formatVersionLabel(version: BriefVersionView): string {
+  const label = version.label ? `${version.label} · ` : ''
+  return `${label}v${version.versionNumber} · ${formatDateTime(version.savedAt)}`
+}
+
+function formatDiffEndpoint(endpoint: BriefDiffView['before']): string {
+  if (endpoint.versionId === 'current') return `Aktuell · ${formatDateTime(endpoint.savedAt)}`
+  return `v${endpoint.versionNumber ?? '?'} · ${formatDateTime(endpoint.savedAt)}`
+}
+
+function formatDateTime(value: string): string {
+  return new Date(value).toLocaleString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 function ActionButton({

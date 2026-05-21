@@ -42,6 +42,41 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
+interface ClientResponse {
+  ok: boolean
+  status: number
+  json: <T>() => Promise<T>
+}
+
+function clientRequest(url: string, init: RequestInit = {}): Promise<ClientResponse> {
+  if (typeof fetch === 'function') {
+    return fetch(url, init)
+  }
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open(init.method ?? 'GET', url)
+
+    if (init.headers instanceof Headers) {
+      init.headers.forEach((value, key) => xhr.setRequestHeader(key, value))
+    } else if (Array.isArray(init.headers)) {
+      init.headers.forEach(([key, value]) => xhr.setRequestHeader(key, value))
+    } else if (init.headers) {
+      Object.entries(init.headers).forEach(([key, value]) => xhr.setRequestHeader(key, String(value)))
+    }
+
+    xhr.onload = () => {
+      resolve({
+        ok: xhr.status >= 200 && xhr.status < 300,
+        status: xhr.status,
+        json: async <T,>() => JSON.parse(xhr.responseText || 'null') as T,
+      })
+    }
+    xhr.onerror = () => reject(new Error('Request failed'))
+    xhr.send(typeof init.body === 'string' ? init.body : null)
+  })
+}
+
 // ─── WorkPackage types (inline to avoid server-only import issues) ──
 
 interface WorkPackage {
@@ -144,8 +179,8 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
   const load = useCallback((isSyncClick = false) => {
     if (isSyncClick) setSyncing(true)
     const url = projectId ? `/api/work-items?projectId=${encodeURIComponent(projectId)}` : '/api/work-items'
-    fetch(url)
-      .then(r => r.json())
+    clientRequest(url)
+      .then(r => r.json<{ items: WorkItem[]; errors?: string[] }>())
       .then((data: { items: WorkItem[]; errors?: string[] }) => {
         setItems(Array.isArray(data.items) ? data.items : [])
         setErrors(data.errors ?? [])
@@ -184,7 +219,7 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
   const createDelegation = async (item: WorkItem) => {
     setCreating(item.id)
     try {
-      const res = await fetch('/api/delegations', {
+      const res = await clientRequest('/api/delegations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildDelegationPayload(item)),
@@ -204,13 +239,13 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
     try {
       // 1. Create delegation
       const delPayload = buildDelegationPayload(item)
-      await fetch('/api/delegations', {
+      await clientRequest('/api/delegations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(delPayload),
       })
       // 2. Decompose with AI → create orchestrated run
-      const orchRes = await fetch('/api/agents/orchestrate', {
+      const orchRes = await clientRequest('/api/agents/orchestrate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -221,7 +256,7 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
         }),
       })
       if (orchRes.ok) {
-        const { run } = await orchRes.json() as { run: { id: string } }
+        const { run } = await orchRes.json<{ run: { id: string } }>()
         setOrchestrated(prev => new Map(Array.from(prev).concat([[item.id, run.id]])))
         setCreated(prev => new Set(Array.from(prev).concat(item.id)))
       }
@@ -528,8 +563,8 @@ function WorkPackagesTab() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/work-packages').then(r => r.json()) as Promise<WorkPackage[]>,
-      fetch('/api/milestones').then(r => r.json()) as Promise<Milestone[]>,
+      clientRequest('/api/work-packages').then(r => r.json<WorkPackage[]>()),
+      clientRequest('/api/milestones').then(r => r.json<Milestone[]>()),
     ])
       .then(([wps, milestones]) => {
         setData({
@@ -544,9 +579,9 @@ function WorkPackagesTab() {
   const handleDelegate = async (wp: WorkPackage) => {
     setCreating(wp.id)
     try {
-      const res = await fetch(`/api/work-packages/${wp.id}/create-delegation`, { method: 'POST' })
+      const res = await clientRequest(`/api/work-packages/${wp.id}/create-delegation`, { method: 'POST' })
       if (res.ok) {
-        const result = await res.json() as { delegationId: string }
+        const result = await res.json<{ delegationId: string }>()
         setDelegated(prev => new Map(Array.from(prev).concat([[wp.id, result.delegationId]])))
       }
     } catch {
