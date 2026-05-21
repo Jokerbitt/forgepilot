@@ -13,6 +13,10 @@
       "schedule": "0 7 * * *"
     },
     {
+      "path": "/api/ai/providers/health",
+      "schedule": "*/30 * * * *"
+    },
+    {
       "path": "/api/cron/delegation-queue",
       "schedule": "*/15 * * * *"
     },
