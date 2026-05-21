@@ -1,9 +1,9 @@
-# AGENTS.md - ForgePilot AI Workflow OS
+# AGENTS.md - ForgePilot AI Workflow Orchestrator
 
 ## Identity
 
-- Product: ForgePilot AI Workflow OS
-- Claim: From Idea to Execution
+- Product: ForgePilot — AI Workflow Orchestrator
+- Tagline: Idea → Delegation → Reviewed Code
 - Owner: Sven Bittl / GitHub `Jokerbitt`
 - Communication with Sven: German
 - Code, identifiers, comments: English
@@ -138,10 +138,25 @@ Known note: do not run `npm run build` and `npm run type-check` in parallel beca
 
 ## Product Guardrails
 
-- ForgePilot is a local-first, NAS-first AI workflow operating system.
-- Linear remains the task SSOT.
-- GitHub remains the code/PR/CI SSOT.
-- Obsidian/SecondBrain remains long-term knowledge.
-- ForgePilot orchestrates idea intake, research, requirements, delegation, risk, cost, approval, agent execution, PR feedback, and knowledge writeback.
-- Critical actions require human approval.
-- Runner/n8n/agents need a task contract, budget/risk classification, privacy mode, and trace.
+**What ForgePilot is (V1):**
+ForgePilot is a focused local AI workflow orchestrator. The single core loop is:
+Idea → structured Brief → Delegation Contract → Agent Execution → Grok Critic Review → Knowledge Writeback → GitHub PR
+
+**What it is not (do not build or extend):**
+- PM-Agent (autonomous project management)
+- Agent Control Plane / Scope Board / Skills Matrix
+- Billing or SaaS readiness features
+- Multi-tenancy (phase 2+)
+- Telegram notification channels
+- Complex DSGVO ledger UI
+- Context Packages as a standalone feature
+
+**Rules:**
+- Local-first: PostgreSQL via Docker or any hosted Postgres, no cloud dependency required
+- Linear remains task SSOT
+- GitHub remains code/PR/CI SSOT
+- Every delegation needs: scope, acceptance criteria, risk class, model preference
+- Grok (xAI) acts as the independent critic — never skip the review layer
+- Auth is mandatory — `FORGEPILOT_AUTH_ENABLED=false` is the only escape hatch
+- Critical actions (Risk Class C) always require explicit human approval
+- Do not add features outside the core loop without explicit approval from Sven
