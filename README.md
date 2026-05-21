@@ -107,6 +107,19 @@ Add any OpenAI-compatible provider via Settings → Providers — no code change
 
 ---
 
+## Daily Critic Report
+
+ForgePilot exposes a read-only Daily Report for Grok, Claude, Codex, or a human reviewer. It contains the MVP verdict, core-flow status, top risks, next actions, and safe prompt templates without exposing secrets.
+
+```bash
+curl http://localhost:3000/api/reports/daily
+curl http://localhost:3000/api/reports/daily?format=markdown
+```
+
+Use the Markdown output as input for an external critic such as Grok. Do not paste API keys, Linear tokens, GitHub tokens, or connector secrets into external chat tools.
+
+---
+
 ## Deployment
 
 **Local development**
