@@ -74,6 +74,7 @@ const { mockGenerateText } = vi.hoisted(() => ({
 
 vi.mock('@/lib/ai/text-generation', () => ({
   generateText: mockGenerateText,
+  stripJsonCodeFence: (value: string) => value.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim(),
 }))
 
 describe('runGrokCritic', async () => {
@@ -90,8 +91,10 @@ describe('runGrokCritic', async () => {
     vi.clearAllMocks()
   })
 
-  it('returns null when generateText throws (provider not configured)', async () => {
-    mockGenerateText.mockRejectedValueOnce(new Error('Provider "xai" not found'))
+  it('returns null when all critic providers throw', async () => {
+    mockGenerateText
+      .mockRejectedValueOnce(new Error('Provider "xai" not found'))
+      .mockRejectedValueOnce(new Error('Ollama unavailable'))
     const result = await runGrokCritic(sampleInput)
     expect(result).toBeNull()
   })
@@ -127,6 +130,59 @@ describe('runGrokCritic', async () => {
     expect(result!.evaluatedAt).toBeTruthy()
   })
 
+  it('falls back to local Ollama when xAI is unavailable', async () => {
+    const mockResponse = {
+      correctnessScore: 78,
+      efficiencyScore: 82,
+      driftScore: 90,
+      overallGrade: 'B',
+      criteriaHit: [true, false],
+      issues: ['Second acceptance criterion is not proven by the output.'],
+      verdict: 'NEEDS_REVISION',
+      reason: 'Mostly implemented, but one criterion needs evidence.',
+    }
+    mockGenerateText
+      .mockRejectedValueOnce(new Error('Provider "xai" not configured'))
+      .mockResolvedValueOnce({
+        text: JSON.stringify(mockResponse),
+        provider: 'ollama',
+        model: 'qwen2.5-coder:14b',
+      })
+
+    const result = await runGrokCritic(sampleInput)
+
+    expect(result).not.toBeNull()
+    expect(result!.providerId).toBe('ollama')
+    expect(result!.verdict).toBe('NEEDS_REVISION')
+    expect(mockGenerateText).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      providerId: 'ollama',
+      anthropicModel: 'qwen2.5-coder:14b',
+    }))
+  })
+
+  it('retries once when local critic returns invalid JSON', async () => {
+    const mockResponse = {
+      correctnessScore: 88,
+      efficiencyScore: 80,
+      driftScore: 85,
+      overallGrade: 'B',
+      criteriaHit: [true, true],
+      issues: [],
+      verdict: 'PASS',
+      reason: 'Valid on retry.',
+    }
+    mockGenerateText
+      .mockResolvedValueOnce({ text: '{ invalid json', provider: 'ollama', model: 'qwen2.5-coder:14b' })
+      .mockResolvedValueOnce({ text: JSON.stringify(mockResponse), provider: 'ollama', model: 'qwen2.5-coder:14b' })
+
+    const result = await runGrokCritic(sampleInput)
+
+    expect(result).not.toBeNull()
+    expect(result!.providerId).toBe('ollama')
+    expect(result!.reason).toBe('Valid on retry.')
+    expect(mockGenerateText).toHaveBeenCalledTimes(2)
+  })
+
   it('truncates very long agent output to avoid token overflow', async () => {
     mockGenerateText.mockResolvedValueOnce({ text: '', provider: 'xai', model: 'grok-3-mini' })
     const longOutput = 'x'.repeat(10000)
@@ -146,8 +202,10 @@ describe('runGrokCodeReview', async () => {
     vi.clearAllMocks()
   })
 
-  it('returns null when provider throws', async () => {
-    mockGenerateText.mockRejectedValueOnce(new Error('xAI unavailable'))
+  it('returns null when all critic providers throw', async () => {
+    mockGenerateText
+      .mockRejectedValueOnce(new Error('xAI unavailable'))
+      .mockRejectedValueOnce(new Error('Ollama unavailable'))
     const result = await runGrokCodeReview({ filePath: 'route.ts', fileContent: 'export {}' })
     expect(result).toBeNull()
   })

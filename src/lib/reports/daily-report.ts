@@ -169,7 +169,7 @@ function buildRisks(input: {
       severity: 'medium',
       title: 'Critic coverage is below target',
       why: 'The V1 promise depends on reviewed output, not blind agent completion.',
-      mitigation: 'Ensure XAI_API_KEY/provider config is present or mark critic-unavailable clearly in execution summaries.',
+      mitigation: 'Run npm run critic:backfill and ensure either xAI/Grok or local Ollama is available for future execution summaries.',
     })
   }
 
