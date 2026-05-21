@@ -143,7 +143,7 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 
 - [x] M154: Telegram Inline Keyboards — One-tap ✅ Genehmigen / ❌ Ablehnen direkt in Telegram-Nachricht für ausstehende Delegations
 - [x] M155: AI Provider Health Monitor — runHealthCheck() mit Latenz, Status-Levels (healthy/degraded/unavailable/unconfigured), failStreak, GET/POST /api/ai/providers/health, Vercel Cron alle 30 Min
-- [~] M156: Provider Health UI — /settings/providers zeigt Live-Status-Badges (●grün/●gelb/●rot) + letzte Latenz + failStreak aus Health-Cache
+- [x] M156: Provider Health UI — /settings/providers zeigt Live-Status-Badges (●grün/●gelb/●rot) + letzte Latenz + failStreak aus Health-Cache
 - [~] M157: Notification Channels — Konfigurierbare Kanäle in /settings/notifications: Bell, Telegram, Email — pro Typ wählbar
 - [~] M158: Delegation SLA Tracker — SLA-Deadline pro Delegation (Erstellt + konfigurierbare Stunden), Badge wenn SLA verletzt
 - [~] M159: Provider Cost Tracker — Token-Verbrauch pro Provider aus Eval-Logs aggregieren, /settings/providers zeigt Kosten-Trend
