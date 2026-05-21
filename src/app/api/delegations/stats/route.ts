@@ -1,18 +1,9 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
-import type { Delegation } from '@/lib/models/delegation'
-
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
-
-function readDelegations(): Delegation[] {
-  try {
-    return JSON.parse(fs.readFileSync(DELEGATIONS_FILE, 'utf-8')) as Delegation[]
-  } catch {
-    return []
-  }
-}
+import {
+  createDelegationRepository,
+  SINGLE_TENANT_USER_ID,
+} from '@/lib/repositories/delegationRepository'
 
 function isToday(iso: string): boolean {
   const d = new Date(iso)
@@ -40,7 +31,8 @@ export interface DelegationStats {
 }
 
 export async function GET() {
-  const delegations = readDelegations()
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+  const delegations = await repo.listByStatus()
 
   const byStatus: Record<string, number> = {}
   let totalEstimatedUsd = 0

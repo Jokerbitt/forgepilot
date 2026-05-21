@@ -2,29 +2,12 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { findProjectBriefById, updateProjectBrief } from '@/lib/project-briefs'
-import type { Delegation, PrivacyMode } from '@/lib/models/delegation'
+import type { PrivacyMode } from '@/lib/models/delegation'
 import type { ResearchPrivacyMode } from '@/lib/models/project-brief'
-import fs from 'fs'
-import path from 'path'
-
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
-
-function readDelegations(): Delegation[] {
-  try {
-    const data = fs.readFileSync(DELEGATIONS_FILE, 'utf-8')
-    return JSON.parse(data) as Delegation[]
-  } catch {
-    return []
-  }
-}
-
-function writeDelegations(delegations: Delegation[]) {
-  const dir = path.dirname(DELEGATIONS_FILE)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  const tmp = DELEGATIONS_FILE + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(delegations, null, 2), 'utf-8')
-  fs.renameSync(tmp, DELEGATIONS_FILE)
-}
+import {
+  createDelegationRepository,
+  SINGLE_TENANT_USER_ID,
+} from '@/lib/repositories/delegationRepository'
 
 function mapPrivacyMode(mode: ResearchPrivacyMode): PrivacyMode {
   if (mode === 'cloud') return 'public'
@@ -69,7 +52,9 @@ export async function POST(_request: Request, { params }: RouteParams) {
   const contractId = randomUUID()
   const delegationId = randomUUID()
 
-  const delegation: Delegation = {
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+
+  const delegation = await repo.create({
     id: delegationId,
     title: brief.title.slice(0, 80),
     briefId: brief.id,
@@ -97,13 +82,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
       type: 'info',
       message: `Delegation aus Projektbrief "${brief.title}" erstellt (${acceptedReqs.length} akzeptierte Requirements)`,
     }],
-    createdAt: now,
-    updatedAt: now,
-  }
-
-  const delegations = readDelegations()
-  delegations.push(delegation)
-  writeDelegations(delegations)
+  })
 
   // Link delegation back to brief
   updateProjectBrief(brief.id, {

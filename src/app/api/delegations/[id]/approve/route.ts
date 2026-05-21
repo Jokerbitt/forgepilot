@@ -1,42 +1,24 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
-import type { AgentLog, Delegation } from '@/lib/models/delegation'
+import type { AgentLog } from '@/lib/models/delegation'
 import { getAutonomousConfig, riskClassFitsThreshold } from '@/lib/config/autonomous-config'
-
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
-
-function readDelegations(): Delegation[] {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(DELEGATIONS_FILE, 'utf-8')) as unknown
-    return Array.isArray(parsed) ? parsed as Delegation[] : []
-  } catch {
-    return []
-  }
-}
-
-function writeDelegationsAtomic(delegations: Delegation[]): void {
-  const dir = path.dirname(DELEGATIONS_FILE)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  const tmp = `${DELEGATIONS_FILE}.tmp`
-  fs.writeFileSync(tmp, JSON.stringify(delegations, null, 2), 'utf-8')
-  fs.renameSync(tmp, DELEGATIONS_FILE)
-}
+import {
+  createDelegationRepository,
+  SINGLE_TENANT_USER_ID,
+} from '@/lib/repositories/delegationRepository'
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  const delegations = readDelegations()
-  const index = delegations.findIndex(delegation => delegation.id === id)
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+  const delegation = await repo.findById(id)
 
-  if (index < 0) {
+  if (!delegation) {
     return NextResponse.json({ error: 'Delegation nicht gefunden' }, { status: 404 })
   }
 
-  const delegation = delegations[index]
   if (delegation.status !== 'pending') {
     return NextResponse.json(
       { error: `Delegation kann nicht genehmigt werden - Status ist '${delegation.status}'.` },
@@ -75,8 +57,7 @@ export async function POST(
     message: `Delegation genehmigt durch ${source}${note}.`,
   }
 
-  const updated: Delegation = {
-    ...delegation,
+  const updated = await repo.update(id, {
     status: 'approved',
     approvalId: delegation.approvalId ?? `approval-${Date.now()}`,
     contract: {
@@ -84,11 +65,11 @@ export async function POST(
       requiresApproval: false,
     },
     logs: [...(delegation.logs ?? []), log],
-    updatedAt: now,
-  }
+  })
 
-  delegations[index] = updated
-  writeDelegationsAtomic(delegations)
+  if (!updated) {
+    return NextResponse.json({ error: 'Delegation nicht gefunden' }, { status: 404 })
+  }
 
   return NextResponse.json(updated)
 }

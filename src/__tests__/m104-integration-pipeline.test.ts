@@ -21,7 +21,13 @@ const fsMock = {
     throw new Error(`ENOENT: no such file '${p}'`)
   },
   writeFileSync: (p: string, data: string) => { store[p] = data },
-  renameSync: vi.fn(),
+  // Atomic write pattern: renameSync(tmp, dest) moves the tmp file into place
+  renameSync: (src: string, dest: string) => {
+    if (src in store) {
+      store[dest] = store[src]
+      delete store[src]
+    }
+  },
   mkdirSync: vi.fn(),
 }
 
