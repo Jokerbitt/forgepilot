@@ -38,6 +38,31 @@ const HEALTH_LABEL: Record<ProviderHealthStatus, string> = {
   unconfigured: 'kein API-Key',
 }
 
+// ─── Cost Tracker Types (M159) ───────────────────────────────────────────────
+
+interface ProviderCostEntry {
+  providerId: string
+  delegationCount: number
+  totalCostUsd: number
+  cloudEquivalentUsd: number
+  totalSavedUsd: number
+  totalTokens: number
+  lastModel: string | null
+  costTrend7d: number | null
+}
+
+interface CostReport {
+  generatedAt: string
+  entries: ProviderCostEntry[]
+  totals: {
+    delegationCount: number
+    totalCostUsd: number
+    cloudEquivalentUsd: number
+    totalSavedUsd: number
+    totalTokens: number
+  }
+}
+
 // ─── Quick-Setup Banner (generic, reusable) ───────────────────────────────────
 
 interface QuickSetupBannerProps {
@@ -1030,6 +1055,7 @@ export default function ProvidersPage() {
   const [health, setHealth]                                   = useState<Record<string, ProviderHealthEntry>>({})
   const [healthLoading, setHealthLoading]                     = useState(false)
   const [healthCheckedAt, setHealthCheckedAt]                 = useState<string | null>(null)
+  const [costReport, setCostReport]                           = useState<CostReport | null>(null)
 
   const load = useCallback(() => {
     fetch('/api/ai/providers')
@@ -1050,6 +1076,15 @@ export default function ProvidersPage() {
       .catch(() => null)
   }, [])
 
+  const loadCostReport = useCallback(() => {
+    fetch('/api/analytics/costs')
+      .then(r => r.json())
+      .then((d: { providerSavings?: CostReport }) => {
+        if (d.providerSavings) setCostReport(d.providerSavings)
+      })
+      .catch(() => null)
+  }, [])
+
   const handleRunHealthCheck = async () => {
     setHealthLoading(true)
     try {
@@ -1060,7 +1095,7 @@ export default function ProvidersPage() {
     }
   }
 
-  useEffect(() => { load(); loadHealth() }, [load, loadHealth])
+  useEffect(() => { load(); loadHealth(); loadCostReport() }, [load, loadHealth, loadCostReport])
 
   const save = async (update: { provider?: Partial<AIProviderConfig> & { id: string }; selection?: AIModelSelection }) => {
     setSaving(true)
@@ -1179,6 +1214,95 @@ export default function ProvidersPage() {
             </div>
           </div>
         </div>
+
+        {/* M159: Provider Cost Summary */}
+        {costReport && costReport.totals.delegationCount > 0 && (
+          <section>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
+              💸 Kosten & Einsparungen
+            </p>
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] divide-y divide-white/[0.04]">
+              {/* Totals row */}
+              <div className="grid grid-cols-4 gap-2 px-4 py-3 text-center">
+                <div>
+                  <p className="text-[10px] text-slate-600 uppercase tracking-wide mb-0.5">Delegierungen</p>
+                  <p className="text-sm font-semibold text-white">{costReport.totals.delegationCount}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-600 uppercase tracking-wide mb-0.5">Kosten (Cloud)</p>
+                  <p className="text-sm font-semibold text-white">
+                    {costReport.totals.cloudEquivalentUsd < 0.01
+                      ? '< $0.01'
+                      : `$${costReport.totals.cloudEquivalentUsd.toFixed(3)}`}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-600 uppercase tracking-wide mb-0.5">Tatsächlich</p>
+                  <p className="text-sm font-semibold text-white">
+                    {costReport.totals.totalCostUsd === 0 ? '$0' : `$${costReport.totals.totalCostUsd.toFixed(4)}`}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-600 uppercase tracking-wide mb-0.5">Erspart</p>
+                  <p className={cx(
+                    'text-sm font-semibold',
+                    costReport.totals.totalSavedUsd > 0 ? 'text-emerald-400' : 'text-slate-400',
+                  )}>
+                    {costReport.totals.totalSavedUsd > 0
+                      ? `$${costReport.totals.totalSavedUsd.toFixed(3)}`
+                      : '$0'}
+                  </p>
+                </div>
+              </div>
+              {/* Per-route rows */}
+              {costReport.entries.slice(0, 5).map(e => (
+                <div key={e.providerId} className="flex items-center gap-3 px-4 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-mono text-slate-300 truncate">{e.providerId}</p>
+                    {e.lastModel && (
+                      <p className="text-[10px] text-slate-600 truncate">{e.lastModel}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4 text-right shrink-0">
+                    <div>
+                      <p className="text-[10px] text-slate-600">Runs</p>
+                      <p className="text-xs text-slate-400">{e.delegationCount}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-600">Tokens</p>
+                      <p className="text-xs text-slate-400">
+                        {e.totalTokens >= 1_000_000
+                          ? `${(e.totalTokens / 1_000_000).toFixed(1)}M`
+                          : e.totalTokens >= 1_000
+                          ? `${(e.totalTokens / 1_000).toFixed(1)}K`
+                          : String(e.totalTokens)}
+                      </p>
+                    </div>
+                    {e.totalSavedUsd > 0 && (
+                      <div>
+                        <p className="text-[10px] text-slate-600">Gespart</p>
+                        <p className="text-xs text-emerald-400">
+                          ${e.totalSavedUsd.toFixed(3)}
+                        </p>
+                      </div>
+                    )}
+                    {e.costTrend7d != null && (
+                      <div>
+                        <p className="text-[10px] text-slate-600">7d Trend</p>
+                        <p className={cx(
+                          'text-xs',
+                          e.costTrend7d > 0 ? 'text-amber-400' : 'text-emerald-400',
+                        )}>
+                          {e.costTrend7d > 0 ? '+' : ''}{e.costTrend7d}%
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Cloud providers */}
         <section>

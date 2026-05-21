@@ -5,6 +5,7 @@ import { readProcessingLedger } from '@/lib/dsgvo/processing-ledger'
 import { readDelegations } from '@/lib/delegations/queue'
 import { calculateCallCost } from '@/lib/delegations/cost-tracker'
 import type { CostAnalytics } from '@/lib/analytics/cost-types'
+import { buildCostReport } from '@/lib/analytics/cost-tracker'
 import { apiLogger } from '@/lib/logger'
 
 const DAYS = 30
@@ -145,7 +146,10 @@ export async function GET(): Promise<NextResponse> {
       },
     }
 
-    return NextResponse.json(analytics)
+    // M159: provider cost report (executionRoute breakdown + Ollama savings)
+    const providerSavings = buildCostReport()
+
+    return NextResponse.json({ ...analytics, providerSavings })
   } catch (err) {
     apiLogger.error({ event: 'analytics.costs.error', err }, 'Failed to compute cost analytics')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

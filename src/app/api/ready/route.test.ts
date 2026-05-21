@@ -31,17 +31,6 @@ vi.mock('@/lib/ai/providers/config-store', () => ({
   ]),
 }))
 
-vi.mock('@/lib/connectors/config', () => ({
-  readConnectorConfigs: vi.fn(() => ({})),
-}))
-
-vi.mock('@/lib/connectors/registry', () => ({
-  getAllConnectorHealth: vi.fn(() => [
-    { manifest: { id: 'linear', name: 'Linear' }, health: { connectorId: 'linear', status: 'unconfigured', lastChecked: '2026-01-01T00:00:00.000Z' } },
-    { manifest: { id: 'github', name: 'GitHub' }, health: { connectorId: 'github', status: 'ok', lastChecked: '2026-01-01T00:00:00.000Z' } },
-  ]),
-}))
-
 import { GET } from './route'
 
 beforeEach(() => {
@@ -61,7 +50,7 @@ describe('GET /api/ready', () => {
     expect(res.status).toBe(200)
     const body = await res.json() as { status: string; checks: { name: string; status: string }[] }
     expect(body.status).toBe('ready')
-    expect(body.checks).toHaveLength(5)
+    expect(body.checks).toHaveLength(4)
   })
 
   it('includes all check names', async () => {
@@ -72,7 +61,6 @@ describe('GET /api/ready', () => {
     expect(names).toContain('ai_providers')
     expect(names).toContain('scope_lock')
     expect(names).toContain('notification_store')
-    expect(names).toContain('connectors')
   })
 
   it('returns 503 with status=not_ready when delegation store is inaccessible', async () => {
@@ -124,20 +112,6 @@ describe('GET /api/ready', () => {
     expect(res.status).toBe(503)
     const body = await res.json() as { checks: { name: string; status: string }[] }
     const check = body.checks.find(c => c.name === 'notification_store')!
-    expect(check.status).toBe('fail')
-  })
-
-  it('returns 503 when connector health reports an error', async () => {
-    const { getAllConnectorHealth } = await import('@/lib/connectors/registry')
-    vi.mocked(getAllConnectorHealth).mockResolvedValueOnce([
-      { manifest: { id: 'linear', name: 'Linear' }, health: { connectorId: 'linear', status: 'error', lastChecked: '2026-01-01T00:00:00.000Z' } },
-      { manifest: { id: 'github', name: 'GitHub' }, health: { connectorId: 'github', status: 'ok', lastChecked: '2026-01-01T00:00:00.000Z' } },
-    ] as Awaited<ReturnType<typeof getAllConnectorHealth>>)
-
-    const res = await GET()
-    expect(res.status).toBe(503)
-    const body = await res.json() as { checks: { name: string; status: string }[] }
-    const check = body.checks.find(c => c.name === 'connectors')!
     expect(check.status).toBe('fail')
   })
 

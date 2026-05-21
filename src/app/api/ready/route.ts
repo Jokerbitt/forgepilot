@@ -9,7 +9,6 @@
  *   2. AI provider configured (at least one provider with API key or local)
  *   3. Scope lock file accessible (agent coordination)
  *   4. Notifications store accessible
- *   5. Connector status readable
  *
  * M160 — Production-Readiness Phase 8-A
  */
@@ -20,8 +19,6 @@ import fs from 'fs'
 import path from 'path'
 import { NextResponse } from 'next/server'
 import { getAllProviderConfigs } from '@/lib/ai/providers/config-store'
-import { readConnectorConfigs } from '@/lib/connectors/config'
-import { getAllConnectorHealth } from '@/lib/connectors/registry'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -117,38 +114,6 @@ async function checkNotificationStore(): Promise<Omit<CheckResult, 'durationMs'>
   }
 }
 
-async function checkConnectors(): Promise<Omit<CheckResult, 'durationMs'>> {
-  try {
-    const connectors = await getAllConnectorHealth(readConnectorConfigs())
-    const errorCount = connectors.filter(connector => connector.health.status === 'error').length
-    const configuredCount = connectors.filter(connector => connector.health.status !== 'unconfigured').length
-
-    if (errorCount > 0) {
-      return {
-        name: 'connectors',
-        status: 'fail',
-        message: `${errorCount}/${connectors.length} connector checks failing`,
-      }
-    }
-
-    if (configuredCount === 0) {
-      return {
-        name: 'connectors',
-        status: 'warn',
-        message: `${connectors.length} connectors installed, none configured`,
-      }
-    }
-
-    return {
-      name: 'connectors',
-      status: 'pass',
-      message: `${configuredCount}/${connectors.length} connectors configured`,
-    }
-  } catch (err) {
-    return { name: 'connectors', status: 'fail', message: `Connector health error: ${String(err)}` }
-  }
-}
-
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function GET(): Promise<NextResponse> {
@@ -159,7 +124,6 @@ export async function GET(): Promise<NextResponse> {
     timed(checkAIProviders),
     timed(checkScopeLock),
     timed(checkNotificationStore),
-    timed(checkConnectors),
   ])
 
   const hasFail = checks.some(c => c.status === 'fail')

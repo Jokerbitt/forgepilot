@@ -3,8 +3,9 @@ node_modules/
 .env.local
 .env*.local
 # All config/*.json are runtime state — NEVER commit (may contain API keys and personal data)
-config/
-!config/.gitkeep
+# Anchored with / so it only ignores the root-level config/ dir, not src/lib/config/
+/config/
+!/config/.gitkeep
 dist/
 build/
 .next/
