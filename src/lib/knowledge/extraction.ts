@@ -1,7 +1,8 @@
 import type { Delegation } from '@/lib/models/delegation'
 import { scrubPII } from '@/lib/context/pii-scrubber'
 import type { MemoryCard, MemoryCardType, ConfidenceLevel, PrivacyClass } from './types'
-import { upsertCard } from './store'
+import { createKnowledgeCardRepository } from '@/lib/repositories/knowledgeCardRepository'
+import { SINGLE_TENANT_USER_ID } from '@/lib/repositories/base'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -116,7 +117,7 @@ export interface ExtractedKnowledge {
  * Called fire-and-forget from the delegation execute route after the delegation
  * transitions to status === 'completed'.
  */
-export function extractKnowledge(delegation: Delegation): ExtractedKnowledge | null {
+export async function extractKnowledge(delegation: Delegation): Promise<ExtractedKnowledge | null> {
   if (delegation.status !== 'completed') return null
 
   const now  = new Date().toISOString()
@@ -140,7 +141,8 @@ export function extractKnowledge(delegation: Delegation): ExtractedKnowledge | n
   }
 
   try {
-    upsertCard(card)
+    const repo = createKnowledgeCardRepository(SINGLE_TENANT_USER_ID)
+    await repo.upsert(card)
     return { card, saved: true }
   } catch {
     return { card, saved: false }

@@ -332,11 +332,9 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
 
       // M116: Auto-Knowledge Extraction — fire-and-forget
       if (success) {
-        try {
-          extractKnowledge(finishedDelegation)
-        } catch {
+        extractKnowledge(finishedDelegation).catch(() => {
           // Non-critical — never block execution
-        }
+        })
       }
 
       // Completion attention item

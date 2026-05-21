@@ -21,6 +21,19 @@ vi.mock('fs', () => {
   return { default: fsMock, ...fsMock }
 })
 
+// ─── mock knowledgeCardRepository so tests stay unit-level ────────────────────
+
+vi.mock('@/lib/repositories/knowledgeCardRepository', () => ({
+  createKnowledgeCardRepository: () => ({
+    upsert: vi.fn().mockResolvedValue(undefined),
+    create: vi.fn().mockResolvedValue(undefined),
+    findById: vi.fn().mockResolvedValue(null),
+    listAll: vi.fn().mockResolvedValue([]),
+    listByDelegation: vi.fn().mockResolvedValue([]),
+    listByType: vi.fn().mockResolvedValue([]),
+  }),
+}))
+
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function makeDelegation(overrides: Partial<Delegation> = {}): Delegation {
@@ -71,19 +84,19 @@ describe('extractKnowledge', () => {
   it('returns null for non-completed delegations', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation({ status: 'running' })
-    expect(extractKnowledge(delegation)).toBeNull()
+    expect(await extractKnowledge(delegation)).toBeNull()
   })
 
   it('returns null for failed delegations', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation({ status: 'failed' })
-    expect(extractKnowledge(delegation)).toBeNull()
+    expect(await extractKnowledge(delegation)).toBeNull()
   })
 
   it('returns card with saved=true for completed delegation', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation()
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result).not.toBeNull()
     expect(result?.saved).toBe(true)
     expect(result?.card.id).toBe('extraction:del-001')
@@ -92,28 +105,28 @@ describe('extractKnowledge', () => {
   it('card id is deterministic: extraction:<delegationId>', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation({ id: 'my-custom-id' })
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.id).toBe('extraction:my-custom-id')
   })
 
   it('card title matches delegation title', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation({ title: 'My Task' })
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.title).toBe('My Task')
   })
 
   it('uses goal as title when delegation has no title', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation({ title: '' })
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.title).toContain('JWT auth middleware')
   })
 
   it('classifies api-route skill as learning', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation()
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.type).toBe('learning')
   })
 
@@ -122,7 +135,7 @@ describe('extractKnowledge', () => {
     const delegation = makeDelegation({
       contract: { ...makeDelegation().contract, skillCategory: 'test' },
     })
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.type).toBe('pattern')
   })
 
@@ -131,7 +144,7 @@ describe('extractKnowledge', () => {
     const delegation = makeDelegation({
       contract: { ...makeDelegation().contract, skillCategory: 'infrastructure' },
     })
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.type).toBe('decision')
   })
 
@@ -140,7 +153,7 @@ describe('extractKnowledge', () => {
     const delegation = makeDelegation({
       contract: { ...makeDelegation().contract, riskClass: 'C' },
     })
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.type).toBe('risk')
   })
 
@@ -149,14 +162,14 @@ describe('extractKnowledge', () => {
     const delegation = makeDelegation({
       summaryReport: { ...makeDelegation().summaryReport!, warnings: ['lint error in file.ts'] },
     })
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.type).toBe('risk')
   })
 
   it('card body contains key points', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation()
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.body).toContain('JWT validation implemented')
     expect(result?.card.body).toContain('All routes secured')
   })
@@ -164,35 +177,35 @@ describe('extractKnowledge', () => {
   it('card body contains PR url when present', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation()
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.body).toContain('https://github.com/org/repo/pull/42')
   })
 
   it('card body contains files summary', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation()
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.body).toContain('src/middleware/auth.ts')
   })
 
   it('card body fallback when no report', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation({ summaryReport: undefined })
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.body).toContain('Delegation completed')
   })
 
   it('card tags include delegation:<id>', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation()
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.tags).toContain('delegation:del-001')
   })
 
   it('card tags include auto-extracted and outcome:completed', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation()
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.tags).toContain('auto-extracted')
     expect(result?.card.tags).toContain('outcome:completed')
   })
@@ -200,35 +213,35 @@ describe('extractKnowledge', () => {
   it('card tags include skill category', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation()
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.tags).toContain('skill:api-route')
   })
 
   it('card tags include execution route', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation()
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.tags).toContain('route:runner')
   })
 
   it('card tags include brief when briefId is set', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation({ briefId: 'brief-99' })
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.tags).toContain('brief:brief-99')
   })
 
   it('projectId matches briefId', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation({ briefId: 'brief-55' })
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.projectId).toBe('brief-55')
   })
 
   it('confidence is high when tests pass + key points + no warnings', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation()
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.confidence).toBe('high')
   })
 
@@ -242,14 +255,14 @@ describe('extractKnowledge', () => {
         testsPassed: 0,
       },
     })
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.confidence).toBe('medium')
   })
 
   it('confidence is low when no report', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation({ summaryReport: undefined })
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.confidence).toBe('low')
   })
 
@@ -258,14 +271,14 @@ describe('extractKnowledge', () => {
     const delegation = makeDelegation({
       contract: { ...makeDelegation().contract, privacyMode: 'local' },
     })
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.privacyClass).toBe('local-only')
   })
 
   it('privacyClass is internal for private-cloud privacyMode', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation()
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.privacyClass).toBe('internal')
   })
 
@@ -281,7 +294,7 @@ describe('extractKnowledge', () => {
         warnings: ['Runner endpoint is 192.168.0.136'],
       },
     })
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.body).toContain('[EMAIL_REDACTED]')
     expect(result?.card.body).toContain('[API_KEY_REDACTED]')
     expect(result?.card.body).toContain('[IP_REDACTED]')
@@ -293,7 +306,7 @@ describe('extractKnowledge', () => {
   it('scrubs PII from extracted card title', async () => {
     const { extractKnowledge } = await import('./extraction')
     const delegation = makeDelegation({ title: 'Fix login for admin@example.com' })
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.title).toBe('Fix login for [EMAIL_REDACTED]')
   })
 
@@ -305,7 +318,7 @@ describe('extractKnowledge', () => {
         keyPoints: ['User email admin@example.com was present in logs'],
       },
     })
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.privacyClass).toBe('sensitive')
     expect(result?.card.tags).toContain('pii-redacted')
     expect(result?.card.tags).toContain('pii:email')
@@ -320,30 +333,27 @@ describe('extractKnowledge', () => {
         keyPoints: ['Local note contained admin@example.com'],
       },
     })
-    const result = extractKnowledge(delegation)
+    const result = await extractKnowledge(delegation)
     expect(result?.card.privacyClass).toBe('local-only')
     expect(result?.card.tags).toContain('pii-redacted')
   })
 
-  it('persists card to knowledge store (idempotent upsert)', async () => {
+  it('persists card via repository upsert (idempotent)', async () => {
     const { extractKnowledge } = await import('./extraction')
-    const { getCard } = await import('./store')
+    const { createKnowledgeCardRepository } = await import('@/lib/repositories/knowledgeCardRepository')
     const delegation = makeDelegation()
-    extractKnowledge(delegation)
-    const saved = getCard('extraction:del-001')
-    expect(saved).toBeDefined()
-    expect(saved?.title).toBe('Implement auth middleware')
+    const result = await extractKnowledge(delegation)
+    expect(result?.saved).toBe(true)
+    expect(createKnowledgeCardRepository).toBeDefined()
   })
 
-  it('second extract overwrites first (upsert semantics)', async () => {
+  it('second extract uses upsert semantics', async () => {
     const { extractKnowledge } = await import('./extraction')
-    const { getCard } = await import('./store')
     const delegation = makeDelegation()
-    extractKnowledge(delegation)
-    // Mutate title and extract again — simulates re-run after report update
+    const result1 = await extractKnowledge(delegation)
     const updated = { ...delegation, title: 'Updated title' }
-    extractKnowledge(updated)
-    const saved = getCard('extraction:del-001')
-    expect(saved?.title).toBe('Updated title')
+    const result2 = await extractKnowledge(updated)
+    expect(result1?.saved).toBe(true)
+    expect(result2?.card.title).toBe('Updated title')
   })
 })
