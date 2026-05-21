@@ -1,3 +1,5 @@
+import type { CriticReview } from '@/lib/brief-critic/types'
+
 export type ProjectBriefStatus = 'draft' | 'in_review' | 'accepted' | 'archived'
 export type BriefScope = 'minimal' | 'standard' | 'full'
 export type ResearchMode = 'quick' | 'standard' | 'deep'
@@ -191,6 +193,7 @@ export interface ProjectBrief {
   reviewedAt?: string
   reviewedBy?: string
   notes?: string
+  criticReview?: CriticReview
 }
 
 export interface IdeaIntakeInput {

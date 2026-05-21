@@ -1,0 +1,1 @@
+export { BriefCriticPanel } from './BriefCriticPanel'
