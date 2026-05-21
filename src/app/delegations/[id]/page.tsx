@@ -14,14 +14,16 @@ import { LiveLogViewer } from '@/components/delegation/LiveLogViewer'
 import { DelegationTimeline } from '@/components/delegation/DelegationTimeline'
 import { DelegationCommentThread } from '@/components/delegation/DelegationCommentThread'
 import { AgentRunReplayView } from '@/components/delegation/AgentRunReplayView'
+import { GrokCriticCard } from '@/components/delegation/GrokCriticCard'
+import { DelegationPipelineBreadcrumb } from '@/components/delegation/DelegationPipelineBreadcrumb'
 
 const STATUS_COLORS: Record<string, string> = {
-  pending:   'bg-yellow-900/50 text-yellow-400 border-yellow-700',
+  pending:   'bg-gray-800 text-gray-400 border-gray-600',
   approved:  'bg-blue-900/50 text-blue-400 border-blue-700',
-  running:   'bg-green-900/50 text-green-400 border-green-500',
-  completed: 'bg-gray-800 text-gray-400 border-gray-600',
+  running:   'bg-violet-900/50 text-violet-300 border-violet-600',
+  completed: 'bg-emerald-900/40 text-emerald-400 border-emerald-800',
   failed:    'bg-red-900/50 text-red-400 border-red-700',
-  cancelled: 'bg-gray-900 text-gray-600 border-gray-800',
+  cancelled: 'bg-gray-950 text-gray-600 border-gray-800',
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -287,23 +289,30 @@ export default function DelegationDetailPage() {
       <div className="max-w-4xl mx-auto space-y-6">
 
         {/* ── Breadcrumb ────────────────────────────────────────────────── */}
-        <div className="flex items-center gap-2 text-sm text-gray-500 flex-wrap">
-          <Link href="/delegations" className="hover:text-gray-300 transition-colors">
-            ← Delegation Center
-          </Link>
-          <span>/</span>
-          <span className="font-mono text-gray-600 truncate max-w-xs">{d.id}</span>
-          {d.briefId && (
-            <>
-              <span>·</span>
-              <Link
-                href={`/project-briefs/${d.briefId}`}
-                className="text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1"
-              >
-                ◇ {d.briefTitle ?? 'Projektbrief'}
-              </Link>
-            </>
-          )}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm text-gray-500 flex-wrap">
+            <Link href="/delegations" className="hover:text-gray-300 transition-colors">
+              ← Delegation Center
+            </Link>
+            <span>/</span>
+            <span className="font-mono text-gray-600 truncate max-w-xs">{d.id}</span>
+            {d.briefId && (
+              <>
+                <span>·</span>
+                <Link
+                  href={`/project-briefs/${d.briefId}`}
+                  className="text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1"
+                >
+                  ← Zum Brief: {d.briefTitle ?? 'Projektbrief'}
+                </Link>
+              </>
+            )}
+          </div>
+          {/* Pipeline progress */}
+          <DelegationPipelineBreadcrumb
+            status={d.status}
+            hasPr={!!d.summaryReport?.prUrl}
+          />
         </div>
 
         {/* ── Header ───────────────────────────────────────────────────── */}
@@ -314,7 +323,7 @@ export default function DelegationDetailPage() {
                 <span className="text-xs font-mono text-gray-600 bg-gray-800 px-2 py-0.5 rounded border border-gray-700">
                   {d.contract.workItemId}
                 </span>
-                <span className={`px-2 py-0.5 text-xs rounded-md border font-semibold uppercase tracking-wider ${STATUS_COLORS[d.status] || STATUS_COLORS.pending}`}>
+                <span className={`px-2 py-0.5 text-xs rounded-md border font-semibold uppercase tracking-wider ${STATUS_COLORS[d.status] || STATUS_COLORS.pending} ${d.status === 'running' ? 'animate-pulse' : ''}`}>
                   {STATUS_LABELS[d.status] || d.status}
                 </span>
                 <span className={`px-2 py-0.5 text-xs rounded border font-medium ${RISK_COLORS[d.contract.riskClass] || ''}`}>
@@ -704,18 +713,39 @@ export default function DelegationDetailPage() {
             )}
           </div>
 
-          {/* Live Agent Logs */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-              Agent Logs
-            </h2>
-            <LiveLogViewer
-              delegationId={id}
-              initialLogs={d.logs ?? []}
-              initialStatus={d.status}
-              initialCostEstimate={d.contract.maxBudgetUsd}
-              onStatusChange={handleLiveStatusChange}
-            />
+          {/* Live Agent Logs + Grok Critic (stacked in right column) */}
+          <div className="space-y-4">
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                Agent Logs
+              </h2>
+              <LiveLogViewer
+                delegationId={id}
+                initialLogs={d.logs ?? []}
+                initialStatus={d.status}
+                initialCostEstimate={d.contract.maxBudgetUsd}
+                onStatusChange={handleLiveStatusChange}
+              />
+            </div>
+
+            {/* Grok Critic — only visible when completed */}
+            {d.status === 'completed' && (
+              <GrokCriticCard
+                delegationId={id}
+                agentOutput={
+                  d.summaryReport
+                    ? [
+                        ...(d.summaryReport.keyPoints ?? []),
+                        ...(d.summaryReport.changes ?? []),
+                      ].join('\n')
+                    : d.contract.goal
+                }
+                grokConfigured={typeof process !== 'undefined'
+                  ? true  // assume configured client-side; API returns 503 if not
+                  : false
+                }
+              />
+            )}
           </div>
         </div>
 
