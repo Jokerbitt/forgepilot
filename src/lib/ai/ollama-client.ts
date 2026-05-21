@@ -1,5 +1,15 @@
 import { readStoredApiKeys } from '@/lib/connectors/config'
 
+export const PREFERRED_MODELS = [
+  'llama3.3',
+  'llama3.2',
+  'qwen2.5:7b',
+  'qwen2.5',
+  'mistral',
+  'gemma3',
+  'llama3',
+]
+
 export function getOllamaBaseUrl(): string {
   return (process.env.OLLAMA_BASE_URL ?? readStoredApiKeys().OLLAMA_BASE_URL ?? 'http://localhost:11434').replace(/\/+$/, '')
 }
@@ -85,4 +95,98 @@ export async function ollamaEmbed(
   if (!data.embeddings?.[0]) throw new Error('Ollama embed returned no vector')
 
   return data.embeddings[0]
+}
+
+// ─── Status helpers (fail-open, never throw) ─────────────────────────────────
+
+interface OllamaTagsResponse {
+  models?: Array<{ name: string }>
+}
+
+interface OllamaGeneratePayload {
+  model: string
+  prompt: string
+  stream: boolean
+}
+
+interface OllamaGenerateResponse {
+  response?: string
+  error?: string
+}
+
+/**
+ * Returns true when Ollama is reachable, false on any error.
+ * Timeout is 2 seconds to keep UI responsive.
+ */
+export async function isOllamaRunning(): Promise<boolean> {
+  try {
+    const baseUrl = getOllamaBaseUrl()
+    const res = await fetch(`${baseUrl}/api/tags`, {
+      signal: AbortSignal.timeout(2000),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Returns list of installed Ollama model names.
+ * Returns empty array on any error.
+ */
+export async function getAvailableOllamaModels(): Promise<string[]> {
+  try {
+    const baseUrl = getOllamaBaseUrl()
+    const res = await fetch(`${baseUrl}/api/tags`, {
+      signal: AbortSignal.timeout(2000),
+    })
+    if (!res.ok) return []
+    const data = await res.json() as OllamaTagsResponse
+    return (data.models ?? []).map(m => m.name)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Picks the best available model from PREFERRED_MODELS (or uses the provided model).
+ * Falls back to the first installed model if none of the preferred ones is available.
+ * Returns empty string on any error (fail-open).
+ */
+export async function generateWithOllama(prompt: string, model?: string): Promise<string> {
+  try {
+    const baseUrl = getOllamaBaseUrl()
+    let resolvedModel = model
+
+    if (!resolvedModel) {
+      const available = await getAvailableOllamaModels()
+      if (available.length === 0) return ''
+
+      // Pick first preferred model that is installed (normalise name for partial match)
+      resolvedModel = PREFERRED_MODELS.find(preferred =>
+        available.some(a => a === preferred || a.startsWith(`${preferred}:`))
+      ) ?? available[0]
+    }
+
+    const payload: OllamaGeneratePayload = {
+      model: resolvedModel,
+      prompt,
+      stream: false,
+    }
+
+    const res = await fetch(`${baseUrl}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(60000),
+    })
+
+    if (!res.ok) return ''
+
+    const data = await res.json() as OllamaGenerateResponse
+    if (data.error) return ''
+    return data.response?.trim() ?? ''
+  } catch {
+    return ''
+  }
 }
