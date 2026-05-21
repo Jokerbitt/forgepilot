@@ -55,7 +55,6 @@ test.describe('V1 Core Flow — Idea → Brief → Delegation → Review surface
           changes: ['Validated V1 core flow without external AI dependency'],
           timeTakenMinutes: 1,
           testsPassed: 1,
-          prUrl: 'https://github.com/Jokerbitt/forgepilot/pull/298',
         },
       },
     })
@@ -64,7 +63,7 @@ test.describe('V1 Core Flow — Idea → Brief → Delegation → Review surface
     await page.goto(`/delegations/${delegation.id}`)
 
     await expect(page.getByRole('heading', { name: delegation.title })).toBeVisible()
-    await expect(page.getByText('Fertig')).toBeVisible()
+    await expect(page.getByText('Fertig', { exact: true }).first()).toBeVisible()
     await expect(page.getByText('Ergebnis')).toBeVisible()
     await expect(page.getByText('Grok Critic')).toBeVisible()
     await expect(page.getByText('Review surface available')).toBeVisible()

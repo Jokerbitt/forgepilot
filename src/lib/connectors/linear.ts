@@ -212,7 +212,7 @@ export async function findLinearIssueByTitle(
   if (!apiKey) throw new Error('LINEAR_API_KEY not configured')
 
   const query = `
-    query FindIssueByTitle($teamId: String!, $title: String!) {
+    query FindIssueByTitle($teamId: ID!, $title: String!) {
       issues(first: 1, filter: { team: { id: { eq: $teamId } }, title: { eq: $title } }) {
         nodes { id identifier url title }
       }
