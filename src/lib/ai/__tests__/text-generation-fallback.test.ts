@@ -106,7 +106,8 @@ describe('generateText — M128 Multi-Provider Fallback', () => {
     const primary  = makeProvider('primary')
     const fallback = makeProvider('fallback', 'fallback-response')
 
-    primary.generateText.mockRejectedValue(new Error('rate limit'))
+    // Use a non-retryable error so retry does not interfere with fallback test
+    primary.generateText.mockRejectedValue(new Error('auth error'))
 
     vi.mocked(getModelSelection).mockReturnValue({
       fastProvider: 'primary',
@@ -132,7 +133,8 @@ describe('generateText — M128 Multi-Provider Fallback', () => {
     const primary  = makeProvider('primary')
     const fallback = makeProvider('fallback')
 
-    primary.generateText.mockRejectedValue(new Error('timeout'))
+    // Use a non-retryable error so only the fallback warn is emitted, not ai.retry
+    primary.generateText.mockRejectedValue(new Error('auth error'))
 
     vi.mocked(getModelSelection).mockReturnValue({
       fastProvider: 'primary',
@@ -149,7 +151,7 @@ describe('generateText — M128 Multi-Provider Fallback', () => {
     await generateText(DEFAULT_OPTIONS)
 
     expect(aiLogger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ event: 'ai.fallback', primaryProvider: 'primary', fallbackProvider: 'fallback' }),
+      expect.objectContaining({ event: 'ai.fallback', primaryId: 'primary', fallbackId: 'fallback' }),
       expect.any(String),
     )
   })
