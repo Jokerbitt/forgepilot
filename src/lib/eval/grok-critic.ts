@@ -10,10 +10,113 @@
  *   if (criticResult) mergeWithPrimaryScore(primaryScore, criticResult)
  */
 
-import { generateText } from '@/lib/ai/text-generation'
+import { generateText, stripJsonCodeFence, type GenerateTextResult } from '@/lib/ai/text-generation'
 import { logger } from '@/lib/logger'
 
 const log = logger.child({ module: 'grok-critic' })
+
+const DEFAULT_LOCAL_CRITIC_MODEL = 'qwen2.5-coder:14b'
+
+interface CriticProviderCandidate {
+  providerId: string
+  model?: string
+}
+
+function getCriticProviderCandidates(): CriticProviderCandidate[] {
+  const configuredProvider = process.env.FORGEPILOT_CRITIC_PROVIDER?.trim()
+  const configuredModel = process.env.FORGEPILOT_CRITIC_MODEL?.trim()
+  const candidates: CriticProviderCandidate[] = []
+
+  if (configuredProvider) {
+    candidates.push({ providerId: configuredProvider, model: configuredModel || undefined })
+  }
+
+  candidates.push(
+    { providerId: 'xai' },
+    { providerId: 'ollama', model: configuredModel || DEFAULT_LOCAL_CRITIC_MODEL },
+  )
+
+  const seen = new Set<string>()
+  return candidates.filter(candidate => {
+    const key = `${candidate.providerId}:${candidate.model ?? ''}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+async function generateCriticJson(options: {
+  system: string
+  prompt: string
+  maxTokens: number
+  event: string
+}) {
+  let lastError: unknown
+
+  for (const candidate of getCriticProviderCandidates()) {
+    try {
+      return await generateText({
+        system: options.system,
+        prompt: options.prompt,
+        purpose: 'fast',
+        providerId: candidate.providerId,
+        anthropicModel: candidate.model,
+        maxTokens: options.maxTokens,
+      })
+    } catch (err) {
+      lastError = err
+      log.warn({
+        event: options.event,
+        providerId: candidate.providerId,
+        reason: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError ?? 'No critic provider available'))
+}
+
+async function generateParsedCriticJson<T>(options: {
+  system: string
+  prompt: string
+  maxTokens: number
+  event: string
+  parseEvent: string
+}): Promise<{ parsed: T; result: GenerateTextResult }> {
+  let lastError: unknown
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const prompt = attempt === 0
+      ? options.prompt
+      : `${options.prompt}
+
+Your previous response was invalid JSON. Retry with compact JSON only. Escape all quotes inside strings. Do not include markdown fences or commentary.`
+
+    const result = await generateCriticJson({
+      system: options.system,
+      prompt,
+      maxTokens: options.maxTokens,
+      event: options.event,
+    })
+
+    try {
+      return {
+        parsed: JSON.parse(stripJsonCodeFence(result.text)) as T,
+        result,
+      }
+    } catch (err) {
+      lastError = err
+      log.warn({
+        event: options.parseEvent,
+        providerId: result.provider,
+        attempt: attempt + 1,
+        reason: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError ?? 'Critic returned invalid JSON'))
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -86,8 +189,8 @@ Respond ONLY with valid JSON. No markdown fences. No prose.`
 // ─── Delegation output evaluator ──────────────────────────────────────────────
 
 /**
- * Send delegation output to Grok for scoring.
- * Returns null if xAI is not configured (graceful degradation).
+ * Send delegation output to a critic provider for scoring.
+ * Prefers Grok/xAI, then falls back to local Ollama for local-first coverage.
  */
 export async function runGrokCritic(input: GrokCriticInput): Promise<GrokCriticResult | null> {
   const criteriaList = input.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n')
@@ -120,19 +223,18 @@ Respond with JSON exactly matching this schema:
 }`
 
   try {
-    const result = await generateText({
+    const { parsed, result } = await generateParsedCriticJson<Omit<GrokCriticResult, 'providerId' | 'evaluatedAt' | 'rawResponse'>>({
       system: CRITIC_SYSTEM_PROMPT,
       prompt,
-      purpose: 'fast',
-      providerId: 'xai',
       maxTokens: 1000,
+      event: 'grok.critic.provider_failed',
+      parseEvent: 'grok.critic.invalid_json',
     })
-
-    const parsed = JSON.parse(result.text) as Omit<GrokCriticResult, 'providerId' | 'evaluatedAt' | 'rawResponse'>
 
     log.info({
       event: 'grok.critic.eval',
       delegation: input.delegationTitle,
+      providerId: result.provider,
       verdict: parsed.verdict,
       grade: parsed.overallGrade,
     })
@@ -152,8 +254,8 @@ Respond with JSON exactly matching this schema:
 // ─── Code reviewer ────────────────────────────────────────────────────────────
 
 /**
- * Ask Grok to review a single file for security + correctness issues.
- * Returns null if xAI is not configured.
+ * Ask the critic to review a single file for security + correctness issues.
+ * Prefers Grok/xAI, then falls back to local Ollama for local-first coverage.
  */
 export async function runGrokCodeReview(input: CodeReviewInput): Promise<CodeReviewResult | null> {
   const diffSection = input.diff ? `\nDIFF:\n${input.diff.slice(0, 3000)}` : ''
@@ -175,19 +277,18 @@ Respond with JSON exactly matching this schema:
 }`
 
   try {
-    const result = await generateText({
+    const { parsed, result } = await generateParsedCriticJson<Omit<CodeReviewResult, 'providerId' | 'reviewedAt' | 'rawResponse'>>({
       system: CODE_REVIEW_SYSTEM_PROMPT,
       prompt,
-      purpose: 'fast',
-      providerId: 'xai',
       maxTokens: 1500,
+      event: 'grok.critic.review.provider_failed',
+      parseEvent: 'grok.critic.review.invalid_json',
     })
-
-    const parsed = JSON.parse(result.text) as Omit<CodeReviewResult, 'providerId' | 'reviewedAt' | 'rawResponse'>
 
     log.info({
       event: 'grok.critic.review',
       file: input.filePath,
+      providerId: result.provider,
       verdict: parsed.verdict,
       securityCount: parsed.securityIssues.length,
     })
