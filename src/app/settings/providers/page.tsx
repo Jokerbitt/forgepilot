@@ -5,6 +5,39 @@ import { useEffect, useState, useCallback } from 'react'
 import { cx } from '@/components/ui/primitives'
 import type { AIProviderConfig, AIModelSelection, AIModelDef } from '@/lib/ai/providers/types'
 
+// ─── Provider Health Types ────────────────────────────────────────────────────
+
+type ProviderHealthStatus = 'healthy' | 'degraded' | 'unavailable' | 'unconfigured'
+
+interface ProviderHealthEntry {
+  providerId: string
+  status: ProviderHealthStatus
+  latencyMs?: number
+  checkedAt: string
+  error?: string
+  failStreak: number
+}
+
+interface HealthReport {
+  checkedAt: string | null
+  providers: ProviderHealthEntry[]
+  summary: { total: number; healthy: number; degraded: number; unavailable: number; unconfigured: number }
+}
+
+const HEALTH_DOT: Record<ProviderHealthStatus, string> = {
+  healthy:      'bg-emerald-400',
+  degraded:     'bg-amber-400 animate-pulse',
+  unavailable:  'bg-red-400 animate-pulse',
+  unconfigured: 'bg-slate-600',
+}
+
+const HEALTH_LABEL: Record<ProviderHealthStatus, string> = {
+  healthy:      'erreichbar',
+  degraded:     'langsam',
+  unavailable:  'nicht erreichbar',
+  unconfigured: 'kein API-Key',
+}
+
 // ─── Quick-Setup Banner (generic, reusable) ───────────────────────────────────
 
 interface QuickSetupBannerProps {
@@ -444,6 +477,7 @@ function BaseUrlEditor({
 function ProviderCard({
   provider,
   selection,
+  healthEntry,
   onToggle,
   onTest,
   onSelectModel,
@@ -452,6 +486,7 @@ function ProviderCard({
 }: {
   provider: ProviderWithStatus
   selection: AIModelSelection
+  healthEntry?: ProviderHealthEntry
   onToggle: (id: string, enabled: boolean) => void
   onTest: (id: string) => Promise<void>
   onSelectModel: (purpose: 'fast' | 'coding', providerId: string, modelId: string) => void
@@ -502,6 +537,21 @@ function ProviderCard({
               limit={provider.freeTier.limit}
               unverified={provider.freeTier.verification?.status === 'unverified'}
             />
+          )}
+          {/* Health status badge */}
+          {healthEntry && (
+            <span
+              title={`${HEALTH_LABEL[healthEntry.status]}${healthEntry.latencyMs != null ? ` · ${healthEntry.latencyMs}ms` : ''}${healthEntry.failStreak > 0 ? ` · ${healthEntry.failStreak}× Fehler` : ''}`}
+              className="flex items-center gap-1 shrink-0"
+            >
+              <span className={cx('h-1.5 w-1.5 rounded-full', HEALTH_DOT[healthEntry.status])} />
+              {healthEntry.latencyMs != null && healthEntry.status !== 'unconfigured' && (
+                <span className="text-[10px] text-slate-500 font-mono">{healthEntry.latencyMs}ms</span>
+              )}
+              {healthEntry.failStreak >= 2 && (
+                <span className="text-[10px] text-red-400">↯{healthEntry.failStreak}</span>
+              )}
+            </span>
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -974,9 +1024,12 @@ const QUICK_SETUP_CONFIGS: Record<string, {
 }
 
 export default function ProvidersPage() {
-  const [data, setData]     = useState<ProvidersData | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved]   = useState(false)
+  const [data, setData]                                       = useState<ProvidersData | null>(null)
+  const [saving, setSaving]                                   = useState(false)
+  const [saved, setSaved]                                     = useState(false)
+  const [health, setHealth]                                   = useState<Record<string, ProviderHealthEntry>>({})
+  const [healthLoading, setHealthLoading]                     = useState(false)
+  const [healthCheckedAt, setHealthCheckedAt]                 = useState<string | null>(null)
 
   const load = useCallback(() => {
     fetch('/api/ai/providers')
@@ -985,7 +1038,29 @@ export default function ProvidersPage() {
       .catch(() => null)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  const loadHealth = useCallback(() => {
+    fetch('/api/ai/providers/health')
+      .then(r => r.json())
+      .then((d: HealthReport) => {
+        const map: Record<string, ProviderHealthEntry> = {}
+        for (const e of d.providers ?? []) map[e.providerId] = e
+        setHealth(map)
+        setHealthCheckedAt(d.checkedAt)
+      })
+      .catch(() => null)
+  }, [])
+
+  const handleRunHealthCheck = async () => {
+    setHealthLoading(true)
+    try {
+      await fetch('/api/ai/providers/health', { method: 'POST' })
+      loadHealth()
+    } finally {
+      setHealthLoading(false)
+    }
+  }
+
+  useEffect(() => { load(); loadHealth() }, [load, loadHealth])
 
   const save = async (update: { provider?: Partial<AIProviderConfig> & { id: string }; selection?: AIModelSelection }) => {
     setSaving(true)
@@ -1053,6 +1128,18 @@ export default function ProvidersPage() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-[10px] text-slate-600">{data.providers.length} Provider · {freeTierProviders.length} mit Free Tier · {freeModelCount} kostenlose Modelle</span>
+          {healthCheckedAt && (
+            <span className="text-[10px] text-slate-600">
+              Health {new Date(healthCheckedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          <button
+            onClick={() => { void handleRunHealthCheck() }}
+            disabled={healthLoading}
+            className="text-[10px] px-2 py-0.5 rounded border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-slate-400 hover:text-white transition-colors disabled:opacity-40"
+          >
+            {healthLoading ? '⏳' : '⚡ Health Check'}
+          </button>
           {saved && <span className="text-xs text-emerald-400">✓ Gespeichert</span>}
           {saving && <span className="text-xs text-slate-500">Speichern…</span>}
         </div>
@@ -1104,6 +1191,7 @@ export default function ProvidersPage() {
                 key={p.id}
                 provider={p}
                 selection={activeSelection}
+                healthEntry={health[p.id]}
                 onToggle={handleToggle}
                 onTest={async () => {}}
                 onSelectModel={handleSelectModel}
@@ -1128,6 +1216,7 @@ export default function ProvidersPage() {
                 key={p.id}
                 provider={p}
                 selection={activeSelection}
+                healthEntry={health[p.id]}
                 onToggle={handleToggle}
                 onTest={async () => {}}
                 onSelectModel={handleSelectModel}
