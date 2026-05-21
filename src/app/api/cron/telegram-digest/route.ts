@@ -13,6 +13,7 @@ import { buildDigest } from '@/lib/digest/digest-builder'
 import { isTelegramEnabled, readTelegramConfig } from '@/lib/telegram/config'
 import { sendTelegramMessage } from '@/lib/telegram/bot'
 import { logger } from '@/lib/logger'
+import { isCronAuthorized } from '@/lib/cron/auth'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -21,16 +22,9 @@ const cronLogger = logger.child({ module: 'cron.telegram-digest' })
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   // Validate Vercel Cron authorization
-  const cronSecret = process.env.CRON_SECRET
-  if (cronSecret) {
-    const authHeader = request.headers.get('authorization')
-    if (authHeader !== `Bearer ${cronSecret}`) {
-      cronLogger.warn({ event: 'cron.telegram_digest.unauthorized' })
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-  } else if (process.env.NODE_ENV === 'production') {
-    cronLogger.error({ event: 'cron.telegram_digest.no_secret', env: 'production' })
-    return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 500 })
+  if (!isCronAuthorized(request, 'telegram-digest')) {
+    cronLogger.warn({ event: 'cron.telegram_digest.unauthorized' })
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   if (!isTelegramEnabled()) {

@@ -1,10 +1,39 @@
 /** @type {import('next').NextConfig} */
 const { withSentryConfig } = require('@sentry/nextjs')
 
+/** @type {import('next').NextConfig['headers']} */
+const securityHeaders = [
+  { key: 'X-DNS-Prefetch-Control', value: 'on' },
+  { key: 'X-Frame-Options', value: 'DENY' },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+  {
+    key: 'Content-Security-Policy',
+    value: [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // unsafe-eval required for Next.js dev HMR
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:",
+      "font-src 'self'",
+      "connect-src 'self' https://*.anthropic.com https://api.openai.com https://api.groq.com https://generativelanguage.googleapis.com https://api.mistral.ai https://api.together.xyz https://openrouter.ai https://api.x.ai https://*.sentry.io",
+      "frame-ancestors 'none'",
+    ].join('; '),
+  },
+]
+
 const nextConfig = {
   output: 'standalone',
   experimental: {
     instrumentationHook: true,
+  },
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: securityHeaders,
+      },
+    ]
   },
 }
 
