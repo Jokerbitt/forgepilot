@@ -13,7 +13,9 @@ import {
   DollarSign,
   GraduationCap,
   Server,
+  Shield,
   Tag,
+  Target,
   TrendingDown,
   TrendingUp,
   XCircle,
@@ -23,6 +25,7 @@ import Link from 'next/link'
 import type { Delegation } from '@/lib/models/delegation'
 import { cx } from '@/components/ui/primitives'
 import type { CostAnalytics } from '@/lib/analytics/cost-types'
+import type { AnalyticsData } from '@/app/api/analytics/route'
 
 interface ResearchStats {
   total: number
@@ -247,6 +250,7 @@ export default function AnalyticsPage() {
   const [delegations, setDelegations] = useState<Delegation[]>([])
   const [researchStats, setResearchStats] = useState<ResearchStats | null>(null)
   const [costAnalytics, setCostAnalytics] = useState<CostAnalytics | null>(null)
+  const [executionAnalytics, setExecutionAnalytics] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -254,10 +258,12 @@ export default function AnalyticsPage() {
       fetch('/api/delegations').then(r => r.json() as Promise<Delegation[]>),
       fetch('/api/knowledge/research/stats').then(r => r.json() as Promise<ResearchStats>).catch(() => null),
       fetch('/api/analytics/costs').then(r => r.json() as Promise<CostAnalytics>).catch(() => null),
-    ]).then(([dels, rs, ca]) => {
+      fetch('/api/analytics').then(r => r.json() as Promise<AnalyticsData>).catch(() => null),
+    ]).then(([dels, rs, ca, ea]) => {
       setDelegations(dels)
       setResearchStats(rs)
       setCostAnalytics(ca)
+      setExecutionAnalytics(ea)
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
@@ -499,6 +505,166 @@ export default function AnalyticsPage() {
         )}
 
         <RecentRunsTable delegations={delegations} />
+
+        {/* ── M198: Execution Analytics Dashboard ──────────────────────────── */}
+        {executionAnalytics && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 border-t border-white/[0.06] pt-5">
+              <Target className="h-4 w-4 text-slate-500" />
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Execution Analytics</p>
+            </div>
+
+            {/* Summary cards */}
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-4">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Executions</p>
+                <p className="text-2xl font-bold tabular-nums text-white">{executionAnalytics.summary.totalExecutions}</p>
+                <p className="mt-0.5 text-[10px] text-slate-600">total</p>
+              </div>
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-4">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Completed</p>
+                <p className="text-2xl font-bold tabular-nums text-emerald-400">{executionAnalytics.summary.completedCount}</p>
+                <p className="mt-0.5 text-[10px] text-slate-600">succeeded</p>
+              </div>
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-4">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Failed</p>
+                <p className="text-2xl font-bold tabular-nums text-rose-400">{executionAnalytics.summary.failedCount}</p>
+                <p className="mt-0.5 text-[10px] text-slate-600">failed</p>
+              </div>
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-4">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Success Rate</p>
+                <p className={cx('text-2xl font-bold tabular-nums', executionAnalytics.summary.successRate >= 80 ? 'text-emerald-400' : executionAnalytics.summary.successRate >= 50 ? 'text-amber-400' : 'text-rose-400')}>
+                  {executionAnalytics.summary.successRate}%
+                </p>
+                <p className="mt-0.5 text-[10px] text-slate-600">of executions</p>
+              </div>
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-4">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Avg Cost</p>
+                <p className="text-2xl font-bold tabular-nums text-white">${executionAnalytics.summary.avgCostUsd.toFixed(4)}</p>
+                <p className="mt-0.5 text-[10px] text-slate-600">per execution</p>
+              </div>
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-4">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Total Cost</p>
+                <p className="text-2xl font-bold tabular-nums text-white">${executionAnalytics.summary.totalCostUsd.toFixed(4)}</p>
+                <p className="mt-0.5 text-[10px] text-slate-600">all executions</p>
+              </div>
+            </div>
+
+            {/* CriticScore breakdown */}
+            {(executionAnalytics.criticScores.approvedCount + executionAnalytics.criticScores.needsRevisionCount + executionAnalytics.criticScores.rejectedCount) > 0 && (
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-5">
+                <div className="mb-4 flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-slate-500" />
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">CriticScore Breakdown</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Correctness</p>
+                    <p className="text-xl font-bold tabular-nums text-white">{executionAnalytics.criticScores.avgCorrectness}</p>
+                    <p className="text-[10px] text-slate-600">avg /100</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Efficiency</p>
+                    <p className="text-xl font-bold tabular-nums text-white">{executionAnalytics.criticScores.avgEfficiency}</p>
+                    <p className="text-[10px] text-slate-600">avg /100</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Drift</p>
+                    <p className="text-xl font-bold tabular-nums text-white">{executionAnalytics.criticScores.avgDrift}</p>
+                    <p className="text-[10px] text-slate-600">avg (lower = better)</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Approved</p>
+                    <p className="text-xl font-bold tabular-nums text-emerald-400">{executionAnalytics.criticScores.approvedCount}</p>
+                    <p className="text-[10px] text-slate-600">verdict</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Needs Revision</p>
+                    <p className="text-xl font-bold tabular-nums text-amber-400">{executionAnalytics.criticScores.needsRevisionCount}</p>
+                    <p className="text-[10px] text-slate-600">verdict</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Rejected</p>
+                    <p className="text-xl font-bold tabular-nums text-rose-400">{executionAnalytics.criticScores.rejectedCount}</p>
+                    <p className="text-[10px] text-slate-600">verdict</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* By-route table */}
+            {executionAnalytics.byRoute.length > 0 && (
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-5">
+                <div className="mb-4 flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-slate-500" />
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Failure Rates by Route</p>
+                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-white/[0.06] text-left">
+                      <th className="pb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Route</th>
+                      <th className="pb-2 text-right text-[10px] font-semibold uppercase tracking-widest text-slate-500">Executions</th>
+                      <th className="pb-2 text-right text-[10px] font-semibold uppercase tracking-widest text-slate-500">Success Rate</th>
+                      <th className="pb-2 text-right text-[10px] font-semibold uppercase tracking-widest text-slate-500">Avg Score</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.04]">
+                    {executionAnalytics.byRoute.map(row => (
+                      <tr key={row.route}>
+                        <td className="py-2.5">
+                          <span className="font-mono text-xs text-slate-300">{row.route}</span>
+                        </td>
+                        <td className="py-2.5 text-right font-mono text-xs text-slate-400">{row.count}</td>
+                        <td className="py-2.5 text-right">
+                          <span className={cx('font-mono text-xs font-medium', row.successRate >= 80 ? 'text-emerald-400' : row.successRate >= 50 ? 'text-amber-400' : 'text-rose-400')}>
+                            {row.successRate}%
+                          </span>
+                        </td>
+                        <td className="py-2.5 text-right font-mono text-xs text-slate-400">
+                          {row.avgScore > 0 ? row.avgScore : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* 14-day trend */}
+            <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-5">
+              <div className="mb-4 flex items-center gap-2">
+                <Activity className="h-4 w-4 text-slate-500" />
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">14-Day Execution Trend</p>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/[0.06] text-left">
+                    <th className="pb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Date</th>
+                    <th className="pb-2 text-right text-[10px] font-semibold uppercase tracking-widest text-slate-500">Completed</th>
+                    <th className="pb-2 text-right text-[10px] font-semibold uppercase tracking-widest text-slate-500">Failed</th>
+                    <th className="pb-2 text-right text-[10px] font-semibold uppercase tracking-widest text-slate-500">Avg Score</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.04]">
+                  {executionAnalytics.recentTrend.slice().reverse().map(row => (
+                    <tr key={row.date}>
+                      <td className="py-2 font-mono text-xs text-slate-400">{row.date}</td>
+                      <td className="py-2 text-right">
+                        <span className={cx('font-mono text-xs', row.completed > 0 ? 'text-emerald-400' : 'text-slate-600')}>{row.completed}</span>
+                      </td>
+                      <td className="py-2 text-right">
+                        <span className={cx('font-mono text-xs', row.failed > 0 ? 'text-rose-400' : 'text-slate-600')}>{row.failed}</span>
+                      </td>
+                      <td className="py-2 text-right font-mono text-xs text-slate-400">
+                        {row.avgScore > 0 ? row.avgScore : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center justify-center gap-2 py-2 text-[11px] text-slate-700">
           <Clock className="h-3 w-3" />
