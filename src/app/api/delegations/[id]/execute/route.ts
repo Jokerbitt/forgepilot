@@ -25,6 +25,7 @@ import { generateText } from '@/lib/ai/text-generation'
 import { extractKnowledge } from '@/lib/knowledge/extraction'
 import { persistGrokCriticForDelegation } from '@/lib/eval/auto-grok-critic'
 import { writebackExecutionInsights } from '@/lib/knowledge/writeback'
+import { notifyExecutionResult } from '@/lib/notifications'
 
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import { buildContextPackage } from '@/lib/knowledge/context-package'
@@ -389,6 +390,9 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
         actionUrl: `/delegations/${id}`,
         createdAt: new Date().toISOString(),
       })
+
+      // M204: fire-and-forget execution notification
+      void notifyExecutionResult({ delegation: finishedDelegation, event: finalStatus })
       }
     })()
   })
@@ -470,6 +474,9 @@ async function runWithOllamaAgent(
         actionUrl: `/delegations/${id}`,
         createdAt: new Date().toISOString(),
       })
+
+      // M204: fire-and-forget execution notification
+      void notifyExecutionResult({ delegation: finished, event: result.success ? 'completed' : 'failed' })
     }
   } catch (err) {
     const msg = (err as Error).message
