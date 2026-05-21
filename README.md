@@ -114,14 +114,16 @@ npm run dev
 **Docker with Postgres**
 ```bash
 docker-compose up -d
-npx drizzle-kit push
-npx tsx scripts/backfill-json-to-postgres.ts  # one-time migration if needed
+npm run db:push
+FORGEPILOT_DELEGATION_STORAGE=dual npm run db:backfill  # one-time migration if needed
 ```
 
 **Any hosted Postgres** (Supabase, Neon, Railway, Fly.io)
 ```bash
-DATABASE_URL=postgresql://... npx drizzle-kit push
+DATABASE_URL=postgresql://... npm run db:push
 ```
+
+For a cautious migration, start with `FORGEPILOT_DELEGATION_STORAGE=dual`: ForgePilot keeps JSON as the primary read path and mirrors delegation writes into Postgres. After backfill and validation, switch to `FORGEPILOT_DELEGATION_STORAGE=postgres`.
 
 ---
 
@@ -148,7 +150,7 @@ src/
 └── lib/
     ├── ai/               # Provider registry + model router + text generation
     ├── eval/             # Grok critic + 3D scoring (correctness · efficiency · drift)
-    ├── repositories/     # Postgres-only repositories (no JSON fallback)
+    ├── repositories/     # Repository boundary with JSON fallback + Postgres migration path
     ├── context/          # PII scrubber
     ├── knowledge/        # Knowledge card store + writeback
     └── validation/       # Zod schemas + parseBody() helper
