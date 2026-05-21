@@ -8,6 +8,7 @@ export default defineConfig({
     reporters: ['verbose', ['json', { outputFile: 'config/test-results.json' }]],
     exclude: [
       '**/node_modules/**',
+      '**/.next/**',
       '**/.claude/worktrees/**',
       '**/forgepilot-agent-worktree/**',
       'e2e/**',
