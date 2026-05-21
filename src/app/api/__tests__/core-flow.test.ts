@@ -313,7 +313,7 @@ describe('Core Flow: Idea → Brief → Delegation → Execute → Critic', () =
     await postBrief(jsonReq(`${BASE}/api/project-briefs`, validBriefInput))
     await postBrief(jsonReq(`${BASE}/api/project-briefs`, { ...validBriefInput, title: 'Second Brief Project' }))
 
-    const res = await getBriefs()
+    const res = await getBriefs(new NextRequest(`${BASE}/api/project-briefs`))
     expect(res.status).toBe(200)
     const list = await res.json() as unknown[]
     expect(Array.isArray(list)).toBe(true)
