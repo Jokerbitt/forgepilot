@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     })
     const summary = summarizePlanningRequest(plan, items)
     const audit = buildPlanningAudit(mode, plan, items, applyResult)
-    const warnings = buildWarnings(mode, applyResult.skipped.length)
+    const warnings = buildWarnings(mode, applyResult.skipped.map(item => item.reason))
     const auditRecord = recordPlanningAudit({ audit, summary, applyResult, warnings })
 
     return NextResponse.json({
@@ -107,13 +107,16 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function buildWarnings(mode: PlanningMode, skipped: number): string[] {
+function buildWarnings(mode: PlanningMode, skippedReasons: string[]): string[] {
   const warnings: string[] = []
   if (mode === 'preview') {
     warnings.push('Preview only: no GitHub or Linear issues were created.')
   }
-  if (skipped > 0) {
+  if (skippedReasons.some(reason => reason.toLowerCase().includes('config missing'))) {
     warnings.push('Some requested targets were skipped because connector configuration is missing.')
+  }
+  if (skippedReasons.some(reason => reason.toLowerCase().includes('already exists'))) {
+    warnings.push('Some requested targets were skipped because matching issues already exist.')
   }
   return warnings
 }
