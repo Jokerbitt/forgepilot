@@ -12,6 +12,7 @@ export const dynamic = 'force-dynamic'
  */
 
 import { NextResponse } from 'next/server'
+import { requireAuth } from '@/lib/auth/require-auth'
 import fs from 'fs'
 import path from 'path'
 import { getDataDir } from '@/lib/config/paths'
@@ -65,6 +66,9 @@ function writeApiKeys(keys: Record<string, string>): void {
 }
 
 export async function POST(request: Request) {
+  const authError = await requireAuth()
+  if (authError) return authError
+
   const bodyResult = await parseBody(request, EnvKeySchema)
   if (isValidationError(bodyResult)) return bodyResult
 

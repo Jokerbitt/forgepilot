@@ -11,6 +11,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
+// Bypass auth for unit tests — auth behaviour is tested in require-auth.test.ts
+vi.mock('@/lib/auth/require-auth', () => ({ requireAuth: vi.fn().mockResolvedValue(null) }))
+
 // ─── In-memory store ──────────────────────────────────────────────────────────
 const store: Record<string, string> = {}
 

@@ -1,5 +1,9 @@
 import { NextRequest } from 'next/server'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+
+// Bypass auth for unit tests — auth behaviour is tested in require-auth.test.ts
+vi.mock('@/lib/auth/require-auth', () => ({ requireAuth: vi.fn().mockResolvedValue(null) }))
+
 import { GET, POST } from './route'
 
 const mockBuiltBrief = {

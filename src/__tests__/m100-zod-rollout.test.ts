@@ -65,6 +65,9 @@ describe('POST /api/agent-runs — Zod validation', () => {
 
 // ─── /api/settings — Zod validation ──────────────────────────────────────────
 
+// Bypass auth for unit tests — auth behaviour is tested in require-auth.test.ts
+vi.mock('@/lib/auth/require-auth', () => ({ requireAuth: vi.fn().mockResolvedValue(null) }))
+
 vi.mock('@/lib/nba-engine/nba-config', () => ({
   getNBAConfig: vi.fn(() => ({
     ignoreStatuses: ['done'],
