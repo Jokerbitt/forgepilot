@@ -2,9 +2,14 @@ import fs from 'fs'
 import path from 'path'
 import type { Notification } from '@/lib/models/notification'
 
-/** Fire-and-forget: forward notification to Telegram if configured */
+/** Fire-and-forget: forward notification to Telegram if configured + channel enabled */
 async function forwardToTelegram(notification: Notification): Promise<void> {
   try {
+    // M157: respect per-type telegram channel preference
+    const { readNotificationPreferences, isChannelEnabled } = await import('./preferences-store')
+    const prefs = readNotificationPreferences()
+    if (!isChannelEnabled(prefs, notification.type, 'telegram')) return
+
     const { isTelegramEnabled, readTelegramConfig } = await import('@/lib/telegram/config')
     if (!isTelegramEnabled()) return
     const cfg = readTelegramConfig()
