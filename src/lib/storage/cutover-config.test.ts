@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { getStorageMode, getStorageStatus } from './cutover-config'
+import { getConfiguredStorageMode, getStorageMode, getStorageStatus } from './cutover-config'
 
 function withEnv(vars: Record<string, string | undefined>, fn: () => void) {
   const originals: Record<string, string | undefined> = {}
@@ -26,7 +26,12 @@ function withEnv(vars: Record<string, string | undefined>, fn: () => void) {
 
 describe('getStorageMode', () => {
   it('defaults to json when STORAGE_MODE is not set', () => {
-    withEnv({ STORAGE_MODE: undefined }, () => {
+    withEnv({
+      STORAGE_MODE: undefined,
+      FORGEPILOT_DELEGATION_STORAGE: undefined,
+      DATABASE_URL: undefined,
+      SUPABASE_URL: undefined,
+    }, () => {
       expect(getStorageMode()).toBe('json')
     })
   })
@@ -44,7 +49,12 @@ describe('getStorageMode', () => {
   })
 
   it('returns json for an unrecognised value', () => {
-    withEnv({ STORAGE_MODE: 'mysql' }, () => {
+    withEnv({
+      STORAGE_MODE: 'mysql',
+      FORGEPILOT_DELEGATION_STORAGE: undefined,
+      DATABASE_URL: undefined,
+      SUPABASE_URL: undefined,
+    }, () => {
       expect(getStorageMode()).toBe('json')
     })
   })
@@ -52,6 +62,41 @@ describe('getStorageMode', () => {
   it('is case-insensitive', () => {
     withEnv({ STORAGE_MODE: 'POSTGRES' }, () => {
       expect(getStorageMode()).toBe('postgres')
+    })
+  })
+
+  it('falls back to the legacy delegation storage override when STORAGE_MODE is unset', () => {
+    withEnv({ STORAGE_MODE: undefined, FORGEPILOT_DELEGATION_STORAGE: 'dual' }, () => {
+      expect(getStorageMode()).toBe('dual')
+    })
+  })
+
+  it('uses postgres by default when a database is configured and no explicit mode is set', () => {
+    withEnv({
+      STORAGE_MODE: undefined,
+      FORGEPILOT_DELEGATION_STORAGE: undefined,
+      DATABASE_URL: 'postgresql://localhost/test',
+      SUPABASE_URL: undefined,
+    }, () => {
+      expect(getStorageMode()).toBe('postgres')
+    })
+  })
+})
+
+describe('getConfiguredStorageMode', () => {
+  it('returns null when mode is inferred from DATABASE_URL', () => {
+    withEnv({
+      STORAGE_MODE: undefined,
+      FORGEPILOT_DELEGATION_STORAGE: undefined,
+      DATABASE_URL: 'postgresql://localhost/test',
+    }, () => {
+      expect(getConfiguredStorageMode()).toBeNull()
+    })
+  })
+
+  it('prefers STORAGE_MODE over FORGEPILOT_DELEGATION_STORAGE', () => {
+    withEnv({ STORAGE_MODE: 'postgres', FORGEPILOT_DELEGATION_STORAGE: 'dual' }, () => {
+      expect(getConfiguredStorageMode()).toBe('postgres')
     })
   })
 })
@@ -71,6 +116,7 @@ describe('getStorageStatus', () => {
     withEnv({ STORAGE_MODE: 'postgres', DATABASE_URL: 'postgresql://localhost/test', SUPABASE_URL: undefined }, () => {
       const status = getStorageStatus()
       expect(status.mode).toBe('postgres')
+      expect(status.configuredMode).toBe('postgres')
       expect(status.postgresConfigured).toBe(true)
       expect(status.jsonFallbackActive).toBe(false)
       expect(status.recommendation).toContain('Production-ready')
@@ -107,6 +153,21 @@ describe('getStorageStatus', () => {
     withEnv({ STORAGE_MODE: 'postgres', DATABASE_URL: undefined, SUPABASE_URL: 'https://abc.supabase.co', }, () => {
       const status = getStorageStatus()
       expect(status.postgresConfigured).toBe(true)
+    })
+  })
+
+  it('reports inferred postgres mode when DATABASE_URL is present without an explicit mode', () => {
+    withEnv({
+      STORAGE_MODE: undefined,
+      FORGEPILOT_DELEGATION_STORAGE: undefined,
+      DATABASE_URL: 'postgresql://localhost/test',
+      SUPABASE_URL: undefined,
+    }, () => {
+      const status = getStorageStatus()
+      expect(status.mode).toBe('postgres')
+      expect(status.configuredMode).toBeNull()
+      expect(status.postgresConfigured).toBe(true)
+      expect(status.jsonFallbackActive).toBe(false)
     })
   })
 })
