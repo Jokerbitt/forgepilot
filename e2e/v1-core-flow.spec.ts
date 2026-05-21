@@ -64,7 +64,7 @@ test.describe('V1 Core Flow — Idea → Brief → Delegation → Review surface
     await page.goto(`/delegations/${delegation.id}`)
 
     await expect(page.getByRole('heading', { name: delegation.title })).toBeVisible()
-    await expect(page.getByText('Fertig')).toBeVisible()
+    await expect(page.getByText('Fertig').first()).toBeVisible()
     await expect(page.getByText('Ergebnis')).toBeVisible()
     await expect(page.getByText('Grok Critic')).toBeVisible()
     await expect(page.getByText('Review surface available')).toBeVisible()
