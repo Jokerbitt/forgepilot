@@ -176,4 +176,4 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [ ] M167: Onboarding Wizard — 3-Step-Flow: Provider konfigurieren → erste Idee eingeben → erste Delegation starten; für Erstnutzer ohne Docs-Lesen
 - [ ] M168: SaaS-Readiness Audit — Auth, Multi-Tenancy-Plan, Billing-Hook, DSGVO-Consent-Flow, Pricing-Page Wireframe
 - [x] M169: End-to-End Smoke Tests — Playwright: Login → Idee → Brief → Delegation → Approve → Run (Critical Happy Path)
-- [ ] M170: Public Launch Prep — README for GitHub.com, Demo-Video Script, Pricing Model Entscheidung (Solo vs. Team vs. API-Credits)
+- [x] M170: Public Launch Prep — README for GitHub.com, Demo-Video Script, Pricing Model Entscheidung (Solo vs. Team vs. API-Credits)
