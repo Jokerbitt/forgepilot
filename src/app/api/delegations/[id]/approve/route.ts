@@ -6,6 +6,7 @@ import {
   createDelegationRepository,
   SINGLE_TENANT_USER_ID,
 } from '@/lib/repositories/delegationRepository'
+import { logAuditEvent } from '@/lib/audit'
 
 export async function POST(
   request: Request,
@@ -70,6 +71,15 @@ export async function POST(
   if (!updated) {
     return NextResponse.json({ error: 'Delegation nicht gefunden' }, { status: 404 })
   }
+
+  logAuditEvent({
+    action: 'delegation.approved',
+    entityId: delegation.id,
+    entityType: 'delegation',
+    entityTitle: delegation.title,
+    actor: source,
+    metadata: { note: body.note },
+  })
 
   return NextResponse.json(updated)
 }

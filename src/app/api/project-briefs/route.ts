@@ -6,6 +6,7 @@ import {
 import { parseBody, isValidationError } from '@/lib/validation/api'
 import { ProjectBriefSchema } from '@/lib/validation/schemas'
 import { createProjectBriefRepository } from '@/lib/repositories/projectBriefRepository'
+import { logAuditEvent } from '@/lib/audit'
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,6 +31,13 @@ export async function POST(request: NextRequest) {
     const brief = buildProjectBrief(result)
     const repo = createProjectBriefRepository()
     const saved = await repo.create(brief)
+    logAuditEvent({
+      action: 'brief.created',
+      entityId: saved.id,
+      entityType: 'brief',
+      entityTitle: saved.title,
+      actor: 'user',
+    })
     return NextResponse.json(saved, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Failed to create project brief' }, { status: 500 })
