@@ -16,6 +16,12 @@ import {
   shouldProtectPath,
   isPublicOperationalPath,
 } from '@/lib/auth/config'
+import {
+  rateLimiterStore,
+  buildRateLimitHeaders,
+  getTierForPath,
+  RATE_LIMIT_TIERS,
+} from '@/lib/rate-limit'
 
 /** Header name read on the request and echoed on the response. */
 export const REQUEST_ID_HEADER = 'x-request-id'
@@ -61,6 +67,38 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     const contentLength = request.headers.get('content-length')
     if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
       return new NextResponse('Request too large', { status: 413 })
+    }
+  }
+
+  // Apply rate limiting to mutating requests on API routes.
+  // GETs are excluded to avoid breaking polling UIs.
+  if (
+    !['GET', 'HEAD'].includes(request.method) &&
+    request.nextUrl.pathname.startsWith('/api/')
+  ) {
+    const tier = getTierForPath(request.nextUrl.pathname)
+    const { limit, windowMs } = RATE_LIMIT_TIERS[tier]
+    const ip =
+      request.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
+      request.headers.get('x-real-ip') ??
+      'unknown'
+    const key = `rl:${ip}:${request.nextUrl.pathname}`
+
+    const rateLimitResult = rateLimiterStore.check(key, limit, windowMs)
+    if (!rateLimitResult.allowed) {
+      return new NextResponse(
+        JSON.stringify({
+          error: 'Too Many Requests',
+          retryAfter: rateLimitResult.retryAfter ?? Math.ceil(windowMs / 1000),
+        }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            ...buildRateLimitHeaders(rateLimitResult),
+          },
+        },
+      )
     }
   }
 

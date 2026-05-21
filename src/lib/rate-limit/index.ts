@@ -160,6 +160,51 @@ export function buildRateLimitHeaders(result: RateLimitResult): Record<string, s
   }
   if (result.retryAfter !== undefined) {
     headers['Retry-After'] = String(result.retryAfter)
+    headers['X-RateLimit-Reset'] = String(Math.floor(Date.now() / 1000) + result.retryAfter)
   }
   return headers
+}
+
+// ─── Tier-based rate limiting (M189) ─────────────────────────────────────────
+
+/** Tier-based limits for different route categories. */
+export const RATE_LIMIT_TIERS = {
+  /** Expensive AI/execution routes — strictly limited */
+  expensive: { limit: 10, windowMs: 60_000 },
+  /** Standard API calls (CRUD, reads) */
+  standard: { limit: 60, windowMs: 60_000 },
+  /** Auth routes — very strictly limited */
+  auth: { limit: 5, windowMs: 60_000 },
+} as const
+
+export type RateLimitTier = keyof typeof RATE_LIMIT_TIERS
+
+/** Maps route path patterns to their rate limit tier. */
+export const ROUTE_TIERS: Record<string, RateLimitTier> = {
+  '/api/delegations/[id]/execute': 'expensive',
+  '/api/delegations/[id]/critic-review': 'expensive',
+  '/api/project-briefs/[id]/research-run': 'expensive',
+  '/api/project-briefs/ai-suggest': 'expensive',
+  '/api/ai/generate': 'expensive',
+  '/api/pilot/idea-to-production': 'expensive',
+  '/api/pilot/auto-run': 'expensive',
+  '/api/auth': 'auth',
+}
+
+/**
+ * Gets the rate limit tier for a given pathname.
+ * Tries exact match first, then prefix match for dynamic segments.
+ * Falls back to 'standard' for unmatched routes.
+ */
+export function getTierForPath(pathname: string): RateLimitTier {
+  // Exact match first
+  if (ROUTE_TIERS[pathname]) return ROUTE_TIERS[pathname]
+  // Prefix match: the pattern base (everything up to the first dynamic segment)
+  // must be followed by a '/' in the pathname so that '/api/delegations' does
+  // not accidentally match '/api/delegations/[id]/execute'.
+  for (const [pattern, tier] of Object.entries(ROUTE_TIERS)) {
+    const base = pattern.includes('/[') ? pattern.split('/[')[0] : pattern
+    if (pathname.startsWith(base + '/')) return tier
+  }
+  return 'standard'
 }
