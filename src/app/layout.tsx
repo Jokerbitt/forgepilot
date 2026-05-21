@@ -5,6 +5,7 @@ import { GlobalKeyboardHandler } from '@/components/shared/GlobalKeyboardHandler
 import { GlobalSearch } from '@/components/search/GlobalSearch'
 import { themeScriptContent } from '@/lib/theme/theme-store'
 import { AppChrome } from '@/components/shared/AppChrome'
+import { CommandPalette } from '@/components/command-palette'
 
 export const metadata: Metadata = {
   title: 'ForgePilot',
@@ -27,6 +28,7 @@ export default function RootLayout({
         <ToastProvider>
           <GlobalKeyboardHandler />
           <GlobalSearch />
+          <CommandPalette />
           <AppChrome>
             {children}
           </AppChrome>
