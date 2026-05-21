@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { signOut } from 'next-auth/react'
 import {
   LayoutDashboard,
   Inbox,
@@ -91,6 +92,7 @@ export function AppNav() {
   const [attentionCount, setAttentionCount] = useState(0)
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
   const [autonomousModeActive, setAutonomousModeActive] = useState(false)
+  const [sessionEmail, setSessionEmail] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -125,6 +127,20 @@ export function AppNav() {
     fetchStatus()
     const interval = setInterval(fetchStatus, 8000)
     return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    const fetchSession = async () => {
+      try {
+        const res = await fetch('/api/auth/session')
+        if (!res.ok) return
+        const data = await res.json() as { user?: { email?: string | null } }
+        setSessionEmail(data.user?.email ?? null)
+      } catch {
+        setSessionEmail(null)
+      }
+    }
+    fetchSession()
   }, [])
 
   const totalActive = running + pending
@@ -200,6 +216,18 @@ export function AppNav() {
 
         {/* Footer */}
         <div className="border-t border-white/[0.06] p-3 space-y-2">
+          {sessionEmail && (
+            <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2">
+              <p className="truncate text-xs font-semibold text-slate-300">{sessionEmail}</p>
+              <button
+                type="button"
+                onClick={() => signOut({ callbackUrl: '/login' })}
+                className="mt-1 text-xs font-medium text-slate-500 transition hover:text-slate-300"
+              >
+                Abmelden
+              </button>
+            </div>
+          )}
           {utilityNavItems.map(item => {
             const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
             const isAutonomousSettings = item.href === '/settings' && autonomousModeActive
