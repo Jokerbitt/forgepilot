@@ -14,20 +14,13 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { syncAllConnectors } from '@/lib/connectors/sync'
 import { logger } from '@/lib/logger'
+import { isCronAuthorized } from '@/lib/cron/auth'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-function isAuthorized(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET
-  if (!secret) {
-    return process.env.NODE_ENV !== 'production'
-  }
-  return request.headers.get('authorization') === `Bearer ${secret}`
-}
-
 async function runSync(request: NextRequest): Promise<NextResponse> {
-  if (!isAuthorized(request)) {
+  if (!isCronAuthorized(request, 'connector-sync')) {
     logger.warn({ event: 'cron.connector-sync.unauthorized' })
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

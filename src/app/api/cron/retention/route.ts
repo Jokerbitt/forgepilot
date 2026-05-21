@@ -13,23 +13,16 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { runRetentionCleanup } from '@/lib/dsgvo/processing-ledger'
 import { dsgvoLogger } from '@/lib/logger'
+import { isCronAuthorized } from '@/lib/cron/auth'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   // Validate Vercel Cron authorization
-  const cronSecret = process.env.CRON_SECRET
-  if (cronSecret) {
-    const authHeader = request.headers.get('authorization')
-    if (authHeader !== `Bearer ${cronSecret}`) {
-      dsgvoLogger.warn({ event: 'cron.retention.unauthorized' })
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-  } else if (process.env.NODE_ENV === 'production') {
-    // In production, CRON_SECRET must be set
-    dsgvoLogger.error({ event: 'cron.retention.no_secret', env: 'production' })
-    return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 500 })
+  if (!isCronAuthorized(request, 'retention')) {
+    dsgvoLogger.warn({ event: 'cron.retention.unauthorized' })
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   try {

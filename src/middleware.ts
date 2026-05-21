@@ -52,7 +52,18 @@ function decorateResponse(request: NextRequest, response: NextResponse): NextRes
   return response
 }
 
+/** Maximum allowed request body size (10 MB). Applied to POST / PUT / PATCH only. */
+const MAX_BODY_SIZE = 10 * 1024 * 1024
+
 export async function middleware(request: NextRequest): Promise<NextResponse> {
+  // Reject oversized bodies early, before auth or business logic.
+  if (['POST', 'PUT', 'PATCH'].includes(request.method)) {
+    const contentLength = request.headers.get('content-length')
+    if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
+      return new NextResponse('Request too large', { status: 413 })
+    }
+  }
+
   if (!isForgePilotAuthEnabled()) {
     return nextWithRequestId(request)
   }

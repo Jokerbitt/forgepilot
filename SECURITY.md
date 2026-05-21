@@ -44,3 +44,16 @@ Out of scope:
 - Vulnerabilities in self-hosted infrastructure not related to ForgePilot code
 - Social engineering attacks
 - Denial of service on self-hosted instances
+
+## Accepted Dev-Only Vulnerabilities (npm audit)
+
+The following vulnerabilities are known and **accepted** because they affect development tooling only and have no impact on production deployments:
+
+| Package | Advisory | Severity | Reason accepted |
+|---|---|---|---|
+| `esbuild <=0.24.2` | [GHSA-67mh-4wv8-2f99](https://github.com/advisories/GHSA-67mh-4wv8-2f99) | Moderate | Dev server only (Vite/Vitest). Not shipped to production. Fix requires `vitest` major version bump — deferred. |
+| `vite <=6.4.1` | Depends on vulnerable esbuild | Moderate | Dev dependency only. Same as above. |
+| `vitest / vite-node <=2.2.0-beta.2` | Depends on vulnerable vite | Moderate | Test runner only. Not in production bundle. |
+| `postcss <8.5.10` | [GHSA-qx2v-qp2m-jg93](https://github.com/advisories/GHSA-qx2v-qp2m-jg93) | Moderate | Pulled in by `next` internally. Direct fix requires downgrading Next.js to a pre-release version — not acceptable. Will be resolved in a future Next.js patch release. |
+
+**Last reviewed:** 2026-05-21 — `npm audit fix` (without `--force`) was run and resolved all auto-fixable issues. Remaining 9 moderate advisories require breaking changes and are tracked here.

@@ -23,6 +23,14 @@ export async function validateAdminCredentials(
   const configuredEmail = env.FORGEPILOT_ADMIN_EMAIL?.trim()
   const configuredPassword = env.FORGEPILOT_ADMIN_PASSWORD
 
+  // V1 note: Password is stored as plaintext in .env.local — no DB hash needed yet.
+  // Warn at runtime if the configured password is too short to be secure.
+  if (configuredPassword && configuredPassword.length < 12) {
+    console.warn(
+      '[ForgePilot] FORGEPILOT_ADMIN_PASSWORD is shorter than 12 characters — use a stronger password',
+    )
+  }
+
   if (!configuredEmail || !configuredPassword || !email || !password) {
     return null
   }

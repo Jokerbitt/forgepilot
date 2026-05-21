@@ -2,7 +2,11 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { handleTelegramUpdate, handleCallbackQuery } from '@/lib/telegram/commands'
 import { sendTelegramMessage, answerCallbackQuery, editMessageText } from '@/lib/telegram/bot'
+import { logger } from '@/lib/logger'
 import type { TelegramUpdate } from '@/lib/telegram/commands'
+
+/** Emitted at most once per process lifetime to avoid log spam. */
+let warnedAboutNoSecret = false
 
 export async function POST(request: Request) {
   try {
@@ -13,6 +17,12 @@ export async function POST(request: Request) {
       if (header !== secret) {
         return NextResponse.json({ ok: false }, { status: 403 })
       }
+    } else if (!warnedAboutNoSecret) {
+      logger.warn(
+        { event: 'telegram.webhook.no_secret' },
+        'TELEGRAM_WEBHOOK_SECRET not set — webhook is unverified',
+      )
+      warnedAboutNoSecret = true
     }
 
     const update = await request.json() as TelegramUpdate
