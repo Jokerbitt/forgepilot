@@ -73,6 +73,8 @@ export interface TaskContract {
   definitionOfDone: string[]
   riskClass: RiskClass
   maxBudgetUsd: number
+  /** M209: If set, execution pauses when actualCostUsd exceeds this value */
+  maxCostUsd?: number
   allowedTools: string[]
   branchStrategy: 'feature' | 'fix' | 'chore'
   requiresApproval: boolean

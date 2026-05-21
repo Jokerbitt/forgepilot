@@ -25,6 +25,7 @@ import { generateText } from '@/lib/ai/text-generation'
 import { extractKnowledge } from '@/lib/knowledge/extraction'
 import { persistGrokCriticForDelegation } from '@/lib/eval/auto-grok-critic'
 import { writebackExecutionInsights } from '@/lib/knowledge/writeback'
+import { checkBudget, wouldExceedBudget } from '@/lib/budget/guard'
 
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import { buildContextPackage } from '@/lib/knowledge/context-package'
@@ -295,6 +296,15 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
         logs: [...(current.logs ?? []), ...logBuffer, finalLog],
       })
       if (!finishedDelegation) return
+
+      // M209: Post-execution budget guard — mark failed if actual cost exceeded limit
+      if (success && actualCost) {
+        const budgetResult = await checkBudget(finishedDelegation)
+        if (budgetResult.exceeded) {
+          // Delegation already marked as failed by checkBudget — skip further processing
+          return
+        }
+      }
 
       {
 
@@ -642,6 +652,14 @@ export async function POST(
   const blocker = getExecutionStartBlocker(delegation)
   if (blocker) {
     return NextResponse.json({ error: blocker.error }, { status: blocker.status })
+  }
+
+  // M209: Pre-execution budget guard — reject before starting if estimate exceeds limit
+  if (wouldExceedBudget(delegation, delegation.costEstimateUsd)) {
+    return NextResponse.json(
+      { error: `Estimated cost $${delegation.costEstimateUsd} exceeds budget limit $${delegation.contract.maxCostUsd}` },
+      { status: 422 },
+    )
   }
 
   // Auto-orchestrate: decompose into sub-tasks and run each sequentially
