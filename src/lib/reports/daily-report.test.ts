@@ -189,7 +189,8 @@ describe('buildDailyReport', () => {
     expect(report.firstRealValueLoop.progressPct).toBe(100)
     expect(report.firstRealValueLoop.currentStep.id).toBe('writeback')
     expect(report.firstRealValueLoop.currentStep.status).toBe('done')
-    expect(report.firstRealValueLoop.currentStep.href).toBe('/idea')
+    expect(report.firstRealValueLoop.currentStep.href).toMatch(/^\/idea\?prompt=/)
+    expect(decodeURIComponent(report.firstRealValueLoop.currentStep.href)).toContain('kleines reales ForgePilot-Entwicklungsticket')
   })
 
   it('raises critical risk when auth is disabled', () => {

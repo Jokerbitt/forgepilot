@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { cx } from '@/components/ui/primitives'
 import type { IdeaHistoryEntry } from '@/lib/pilot/idea-history-store'
 import { IdeaRefinementWizard } from '@/components/idea/IdeaRefinementWizard'
@@ -83,6 +83,7 @@ function taskStatusIcon(s: TaskStatus): string {
 
 export default function IdeaPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [idea, setIdea] = useState('')
   const [stage, setStage] = useState<Stage>('idle')
   const [result, setResult] = useState<PipelineResult | null>(null)
@@ -94,6 +95,7 @@ export default function IdeaPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const historyPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const queryPrompt = searchParams.get('prompt')?.trim() ?? ''
 
   /** M136: Create project brief from refined wizard output and navigate to it */
   const handleWizardBriefReady = useCallback(async (rawIdea: string, brief: RefinedBriefDraft) => {
@@ -133,6 +135,11 @@ export default function IdeaPage() {
   useEffect(() => {
     refreshHistory()
   }, [refreshHistory])
+
+  useEffect(() => {
+    if (!queryPrompt) return
+    setIdea(current => current.trim() ? current : queryPrompt)
+  }, [queryPrompt])
 
   // Adaptive history polling: faster when entries are in-flight
   useEffect(() => {

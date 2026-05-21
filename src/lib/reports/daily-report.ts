@@ -113,6 +113,16 @@ export interface BuildDailyReportInput {
   authDisabled: boolean
 }
 
+const NEXT_REAL_TICKET_PROMPT = [
+  'Starte ein kleines reales ForgePilot-Entwicklungsticket, das den Alltag spuerbar verbessert.',
+  'Halte den Scope eng, erstelle einen klaren Brief, eine Delegation, einen PR, einen Critic Review und einen Knowledge Writeback.',
+  'Vergleiche am Ende die gesparte Zeit und dokumentiere, was zuverlaessig funktioniert hat.',
+].join(' ')
+
+function ideaHrefWithPrompt(prompt: string): string {
+  return `/idea?prompt=${encodeURIComponent(prompt)}`
+}
+
 function countDelegations(delegations: Delegation[]): DailyReport['status']['delegations'] {
   const counts = {
     pending: 0,
@@ -311,7 +321,7 @@ function buildFirstRealValueLoop(status: DailyReport['status']): DailyReportFirs
         ...steps[steps.length - 1],
         label: 'Loop complete',
         action: 'Run the next small real ticket through the full loop and compare time saved.',
-        href: '/idea',
+        href: ideaHrefWithPrompt(NEXT_REAL_TICKET_PROMPT),
       }
     : steps.find(step => step.status === 'blocked')
     ?? steps.find(step => step.status === 'active')
