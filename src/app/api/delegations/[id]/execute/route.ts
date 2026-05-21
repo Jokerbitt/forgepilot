@@ -15,6 +15,7 @@ import {
   getExecutionStartBlocker,
   buildSubTaskPrompt,
   buildSkillBlock,
+  buildPrompt,
 } from '@/lib/delegation-execution'
 import { OllamaAgentRunner, isOllamaReachable } from '@/lib/agent-runner/ollama-runner'
 import { budgetToMaxTurns } from '@/lib/budget-utils'
@@ -23,6 +24,8 @@ import { recordOutcome } from '@/lib/agents/skill-evolver'
 import { generateText } from '@/lib/ai/text-generation'
 import { extractKnowledge } from '@/lib/knowledge/extraction'
 import { runGrokCritic } from '@/lib/eval/grok-critic'
+import { buildContextPackage } from '@/lib/knowledge/context-package'
+import type { MemoryCard } from '@/lib/knowledge/types'
 
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
@@ -36,74 +39,6 @@ async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Dele
     logs: [...(current.logs ?? []), ...newLogs],
   })
 }
-
-function buildPrompt(delegation: Delegation): string {
-  const c = delegation.contract
-  const slug = c.workItemId.replace(/[^a-z0-9-]/gi, '-').toLowerCase()
-  const branch = `${c.branchStrategy}/${slug}-task`
-  const commitPrefix = c.taskType || 'feat'
-  const maxTurns = budgetToMaxTurns(c.maxBudgetUsd)
-  const checkpointTurn = Math.max(10, Math.floor(maxTurns * 0.4))
-
-  const dod = (c.definitionOfDone ?? [])
-    .filter(Boolean)
-    .map((d, i) => `- [ ] ${d}`)
-    .join('\n') || '- [ ] Task erfolgreich abgeschlossen'
-
-  const context = c.context?.trim()
-    ? `\n## Context\n${c.context.trim()}\n`
-    : ''
-
-  const skillBlock = buildSkillBlock(c.skillCategory, c.allowedFilePatterns)
-
-  return `You are an autonomous software engineering agent working on **ForgePilot** — a local-first AI Workflow OS built with Next.js 14, TypeScript strict, Tailwind CSS, and Vitest.
-
-## Task
-${c.goal}
-${context}
-## Definition of Done (check each before creating PR)
-${dod}
-
-## Constraints
-- Risk class: **${c.riskClass}** (A = safe/additive, B = modifies existing, C = needs human review)
-- Branch: \`${branch}\`
-- Max budget: $${c.maxBudgetUsd} (~${maxTurns} turns)
-- Work item: ${c.workItemId}
-
-## Execution protocol (follow exactly, in order)
-\`\`\`
-1. Read CLAUDE.md  →  understand conventions and project structure
-2. git checkout -b ${branch}
-3. Explore: read relevant source files before writing any code
-4. Implement: small, focused changes — one concern per commit
-5. Verify: npm run test:run && npm run lint && npm run type-check
-   (run type-check BEFORE build — never in parallel)
-6. Commit: git commit -m "${commitPrefix}: <description>"
-7. PR: gh pr create --title "${commitPrefix}: ${c.goal.substring(0, 60).replace(/"/g, "'")}" --body "## Summary\\n- <bullets>\\n\\n## Test plan\\n- [ ] tests pass"
-8. Final output: print DONE: <one-sentence summary>
-\`\`\`
-
-## Anti-drift rules (critical — read before each major action)
-- **Stay in scope**: only modify files directly needed for this task. Touching unrelated files = scope drift.
-- **No gold-plating**: implement exactly what the Definition of Done requires. Nothing more.
-- **Turn checkpoint**: at turn ${checkpointTurn}, stop and re-read "## Task" and "## Definition of Done" above before continuing.
-- **Progress signal every 10 turns**: print "PROGRESS: <what done> | <what next> | <turns used>/${maxTurns}"
-- **Abort conditions** — stop immediately and print "ESCALATION: <reason>" if:
-  - You've used more than 60% of turns without a commit
-  - A step fails 3 times with the same error
-  - The task requires touching Risk-C files and riskClass is A or B
-  - You are unsure which of 2+ approaches to take
-
-## Quality rules
-- No \`any\` types. No unused imports. No comments stating the obvious.
-- Tests must cover the new behavior — not just type-check.
-- Never commit directly to main. Never force-push.
-- If a step fails, diagnose root cause before retrying.
-${skillBlock}
-Start now.`
-}
-
-// buildSubTaskPrompt and buildSkillBlock are imported from @/lib/delegation-execution
 
 type SkillCategory = NonNullable<import('@/lib/models/delegation').TaskContract['skillCategory']>
 
@@ -678,10 +613,27 @@ export async function POST(
   await appendLogs(id, [startLog], 'running')
 
   const startTime = new Date()
+
+  // Build context from past learnings (fire-and-forget on error)
+  let contextCards: MemoryCard[] | undefined
+  try {
+    const pkg = await buildContextPackage(delegation.contract.goal, {
+      workItemId: delegation.contract.workItemId,
+      delegationId: delegation.id,
+      maxCards: 4,
+    })
+    if (pkg.cards.length > 0) {
+      contextCards = pkg.cards
+      delegationLogger.info({ event: 'context.package', cardCount: pkg.cards.length, tokenEstimate: pkg.tokenEstimate })
+    }
+  } catch {
+    // Non-critical — never block execution
+  }
+
   // Use focused sub-task prompt when this is part of an orchestrated run
   const prompt = delegation.contract.orchestratedRunId
     ? buildSubTaskPrompt(delegation)
-    : buildPrompt(delegation)
+    : buildPrompt(delegation, contextCards)
 
   // OTel: trace execution start + routing decision
   const mode = delegation.executionRoute === 'ollama-agent'
