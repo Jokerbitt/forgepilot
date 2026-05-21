@@ -3,14 +3,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, CheckCircle, Clock, Play, ShieldCheck, Sparkles } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Clipboard, Clock, FileText, Play, ShieldCheck, Sparkles } from 'lucide-react'
 import type { Delegation } from '@/lib/models/delegation'
 import type { DashboardStats } from '@/app/api/dashboard/stats/route'
+import type { DailyReport } from '@/lib/reports/daily-report'
 import { StatusDot, buttonClassName, cx } from '@/components/ui/primitives'
 
 interface FocusedData {
   delegations: Delegation[]
   stats: DashboardStats | null
+  report: DailyReport | null
 }
 
 interface NextAction {
@@ -38,16 +40,17 @@ function latestTime(delegation: Delegation): string {
 }
 
 export function CommandCenterOverview() {
-  const [data, setData] = useState<FocusedData>({ delegations: [], stats: null })
+  const [data, setData] = useState<FocusedData>({ delegations: [], stats: null, report: null })
   const [idea, setIdea] = useState('')
 
   useEffect(() => {
     let cancelled = false
 
     async function load() {
-      const [delegationsRes, statsRes] = await Promise.allSettled([
+      const [delegationsRes, statsRes, reportRes] = await Promise.allSettled([
         fetch('/api/delegations').then(res => res.json() as Promise<Delegation[]>),
         fetch('/api/dashboard/stats').then(res => res.json() as Promise<DashboardStats>),
+        fetch('/api/reports/daily').then(res => res.json() as Promise<DailyReport>),
       ])
 
       if (cancelled) return
@@ -58,6 +61,9 @@ export function CommandCenterOverview() {
             ? delegationsRes.value
             : [],
         stats: statsRes.status === 'fulfilled' ? statsRes.value : null,
+        report: reportRes.status === 'fulfilled' && reportRes.value.version === 1
+          ? reportRes.value
+          : null,
       })
     }
 
@@ -69,7 +75,7 @@ export function CommandCenterOverview() {
     }
   }, [])
 
-  const { delegations, stats } = data
+  const { delegations, stats, report } = data
   const failed = delegations.filter(d => d.status === 'failed')
   const pending = delegations.filter(d => d.status === 'pending')
   const approved = delegations.filter(d => d.status === 'approved')
@@ -131,7 +137,7 @@ export function CommandCenterOverview() {
       <NextBestActionCard action={nextAction} />
       <ActiveDelegationsCard running={running} approved={approved} pending={pending} />
       <SystemHealthCard stats={stats} />
-      <RecentReviewsCard stats={stats} finished={finished} />
+      <DailyCriticReportCard report={report} stats={stats} finished={finished} />
       <QuickIdeaCard idea={idea} onIdeaChange={setIdea} href={quickIdeaHref} />
     </div>
   )
@@ -284,53 +290,164 @@ function HealthLine({
   )
 }
 
-function RecentReviewsCard({
+function DailyCriticReportCard({
+  report,
   stats,
   finished,
 }: {
+  report: DailyReport | null
   stats: DashboardStats | null
   finished: Delegation[]
 }) {
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
   const avgScore = stats?.quality.avgScore
   const topWarning = stats?.quality.topWarning
   const latest = finished[0]
-  const scoreTone = avgScore === null || avgScore === undefined
-    ? 'text-slate-400'
-    : avgScore >= 80
+  const headlineValue = latest && avgScore !== null && avgScore !== undefined
+    ? avgScore
+    : report
+      ? report.risks.length
+      : '--'
+  const headlineLabel = latest ? 'Critic Score' : 'Risiken'
+  const headlineTone = latest && avgScore !== null && avgScore !== undefined
+    ? avgScore >= 80
       ? 'text-emerald-300'
       : avgScore >= 60
         ? 'text-amber-300'
         : 'text-rose-300'
+    : report?.executiveVerdict.status === 'red'
+      ? 'text-rose-300'
+      : report?.executiveVerdict.status === 'yellow'
+        ? 'text-amber-300'
+        : 'text-emerald-300'
+
+  const verdictTone = report?.executiveVerdict.status === 'red'
+    ? 'border-rose-500/25 bg-rose-500/10 text-rose-200'
+    : report?.executiveVerdict.status === 'yellow'
+      ? 'border-amber-500/25 bg-amber-500/10 text-amber-200'
+      : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
+
+  async function copyMarkdown() {
+    if (!report?.markdown) return
+    try {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(report.markdown)
+      } else {
+        const textArea = document.createElement('textarea')
+        textArea.value = report.markdown
+        textArea.setAttribute('readonly', 'true')
+        textArea.style.position = 'fixed'
+        textArea.style.left = '-9999px'
+        document.body.appendChild(textArea)
+        textArea.select()
+        const copied = document.execCommand('copy')
+        document.body.removeChild(textArea)
+        if (!copied) throw new Error('copy command failed')
+      }
+      setCopyState('copied')
+      window.setTimeout(() => setCopyState('idle'), 1800)
+    } catch {
+      try {
+        const textArea = document.createElement('textarea')
+        textArea.value = report.markdown
+        textArea.setAttribute('readonly', 'true')
+        textArea.style.position = 'fixed'
+        textArea.style.left = '-9999px'
+        document.body.appendChild(textArea)
+        textArea.select()
+        const copied = document.execCommand('copy')
+        document.body.removeChild(textArea)
+        setCopyState(copied ? 'copied' : 'failed')
+      } catch {
+        setCopyState('failed')
+      }
+      window.setTimeout(() => setCopyState('idle'), 2400)
+    }
+  }
 
   return (
     <section className="col-span-12 rounded-xl border border-white/[0.08] bg-white/[0.03] p-6 shadow-sm shadow-black/20 lg:col-span-5">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-lg font-semibold text-white">Letzte Critic Reviews</h3>
-        <Link href="/agents?tab=performance" className="text-sm text-slate-400 transition-colors hover:text-white">
-          Details
-        </Link>
+        <div>
+          <h3 className="text-lg font-semibold text-white">Grok Daily Report</h3>
+          <p className="mt-1 text-xs text-slate-500">Sicherer Markdown-Handoff ohne Secrets.</p>
+        </div>
+        <span className={cx('rounded-full border px-2.5 py-1 text-xs font-semibold uppercase tracking-wide', verdictTone)}>
+          {report?.executiveVerdict.status ?? 'loading'}
+        </span>
       </div>
 
       <div className="mt-5 rounded-lg border border-white/[0.06] bg-black/20 p-4">
         <div className="flex gap-4">
-          <div className={cx('text-2xl font-semibold tabular-nums', scoreTone)}>
-            {avgScore ?? '--'}
+          <div className={cx('min-w-12 text-2xl font-semibold tabular-nums', headlineTone)}>
+            {headlineValue}
+            <div className="mt-1 text-[10px] font-medium uppercase tracking-wide text-slate-500">{headlineLabel}</div>
           </div>
           <div className="min-w-0">
             <p className="text-sm font-medium text-white">
-              {latest ? `Delegation: ${latest.title}` : 'Noch keine abgeschlossene Delegation'}
+              {latest ? `Delegation: ${latest.title}` : 'Report: MVP-Risiken und naechste Aufgaben'}
             </p>
             <p className="mt-1 text-sm leading-5 text-slate-500">
               {topWarning
                 ? topWarning.message
                 : latest
                   ? latest.status === 'failed' ? 'Review noetig: Ausfuehrung fehlgeschlagen.' : 'Letzter Lauf abgeschlossen. Score zeigt die aktuelle Review-Qualitaet.'
-                  : 'Sobald Delegations abgeschlossen sind, erscheint hier die kritische Qualitaetslage.'}
+                  : report?.risks[0]?.title ?? 'Sobald Daten vorhanden sind, erscheint hier die kritische Qualitaetslage.'}
             </p>
           </div>
         </div>
       </div>
+
+      <div className="mt-4 rounded-lg border border-white/[0.06] bg-black/20 p-4">
+        <p className="text-sm font-medium text-white">
+          {report ? report.executiveVerdict.summary : 'Daily Report wird geladen...'}
+        </p>
+        <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+          <MetricPill label="Risiken" value={report?.risks.length ?? '--'} />
+          <MetricPill label="Actions" value={report?.nextActions.length ?? '--'} />
+          <MetricPill label="Coverage" value={report ? `${report.status.quality.criticCoveragePct}%` : '--'} />
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+        <button
+          type="button"
+          onClick={copyMarkdown}
+          disabled={!report}
+          className={buttonClassName('primary', 'min-h-10 flex-1 disabled:pointer-events-none disabled:opacity-50')}
+        >
+          <Clipboard className="h-4 w-4" />
+          {copyState === 'copied' ? 'Kopiert' : copyState === 'failed' ? 'Manuell kopieren' : 'Fuer Grok kopieren'}
+        </button>
+        <a
+          href="/api/reports/daily?format=markdown"
+          target="_blank"
+          rel="noopener noreferrer"
+          className={buttonClassName('secondary', 'min-h-10 flex-1')}
+        >
+          <FileText className="h-4 w-4" />
+          Markdown
+        </a>
+      </div>
+      {copyState === 'failed' && report?.markdown && (
+        <textarea
+          readOnly
+          value={report.markdown}
+          onFocus={event => event.currentTarget.select()}
+          className="mt-3 h-28 w-full rounded-lg border border-amber-500/25 bg-amber-500/[0.04] px-3 py-2 font-mono text-xs leading-5 text-amber-50 outline-none"
+          aria-label="Daily Report Markdown manuell kopieren"
+        />
+      )}
     </section>
+  )
+}
+
+function MetricPill({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2">
+      <div className="text-sm font-semibold tabular-nums text-white">{value}</div>
+      <div className="mt-0.5 text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
+    </div>
   )
 }
 
