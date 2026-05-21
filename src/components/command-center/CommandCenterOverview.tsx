@@ -3,11 +3,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, CheckCircle, Clipboard, Clock, FileText, Play, ShieldCheck, Sparkles } from 'lucide-react'
+import { AlertTriangle, Bot, CheckCircle, Clipboard, Clock, FileText, Play, ShieldCheck, Sparkles } from 'lucide-react'
 import type { Delegation } from '@/lib/models/delegation'
 import type { DashboardStats } from '@/app/api/dashboard/stats/route'
 import type { DailyReport } from '@/lib/reports/daily-report'
 import type { ProjectBrief } from '@/lib/models/project-brief'
+import type { Gbot4HandoffPackage } from '@/app/api/reports/daily/gbot4-handoff/route'
+import type { Gbot4FeedbackBody, Gbot4Verdict } from '@/app/api/reports/daily/gbot4-feedback/route'
 import { StatusDot, buttonClassName, cx } from '@/components/ui/primitives'
 
 interface FocusedData {
@@ -145,6 +147,7 @@ export function CommandCenterOverview() {
       <ActiveDelegationsCard running={running} approved={approved} pending={pending} acceptedBriefs={acceptedBriefs} />
       <SystemHealthCard stats={stats} />
       <DailyCriticReportCard report={report} stats={stats} finished={finished} />
+      <GrokHandoffCard />
       <QuickIdeaCard idea={idea} onIdeaChange={setIdea} href={quickIdeaHref} />
     </div>
   )
@@ -510,6 +513,210 @@ function QuickIdeaCard({
           Delegieren
         </Link>
       </div>
+    </section>
+  )
+}
+
+type HandoffState = 'idle' | 'loading' | 'ready' | 'error'
+type FeedbackSaveState = 'idle' | 'saving' | 'saved' | 'error'
+
+function parseFeedbackJson(raw: string): Gbot4FeedbackBody | null {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const verdicts: Gbot4Verdict[] = ['approved', 'needs_attention', 'critical']
+    if (!verdicts.includes(parsed.verdict as Gbot4Verdict)) return null
+    if (typeof parsed.score !== 'number') return null
+    if (!Array.isArray(parsed.risks)) return null
+    if (typeof parsed.recommendation !== 'string') return null
+    if (typeof parsed.linearComment !== 'string') return null
+    return parsed as unknown as Gbot4FeedbackBody
+  } catch {
+    return null
+  }
+}
+
+function GrokHandoffCard() {
+  const [handoffState, setHandoffState] = useState<HandoffState>('idle')
+  const [handoff, setHandoff] = useState<Gbot4HandoffPackage | null>(null)
+  const [copyPromptState, setCopyPromptState] = useState<'idle' | 'copied'>('idle')
+  const [copyReportState, setCopyReportState] = useState<'idle' | 'copied'>('idle')
+  const [feedbackRaw, setFeedbackRaw] = useState('')
+  const [feedbackSaveState, setFeedbackSaveState] = useState<FeedbackSaveState>('idle')
+  const [feedbackError, setFeedbackError] = useState('')
+  const [expanded, setExpanded] = useState(false)
+
+  async function loadHandoff() {
+    setHandoffState('loading')
+    try {
+      const res = await fetch('/api/reports/daily/gbot4-handoff')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json() as Gbot4HandoffPackage
+      setHandoff(data)
+      setHandoffState('ready')
+      setExpanded(true)
+    } catch {
+      setHandoffState('error')
+    }
+  }
+
+  async function copyText(text: string, setCopyState: (s: 'idle' | 'copied') => void) {
+    try {
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(text)
+      } else {
+        const ta = document.createElement('textarea')
+        ta.value = text
+        ta.style.position = 'fixed'
+        ta.style.left = '-9999px'
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      }
+      setCopyState('copied')
+      window.setTimeout(() => setCopyState('idle'), 1800)
+    } catch {
+      // silently ignore
+    }
+  }
+
+  async function saveFeedback() {
+    if (!feedbackRaw.trim()) return
+    const parsed = parseFeedbackJson(feedbackRaw.trim())
+    if (!parsed) {
+      setFeedbackError('Ungueltig: JSON muss verdict, score (1-10), risks (Array), recommendation und linearComment enthalten.')
+      return
+    }
+    setFeedbackError('')
+    setFeedbackSaveState('saving')
+    try {
+      const res = await fetch('/api/reports/daily/gbot4-feedback', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(parsed),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setFeedbackSaveState('saved')
+      setFeedbackRaw('')
+      window.setTimeout(() => setFeedbackSaveState('idle'), 2500)
+    } catch {
+      setFeedbackSaveState('error')
+    }
+  }
+
+  return (
+    <section className="col-span-12 rounded-xl border border-violet-500/20 bg-violet-500/[0.03] p-6 shadow-sm shadow-black/20 lg:col-span-5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-violet-500/25 bg-violet-500/10 text-violet-300">
+            <Bot className="h-4 w-4" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-white">Grok Critic Handoff</h3>
+            <p className="mt-0.5 text-xs text-slate-500">Sicherer Handoff — keine Secrets, keine Tokens.</p>
+          </div>
+        </div>
+        {handoffState === 'idle' && (
+          <button
+            type="button"
+            onClick={() => { void loadHandoff() }}
+            className={buttonClassName('primary', 'min-h-9 text-sm')}
+          >
+            Paket erstellen
+          </button>
+        )}
+        {handoffState === 'loading' && (
+          <span className="text-sm text-slate-500">Lade...</span>
+        )}
+        {handoffState === 'error' && (
+          <button type="button" onClick={() => { void loadHandoff() }} className={buttonClassName('destructive', 'min-h-9 text-sm')}>
+            Erneut versuchen
+          </button>
+        )}
+        {handoffState === 'ready' && (
+          <button
+            type="button"
+            onClick={() => setExpanded(prev => !prev)}
+            className={buttonClassName('secondary', 'min-h-9 text-sm')}
+          >
+            {expanded ? 'Minimieren' : 'Anzeigen'}
+          </button>
+        )}
+      </div>
+
+      {handoffState === 'idle' && (
+        <div className="mt-4 rounded-lg border border-dashed border-violet-500/20 p-4 text-center">
+          <p className="text-sm text-slate-500">
+            Erstelle ein Handoff-Paket um den Report + Prompt fuer Grok zu kopieren und Feedback zurueck zu importieren.
+          </p>
+        </div>
+      )}
+
+      {handoffState === 'ready' && handoff && expanded && (
+        <div className="mt-4 space-y-4">
+          {/* Context summary */}
+          <div className="grid grid-cols-2 gap-2">
+            <MetricPill label="Aktive Delegations" value={handoff.safeContext.activeDelegations} />
+            <MetricPill label="Offene Approvals" value={handoff.safeContext.pendingApprovals} />
+          </div>
+
+          {/* Copy actions */}
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => { void copyText(handoff.promptTemplate, setCopyPromptState) }}
+              className={buttonClassName('primary', 'min-h-10 flex-1 text-sm')}
+            >
+              <Clipboard className="h-4 w-4" />
+              {copyPromptState === 'copied' ? 'Prompt kopiert!' : 'Prompt kopieren'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { void copyText(handoff.reportMarkdown, setCopyReportState) }}
+              className={buttonClassName('secondary', 'min-h-10 flex-1 text-sm')}
+            >
+              <FileText className="h-4 w-4" />
+              {copyReportState === 'copied' ? 'Report kopiert!' : 'Report kopieren'}
+            </button>
+          </div>
+
+          {/* Instructions */}
+          <div className="rounded-lg border border-violet-500/15 bg-violet-500/[0.04] p-3">
+            <p className="text-xs font-medium text-violet-300 mb-1">Workflow</p>
+            <pre className="text-xs leading-5 text-slate-400 whitespace-pre-wrap">{handoff.instructions}</pre>
+          </div>
+
+          {/* Feedback import */}
+          <div className="rounded-lg border border-white/[0.06] bg-black/20 p-4">
+            <p className="mb-2 text-sm font-medium text-white">Grok Feedback einfuegen</p>
+            <textarea
+              value={feedbackRaw}
+              onChange={e => setFeedbackRaw(e.target.value)}
+              placeholder={'{\n  "verdict": "approved",\n  "score": 8,\n  "risks": ["..."],\n  "recommendation": "...",\n  "linearComment": "..."\n}'}
+              rows={6}
+              className="w-full rounded-lg border border-white/[0.08] bg-black/30 px-3 py-2 font-mono text-xs leading-5 text-white outline-none transition-colors placeholder:text-slate-600 focus:border-violet-400/50"
+              aria-label="Grok Feedback JSON einfuegen"
+            />
+            {feedbackError && (
+              <p className="mt-1.5 text-xs text-rose-400">{feedbackError}</p>
+            )}
+            <button
+              type="button"
+              onClick={() => { void saveFeedback() }}
+              disabled={!feedbackRaw.trim() || feedbackSaveState === 'saving'}
+              className={buttonClassName('primary', 'mt-3 min-h-9 w-full text-sm disabled:pointer-events-none disabled:opacity-50')}
+            >
+              {feedbackSaveState === 'saving'
+                ? 'Speichern...'
+                : feedbackSaveState === 'saved'
+                  ? 'Gespeichert!'
+                  : feedbackSaveState === 'error'
+                    ? 'Fehler — erneut versuchen'
+                    : 'Feedback speichern'}
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
