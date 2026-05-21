@@ -140,7 +140,7 @@ export function CommandCenterOverview() {
     : '/idea'
 
   return (
-    <div className="grid grid-cols-12 gap-5">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
       <NextBestActionCard action={nextAction} />
       <ActiveDelegationsCard running={running} approved={approved} pending={pending} acceptedBriefs={acceptedBriefs} />
       <SystemHealthCard stats={stats} />
