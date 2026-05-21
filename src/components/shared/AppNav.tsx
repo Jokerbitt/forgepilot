@@ -32,6 +32,7 @@ import {
   Bell,
   Radio,
   GraduationCap,
+  ClipboardList,
 } from 'lucide-react'
 import type { Delegation } from '@/lib/models/delegation'
 import type { AttentionItem } from '@/lib/models/attention'
@@ -52,6 +53,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/', label: 'Command Center', shortLabel: 'Command', icon: LayoutDashboard, section: 'Main' },
+  { href: '/briefing', label: 'Briefing', shortLabel: 'Briefing', icon: ClipboardList, section: 'Main', isNew: true },
   { href: '/projects', label: 'Plan', shortLabel: 'Plan', icon: FolderOpen, section: 'Main' },
   { href: '/delegations', label: 'Execute', shortLabel: 'Execute', icon: ListChecks, section: 'Main' },
   { href: '/knowledge', label: 'Knowledge', shortLabel: 'Knowledge', icon: BookOpen, section: 'Main' },
