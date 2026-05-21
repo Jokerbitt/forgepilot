@@ -58,6 +58,7 @@ import { generateText }                              from '@/lib/ai/text-generat
 import { buildProjectBrief }                         from '@/lib/project-briefs'
 import { createProjectBriefRepository }              from '@/lib/repositories/projectBriefRepository'
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
+import { createKnowledgeCardRepository }             from '@/lib/repositories/knowledgeCardRepository'
 import { writebackDelegationKnowledge }              from '@/lib/knowledge/writeback'
 import type { ProjectBrief }                         from '@/lib/models/project-brief'
 import type { Delegation }                           from '@/lib/models/delegation'
@@ -360,12 +361,12 @@ async function step4CompleteDelegation(delegation: Delegation | null): Promise<{
   }
 }
 
-async function step5KnowledgeWriteback(delegation: Delegation | null): Promise<StepResult> {
+async function step5KnowledgeWriteback(delegation: Delegation | null): Promise<{ result: StepResult; cardId: string | null }> {
   const elapsed = timer()
 
   if (DRY_RUN || !delegation) {
     log(`  ⏭  Step 5 übersprungen (${DRY_RUN ? '--dry-run' : 'keine Delegation'})`)
-    return { name: 'Step 5: Knowledge Writeback', status: 'skip', durationMs: elapsed() }
+    return { result: { name: 'Step 5: Knowledge Writeback', status: 'skip', durationMs: elapsed() }, cardId: null }
   }
 
   try {
@@ -382,24 +383,35 @@ async function step5KnowledgeWriteback(delegation: Delegation | null): Promise<S
     }
 
     // Fail-open: skipped is OK too
-    return { name: 'Step 5: Knowledge Writeback', status: 'pass', durationMs: elapsed() }
+    return {
+      result: { name: 'Step 5: Knowledge Writeback', status: 'pass', durationMs: elapsed() },
+      cardId: result.written ? (result.cardId ?? null) : null,
+    }
   } catch (err) {
     return {
-      name: 'Step 5: Knowledge Writeback',
-      status: 'fail',
-      detail: err instanceof Error ? err.message : String(err),
-      durationMs: elapsed(),
+      result: {
+        name: 'Step 5: Knowledge Writeback',
+        status: 'fail',
+        detail: err instanceof Error ? err.message : String(err),
+        durationMs: elapsed(),
+      },
+      cardId: null,
     }
   }
 }
 
-async function cleanup(briefId: string | null, delegationId: string | null): Promise<void> {
+async function cleanup(briefId: string | null, delegationId: string | null, cardId: string | null): Promise<void> {
   if (NO_CLEANUP || DRY_RUN) {
     verbose('Cleanup übersprungen')
     return
   }
 
   try {
+    if (cardId) {
+      const repo    = createKnowledgeCardRepository(SINGLE_TENANT_USER_ID)
+      const deleted = await repo.delete?.(cardId)
+      verbose(`Knowledge Card ${cardId} gelöscht: ${deleted}`)
+    }
     if (delegationId) {
       const repo    = createDelegationRepository(SINGLE_TENANT_USER_ID)
       const deleted = await repo.delete(delegationId)
@@ -489,11 +501,11 @@ async function main(): Promise<void> {
   results.push(r4)
 
   // Step 5 — Knowledge Writeback
-  const r5 = await step5KnowledgeWriteback(d4)
+  const { result: r5, cardId } = await step5KnowledgeWriteback(d4)
   results.push(r5)
 
   // Cleanup
-  await cleanup(brief?.id ?? null, d3?.id ?? null)
+  await cleanup(brief?.id ?? null, d3?.id ?? null, cardId)
 
   // Summary + exit code
   printSummary(results)
