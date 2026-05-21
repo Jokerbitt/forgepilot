@@ -1,28 +1,21 @@
-/**
- * 404 Not Found — M96
- * Shown when a page or dynamic route doesn't exist.
- */
-
 import Link from 'next/link'
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
-      <div className="max-w-md w-full text-center space-y-6">
-        <div className="text-6xl font-bold text-slate-700">404</div>
-        <div>
-          <h1 className="text-xl font-semibold text-white mb-2">Seite nicht gefunden</h1>
-          <p className="text-sm text-slate-400">
-            Diese Seite existiert nicht oder wurde verschoben.
-          </p>
-        </div>
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          ← Command Center
-        </Link>
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-zinc-950 p-8">
+      <div className="text-center">
+        <p className="text-sm font-semibold uppercase tracking-widest text-slate-500">404</p>
+        <h1 className="mt-4 text-3xl font-semibold text-white">Seite nicht gefunden</h1>
+        <p className="mt-4 text-sm text-slate-400">
+          Diese Seite existiert nicht oder wurde verschoben.
+        </p>
       </div>
+      <Link
+        href="/"
+        className="rounded-lg border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
+      >
+        Zurück zur Startseite
+      </Link>
     </div>
   )
 }
