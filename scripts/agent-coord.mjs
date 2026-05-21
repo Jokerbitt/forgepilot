@@ -18,8 +18,10 @@
  *   node scripts/agent-coord.mjs heartbeat --agent claude-code-1
  *   node scripts/agent-coord.mjs release --agent claude-code-1
  *
- * The script reads/writes config/agent-scope.json directly so it works even
- * when the Next.js dev server is offline.
+ * The script reads/writes the scope-lock registry directly so it works even
+ * when the Next.js dev server is offline. Storage location is
+ * `<git-common-dir>/forgepilot-agent-scope.json` (shared across all worktrees
+ * of the same repo) with a legacy `<repo>/config/agent-scope.json` fallback.
  */
 
 import { execSync } from 'node:child_process'
@@ -28,7 +30,33 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const SCOPE_FILE = join(ROOT, 'config', 'agent-scope.json')
+const LEGACY_SCOPE_FILE = join(ROOT, 'config', 'agent-scope.json')
+
+/**
+ * Resolve the scope-lock file location. Prefers `<git-common-dir>/forgepilot-agent-scope.json`
+ * so all worktrees of the same repo share one registry. Falls back to the
+ * legacy `<repo-root>/config/agent-scope.json` when git is unavailable.
+ *
+ * Must mirror src/lib/agents/scope-lock.ts → resolveScopeFile().
+ */
+function resolveScopeFile() {
+  try {
+    const out = execSync('git rev-parse --git-common-dir', {
+      cwd: process.cwd(),
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+    if (out) {
+      const gitCommonDir = out.startsWith('/') ? out : join(process.cwd(), out)
+      return join(gitCommonDir, 'forgepilot-agent-scope.json')
+    }
+  } catch {
+    // Not in a git repo or git binary unavailable — fall through.
+  }
+  return LEGACY_SCOPE_FILE
+}
+
+const SCOPE_FILE = resolveScopeFile()
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -449,7 +477,8 @@ Common options:
   --type TYPE     claude-code | codex | antigravity | general (default: claude-code)
   --milestone M   short label, e.g. "M130-multi-agent"
 
-State file: config/agent-scope.json`)
+State file: ${SCOPE_FILE}
+   (worktree-shared via git-common-dir, falls back to <repo>/config/agent-scope.json)`)
 }
 
 // ─── Entry ──────────────────────────────────────────────────────────────────

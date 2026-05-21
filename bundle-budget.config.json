@@ -1,0 +1,9 @@
+{
+  "$schema": "./bundle-budget.schema.json",
+  "_comment": "Per-chunk size budget in KB. Edit the numbers; the CI check reads this on every PR.",
+  "chunksDir": ".next/static/chunks",
+  "maxKbPerChunk": 500,
+  "maxKbTotal": 6000,
+  "topN": 10,
+  "exceptions": []
+}
