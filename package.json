@@ -29,6 +29,7 @@
     "db:backfill": "tsx scripts/backfill-json-to-postgres.ts",
     "db:verify-cutover": "tsx scripts/verify-postgres-cutover.ts",
     "critic:backfill": "tsx scripts/backfill-critic-scores.ts",
+    "knowledge:backfill": "tsx scripts/backfill-knowledge-writebacks.ts",
     "seed": "tsx scripts/seed-demo.ts",
     "seed:clean": "rm -f config/local-items.json config/delegations.json config/orchestrated-runs.json && npm run seed"
   },

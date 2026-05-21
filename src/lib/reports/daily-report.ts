@@ -143,9 +143,10 @@ function isStaleRunning(delegation: Delegation, now: Date): boolean {
   return now.getTime() - updated > 60 * 60 * 1000
 }
 
-function isKnowledgeWriteback(card: MemoryCard): boolean {
+function isKnowledgeWriteback(card: MemoryCard, delegationIds: Set<string>): boolean {
   return card.tags.includes('auto-extracted')
     || card.tags.some(tag => tag.startsWith('delegation:'))
+    || card.sourceIds.some(id => delegationIds.has(id))
     || card.sourceIds.some(id => id.startsWith('extraction:'))
 }
 
@@ -304,7 +305,14 @@ function buildFirstRealValueLoop(status: DailyReport['status']): DailyReportFirs
   ]
 
   const doneCount = steps.filter(step => step.status === 'done').length
-  const currentStep = steps.find(step => step.status === 'blocked')
+  const allDone = doneCount === steps.length
+  const currentStep = allDone
+    ? {
+        ...steps[steps.length - 1],
+        label: 'Loop complete',
+        action: 'Run the next small real ticket through the full loop and compare time saved.',
+      }
+    : steps.find(step => step.status === 'blocked')
     ?? steps.find(step => step.status === 'active')
     ?? steps.find(step => step.status === 'pending')
     ?? steps[steps.length - 1]
@@ -524,10 +532,11 @@ export function buildDailyReport(input: BuildDailyReportInput): DailyReport {
   const generatedAt = now.toISOString()
   const delegationCounts = countDelegations(input.delegations)
   const completedDelegations = input.delegations.filter(d => d.status === 'completed')
+  const delegationIds = new Set(input.delegations.map(delegation => delegation.id))
   const criticScoresStored = completedDelegations.filter(d => Boolean(d.criticScore)).length
   const prsCreated = input.delegations.filter(d => Boolean(d.summaryReport?.prUrl)).length
   const staleRunningDelegations = input.delegations.filter(d => isStaleRunning(d, now)).length
-  const knowledgeWritebacks = input.knowledgeCards.filter(isKnowledgeWriteback).length
+  const knowledgeWritebacks = input.knowledgeCards.filter(card => isKnowledgeWriteback(card, delegationIds)).length
 
   const status: DailyReport['status'] = {
     delegations: delegationCounts,
