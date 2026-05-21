@@ -12,6 +12,13 @@ export const dynamic = 'force-dynamic'
 type Source = 'all' | 'linear' | 'github' | 'local'
 
 const LOCAL_ITEMS_FILE = path.join(process.cwd(), 'config', 'local-items.json')
+const STATUS_OVERRIDES_FILE = path.join(process.cwd(), 'config', 'work-item-status-overrides.json')
+
+interface StatusOverride {
+  id: string
+  status: WorkItem['status']
+  updatedAt: string
+}
 
 function readLocalWorkItems(): WorkItem[] {
   try {
@@ -23,6 +30,30 @@ function readLocalWorkItems(): WorkItem[] {
   } catch {
     return []
   }
+}
+
+function readStatusOverrides(): StatusOverride[] {
+  try {
+    if (!fs.existsSync(STATUS_OVERRIDES_FILE)) return []
+    return JSON.parse(fs.readFileSync(STATUS_OVERRIDES_FILE, 'utf-8')) as StatusOverride[]
+  } catch {
+    return []
+  }
+}
+
+function applyStatusOverrides(items: WorkItem[]): WorkItem[] {
+  const overrides = new Map(readStatusOverrides().map(override => [override.id, override]))
+  if (overrides.size === 0) return items
+
+  return items.map(item => {
+    const override = overrides.get(item.id)
+    if (!override) return item
+    return {
+      ...item,
+      status: override.status,
+      updatedAt: override.updatedAt,
+    }
+  })
 }
 
 export async function GET(request: NextRequest) {
@@ -75,12 +106,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    items.sort((a, b) => {
+    const effectiveItems = applyStatusOverrides(items)
+
+    effectiveItems.sort((a, b) => {
       if (a.priority !== b.priority) return a.priority - b.priority
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     })
 
-    const filtered = projectId ? items.filter(i => i.projectId === projectId) : items
+    const filtered = projectId ? effectiveItems.filter(i => i.projectId === projectId) : effectiveItems
 
     return NextResponse.json({
       items: filtered,
