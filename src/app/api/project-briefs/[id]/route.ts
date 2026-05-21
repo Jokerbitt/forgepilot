@@ -2,8 +2,9 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { findProjectBriefById } from '@/lib/project-briefs'
 import { saveSnapshot } from '@/lib/project-briefs/brief-versions'
-import type { ProjectBrief } from '@/lib/models/project-brief'
 import { createProjectBriefRepository } from '@/lib/repositories/projectBriefRepository'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { ProjectBriefPatchSchema } from '@/lib/validation/schemas'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -26,7 +27,9 @@ export async function GET(_request: Request, { params }: RouteParams) {
 export async function PATCH(request: Request, { params }: RouteParams) {
   const { id } = await params
   try {
-    const patch = await request.json() as Partial<Omit<ProjectBrief, 'id' | 'createdAt'>>
+    const patch = await parseBody(request, ProjectBriefPatchSchema)
+    if (isValidationError(patch)) return patch
+
     const current = findProjectBriefById(id)
     if (!current) {
       return NextResponse.json({ error: 'Project brief not found' }, { status: 404 })

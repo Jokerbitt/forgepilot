@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
 import type { WorkItem } from '@/lib/models/work-item'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { WorkItemDependenciesSchema } from '@/lib/validation/schemas'
 
 const LOCAL_ITEMS_FILE = path.join(process.cwd(), 'config', 'local-items.json')
 
@@ -51,14 +53,10 @@ export async function POST(
 ) {
   const { id } = await params
   try {
-    const body = await req.json() as { blockedBy: string[] }
+    const bodyResult = await parseBody(req, WorkItemDependenciesSchema)
+    if (isValidationError(bodyResult)) return bodyResult
 
-    if (!Array.isArray(body.blockedBy)) {
-      return NextResponse.json(
-        { error: 'blockedBy must be an array of strings' },
-        { status: 400 },
-      )
-    }
+    const body = bodyResult
 
     const items = readLocalWorkItems()
     const itemIndex = items.findIndex(i => i.id === id)

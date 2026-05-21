@@ -2,20 +2,13 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { scoreWork } from '@/lib/agents/work-quality'
 import { recordOutcome, getDriftWarnings } from '@/lib/agents/skill-evolver'
-import type { AtomicTask } from '@/lib/agents/atomic-task'
 import type { AgentType } from '@/lib/agents/agent-skills'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { AgentOptimizeSchema } from '@/lib/validation/schemas'
 
 export async function POST(req: Request) {
-  const body = await req.json() as {
-    task: AtomicTask
-    agentType: AgentType
-    testsPassed: boolean
-    typeErrorCount: number
-    lintErrorCount: number
-    filesChanged: number
-    retryCount: number
-    durationMinutes: number
-  }
+  const body = await parseBody(req, AgentOptimizeSchema)
+  if (isValidationError(body)) return body
 
   const result = scoreWork({
     task: body.task,
@@ -27,7 +20,7 @@ export async function POST(req: Request) {
     durationMinutes: body.durationMinutes ?? 0,
   })
 
-  recordOutcome(body.agentType, body.task.skillCategory, result)
+  recordOutcome(body.agentType as AgentType, body.task.skillCategory, result)
 
   const warnings = getDriftWarnings()
 

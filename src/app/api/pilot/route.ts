@@ -1,17 +1,13 @@
 export const dynamic = 'force-dynamic'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { runPilot } from '@/lib/pilot/orchestrator'
 import type { PilotInput } from '@/lib/pilot/orchestrator'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { PilotInputSchema } from '@/lib/validation/schemas'
 
-export async function POST(req: Request) {
-  const body = await req.json() as Partial<PilotInput>
-
-  if (!body.workItemId || !body.title || !body.goal) {
-    return NextResponse.json(
-      { error: 'workItemId, title, goal required' },
-      { status: 400 },
-    )
-  }
+export async function POST(req: NextRequest) {
+  const body = await parseBody(req, PilotInputSchema)
+  if (isValidationError(body)) return body
 
   const result = await runPilot(body as PilotInput)
   const status = result.status === 'completed' ? 200 : 422

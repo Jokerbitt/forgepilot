@@ -1,8 +1,10 @@
 export const dynamic = 'force-dynamic'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getAgents, upsertAgent } from '@/lib/agents/registry'
 import type { AgentRole } from '@/lib/models/agent-profile'
 import type { AgentProfile } from '@/lib/models/agent-profile'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { AgentProfileSchema } from '@/lib/validation/schemas'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -10,11 +12,9 @@ export async function GET(req: Request) {
   return NextResponse.json(getAgents(role ?? undefined))
 }
 
-export async function POST(req: Request) {
-  const body = await req.json() as Partial<AgentProfile>
-  if (!body.id || !body.role || !body.displayName) {
-    return NextResponse.json({ error: 'id, role, displayName required' }, { status: 400 })
-  }
+export async function POST(req: NextRequest) {
+  const body = await parseBody(req, AgentProfileSchema)
+  if (isValidationError(body)) return body
   const now = new Date().toISOString()
   const profile: AgentProfile = {
     availability: 'available',
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     updatedAt: now,
     ...body,
     id: body.id,
-    role: body.role,
+    role: body.role as AgentRole,
     displayName: body.displayName,
   }
   return NextResponse.json(upsertAgent(profile), { status: 201 })

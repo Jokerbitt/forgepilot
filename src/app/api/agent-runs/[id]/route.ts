@@ -1,8 +1,10 @@
 export const dynamic = 'force-dynamic'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getRun, updateRun } from '@/lib/agent-runs/store'
 import { buildRunSummary } from '@/lib/writeback/summary'
 import { writeRunLessons } from '@/lib/writeback/lessons'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { AgentRunPatchSchema } from '@/lib/validation/schemas'
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -11,9 +13,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   return NextResponse.json(run)
 }
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const body = await req.json() as Record<string, unknown>
+  const body = await parseBody(req, AgentRunPatchSchema)
+  if (isValidationError(body)) return body
+
   const run = updateRun(id, body)
   if (!run) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 

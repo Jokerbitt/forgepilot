@@ -1,11 +1,13 @@
 export const dynamic = 'force-dynamic'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
 import { getResearchDocument } from '@/lib/knowledge/research-store'
 import { saveProjectBrief } from '@/lib/project-briefs'
 import { readStoredApiKeys } from '@/lib/connectors/config'
 import { generateText, stripJsonCodeFence, AIProviderConfigurationError } from '@/lib/ai/text-generation'
 import type { ProjectBrief } from '@/lib/models/project-brief'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { FromResearchSchema } from '@/lib/validation/schemas'
 
 const SYSTEM_PROMPT = `You are a product manager who turns research documents into structured project briefs.
 
@@ -26,12 +28,9 @@ Respond ONLY with valid JSON (no markdown fences):
   "nonGoals": ["string", ...]
 }`
 
-export async function POST(req: Request) {
-  const body = await req.json() as { researchId: string }
-
-  if (!body.researchId?.trim()) {
-    return NextResponse.json({ error: 'researchId is required' }, { status: 400 })
-  }
+export async function POST(req: NextRequest) {
+  const body = await parseBody(req, FromResearchSchema)
+  if (isValidationError(body)) return body
 
   const research = getResearchDocument(body.researchId)
   if (!research) {

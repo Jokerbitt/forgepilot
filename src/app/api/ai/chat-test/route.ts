@@ -13,6 +13,8 @@ import { getAllProviderConfigs } from '@/lib/ai/providers/config-store'
 import { getProviderInstance } from '@/lib/ai/providers/registry'
 import { readStoredApiKeys } from '@/lib/connectors/config'
 import { aiLogger } from '@/lib/logger'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { ChatTestSchema } from '@/lib/validation/schemas'
 
 interface ChatTestBody {
   providerId: string
@@ -39,21 +41,10 @@ interface ChatTestError {
 }
 
 export async function POST(request: Request): Promise<NextResponse<ChatTestResult | ChatTestError>> {
-  let body: ChatTestBody
-  try {
-    body = await request.json() as ChatTestBody
-  } catch {
-    return NextResponse.json({ ok: false, error: 'Invalid JSON' }, { status: 400 })
-  }
+  const result = await parseBody(request, ChatTestSchema)
+  if (isValidationError(result)) return result as NextResponse<ChatTestError>
 
-  const { providerId, modelId, prompt, systemPrompt, maxTokens } = body
-
-  if (!providerId?.trim() || !modelId?.trim() || !prompt?.trim()) {
-    return NextResponse.json(
-      { ok: false, error: 'providerId, modelId and prompt are required' },
-      { status: 400 },
-    )
-  }
+  const { providerId, modelId, prompt, systemPrompt, maxTokens } = result
 
   const configs  = getAllProviderConfigs()
   const config   = configs.find(c => c.id === providerId)

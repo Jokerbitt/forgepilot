@@ -19,9 +19,10 @@ export type ParseResult<T> = T | NextResponse
 /**
  * Parse and validate a JSON request body against a Zod schema.
  * Returns the validated data, or a 400 NextResponse with structured errors.
+ * Accepts both Request and NextRequest (the latter extends the former).
  */
 export async function parseBody<T>(
-  request: NextRequest,
+  request: Request | NextRequest,
   schema: ZodSchema<T>,
 ): Promise<ParseResult<T>> {
   let raw: unknown

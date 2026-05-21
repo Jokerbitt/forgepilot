@@ -1,5 +1,5 @@
 export const dynamic = 'force-dynamic'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { readProjectBriefs } from '@/lib/project-briefs'
 import { readMilestones, readWorkPackages } from '@/lib/knowledge/milestone-store'
 import { readStoredApiKeys } from '@/lib/connectors/config'
@@ -8,6 +8,8 @@ import { readLastPMPlan, writePMPlan, isPlanStale } from '@/lib/agent-runner/pm-
 import { appendPMHistory } from '@/lib/agent-runner/pm-history-store'
 import { getNBAConfig, saveNBAConfig } from '@/lib/nba-engine/nba-config'
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { PMAgentAutoPatchSchema } from '@/lib/validation/schemas'
 
 export async function POST() {
   const config = getNBAConfig()
@@ -56,8 +58,10 @@ export async function GET() {
   })
 }
 
-export async function PATCH(request: Request) {
-  const body = await request.json() as { autoPmAgent: boolean }
+export async function PATCH(request: NextRequest) {
+  const body = await parseBody(request, PMAgentAutoPatchSchema)
+  if (isValidationError(body)) return body
+
   const config = getNBAConfig()
   saveNBAConfig({ ...config, autoPmAgent: body.autoPmAgent })
   return NextResponse.json({ ok: true, autoPmAgent: body.autoPmAgent })

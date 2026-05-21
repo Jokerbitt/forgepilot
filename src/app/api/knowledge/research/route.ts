@@ -1,28 +1,21 @@
 export const dynamic = 'force-dynamic'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { nanoid } from 'nanoid'
 import { readResearchDocuments, upsertResearchDocument } from '@/lib/knowledge/research-store'
 import { runResearchAgent } from '@/lib/agent-runner/research-agent'
 import { readStoredApiKeys } from '@/lib/connectors/config'
 import type { ResearchDocument } from '@/lib/models/research'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { ResearchDocumentSchema } from '@/lib/validation/schemas'
 
 export async function GET() {
   const docs = readResearchDocuments()
   return NextResponse.json(docs)
 }
 
-export async function POST(req: Request) {
-  const body = await req.json() as {
-    topic: string
-    question?: string
-    relatedWorkItemId?: string
-    relatedProjectBriefId?: string
-    tags?: string[]
-  }
-
-  if (!body.topic?.trim()) {
-    return NextResponse.json({ error: 'topic is required' }, { status: 400 })
-  }
+export async function POST(req: NextRequest) {
+  const body = await parseBody(req, ResearchDocumentSchema)
+  if (isValidationError(body)) return body
 
   const storedKeys = readStoredApiKeys()
   const apiKey = storedKeys.ANTHROPIC_API_KEY?.trim()

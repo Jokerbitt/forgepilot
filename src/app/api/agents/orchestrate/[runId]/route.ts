@@ -1,8 +1,10 @@
 export const dynamic = 'force-dynamic'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getRun, updateTaskStatus, updateRunStatus } from '@/lib/agents/orchestrated-run'
 import type { TaskResult, RunStatus } from '@/lib/agents/orchestrated-run'
 import type { AtomicTaskStatus } from '@/lib/agents/atomic-task'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { OrchestratedRunPatchSchema } from '@/lib/validation/schemas'
 
 export async function GET(_req: Request, { params }: { params: Promise<{ runId: string }> }) {
   const { runId } = await params
@@ -11,14 +13,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ runId: 
   return NextResponse.json(run)
 }
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ runId: string }> }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ runId: string }> }) {
   const { runId } = await params
-  const body = await req.json() as {
-    taskId?: string
-    status?: AtomicTaskStatus
-    result?: TaskResult
-    runStatus?: string
-  }
+  const body = await parseBody(req, OrchestratedRunPatchSchema)
+  if (isValidationError(body)) return body
 
   if (body.runStatus) {
     updateRunStatus(runId, body.runStatus as RunStatus)
@@ -29,7 +27,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ runId:
     return NextResponse.json({ error: 'taskId and status required' }, { status: 400 })
   }
 
-  const updated = updateTaskStatus(runId, body.taskId, body.status, body.result)
+  const updated = updateTaskStatus(runId, body.taskId, body.status as AtomicTaskStatus, body.result as TaskResult | undefined)
   if (!updated) return NextResponse.json({ error: 'Run or task not found' }, { status: 404 })
   return NextResponse.json(updated)
 }

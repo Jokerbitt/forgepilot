@@ -5,6 +5,8 @@ import {
   createDelegationRepository,
   SINGLE_TENANT_USER_ID,
 } from '@/lib/repositories/delegationRepository'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { PatchDelegationSchema } from '@/lib/validation/schemas'
 
 export async function GET(
   _req: Request,
@@ -24,11 +26,13 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
+  const result = await parseBody(req, PatchDelegationSchema)
+  if (isValidationError(result)) return result
+
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
-  const body = await req.json() as Partial<Pick<Delegation, 'status' | 'agentRunId'>>
   const patch: Partial<Delegation> = {}
-  if (body.status !== undefined) patch.status = body.status
-  if (body.agentRunId !== undefined) patch.agentRunId = body.agentRunId
+  if (result.status !== undefined) patch.status = result.status
+  if (result.agentRunId !== undefined) patch.agentRunId = result.agentRunId
   const updated = await repo.update(id, patch)
   if (!updated) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
