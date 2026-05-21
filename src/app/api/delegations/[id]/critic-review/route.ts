@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
-import { runGrokCritic, runGrokCodeReview } from '@/lib/eval/grok-critic'
+import { getCriticProviderPlan, runGrokCritic, runGrokCodeReview } from '@/lib/eval/grok-critic'
 import type { GrokCriticResult, CodeReviewResult } from '@/lib/eval/grok-critic'
 import { mapGrokResultToCriticScore } from '@/lib/eval/auto-grok-critic'
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
@@ -58,7 +58,10 @@ export async function POST(
 
     if (!result) {
       return NextResponse.json(
-        { error: 'Grok code review failed — check server logs' },
+        {
+          error: 'Critic code review failed — check provider configuration and server logs',
+          criticPlan: getCriticProviderPlan(),
+        },
         { status: 502 },
       )
     }
@@ -77,7 +80,10 @@ export async function POST(
 
   if (!result) {
     return NextResponse.json(
-      { error: 'Grok critic review failed — check provider configuration and server logs' },
+      {
+        error: 'Critic review failed — check provider configuration and server logs',
+        criticPlan: getCriticProviderPlan(),
+      },
       { status: 502 },
     )
   }
