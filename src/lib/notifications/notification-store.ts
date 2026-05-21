@@ -10,9 +10,21 @@ async function forwardToTelegram(notification: Notification): Promise<void> {
     const cfg = readTelegramConfig()
     if (!cfg) return
     if (!cfg.notifyOnSeverity.includes(notification.severity as 'info' | 'warning' | 'critical')) return
-    const { sendTelegramMessage, formatNotification } = await import('@/lib/telegram/bot')
+    const { sendTelegramMessage, formatNotification, delegationApprovalKeyboard } = await import('@/lib/telegram/bot')
     const text = formatNotification(notification)
-    await sendTelegramMessage(text, { parseMode: 'Markdown', disableWebPagePreview: true })
+
+    // For delegation_pending notifications: attach inline Approve/Reject keyboard
+    const isDelegationPending =
+      notification.type === 'delegation_pending' && typeof notification.link === 'string'
+    const delegationId = isDelegationPending
+      ? notification.link!.split('/').pop()
+      : undefined
+
+    await sendTelegramMessage(text, {
+      parseMode: 'Markdown',
+      disableWebPagePreview: true,
+      replyMarkup: delegationId ? delegationApprovalKeyboard(delegationId) : undefined,
+    })
   } catch { /* non-fatal — Telegram errors must never crash the notification store */ }
 }
 
