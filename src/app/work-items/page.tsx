@@ -8,6 +8,7 @@ import { Badge, StatusDot, cx } from '@/components/ui/primitives'
 import { BlockedByBadge } from '@/components/work-items/BlockedByBadge'
 import { CSVImport } from '@/components/work-items/CSVImport'
 import { KanbanBoard } from '@/components/work-items/KanbanBoard'
+import { sortWorkItems, type SortDirection, type WorkItemSortKey } from '@/lib/work-items/sort-utils'
 
 // ─── helpers ─────────────────────────────────────────────────────
 
@@ -39,6 +40,41 @@ const WP_PRIORITY_COLOR: Record<string, string> = {
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })
+}
+
+interface ClientResponse {
+  ok: boolean
+  status: number
+  json: <T>() => Promise<T>
+}
+
+function clientRequest(url: string, init: RequestInit = {}): Promise<ClientResponse> {
+  if (typeof fetch === 'function') {
+    return fetch(url, init)
+  }
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open(init.method ?? 'GET', url)
+
+    if (init.headers instanceof Headers) {
+      init.headers.forEach((value, key) => xhr.setRequestHeader(key, value))
+    } else if (Array.isArray(init.headers)) {
+      init.headers.forEach(([key, value]) => xhr.setRequestHeader(key, value))
+    } else if (init.headers) {
+      Object.entries(init.headers).forEach(([key, value]) => xhr.setRequestHeader(key, String(value)))
+    }
+
+    xhr.onload = () => {
+      resolve({
+        ok: xhr.status >= 200 && xhr.status < 300,
+        status: xhr.status,
+        json: async <T,>() => JSON.parse(xhr.responseText || 'null') as T,
+      })
+    }
+    xhr.onerror = () => reject(new Error('Request failed'))
+    xhr.send(typeof init.body === 'string' ? init.body : null)
+  })
 }
 
 // ─── WorkPackage types (inline to avoid server-only import issues) ──
@@ -94,11 +130,13 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
   const [orchestrating, setOrchestrating] = useState<string | null>(null)
   const [orchestrated, setOrchestrated] = useState<Map<string, string>>(new Map()) // itemId → runId
   const [csvImportOpen, setCsvImportOpen] = useState(false)
-  type SortKey = 'priority' | 'title' | 'updatedAt'
-  const [sortKey, setSortKey] = useState<SortKey>('priority')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [sortKey, setSortKey] = useState<WorkItemSortKey>('priority')
+  const [sortDir, setSortDir] = useState<SortDirection>('asc')
+  const [updatingPriority, setUpdatingPriority] = useState<string | null>(null)
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null)
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null)
 
-  const toggleSort = (key: SortKey) => {
+  const toggleSort = (key: WorkItemSortKey) => {
     if (sortKey === key) {
       setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     } else {
@@ -106,13 +144,43 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
       setSortDir('asc')
     }
   }
+
+  const handlePriorityChange = async (itemId: string, priority: WorkItem['priority']) => {
+    const previous = items
+    setUpdatingPriority(itemId)
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, priority, updatedAt: new Date().toISOString() } : i))
+    try {
+      const res = await fetch(`/api/work-items/${itemId}/priority`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priority }),
+      })
+      if (!res.ok) {
+        setItems(previous)
+      }
+    } catch {
+      setItems(previous)
+    } finally {
+      setUpdatingPriority(null)
+    }
+  }
+
+  const handlePriorityDrop = async (targetItem: WorkItem) => {
+    const draggedItem = items.find(item => item.id === draggedItemId)
+    setDraggedItemId(null)
+    setDropTargetId(null)
+    if (!draggedItem || draggedItem.id === targetItem.id || draggedItem.priority === targetItem.priority) return
+    await handlePriorityChange(draggedItem.id, targetItem.priority)
+    setSortKey('priority')
+    setSortDir('asc')
+  }
   const [view, setView] = useState<'list' | 'kanban'>('list')
 
   const load = useCallback((isSyncClick = false) => {
     if (isSyncClick) setSyncing(true)
     const url = projectId ? `/api/work-items?projectId=${encodeURIComponent(projectId)}` : '/api/work-items'
-    fetch(url)
-      .then(r => r.json())
+    clientRequest(url)
+      .then(r => r.json<{ items: WorkItem[]; errors?: string[] }>())
       .then((data: { items: WorkItem[]; errors?: string[] }) => {
         setItems(Array.isArray(data.items) ? data.items : [])
         setErrors(data.errors ?? [])
@@ -151,7 +219,7 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
   const createDelegation = async (item: WorkItem) => {
     setCreating(item.id)
     try {
-      const res = await fetch('/api/delegations', {
+      const res = await clientRequest('/api/delegations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildDelegationPayload(item)),
@@ -171,13 +239,13 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
     try {
       // 1. Create delegation
       const delPayload = buildDelegationPayload(item)
-      await fetch('/api/delegations', {
+      await clientRequest('/api/delegations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(delPayload),
       })
       // 2. Decompose with AI → create orchestrated run
-      const orchRes = await fetch('/api/agents/orchestrate', {
+      const orchRes = await clientRequest('/api/agents/orchestrate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -188,7 +256,7 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
         }),
       })
       if (orchRes.ok) {
-        const { run } = await orchRes.json() as { run: { id: string } }
+        const { run } = await orchRes.json<{ run: { id: string } }>()
         setOrchestrated(prev => new Map(Array.from(prev).concat([[item.id, run.id]])))
         setCreated(prev => new Set(Array.from(prev).concat(item.id)))
       }
@@ -213,16 +281,12 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
   }
 
   const searchLower = search.toLowerCase()
-  const filtered = [...items
+  const filtered = sortWorkItems(items
     .filter(i => !sourceFilter || i.source === sourceFilter)
-    .filter(i => !searchLower || i.title.toLowerCase().includes(searchLower) || i.id.toLowerCase().includes(searchLower))
-  ].sort((a, b) => {
-    let cmp = 0
-    if (sortKey === 'priority') cmp = a.priority - b.priority
-    else if (sortKey === 'title') cmp = a.title.localeCompare(b.title)
-    else if (sortKey === 'updatedAt') cmp = a.updatedAt.localeCompare(b.updatedAt)
-    return sortDir === 'asc' ? cmp : -cmp
-  })
+    .filter(i => !searchLower || i.title.toLowerCase().includes(searchLower) || i.id.toLowerCase().includes(searchLower)),
+    sortKey,
+    sortDir,
+  )
 
   const sources = Array.from(new Set(items.map(i => i.source))) as WorkItemSource[]
   const exportParams = new URLSearchParams()
@@ -310,6 +374,12 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
         </div>
       </div>
 
+      {view === 'list' && filtered.length > 0 && (
+        <p className="mb-3 text-xs text-slate-500">
+          Priorität direkt ändern oder Handle auf eine andere Zeile ziehen, um deren Prioritätsstufe zu übernehmen.
+        </p>
+      )}
+
       {errors.length > 0 && (
         <div className="mb-4 rounded-lg border border-amber-800/40 bg-amber-900/10 px-3 py-2 text-xs text-amber-400">
           {errors[0]}
@@ -332,6 +402,7 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-800 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="w-10 px-4 py-3"></th>
                 <th
                   className="cursor-pointer select-none px-4 py-3 hover:text-slate-300"
                   onClick={() => toggleSort('title')}
@@ -357,7 +428,36 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
             </thead>
             <tbody className="divide-y divide-slate-800">
               {filtered.map(item => (
-                <tr key={item.id} className="hover:bg-slate-800/30">
+                <tr
+                  key={item.id}
+                  onDragOver={event => {
+                    if (!draggedItemId || draggedItemId === item.id) return
+                    event.preventDefault()
+                    setDropTargetId(item.id)
+                  }}
+                  onDragLeave={() => setDropTargetId(current => current === item.id ? null : current)}
+                  onDrop={event => {
+                    event.preventDefault()
+                    void handlePriorityDrop(item)
+                  }}
+                  className={cx(
+                    'hover:bg-slate-800/30',
+                    dropTargetId === item.id && 'bg-sky-500/10 ring-1 ring-inset ring-sky-500/30',
+                  )}
+                >
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      draggable
+                      onDragStart={() => setDraggedItemId(item.id)}
+                      onDragEnd={() => { setDraggedItemId(null); setDropTargetId(null) }}
+                      className="cursor-grab rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-xs text-slate-500 transition-colors hover:border-slate-700 hover:text-slate-300 active:cursor-grabbing"
+                      title="Priorität per Drag auf eine Zielzeile übernehmen"
+                      aria-label={`${item.title} priorisieren`}
+                    >
+                      ⋮⋮
+                    </button>
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-start gap-2">
                       <StatusDot tone={item.blocked ? 'warning' : 'neutral'} />
@@ -375,8 +475,21 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
                   <td className="hidden px-4 py-3 sm:table-cell">
                     <Badge>{SOURCE_LABEL[item.source]}</Badge>
                   </td>
-                  <td className={cx('hidden px-4 py-3 text-xs font-medium md:table-cell', PRIORITY_COLOR[item.priority])}>
-                    {PRIORITY_LABEL[item.priority]}
+                  <td className="hidden px-4 py-3 md:table-cell">
+                    <select
+                      value={item.priority}
+                      onChange={event => void handlePriorityChange(item.id, Number(event.target.value) as WorkItem['priority'])}
+                      disabled={updatingPriority === item.id}
+                      aria-label={`Priorität für ${item.title}`}
+                      className={cx(
+                        'rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-xs font-medium outline-none transition-colors hover:border-slate-700 focus:border-sky-500 disabled:opacity-50',
+                        PRIORITY_COLOR[item.priority],
+                      )}
+                    >
+                      {Object.entries(PRIORITY_LABEL).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
                   </td>
                   <td className="px-4 py-3">
                     <span className={cx('rounded border px-1.5 py-0.5 text-xs font-bold', RISK_COLOR[item.risk])}>
@@ -450,8 +563,8 @@ function WorkPackagesTab() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/work-packages').then(r => r.json()) as Promise<WorkPackage[]>,
-      fetch('/api/milestones').then(r => r.json()) as Promise<Milestone[]>,
+      clientRequest('/api/work-packages').then(r => r.json<WorkPackage[]>()),
+      clientRequest('/api/milestones').then(r => r.json<Milestone[]>()),
     ])
       .then(([wps, milestones]) => {
         setData({
@@ -466,9 +579,9 @@ function WorkPackagesTab() {
   const handleDelegate = async (wp: WorkPackage) => {
     setCreating(wp.id)
     try {
-      const res = await fetch(`/api/work-packages/${wp.id}/create-delegation`, { method: 'POST' })
+      const res = await clientRequest(`/api/work-packages/${wp.id}/create-delegation`, { method: 'POST' })
       if (res.ok) {
-        const result = await res.json() as { delegationId: string }
+        const result = await res.json<{ delegationId: string }>()
         setDelegated(prev => new Map(Array.from(prev).concat([[wp.id, result.delegationId]])))
       }
     } catch {
