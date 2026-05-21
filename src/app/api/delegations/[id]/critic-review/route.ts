@@ -1,20 +1,8 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
-import type { Delegation } from '@/lib/models/delegation'
 import { runGrokCritic, runGrokCodeReview } from '@/lib/eval/grok-critic'
 import type { GrokCriticResult, CodeReviewResult } from '@/lib/eval/grok-critic'
-
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
-
-function readDelegations(): Delegation[] {
-  try {
-    return JSON.parse(fs.readFileSync(DELEGATIONS_FILE, 'utf-8')) as Delegation[]
-  } catch {
-    return []
-  }
-}
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 type ReviewType = 'delegation' | 'code'
 
@@ -53,7 +41,8 @@ export async function POST(
     )
   }
 
-  const delegation = readDelegations().find(d => d.id === id)
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+  const delegation = await repo.findById(id)
   if (!delegation) {
     return NextResponse.json({ error: 'Delegation not found' }, { status: 404 })
   }

@@ -76,6 +76,10 @@ function rowToDelegation(row: DbDelegation): Delegation {
     autoOrchestrate: row.autoOrchestrate,
     priority: row.priority ?? undefined,
     briefId: row.briefId ?? undefined,
+    criticScore:
+      row.criticScore != null
+        ? (row.criticScore as unknown as Delegation['criticScore'])
+        : undefined,
     contract: row.contract as unknown as Delegation['contract'],
     summaryReport:
       row.summaryReport != null
@@ -194,6 +198,14 @@ class PostgresDelegationRepository implements DelegationRepository {
         ...(patch.autoOrchestrate != null ? { autoOrchestrate: patch.autoOrchestrate } : {}),
         ...(patch.priority !== undefined ? { priority: patch.priority ?? null } : {}),
         ...(patch.briefId !== undefined ? { briefId: patch.briefId ?? null } : {}),
+        ...(patch.criticScore !== undefined
+          ? {
+              criticScore:
+                patch.criticScore != null
+                  ? (patch.criticScore as unknown as Record<string, unknown>)
+                  : null,
+            }
+          : {}),
         updatedAt: now,
       })
       .where(eq(delegations.id, id))

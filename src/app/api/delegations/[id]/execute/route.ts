@@ -22,6 +22,7 @@ import { scoreWork } from '@/lib/agents/work-quality'
 import { recordOutcome } from '@/lib/agents/skill-evolver'
 import { generateText } from '@/lib/ai/text-generation'
 import { extractKnowledge } from '@/lib/knowledge/extraction'
+import { runGrokCritic } from '@/lib/eval/grok-critic'
 
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
@@ -333,6 +334,40 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       // M116: Auto-Knowledge Extraction — fire-and-forget
       if (success) {
         extractKnowledge(finishedDelegation).catch(() => {
+          // Non-critical — never block execution
+        })
+      }
+
+      // M181: Auto-Grok Critic after successful execution — fire-and-forget
+      if (success && report && process.env.XAI_API_KEY) {
+        const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+        runGrokCritic({
+          delegationTitle: finishedDelegation.title || finishedDelegation.contract.goal,
+          delegationContract: finishedDelegation.contract.goal,
+          acceptanceCriteria: finishedDelegation.contract.definitionOfDone ?? [],
+          agentOutput: report.keyPoints?.join('\n') ?? report.changes?.join('\n') ?? finishedDelegation.contract.goal,
+          filesChanged: [
+            ...(report.filesAdded ?? []),
+            ...(report.filesModified ?? []),
+          ],
+        }).then(async (criticResult) => {
+          if (!criticResult) return
+          const verdictMap: Record<string, 'approved' | 'needs-revision' | 'rejected'> = {
+            PASS: 'approved',
+            NEEDS_REVISION: 'needs-revision',
+            FAIL: 'rejected',
+          }
+          await repo.update(id, {
+            criticScore: {
+              correctness: criticResult.correctnessScore,
+              efficiency: criticResult.efficiencyScore,
+              drift: criticResult.driftScore,
+              verdict: verdictMap[criticResult.verdict] ?? 'needs-revision',
+              summary: criticResult.reason,
+              runAt: criticResult.evaluatedAt,
+            },
+          })
+        }).catch(() => {
           // Non-critical — never block execution
         })
       }
