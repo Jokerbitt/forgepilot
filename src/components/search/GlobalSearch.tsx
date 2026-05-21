@@ -106,9 +106,9 @@ export function GlobalSearch() {
     void fetchResults(debouncedQuery)
   }, [debouncedQuery, fetchResults])
 
-  const navigate = useCallback((url: string) => {
+  const navigate = useCallback((href: string) => {
     setOpen(false)
-    router.push(url)
+    router.push(href)
   }, [router])
 
   // Navigate to full search page
@@ -132,7 +132,7 @@ export function GlobalSearch() {
     } else if (e.key === 'Enter') {
       e.preventDefault()
       if (results.length > 0 && results[selectedIdx]) {
-        navigate(results[selectedIdx].url)
+        navigate(results[selectedIdx].href)
       } else if (query.trim().length >= 2) {
         openFullSearch()
       }
@@ -208,7 +208,7 @@ export function GlobalSearch() {
                           ? 'bg-slate-800/80 text-white'
                           : 'text-slate-300 hover:bg-slate-800/40 hover:text-white'
                       }`}
-                      onClick={() => navigate(result.url)}
+                      onClick={() => navigate(result.href)}
                       onMouseEnter={() => setSelectedIdx(idx)}
                     >
                       <Icon className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${color}`} strokeWidth={1.75} />

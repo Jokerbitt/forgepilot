@@ -207,7 +207,7 @@ function SearchContent() {
                     {items.map(result => (
                       <Link
                         key={result.id}
-                        href={result.url}
+                        href={result.href}
                         className="group block rounded-xl border border-slate-800 bg-slate-900 p-4 transition-all duration-150 hover:border-slate-600 hover:bg-slate-800/60 hover:shadow-md hover:shadow-black/20"
                       >
                         <div className="flex items-start justify-between gap-3">
