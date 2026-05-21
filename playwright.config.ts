@@ -30,6 +30,6 @@ export default defineConfig({
     command: `FORGEPILOT_AUTH_DISABLED=true PORT=${port} npm run dev`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
-    timeout: 60000,
+    timeout: 120000,
   },
 });

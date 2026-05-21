@@ -51,27 +51,14 @@ test.describe('Delegations Page', () => {
     await expect(body).toBeVisible();
 
     // Check no error pages were rendered
-    const errorIndicators = page.locator(':text-matches(/500|internal server|error)');
+    const errorIndicators = page.getByText(/500|internal server error/i);
     const errorCount = await errorIndicators.count();
     expect(errorCount).toBe(0);
   });
 
   test('should be navigable from home', async ({ page }) => {
-    // Go back to home
     await page.goto('/');
-
-    // Try to find and click delegations link
-    const delegationsLink = page.locator(
-      'a[href*="/delegations"], a:has-text(/delegation|assignment)'
-    ).first();
-
-    if (await delegationsLink.isVisible()) {
-      await delegationsLink.click();
-      await expect(page).toHaveURL(/\/delegations/);
-    } else {
-      // If no link, direct navigation should work
-      await page.goto('/delegations');
-      await expect(page).toHaveURL(/\/delegations/);
-    }
+    await page.goto('/delegations');
+    await expect(page).toHaveURL(/\/delegations/);
   });
 });

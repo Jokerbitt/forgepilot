@@ -21,9 +21,9 @@ test.describe('Work Items Page', () => {
 
   test('should have a sync button or refresh functionality', async ({ page }) => {
     // Look for sync/refresh button
-    const syncButton = page.locator(
-      'button:has-text(/sync|refresh|reload|update|fetch), [role="button"]:has-text(/sync|refresh)'
-    ).first();
+    const syncButton = page
+      .getByRole('button', { name: /sync|refresh|reload|update|fetch/i })
+      .first();
 
     if (await syncButton.isVisible()) {
       // Button exists and should be clickable

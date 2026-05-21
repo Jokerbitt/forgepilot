@@ -4,7 +4,7 @@ test.describe('Critical Path — Idea to Delegation', () => {
   test('homepage loads with navigation', async ({ page }) => {
     await page.goto('/')
     await expect(page).toHaveTitle(/ForgePilot/)
-    const nav = page.locator('nav, [role="navigation"]').first()
+    const nav = page.locator('nav:visible, [role="navigation"]:visible, aside:visible').first()
     await expect(nav).toBeVisible()
   })
 

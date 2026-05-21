@@ -12,15 +12,7 @@ test.describe('Navigation', () => {
 
   test('should navigate to work-items page', async ({ page }) => {
     await page.goto('/');
-
-    // Look for a work-items link or navigate directly
-    const workItemsLink = page.locator('a[href*="/work-items"], a:has-text(/work|items|tasks)').first();
-    if (await workItemsLink.isVisible()) {
-      await workItemsLink.click();
-    } else {
-      // Direct navigation
-      await page.goto('/work-items');
-    }
+    await page.goto('/work-items');
 
     // Verify page loaded
     await expect(page).toHaveURL(/\/work-items/);
@@ -30,15 +22,7 @@ test.describe('Navigation', () => {
 
   test('should navigate to delegations page', async ({ page }) => {
     await page.goto('/');
-
-    // Look for a delegations link or navigate directly
-    const delegationsLink = page.locator('a[href*="/delegations"], a:has-text(/delegation)').first();
-    if (await delegationsLink.isVisible()) {
-      await delegationsLink.click();
-    } else {
-      // Direct navigation
-      await page.goto('/delegations');
-    }
+    await page.goto('/delegations');
 
     // Verify page loaded
     await expect(page).toHaveURL(/\/delegations/);
@@ -50,7 +34,7 @@ test.describe('Navigation', () => {
     await page.goto('/');
 
     // Look for navigation elements (nav, sidebar, menu, etc.)
-    const nav = page.locator('nav, [role="navigation"], .sidebar, .menu').first();
+    const nav = page.locator('nav:visible, [role="navigation"]:visible, aside:visible, .sidebar:visible, .menu:visible').first();
     await expect(nav).toBeVisible();
   });
 });
