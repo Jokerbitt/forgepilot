@@ -122,6 +122,12 @@ export interface Delegation {
   traceId?: string
   /** M181: Grok Critic score — automatically populated after successful execution */
   criticScore?: CriticScore
+  /** M207: ID of parent delegation (for sub-delegations in parallel fan-out) */
+  parentId?: string
+  /** M207: IDs of spawned child sub-delegations */
+  childIds?: string[]
+  /** M207: Group identifier shared by all parallel sub-delegations from the same fan-out */
+  parallelGroup?: string
   createdAt: string
   updatedAt: string
 }
