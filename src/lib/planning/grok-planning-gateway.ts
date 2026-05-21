@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { createHash } from 'crypto'
-import { createGitHubIssue, type GitHubConnectorConfig } from '@/lib/connectors/github'
-import { createLinearIssue, type LinearConnectorConfig } from '@/lib/connectors/linear'
+import { createGitHubIssue, findGitHubIssueByTitle, type GitHubConnectorConfig } from '@/lib/connectors/github'
+import { createLinearIssue, findLinearIssueByTitle, type LinearConnectorConfig } from '@/lib/connectors/linear'
 import type { Fetcher } from '@/lib/connectors/shared'
 
 const PRIORITIES = ['P0', 'P1', 'P2'] as const
@@ -216,18 +216,30 @@ export async function applyPlanningItems(
       if (!apiKey || !teamId) {
         result.skipped.push({ target: 'linear', title: item.title, reason: 'Linear config missing' })
       } else {
-        const issue = await createLinearIssue({ ...options.linearConfig, apiKey, teamId }, {
+        const existing = await findLinearIssueByTitle({ ...options.linearConfig, apiKey, teamId }, {
           teamId,
           title: item.title,
-          description: item.body,
-          priority: item.linearPriority,
         }, fetcher)
-        result.created.push({
-          target: 'linear',
-          title: item.title,
-          identifier: issue.identifier,
-          url: issue.url,
-        })
+        if (existing) {
+          result.skipped.push({
+            target: 'linear',
+            title: item.title,
+            reason: `Already exists: ${existing.identifier}`,
+          })
+        } else {
+          const issue = await createLinearIssue({ ...options.linearConfig, apiKey, teamId }, {
+            teamId,
+            title: item.title,
+            description: item.body,
+            priority: item.linearPriority,
+          }, fetcher)
+          result.created.push({
+            target: 'linear',
+            title: item.title,
+            identifier: issue.identifier,
+            url: issue.url,
+          })
+        }
       }
     }
 
@@ -238,19 +250,33 @@ export async function applyPlanningItems(
       if (!token || !owner || !repo) {
         result.skipped.push({ target: 'github', title: item.title, reason: 'GitHub config missing' })
       } else {
-        const issue = await createGitHubIssue({ ...options.githubConfig, token, owner }, {
+        const existing = await findGitHubIssueByTitle({ ...options.githubConfig, token, owner }, {
           owner,
           repo,
           title: item.title,
-          body: item.body,
-          labels: item.githubLabels,
+          labels: ['grok-planning'],
         }, fetcher)
-        result.created.push({
-          target: 'github',
-          title: item.title,
-          identifier: `#${issue.number}`,
-          url: issue.html_url,
-        })
+        if (existing) {
+          result.skipped.push({
+            target: 'github',
+            title: item.title,
+            reason: `Already exists: #${existing.number}`,
+          })
+        } else {
+          const issue = await createGitHubIssue({ ...options.githubConfig, token, owner }, {
+            owner,
+            repo,
+            title: item.title,
+            body: item.body,
+            labels: item.githubLabels,
+          }, fetcher)
+          result.created.push({
+            target: 'github',
+            title: item.title,
+            identifier: `#${issue.number}`,
+            url: issue.html_url,
+          })
+        }
       }
     }
   }
