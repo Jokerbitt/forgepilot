@@ -277,6 +277,11 @@ function buildPrompts(): DailyReportPrompt[] {
       prompt: 'Convert this Daily Report into ForgePilot Planning Gateway JSON. Include milestones, issues, risks and doNotBuild. Prioritize P0 Auth/Security and PostgreSQL Cutover, then P1 core UX. Do not request tokens or secrets. Keep each issue scoped with owner, writeScope, acceptanceCriteria and verification.',
     },
     {
+      target: 'grok',
+      title: 'Coding validation pass',
+      prompt: 'Act as Grok 4 Heavy in validation-engineer mode. Use this Daily Report to produce a focused validation matrix and at most 3 small patch plans. Each patch plan must include owner, writeScope, acceptanceCriteria, verification commands and rollback note. Focus on Execute Loop, Auth/Postgres hardening and PR/critic/writeback reliability. Do not ask for secrets or broad write access.',
+    },
+    {
       target: 'codex',
       title: 'Implementation pick',
       prompt: 'Use the Daily Report to pick the highest-value P0/P1 task. Claim a narrow write scope, implement it, run type-check, focused tests, lint, full tests when risk warrants it, build, then open a PR with verification.',

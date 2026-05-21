@@ -9,5 +9,6 @@ ForgePilot uses Grok as an independent critic/evaluator alongside Claude.
 
 ## Usage
 - **Interactive critic**: send `docs/GROK_BRIEFING.md` to any Grok interface
+- **Coding + validation support**: send `docs/GROK_HEAVY_VALIDATION.md` to Grok 4 Heavy when you want focused code review, test matrices, patch planning, and Planning Gateway JSON
 - **API critic**: `POST /api/eval/critic` with `type: "delegation"` or `type: "code-review"`
 - **Models**: `grok-3-mini` (fast, cheap) or `grok-3` (strongest)

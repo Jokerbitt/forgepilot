@@ -130,6 +130,8 @@ describe('buildDailyReport', () => {
     expect(report.status.quality.knowledgeWritebacks).toBe(1)
     expect(report.markdown).toContain('ForgePilot Daily Report')
     expect(report.prompts.some(prompt => prompt.target === 'grok')).toBe(true)
+    expect(report.prompts.some(prompt => prompt.title === 'Coding validation pass')).toBe(true)
+    expect(report.markdown).toContain('Coding validation pass')
   })
 
   it('raises critical risk when auth is disabled', () => {

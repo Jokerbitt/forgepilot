@@ -118,6 +118,8 @@ curl http://localhost:3000/api/reports/daily?format=markdown
 
 Use the Markdown output as input for an external critic such as Grok. Do not paste API keys, Linear tokens, GitHub tokens, or connector secrets into external chat tools.
 
+For Grok 4 Heavy as a coding and validation partner, use [`docs/GROK_HEAVY_VALIDATION.md`](docs/GROK_HEAVY_VALIDATION.md). Grok should focus on code review, test matrices, small patch plans, and Planning Gateway JSON; Codex/Claude still implement through claimed write scopes and PRs.
+
 ---
 
 ## Deployment
