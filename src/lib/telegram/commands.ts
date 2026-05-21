@@ -6,6 +6,13 @@ import { readDelegations } from '@/lib/delegations/queue'
 import { readNotifications, getUnreadCount } from '@/lib/notifications/notification-store'
 import { getRuns } from '@/lib/agent-runs/store'
 import { buildDigest } from '@/lib/digest/digest-builder'
+import {
+  handleSprintCommand,
+  handleTicketCommand,
+  handleCiCommand,
+  handleIssuesCommand,
+  handleHealthCommand,
+} from '@/lib/telegram/sprint-commands'
 
 export interface TelegramCallbackQuery {
   id: string
@@ -68,6 +75,11 @@ function cmdHelp(): string {
 /approve \\<id\\> — Delegation genehmigen
 /reject \\<id\\> — Delegation ablehnen
 /notif — Letzte 5 ungelesene Benachrichtigungen
+/sprint — Sprint-Status & Burndown
+/ticket \\<id\\> — Ticket-Details (z.B. JOK\\-23)
+/ci — CI/CD Connector-Status
+/issues — Offene Delegations
+/health — System-Gesundheitscheck
 /help — Diese Hilfe`
 }
 
@@ -230,6 +242,11 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<stri
     case '/approve':  return cmdApprove(args[0] ?? '')
     case '/reject':   return cmdReject(args[0] ?? '')
     case '/notif':    return cmdNotif()
+    case '/sprint':   return handleSprintCommand()
+    case '/ticket':   return handleTicketCommand(args)
+    case '/ci':       return handleCiCommand()
+    case '/issues':   return handleIssuesCommand()
+    case '/health':   return handleHealthCommand()
     default:          return '❓ Unbekannter Befehl\\. Sende /help für alle Befehle\\.'
   }
 }
