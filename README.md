@@ -10,6 +10,20 @@
 
 ---
 
+## Features
+
+- **Idea → Brief → Requirements → Delegation → PR** — full workflow automation in one place
+- **Multi-provider AI** — Claude, Grok, Gemini, GPT-4, Groq, Mistral, Ollama, LM Studio, and any OpenAI-compatible endpoint
+- **Grok critic** — independent AI evaluation layer that scores delegations and code reviews
+- **Local-first** — JSON file persistence, no database required
+- **Optional auth** — single-user login gate (M166), disabled by default
+- **Knowledge writeback** — execution results flow back into your knowledge base automatically
+- **GDPR-by-design** — PII scrubbing, DSGVO processing ledger, erasure support
+- **Self-hosted** — Docker/NAS deployment, Vercel, or plain `npm run dev`
+- **1560+ tests** — Vitest suite covering core flows end-to-end
+
+---
+
 ## What it does
 
 1. **Idea → Brief** — Describe an idea in plain language, AI expands it into a structured project brief
@@ -101,10 +115,15 @@ forgepilot/
 | Together AI | Cloud | `TOGETHER_API_KEY` |
 | Mistral | Cloud | `MISTRAL_API_KEY` |
 | OpenRouter | Cloud (aggregator) | `OPENROUTER_API_KEY` |
+| xAI Grok | Cloud (critic) | `XAI_API_KEY` |
 | Ollama | Local (free) | `OLLAMA_BASE_URL` |
 | LM Studio | Local (free) | any OpenAI-compatible URL |
 
 Add any OpenAI-compatible provider via `/settings/providers` — no code changes needed.
+
+### Grok Integration
+
+Grok acts as an independent **critic/evaluator** — it scores delegations, reviews code, and provides a second opinion alongside Claude. See [docs/GROK_SETUP.md](./docs/GROK_SETUP.md) for setup instructions.
 
 ---
 
