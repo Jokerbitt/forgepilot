@@ -5,9 +5,11 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { ProjectBrief, Requirement, UseCase, Risk, Finding, FindingConfidence, ResearchRun } from '@/lib/models/project-brief'
 import type { Milestone, WorkPackage } from '@/lib/models/milestone'
+import type { Delegation } from '@/lib/models/delegation'
 import { briefToMarkdown, briefMarkdownFilename } from '@/lib/project-briefs/markdown-export'
 import { StartDelegationButton } from '@/components/project-briefs/StartDelegationButton'
 import { BriefCriticPanel } from '@/components/brief-critic'
+import { useDelegationStatuses } from '@/hooks/useDelegationStatuses'
 
 interface Props {
   initialBrief: ProjectBrief
@@ -120,6 +122,7 @@ export function BlueprintScreen({ initialBrief }: Props) {
   const [diffNotice, setDiffNotice] = useState('')
 
   const vm = useMemo(() => buildBlueprintViewModel(brief), [brief])
+  const delegationStatuses = useDelegationStatuses(brief.id)
 
   const loadVersions = useCallback(async () => {
     setVersionsLoading(true)
@@ -602,16 +605,22 @@ export function BlueprintScreen({ initialBrief }: Props) {
             {brief.delegationIds && brief.delegationIds.length > 0 && (
               <Section title="Delegationen" eyebrow={`${brief.delegationIds.length} Runs`}>
                 <div className="space-y-2">
-                  {brief.delegationIds.map((delegationId, index) => (
-                    <Link
-                      key={delegationId}
-                      href={`/delegations/${delegationId}`}
-                      className="flex items-center justify-between border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-300 hover:border-slate-600"
-                    >
-                      <span>Delegation {index + 1}</span>
-                      <span className="text-slate-500">oeffnen</span>
-                    </Link>
-                  ))}
+                  {brief.delegationIds.map((delegationId, index) => {
+                    const status = delegationStatuses[delegationId]
+                    return (
+                      <Link
+                        key={delegationId}
+                        href={`/delegations/${delegationId}`}
+                        className="flex items-center justify-between border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-300 hover:border-slate-600"
+                      >
+                        <span>Delegation {index + 1}</span>
+                        <div className="flex items-center gap-2">
+                          {status && <DelegationStatusBadge status={status} />}
+                          <span className="text-slate-500">oeffnen</span>
+                        </div>
+                      </Link>
+                    )
+                  })}
                 </div>
               </Section>
             )}
@@ -1354,5 +1363,23 @@ function ConfirmDialog({
         </div>
       </div>
     </div>
+  )
+}
+
+function DelegationStatusBadge({ status }: { status: Delegation['status'] }) {
+  const configs: Record<string, { label: string; style: string }> = {
+    completed: { label: 'Abgeschlossen', style: 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60' },
+    running:   { label: 'Laeuft',        style: 'bg-amber-950/40 text-amber-300 border-amber-800/60' },
+    pending:   { label: 'Wartet',        style: 'bg-amber-950/20 text-amber-400 border-amber-800/40' },
+    failed:    { label: 'Fehlgeschlagen', style: 'bg-red-950/40 text-red-300 border-red-800/60' },
+    draft:     { label: 'Bereit',        style: 'bg-slate-900 text-slate-400 border-slate-700' },
+    approved:  { label: 'Freigegeben',   style: 'bg-sky-950/40 text-sky-300 border-sky-800/60' },
+    cancelled: { label: 'Abgebrochen',   style: 'bg-slate-900 text-slate-500 border-slate-800' },
+  }
+  const cfg = configs[status] ?? { label: status, style: 'bg-slate-900 text-slate-500 border-slate-800' }
+  return (
+    <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${cfg.style}`}>
+      {cfg.label}
+    </span>
   )
 }
