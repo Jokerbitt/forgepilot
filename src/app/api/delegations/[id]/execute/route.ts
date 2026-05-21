@@ -166,6 +166,25 @@ function parsePrUrlFromOutput(output: string): string | undefined {
   return match ? match[0] : undefined
 }
 
+/**
+ * M217: Auto-merge PR for Risk A delegations.
+ * Risk A = safe/additive → auto-merge when CI passes.
+ * Risk B = modifies existing → manual review needed.
+ * Risk C = blocked upstream at approval step.
+ */
+function autoMergePRIfEligible(prUrl: string, riskClass: string, delegationId: string): void {
+  if (riskClass !== 'A') return
+  try {
+    const match = /\/pull\/(\d+)/.exec(prUrl)
+    if (!match) return
+    const prNumber = match[1]
+    execSync(`gh pr merge ${prNumber} --auto --squash`, { timeout: 15000, stdio: 'ignore' })
+    delegationLogger.info({ event: 'pr.auto_merge.enabled', prUrl, delegationId }, 'Auto-merge enabled for Risk A PR')
+  } catch (err) {
+    delegationLogger.warn({ event: 'pr.auto_merge.failed', error: String(err), prUrl, delegationId }, 'Auto-merge setup failed')
+  }
+}
+
 function isClaudeAvailable(): boolean {
   try {
     execSync('claude --version', { stdio: 'ignore', timeout: 3000 })
@@ -175,7 +194,7 @@ function isClaudeAvailable(): boolean {
   }
 }
 
-function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd: number) {
+function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd: number, riskClass: string) {
   const storedKeys = readStoredApiKeys()
   const anthropicKey = storedKeys.ANTHROPIC_API_KEY?.trim() || undefined
   const maxTurns = budgetToMaxTurns(budgetUsd)
@@ -269,11 +288,24 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     const prUrl = parsePrUrlFromOutput(fullOutput)
     const knownError = !success ? detectKnownError(fullOutput) : undefined
 
+    // M217: Auto-merge for Risk A
+    if (success && prUrl) {
+      autoMergePRIfEligible(prUrl, riskClass, id)
+    }
+
+    const autoMergeNote = success && prUrl
+      ? riskClass === 'A'
+        ? ' · Auto-Merge aktiviert (Risk A)'
+        : riskClass === 'B'
+          ? ' · PR bereit — Review erforderlich (Risk B)'
+          : ''
+      : ''
+
     const finalLog: AgentLog = {
       timestamp: new Date().toISOString(),
       type: success ? 'success' : 'error',
       message: success
-        ? `✅ Ausführung abgeschlossen (Exit-Code: ${code}${actualCost ? `, Kosten: $${actualCost.toFixed(4)}` : ''})`
+        ? `✅ Ausführung abgeschlossen (Exit-Code: ${code}${actualCost ? `, Kosten: $${actualCost.toFixed(4)}` : ''}${autoMergeNote})`
         : knownError
           ? `❌ ${knownError}`
           : `❌ Ausführung fehlgeschlagen (Exit-Code: ${code})`,
@@ -741,7 +773,7 @@ export async function POST(
   }
 
   if (mode === 'claude-cli') {
-    runWithClaudeCLI(id, prompt, startTime, delegation.contract.maxBudgetUsd)
+    runWithClaudeCLI(id, prompt, startTime, delegation.contract.maxBudgetUsd, delegation.contract.riskClass)
     return NextResponse.json({ started: true, mode: 'claude-cli', delegationId: id })
   }
 

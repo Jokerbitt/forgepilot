@@ -14,8 +14,52 @@ export interface LinearIssue {
   state: { name: string; type: string }
 }
 
+export interface LinearCreatedIssue {
+  id: string
+  identifier: string
+  url: string
+}
+
 export class LinearClient {
   constructor(private apiKey: string) {}
+
+  async getTeamId(): Promise<string | null> {
+    const res = await fetch(LINEAR_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: this.apiKey },
+      body: JSON.stringify({ query: `query { teams { nodes { id name } } }` }),
+    })
+    if (!res.ok) return null
+    const data = await res.json() as { data?: { teams?: { nodes: Array<{ id: string; name: string }> } } }
+    return data.data?.teams?.nodes?.[0]?.id ?? null
+  }
+
+  async createIssue(params: {
+    title: string
+    description: string
+    teamId?: string
+  }): Promise<{ id: string; identifier: string; url: string } | null> {
+    const teamId = params.teamId ?? await this.getTeamId()
+    if (!teamId) return null
+    const res = await fetch(LINEAR_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: this.apiKey },
+      body: JSON.stringify({
+        query: `mutation CreateIssue($teamId: String!, $title: String!, $description: String) {
+          issueCreate(input: { teamId: $teamId, title: $title, description: $description }) {
+            success
+            issue { id identifier url }
+          }
+        }`,
+        variables: { teamId, title: params.title, description: params.description },
+      }),
+    })
+    if (!res.ok) return null
+    const data = await res.json() as {
+      data?: { issueCreate?: { success: boolean; issue?: { id: string; identifier: string; url: string } } }
+    }
+    return data.data?.issueCreate?.issue ?? null
+  }
 
   async getIssue(issueId: string): Promise<LinearIssue | null> {
     const res = await fetch(LINEAR_API, {
