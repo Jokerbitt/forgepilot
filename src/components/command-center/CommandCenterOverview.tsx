@@ -1,19 +1,26 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import Link from 'next/link'
+import { AlertTriangle, CheckCircle, Clock, Play, ShieldCheck, Sparkles } from 'lucide-react'
 import type { Delegation } from '@/lib/models/delegation'
 import type { DashboardStats } from '@/app/api/dashboard/stats/route'
-import { Badge, StatusDot, buttonClassName, cx } from '@/components/ui/primitives'
-
-// ─── Types ───────────────────────────────────────────────────────────────────
+import { StatusDot, buttonClassName, cx } from '@/components/ui/primitives'
 
 interface FocusedData {
   delegations: Delegation[]
   stats: DashboardStats | null
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+interface NextAction {
+  eyebrow: string
+  title: string
+  detail: string
+  href: string
+  actionLabel: string
+  tone: 'ready' | 'attention' | 'blocked'
+}
 
 function relativeTime(isoDate: string): string {
   const diff = Date.now() - new Date(isoDate).getTime()
@@ -26,10 +33,13 @@ function relativeTime(isoDate: string): string {
   return `vor ${days} Tag${days === 1 ? '' : 'en'}`
 }
 
-// ─── Main Component ──────────────────────────────────────────────────────────
+function latestTime(delegation: Delegation): string {
+  return delegation.updatedAt ?? delegation.createdAt ?? ''
+}
 
 export function CommandCenterOverview() {
   const [data, setData] = useState<FocusedData>({ delegations: [], stats: null })
+  const [idea, setIdea] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -42,13 +52,13 @@ export function CommandCenterOverview() {
 
       if (cancelled) return
 
-      const delegations =
-        delegationsRes.status === 'fulfilled' && Array.isArray(delegationsRes.value)
-          ? delegationsRes.value
-          : []
-      const stats = statsRes.status === 'fulfilled' ? statsRes.value : null
-
-      setData({ delegations, stats })
+      setData({
+        delegations:
+          delegationsRes.status === 'fulfilled' && Array.isArray(delegationsRes.value)
+            ? delegationsRes.value
+            : [],
+        stats: statsRes.status === 'fulfilled' ? statsRes.value : null,
+      })
     }
 
     void load()
@@ -60,262 +70,312 @@ export function CommandCenterOverview() {
   }, [])
 
   const { delegations, stats } = data
-
+  const failed = delegations.filter(d => d.status === 'failed')
   const pending = delegations.filter(d => d.status === 'pending')
+  const approved = delegations.filter(d => d.status === 'approved')
   const running = delegations.filter(d => d.status === 'running')
-  const recentDone = delegations
+  const finished = delegations
     .filter(d => d.status === 'completed' || d.status === 'failed')
-    .sort((a, b) => {
-      const aTime = a.updatedAt ?? a.createdAt ?? ''
-      const bTime = b.updatedAt ?? b.createdAt ?? ''
-      return bTime.localeCompare(aTime)
-    })
-    .slice(0, 5)
+    .sort((a, b) => latestTime(b).localeCompare(latestTime(a)))
 
-  const totalStats = stats?.delegations ?? null
+  const nextAction = useMemo<NextAction>(() => {
+    if (failed.length > 0) {
+      return {
+        eyebrow: 'Blocker',
+        title: `${failed.length} Delegation${failed.length === 1 ? '' : 'en'} brauchen Review`,
+        detail: 'Fehlerhafte Ausfuehrungen zuerst klaeren. Das stabilisiert den Kern-Flow, bevor neue Arbeit gestartet wird.',
+        href: '/delegations?filter=failed',
+        actionLabel: 'Fehler pruefen',
+        tone: 'blocked',
+      }
+    }
+
+    if (pending.length > 0) {
+      return {
+        eyebrow: 'Entscheidung',
+        title: `${pending.length} Freigabe${pending.length === 1 ? '' : 'n'} wartet`,
+        detail: 'Der schnellste Fortschritt entsteht jetzt durch klare Freigabe oder Ablehnung vorbereiteter Delegations.',
+        href: '/delegations?filter=pending',
+        actionLabel: 'Freigaben pruefen',
+        tone: 'attention',
+      }
+    }
+
+    if (approved.length > 0) {
+      return {
+        eyebrow: 'Startbereit',
+        title: `${approved.length} Delegation${approved.length === 1 ? '' : 'en'} kann gestartet werden`,
+        detail: 'Der Scope ist vorbereitet. Starte die naechste Aufgabe, solange Kontext und Akzeptanzkriterien frisch sind.',
+        href: '/delegations?filter=approved',
+        actionLabel: 'Queue oeffnen',
+        tone: 'ready',
+      }
+    }
+
+    return {
+      eyebrow: 'Naechste Aktion',
+      title: 'Neue Delegation aus einer klaren Idee erzeugen',
+      detail: 'Fokus fuer V1: Idee strukturieren, Scope begrenzen, KI arbeiten lassen, kritisch pruefen, Wissen sichern.',
+      href: '/delegations?new=1',
+      actionLabel: 'Delegation starten',
+      tone: 'ready',
+    }
+  }, [approved.length, failed.length, pending.length])
+
+  const quickIdeaHref = idea.trim()
+    ? `/idea?prompt=${encodeURIComponent(idea.trim())}`
+    : '/idea'
 
   return (
-    <div className="space-y-5">
-      {/* ── Row 1: CTA + Status-Kacheln ─────────────────────────────────── */}
-      <div className="grid gap-5 lg:grid-cols-3">
-        {/* Kachel 1 — Neue Delegation (Haupt-CTA, 2/3 Breite) */}
-        <NewDelegationCard />
-
-        {/* Kacheln 2 + 3 in einer Spalte */}
-        <div className="flex flex-col gap-5">
-          <PendingApprovalsCard count={pending.length} />
-          <ActiveExecutionsCard running={running} />
-        </div>
-      </div>
-
-      {/* ── Row 2: Letzte Aktivität ──────────────────────────────────────── */}
-      <RecentActivityCard entries={recentDone} />
-
-      {/* ── Row 3: Mini-Statistik ────────────────────────────────────────── */}
-      {totalStats && <MiniStats stats={totalStats} />}
+    <div className="grid grid-cols-12 gap-5">
+      <NextBestActionCard action={nextAction} />
+      <ActiveDelegationsCard running={running} approved={approved} pending={pending} />
+      <SystemHealthCard stats={stats} />
+      <RecentReviewsCard stats={stats} finished={finished} />
+      <QuickIdeaCard idea={idea} onIdeaChange={setIdea} href={quickIdeaHref} />
     </div>
   )
 }
 
-// ─── Kachel 1: Neue Delegation (Haupt-CTA) ──────────────────────────────────
+function NextBestActionCard({ action }: { action: NextAction }) {
+  const tone = action.tone === 'blocked'
+    ? 'border-rose-500/35 bg-rose-500/[0.05]'
+    : action.tone === 'attention'
+      ? 'border-amber-500/35 bg-amber-500/[0.05]'
+      : 'border-emerald-500/25 bg-emerald-500/[0.04]'
 
-function NewDelegationCard() {
   return (
-    <Link
-      href="/delegations?new=1"
-      className={cx(
-        'group relative lg:col-span-2 flex flex-col justify-between overflow-hidden rounded-xl border border-violet-500/30 p-8',
-        'bg-gradient-to-br from-violet-600/20 via-indigo-600/15 to-[#0d0d15]',
-        'transition-all duration-200 hover:border-violet-400/50 hover:from-violet-600/25',
-      )}
-    >
-      {/* Subtle background glow */}
-      <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-violet-500/10 blur-3xl" />
-
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-widest text-violet-400">
-          Nächster Schritt
-        </p>
-        <h2 className="mt-4 text-2xl font-bold tracking-tight text-white sm:text-3xl">
-          Was soll als nächstes<br />delegiert werden?
-        </h2>
-        <p className="mt-3 text-sm leading-6 text-slate-400">
-          Vom Brief zur Ausführung in einem Schritt — Ziel definieren, KI übernimmt den Rest.
-        </p>
+    <section className={cx('col-span-12 lg:col-span-7 rounded-xl border p-7 shadow-sm shadow-black/20', tone)}>
+      <div className="flex items-start gap-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.05] text-emerald-300">
+          <Play className="h-6 w-6" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-widest text-emerald-300">{action.eyebrow}</p>
+          <h2 className="mt-2 max-w-2xl text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+            {action.title}
+          </h2>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">{action.detail}</p>
+        </div>
       </div>
 
-      <div className="mt-8">
-        <span
-          className={cx(
-            buttonClassName('primary', 'inline-flex gap-2 bg-white text-violet-700 border-white/90'),
-            'group-hover:bg-white/90',
-          )}
+      <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+        <Link
+          href={action.href}
+          className={buttonClassName(action.tone === 'blocked' ? 'destructive' : 'primary', 'min-h-11 flex-1')}
         >
-          Delegation starten
-          <span aria-hidden="true">→</span>
-        </span>
+          {action.actionLabel}
+        </Link>
+        <Link href="/projects" className={buttonClassName('secondary', 'min-h-11 flex-1')}>
+          Projektkontext ansehen
+        </Link>
       </div>
+    </section>
+  )
+}
+
+function ActiveDelegationsCard({
+  running,
+  approved,
+  pending,
+}: {
+  running: Delegation[]
+  approved: Delegation[]
+  pending: Delegation[]
+}) {
+  const visible = [...running, ...approved, ...pending]
+    .sort((a, b) => latestTime(b).localeCompare(latestTime(a)))
+    .slice(0, 4)
+
+  return (
+    <section className="col-span-12 rounded-xl border border-white/[0.08] bg-white/[0.03] p-6 shadow-sm shadow-black/20 lg:col-span-5">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-lg font-semibold text-white">Aktive Delegations</h3>
+        <span className="text-sm text-slate-500">{running.length} laufend</span>
+      </div>
+
+      <div className="mt-5 space-y-3">
+        {visible.length > 0 ? visible.map(item => (
+          <Link
+            key={item.id}
+            href="/delegations"
+            className="flex items-center justify-between gap-4 rounded-lg border border-white/[0.06] bg-black/20 px-4 py-3 transition-colors hover:border-white/[0.14] hover:bg-white/[0.04]"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-white">{item.title}</p>
+              <p className="mt-1 text-xs text-slate-500">{latestTime(item) ? relativeTime(latestTime(item)) : 'ohne Zeitstempel'}</p>
+            </div>
+            <StatusBadge status={item.status} />
+          </Link>
+        )) : (
+          <div className="rounded-lg border border-dashed border-white/[0.08] p-5">
+            <p className="text-sm font-medium text-white">Keine aktiven Delegations</p>
+            <p className="mt-1 text-sm text-slate-500">Starte eine neue Delegation, sobald der naechste Scope klar ist.</p>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function StatusBadge({ status }: { status: Delegation['status'] }) {
+  const classes = {
+    pending: 'border-amber-500/25 bg-amber-500/10 text-amber-300',
+    approved: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300',
+    running: 'border-sky-500/25 bg-sky-500/10 text-sky-300',
+    completed: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300',
+    failed: 'border-rose-500/25 bg-rose-500/10 text-rose-300',
+    cancelled: 'border-slate-500/25 bg-slate-500/10 text-slate-300',
+  } satisfies Record<Delegation['status'], string>
+
+  const icons = {
+    pending: <AlertTriangle className="h-3.5 w-3.5" />,
+    approved: <CheckCircle className="h-3.5 w-3.5" />,
+    running: <Clock className="h-3.5 w-3.5" />,
+    completed: <CheckCircle className="h-3.5 w-3.5" />,
+    failed: <AlertTriangle className="h-3.5 w-3.5" />,
+    cancelled: <AlertTriangle className="h-3.5 w-3.5" />,
+  } satisfies Record<Delegation['status'], ReactNode>
+
+  return (
+    <span className={cx('inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold', classes[status])}>
+      {icons[status]}
+      {status}
+    </span>
+  )
+}
+
+function SystemHealthCard({ stats }: { stats: DashboardStats | null }) {
+  const activeProviders = stats?.system.activeProviders ?? 0
+  const testsGreen = stats?.system.testsGreen ?? 0
+  const aiCallsToday = stats?.system.aiCallsToday ?? 0
+
+  return (
+    <section className="col-span-12 rounded-xl border border-white/[0.08] bg-white/[0.03] p-6 shadow-sm shadow-black/20 lg:col-span-4">
+      <h3 className="text-lg font-semibold text-white">System Health</h3>
+      <div className="mt-5 space-y-4">
+        <HealthLine label="AI Provider" value={activeProviders > 0 ? `${activeProviders} aktiv` : 'einrichten'} ok={activeProviders > 0} href="/settings/providers" />
+        <HealthLine label="Tests" value={testsGreen > 0 ? `${testsGreen} gruen` : 'kein Lauf'} ok={testsGreen > 0} href="/analytics" />
+        <HealthLine label="AI Calls heute" value={aiCallsToday} ok href="/governance" />
+      </div>
+    </section>
+  )
+}
+
+function HealthLine({
+  label,
+  value,
+  ok,
+  href,
+}: {
+  label: string
+  value: string | number
+  ok: boolean
+  href: string
+}) {
+  return (
+    <Link href={href} className="flex items-center justify-between gap-4 rounded-lg border border-white/[0.06] bg-black/20 px-4 py-3 transition-colors hover:border-white/[0.14]">
+      <span className="text-sm text-slate-400">{label}</span>
+      <span className="flex items-center gap-2 text-sm font-medium text-white">
+        <StatusDot tone={ok ? 'success' : 'warning'} />
+        {value}
+      </span>
     </Link>
   )
 }
 
-// ─── Kachel 2: Ausstehende Genehmigungen ────────────────────────────────────
-
-function PendingApprovalsCard({ count }: { count: number }) {
-  const allClear = count === 0
-
-  return (
-    <div
-      className={cx(
-        'flex flex-col justify-between rounded-xl border p-5',
-        allClear
-          ? 'border-emerald-500/20 bg-emerald-500/[0.04]'
-          : 'border-amber-500/25 bg-amber-500/[0.04]',
-      )}
-    >
-      <div>
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-            Genehmigungen
-          </p>
-          {allClear ? (
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/20 text-xs text-emerald-400">
-              ✓
-            </span>
-          ) : (
-            <Badge tone="warning">{count}</Badge>
-          )}
-        </div>
-
-        <p className="mt-3 text-base font-semibold text-white">
-          {allClear ? 'Alles genehmigt' : 'Warten auf deine Freigabe'}
-        </p>
-        <p className="mt-1 text-sm text-slate-400">
-          {allClear
-            ? 'Keine Delegations in der Warteschleife.'
-            : `${count} Delegation${count === 1 ? '' : 'en'} brauchen eine Entscheidung.`}
-        </p>
-      </div>
-
-      {!allClear && (
-        <Link
-          href="/delegations?filter=pending"
-          className={cx(buttonClassName('secondary', 'mt-4 w-full justify-center text-sm'))}
-        >
-          Jetzt prüfen
-        </Link>
-      )}
-    </div>
-  )
-}
-
-// ─── Kachel 3: Aktive Ausführungen ──────────────────────────────────────────
-
-function ActiveExecutionsCard({ running }: { running: Delegation[] }) {
-  const count = running.length
-  const preview = running.slice(0, 3)
+function RecentReviewsCard({
+  stats,
+  finished,
+}: {
+  stats: DashboardStats | null
+  finished: Delegation[]
+}) {
+  const avgScore = stats?.quality.avgScore
+  const topWarning = stats?.quality.topWarning
+  const latest = finished[0]
+  const scoreTone = avgScore === null || avgScore === undefined
+    ? 'text-slate-400'
+    : avgScore >= 80
+      ? 'text-emerald-300'
+      : avgScore >= 60
+        ? 'text-amber-300'
+        : 'text-rose-300'
 
   return (
-    <div className="flex flex-col justify-between rounded-xl border border-white/[0.08] bg-white/[0.03] p-5">
-      <div>
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-            Aktive Ausführungen
-          </p>
-          {count > 0 && (
-            <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-60" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-sky-400" />
-            </span>
-          )}
-        </div>
-
-        {count === 0 ? (
-          <p className="mt-3 text-sm text-slate-500">Keine aktiven Ausführungen</p>
-        ) : (
-          <>
-            <p className="mt-3 text-base font-semibold text-white">
-              {count} Delegation{count === 1 ? '' : 'en'} laufen gerade
-            </p>
-            <ul className="mt-3 space-y-1.5">
-              {preview.map(d => (
-                <li key={d.id}>
-                  <Link
-                    href={`/delegations`}
-                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-slate-300 transition-colors hover:bg-white/[0.05] hover:text-white"
-                  >
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400" aria-hidden="true" />
-                    <span className="truncate">{d.title}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-      </div>
-
-      {count > 3 && (
-        <Link
-          href="/delegations?filter=running"
-          className={cx(buttonClassName('ghost', 'mt-3 w-full justify-center text-xs'))}
-        >
-          Alle {count} anzeigen →
-        </Link>
-      )}
-    </div>
-  )
-}
-
-// ─── Kachel 4: Letzte Aktivität ─────────────────────────────────────────────
-
-interface RecentEntry {
-  id: string
-  status: 'completed' | 'failed'
-  title: string
-  time: string
-}
-
-function RecentActivityCard({ entries }: { entries: Delegation[] }) {
-  const items: RecentEntry[] = entries.map(d => ({
-    id: d.id,
-    status: d.status as 'completed' | 'failed',
-    title: d.title,
-    time: d.updatedAt ?? d.createdAt ?? '',
-  }))
-
-  return (
-    <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-5">
+    <section className="col-span-12 rounded-xl border border-white/[0.08] bg-white/[0.03] p-6 shadow-sm shadow-black/20 lg:col-span-5">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-          Letzte Aktivität
-        </p>
-        <Link
-          href="/delegations"
-          className="text-xs text-violet-400 transition-colors hover:text-violet-300"
-        >
-          Alle anzeigen →
+        <h3 className="text-lg font-semibold text-white">Letzte Critic Reviews</h3>
+        <Link href="/agents?tab=performance" className="text-sm text-slate-400 transition-colors hover:text-white">
+          Details
         </Link>
       </div>
 
-      {items.length === 0 ? (
-        <p className="mt-4 text-sm text-slate-500">Noch keine abgeschlossenen Delegations.</p>
-      ) : (
-        <ul className="mt-4 divide-y divide-white/[0.05]">
-          {items.map(item => (
-            <li key={item.id} className="flex items-center gap-3 py-2.5">
-              <StatusDot
-                tone={item.status === 'completed' ? 'success' : 'danger'}
-              />
-              <span className="flex-1 truncate text-sm text-slate-300">{item.title}</span>
-              <span className="shrink-0 text-xs text-slate-600">
-                {item.time ? relativeTime(item.time) : '—'}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+      <div className="mt-5 rounded-lg border border-white/[0.06] bg-black/20 p-4">
+        <div className="flex gap-4">
+          <div className={cx('text-2xl font-semibold tabular-nums', scoreTone)}>
+            {avgScore ?? '--'}
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-white">
+              {latest ? `Delegation: ${latest.title}` : 'Noch keine abgeschlossene Delegation'}
+            </p>
+            <p className="mt-1 text-sm leading-5 text-slate-500">
+              {topWarning
+                ? topWarning.message
+                : latest
+                  ? latest.status === 'failed' ? 'Review noetig: Ausfuehrung fehlgeschlagen.' : 'Letzter Lauf abgeschlossen. Score zeigt die aktuelle Review-Qualitaet.'
+                  : 'Sobald Delegations abgeschlossen sind, erscheint hier die kritische Qualitaetslage.'}
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }
 
-// ─── Mini-Statistik ─────────────────────────────────────────────────────────
-
-function MiniStats({ stats }: { stats: DashboardStats['delegations'] }) {
-  const items = [
-    { label: 'Gesamt', value: stats.total },
-    { label: 'Abgeschlossen', value: stats.completed },
-    { label: 'Fehler', value: stats.failed },
-    { label: 'Laufend', value: stats.running },
-  ]
-
+function QuickIdeaCard({
+  idea,
+  onIdeaChange,
+  href,
+}: {
+  idea: string
+  onIdeaChange: (value: string) => void
+  href: string
+}) {
   return (
-    <div className="flex flex-wrap gap-6 px-1">
-      {items.map(({ label, value }) => (
-        <div key={label} className="text-center">
-          <p className="text-lg font-semibold tabular-nums text-slate-400">{value}</p>
-          <p className="text-xs text-slate-600">{label}</p>
+    <section className="col-span-12 rounded-xl border border-white/[0.08] bg-white/[0.03] p-6 shadow-sm shadow-black/20 lg:col-span-7">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] text-cyan-300">
+          <Sparkles className="h-5 w-5" />
         </div>
-      ))}
+        <div>
+          <h3 className="text-lg font-semibold text-white">Schnell eine neue Idee eingeben</h3>
+          <p className="mt-1 text-sm text-slate-500">Aus einer Idee wird der naechste strukturierte Brief.</p>
+        </div>
+      </div>
+
+      <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+        <input
+          type="text"
+          value={idea}
+          onChange={event => onIdeaChange(event.target.value)}
+          placeholder="z.B. Dark Mode Toggle mit persistenter Einstellung..."
+          className="min-h-11 flex-1 rounded-lg border border-white/[0.08] bg-black/30 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-cyan-400/50"
+        />
+        <Link href={href} className={buttonClassName('primary', 'min-h-11 px-6')}>
+          Delegieren
+        </Link>
+      </div>
+    </section>
+  )
+}
+
+export function CommandCenterPrinciples() {
+  return (
+    <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/[0.04] px-4 py-3 text-xs text-cyan-100">
+      <ShieldCheck className="mr-2 inline h-4 w-4 align-text-bottom text-cyan-300" />
+      Fokus: naechste sinnvolle Aktion, klare Delegation, kritischer Review, kein ueberladenes Swarm-Dashboard.
     </div>
   )
 }
