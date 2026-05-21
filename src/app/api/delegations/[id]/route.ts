@@ -7,6 +7,7 @@ import {
 } from '@/lib/repositories/delegationRepository'
 import { parseBody, isValidationError } from '@/lib/validation/api'
 import { PatchDelegationSchema } from '@/lib/validation/schemas'
+import { broadcastEvent } from '@/app/api/events/route'
 
 export async function GET(
   _req: Request,
@@ -36,6 +37,9 @@ export async function PATCH(
   const updated = await repo.update(id, patch)
   if (!updated) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+  if (result.status !== undefined) {
+    broadcastEvent('delegation:update', { id, status: result.status })
   }
   return NextResponse.json(updated)
 }

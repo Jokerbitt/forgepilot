@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSSE } from '@/hooks/useSSE'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, CheckCircle, Clipboard, Clock, FileText, Play, ShieldCheck, Sparkles } from 'lucide-react'
@@ -45,42 +46,42 @@ export function CommandCenterOverview() {
   const [data, setData] = useState<FocusedData>({ delegations: [], stats: null, report: null, acceptedBriefs: [] })
   const [idea, setIdea] = useState('')
 
+  const load = useCallback(async () => {
+    const [delegationsRes, statsRes, reportRes, acceptedBriefsRes] = await Promise.allSettled([
+      fetch('/api/delegations').then(res => res.json() as Promise<Delegation[]>),
+      fetch('/api/dashboard/stats').then(res => res.json() as Promise<DashboardStats>),
+      fetch('/api/reports/daily').then(res => res.json() as Promise<DailyReport>),
+      fetch('/api/project-briefs?status=accepted').then(res => res.json() as Promise<ProjectBrief[]>),
+    ])
+
+    setData({
+      delegations:
+        delegationsRes.status === 'fulfilled' && Array.isArray(delegationsRes.value)
+          ? delegationsRes.value
+          : [],
+      stats: statsRes.status === 'fulfilled' ? statsRes.value : null,
+      report: reportRes.status === 'fulfilled' && reportRes.value.version === 1
+        ? reportRes.value
+        : null,
+      acceptedBriefs:
+        acceptedBriefsRes.status === 'fulfilled' && Array.isArray(acceptedBriefsRes.value)
+          ? acceptedBriefsRes.value
+          : [],
+    })
+  }, [])
+
   useEffect(() => {
-    let cancelled = false
-
-    async function load() {
-      const [delegationsRes, statsRes, reportRes, acceptedBriefsRes] = await Promise.allSettled([
-        fetch('/api/delegations').then(res => res.json() as Promise<Delegation[]>),
-        fetch('/api/dashboard/stats').then(res => res.json() as Promise<DashboardStats>),
-        fetch('/api/reports/daily').then(res => res.json() as Promise<DailyReport>),
-        fetch('/api/project-briefs?status=accepted').then(res => res.json() as Promise<ProjectBrief[]>),
-      ])
-
-      if (cancelled) return
-
-      setData({
-        delegations:
-          delegationsRes.status === 'fulfilled' && Array.isArray(delegationsRes.value)
-            ? delegationsRes.value
-            : [],
-        stats: statsRes.status === 'fulfilled' ? statsRes.value : null,
-        report: reportRes.status === 'fulfilled' && reportRes.value.version === 1
-          ? reportRes.value
-          : null,
-        acceptedBriefs:
-          acceptedBriefsRes.status === 'fulfilled' && Array.isArray(acceptedBriefsRes.value)
-            ? acceptedBriefsRes.value
-            : [],
-      })
-    }
-
     void load()
     const interval = window.setInterval(() => { void load() }, 15_000)
     return () => {
-      cancelled = true
       window.clearInterval(interval)
     }
-  }, [])
+  }, [load])
+
+  // SSE for instant updates when delegation status changes — polling stays as fallback
+  useSSE({
+    'delegation:update': () => { void load() },
+  })
 
   const { delegations, stats, report, acceptedBriefs } = data
   const failed = delegations.filter(d => d.status === 'failed')

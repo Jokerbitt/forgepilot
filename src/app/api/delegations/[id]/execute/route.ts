@@ -31,6 +31,7 @@ import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/reposit
 import { buildContextPackage } from '@/lib/knowledge/context-package'
 import type { MemoryCard } from '@/lib/knowledge/types'
 import { checkParallelCompletion } from '@/lib/delegation-parallel'
+import { broadcastEvent } from '@/app/api/events/route'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
@@ -41,6 +42,9 @@ async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Dele
     ...(report ? { summaryReport: report } : {}),
     logs: [...(current.logs ?? []), ...newLogs],
   })
+  if (statusOverride) {
+    broadcastEvent('delegation:update', { id, status: statusOverride })
+  }
 }
 
 function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[]): string {
@@ -297,6 +301,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
         logs: [...(current.logs ?? []), ...logBuffer, finalLog],
       })
       if (!finishedDelegation) return
+      broadcastEvent('delegation:update', { id, status: finalStatus })
 
       // M207: Fan-in — notify parent if this is a parallel sub-delegation
       void checkParallelCompletion(finishedDelegation)
