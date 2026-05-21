@@ -62,58 +62,36 @@ describe('POST /api/project-briefs/[id]/generate-structure', () => {
     expect(body.error).toContain('not found')
   })
 
-  it('returns fallback structure when AI provider is not configured', async () => {
+  it('returns no_ai_provider error when AI provider is not configured', async () => {
     vi.mocked(textGeneration.generateText).mockRejectedValueOnce(
       new textGeneration.AIProviderConfigurationError('No API key configured')
     )
 
     const res = await POST(makeRequest(), makeParams('brief-studio-test'))
-    expect(res.status).toBe(200)
+    expect(res.status).toBe(503)
 
     const body = await res.json() as {
-      requirements: unknown[]
-      useCases: unknown[]
-      risks: unknown[]
-      assumptions: string[]
-      implementationDirection: string
-      source: string
-      brief: unknown
+      error: string
+      message: string
+      settingsUrl: string
     }
-    expect(body.source).toBe('fallback')
-    expect(Array.isArray(body.requirements)).toBe(true)
-    expect(body.requirements.length).toBeGreaterThan(0)
-    expect(Array.isArray(body.useCases)).toBe(true)
-    expect(body.useCases.length).toBeGreaterThan(0)
-    expect(Array.isArray(body.risks)).toBe(true)
-    expect(body.risks.length).toBeGreaterThan(0)
-    expect(Array.isArray(body.assumptions)).toBe(true)
-    expect(body.assumptions.length).toBeGreaterThan(0)
-    expect(typeof body.implementationDirection).toBe('string')
-    expect(body.implementationDirection.length).toBeGreaterThan(0)
-    expect(body.brief).toBeTruthy()
+    expect(body.error).toBe('no_ai_provider')
+    expect(typeof body.message).toBe('string')
+    expect(body.message.length).toBeGreaterThan(0)
+    expect(body.settingsUrl).toBe('/settings')
   })
 
-  it('updates the brief in the store after fallback generation', async () => {
+  it('does not call updateProjectBrief when AI provider is not configured', async () => {
     vi.mocked(textGeneration.generateText).mockRejectedValueOnce(
       new textGeneration.AIProviderConfigurationError('No API key configured')
     )
 
     await POST(makeRequest(), makeParams('brief-studio-test'))
 
-    expect(projectBriefs.updateProjectBrief).toHaveBeenCalledWith(
-      'brief-studio-test',
-      expect.objectContaining({
-        requirements: expect.any(Array),
-        useCases: expect.any(Array),
-        risks: expect.any(Array),
-        assumptions: expect.any(Array),
-        implementationDirection: expect.any(String),
-        status: 'in_review',
-      })
-    )
+    expect(projectBriefs.updateProjectBrief).not.toHaveBeenCalled()
   })
 
-  it('returns all required fields in the response', async () => {
+  it('returns error and settingsUrl fields in the no_ai_provider response', async () => {
     vi.mocked(textGeneration.generateText).mockRejectedValueOnce(
       new textGeneration.AIProviderConfigurationError('No API key')
     )
@@ -121,10 +99,9 @@ describe('POST /api/project-briefs/[id]/generate-structure', () => {
     const res = await POST(makeRequest(), makeParams('brief-studio-test'))
     const body = await res.json() as Record<string, unknown>
 
-    const requiredFields = ['requirements', 'useCases', 'risks', 'assumptions', 'implementationDirection', 'brief', 'source']
-    for (const field of requiredFields) {
-      expect(body).toHaveProperty(field)
-    }
+    expect(body).toHaveProperty('error', 'no_ai_provider')
+    expect(body).toHaveProperty('message')
+    expect(body).toHaveProperty('settingsUrl')
   })
 
   it('returns 200 with ai source when generateText succeeds', async () => {
