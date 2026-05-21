@@ -150,6 +150,47 @@ describe('buildDailyReport', () => {
     expect(report.markdown).toContain('## First Real Value Loop')
   })
 
+  it('counts repository memory cards linked by sourceId as knowledge writebacks', () => {
+    const linkedCard = card({
+      id: 'card-linked-by-source',
+      sourceIds: ['11111111-1111-4111-8111-111111111111'],
+      tags: ['completed', 'approved', 'local-agent'],
+    })
+
+    const report = buildDailyReport({
+      now,
+      storageMode: 'postgres',
+      authDisabled: false,
+      projectBriefs: [brief({ status: 'accepted' })],
+      knowledgeCards: [linkedCard],
+      attentionItems: [],
+      delegations: [
+        delegation({
+          status: 'completed',
+          summaryReport: {
+            keyPoints: ['Done'],
+            changes: [],
+            timeTakenMinutes: 3,
+            prUrl: 'https://github.com/Jokerbitt/forgepilot/pull/2',
+          },
+          criticScore: {
+            correctness: 90,
+            efficiency: 80,
+            drift: 95,
+            verdict: 'approved',
+            summary: 'Good',
+            runAt: '2026-05-21T11:05:00.000Z',
+          },
+        }),
+      ],
+    })
+
+    expect(report.status.quality.knowledgeWritebacks).toBe(1)
+    expect(report.firstRealValueLoop.progressPct).toBe(100)
+    expect(report.firstRealValueLoop.currentStep.id).toBe('writeback')
+    expect(report.firstRealValueLoop.currentStep.status).toBe('done')
+  })
+
   it('raises critical risk when auth is disabled', () => {
     const report = buildDailyReport({
       now,
