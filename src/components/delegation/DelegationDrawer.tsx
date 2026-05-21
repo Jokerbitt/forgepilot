@@ -12,6 +12,16 @@ import { PipelineRunner } from '@/components/delegation/PipelineRunner'
 
 type Tab = 'details' | 'logs' | 'report' | 'notes'
 
+function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
+  switch (status) {
+    case 'completed':  return { textClass: 'line-through text-gray-500', icon: '✓', iconClass: 'text-green-500' }
+    case 'cancelled':  return { textClass: 'line-through text-gray-500', icon: '✕', iconClass: 'text-gray-400' }
+    case 'failed':     return { textClass: 'line-through text-red-400',   icon: '✕', iconClass: 'text-red-500' }
+    case 'in_progress': return { textClass: '', icon: '●', iconClass: 'text-yellow-400' }
+    default:           return { textClass: 'text-gray-300', icon: '○', iconClass: 'text-gray-500' }
+  }
+}
+
 const AVAILABLE_TOOLS = [
   { id: 'read_file', label: 'Dateien lesen' },
   { id: 'write_file', label: 'Dateien schreiben' },
@@ -692,14 +702,17 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
                 </label>
                 {delegation.contract.definitionOfDone && delegation.contract.definitionOfDone.filter(Boolean).length > 0 ? (
                   <ul className="space-y-1 mb-2">
-                    {delegation.contract.definitionOfDone.filter(Boolean).map((item, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
-                        <span className={`mt-0.5 flex-shrink-0 text-xs ${isCompleted ? 'text-green-500' : 'text-gray-600'}`}>
-                          {isCompleted ? '✓' : '◻'}
-                        </span>
-                        {item}
-                      </li>
-                    ))}
+                    {delegation.contract.definitionOfDone.filter(Boolean).map((item, i) => {
+                      const style = getTaskStatusStyle(delegation.status)
+                      return (
+                        <li key={i} className="flex items-start gap-2 text-sm">
+                          <span className={`mt-0.5 flex-shrink-0 text-xs ${style.iconClass}`}>
+                            {style.icon}
+                          </span>
+                          <span className={style.textClass || 'text-gray-300'}>{item}</span>
+                        </li>
+                      )
+                    })}
                   </ul>
                 ) : null}
                 <textarea

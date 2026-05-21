@@ -67,6 +67,16 @@ const GOAL_STYLE: Record<string, string> = {
   cancelled: 'line-through text-gray-600',
 }
 
+function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
+  switch (status) {
+    case 'completed':  return { textClass: 'line-through text-gray-500', icon: '✓', iconClass: 'text-green-500' }
+    case 'cancelled':  return { textClass: 'line-through text-gray-500', icon: '✕', iconClass: 'text-gray-400' }
+    case 'failed':     return { textClass: 'line-through text-red-400',   icon: '✕', iconClass: 'text-red-500' }
+    case 'in_progress': return { textClass: '', icon: '●', iconClass: 'text-yellow-400' }
+    default:           return { textClass: 'text-gray-300', icon: '○', iconClass: 'text-gray-500' }
+  }
+}
+
 const APPROVAL_FILTER_LABELS: Record<ApprovalFilter, string> = {
   Alle: 'Alle',
   'approval-required': 'Freigabe noetig',
@@ -1153,8 +1163,13 @@ function DelegationsContent() {
                               />
                               <VersionBadge delegationId={del.id} compact />
                             </div>
-                            <div className={`text-sm font-medium ${GOAL_STYLE[del.status] || 'text-gray-200'}`}>
-                              {getDelegationGoal(del)}
+                            <div className="flex items-baseline gap-1.5">
+                              <span className={`text-xs flex-shrink-0 ${getTaskStatusStyle(del.status).iconClass}`}>
+                                {getTaskStatusStyle(del.status).icon}
+                              </span>
+                              <span className={`text-sm font-medium ${GOAL_STYLE[del.status] || 'text-gray-200'}`}>
+                                {getDelegationGoal(del)}
+                              </span>
                             </div>
                             {del.note?.text && (
                               <div className="text-xs text-yellow-400/70 mt-0.5 truncate max-w-xs">
