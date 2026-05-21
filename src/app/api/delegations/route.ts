@@ -5,6 +5,10 @@ import path from 'path'
 import type { Delegation } from '@/lib/models/delegation'
 import { z } from 'zod'
 import { parseBody, isValidationError } from '@/lib/validation/api'
+import {
+  createDelegationRepository,
+  SINGLE_TENANT_USER_ID,
+} from '@/lib/repositories/delegationRepository'
 
 // Zod schema for creating/updating a delegation via POST
 const DelegationInputSchema = z.object({
@@ -26,6 +30,8 @@ const DelegationInputSchema = z.object({
   dataSubjectId:   z.string().optional(),
 }).passthrough()  // allow extra fields from existing clients
 
+// Keep DELEGATIONS_FILE + read/write for PUT and DELETE bulk operations
+// that are not yet migrated to the repository
 const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
 
 function readDelegations(): Delegation[] {
@@ -51,14 +57,15 @@ function backfillTitle(d: Delegation): Delegation {
 }
 
 export async function GET(request: NextRequest) {
-  let delegations = readDelegations().map(backfillTitle)
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
 
   // Optional status filter: ?statuses=pending,approved,running
-  const statuses = request.nextUrl.searchParams.get('statuses')
-  if (statuses) {
-    const allowedStatuses = new Set(statuses.split(',').map(s => s.trim()))
-    delegations = delegations.filter(d => allowedStatuses.has(d.status))
-  }
+  const statusesParam = request.nextUrl.searchParams.get('statuses')
+  const statusFilter = statusesParam
+    ? (statusesParam.split(',').map(s => s.trim()) as Parameters<typeof repo.listByStatus>[0])
+    : undefined
+
+  let delegations = (await repo.listByStatus(statusFilter)).map(backfillTitle)
 
   // Optional limit: ?limit=50
   const limit = request.nextUrl.searchParams.get('limit')
@@ -75,7 +82,6 @@ export async function POST(request: NextRequest) {
     const body = await parseBody(request, DelegationInputSchema)
     if (isValidationError(body)) return body
     const delegation = body as unknown as Delegation
-    const delegations = readDelegations()
 
     // Ensure title is set
     const withTitle: Delegation = {
@@ -91,36 +97,50 @@ export async function POST(request: NextRequest) {
         ? { ...withTitle, status: 'approved', updatedAt: new Date().toISOString() }
         : withTitle
 
-    // Add or update
-    const index = delegations.findIndex(d => d.id === autoApproved.id)
-    if (index >= 0) {
-      delegations[index] = { ...delegations[index], ...autoApproved, updatedAt: new Date().toISOString() }
-    } else {
-      delegations.push({
-        ...autoApproved,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      })
+    const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+
+    // If delegation already exists (has an id matching an existing one), update it
+    if (autoApproved.id) {
+      const existing = await repo.findById(autoApproved.id)
+      if (existing) {
+        const updated = await repo.update(autoApproved.id, {
+          ...autoApproved,
+        })
+        if (updated) {
+          // Store rotation: cap at 200 after update
+          await trimStore(repo)
+          return NextResponse.json(updated)
+        }
+      }
     }
+
+    // Create new delegation via repository
+    const created = await repo.create(autoApproved)
 
     // Store rotation: cap at 200, dropping oldest terminal-status entries first
-    const MAX_DELEGATIONS = 200
-    if (delegations.length > MAX_DELEGATIONS) {
-      const terminalStatuses = ['completed', 'failed', 'cancelled']
-      const terminal = delegations.filter(d => terminalStatuses.includes(d.status))
-      const active = delegations.filter(d => !terminalStatuses.includes(d.status))
-      const keep = MAX_DELEGATIONS - active.length
-      const trimmedTerminal = terminal
-        .sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime())
-        .slice(-Math.max(keep, 0))
-      delegations.length = 0
-      delegations.push(...active, ...trimmedTerminal)
-    }
+    await trimStore(repo)
 
-    writeDelegations(delegations)
-    return NextResponse.json(autoApproved)
+    return NextResponse.json(created)
   } catch (e) {
     return NextResponse.json({ error: 'Failed to save delegation' }, { status: 500 })
+  }
+}
+
+async function trimStore(repo: ReturnType<typeof createDelegationRepository>): Promise<void> {
+  const MAX_DELEGATIONS = 200
+  const all = await repo.listByStatus()
+  if (all.length <= MAX_DELEGATIONS) return
+
+  const terminalStatuses: Array<'completed' | 'failed' | 'cancelled'> = ['completed', 'failed', 'cancelled']
+  const terminal = all.filter(d => (terminalStatuses as string[]).includes(d.status))
+  const active = all.filter(d => !(terminalStatuses as string[]).includes(d.status))
+  const keep = MAX_DELEGATIONS - active.length
+  const toDelete = terminal
+    .sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime())
+    .slice(0, Math.max(terminal.length - Math.max(keep, 0), 0))
+
+  for (const d of toDelete) {
+    await repo.delete(d.id)
   }
 }
 
