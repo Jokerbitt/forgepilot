@@ -102,6 +102,36 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     }
   }
 
+  // API Key auth (optional — set FORGEPILOT_API_KEY to enable machine-to-machine access).
+  // Takes precedence over session auth: a valid API key bypasses the NextAuth flow.
+  const apiKey = process.env.FORGEPILOT_API_KEY
+  if (apiKey) {
+    const { pathname } = request.nextUrl
+    const isApiRoute = pathname.startsWith('/api/')
+    const isExcluded =
+      pathname.startsWith('/api/intake') ||
+      pathname.startsWith('/api/cron/') ||
+      pathname === '/api/health' ||
+      pathname === '/api/ready' ||
+      pathname.startsWith('/api/webhooks/') ||
+      pathname === '/api/telegram/webhook' ||
+      pathname === '/api/sentry/webhook'
+    if (isApiRoute && !isExcluded) {
+      const authHeader = request.headers.get('authorization')
+      if (authHeader !== `Bearer ${apiKey}`) {
+        return decorateResponse(
+          request,
+          new NextResponse(JSON.stringify({ error: 'Unauthorized' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        )
+      }
+      // API key is valid — skip session auth for this request.
+      return nextWithRequestId(request)
+    }
+  }
+
   if (!isForgePilotAuthEnabled()) {
     return nextWithRequestId(request)
   }
