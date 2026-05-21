@@ -31,6 +31,7 @@ import {
   FolderOpen,
   Bell,
   Radio,
+  Rocket,
 } from 'lucide-react'
 import type { Delegation } from '@/lib/models/delegation'
 import type { AttentionItem } from '@/lib/models/attention'
@@ -70,6 +71,7 @@ const navItems: NavItem[] = [
   { href: '/context-packages', label: 'Context Packages', shortLabel: 'Context', icon: Package, section: 'More' },
   { href: '/governance', label: 'Governance Hub', shortLabel: 'Gov', icon: Shield, section: 'More' },
   { href: '/analytics', label: 'Cost Analytics', shortLabel: 'Analytics', icon: BarChart3, section: 'More' },
+  { href: '/saas-readiness', label: 'SaaS Readiness', shortLabel: 'SaaS', icon: Rocket, section: 'More' },
   { href: '/idea', label: 'Idea → Production', shortLabel: 'Idea', icon: Lightbulb, section: 'More' },
   { href: '/pilot', label: 'E2E Pilot', shortLabel: 'Pilot', icon: FlaskConical, section: 'More' },
   { href: '/digest', label: 'Aktivitäts-Digest', shortLabel: 'Digest', icon: Bell, section: 'Utility' },
