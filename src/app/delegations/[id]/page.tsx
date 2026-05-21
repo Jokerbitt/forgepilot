@@ -18,6 +18,7 @@ import { GrokCriticCard } from '@/components/delegation/GrokCriticCard'
 import { DelegationPipelineBreadcrumb } from '@/components/delegation/DelegationPipelineBreadcrumb'
 import { KnowledgeWritebackPanel } from '@/components/delegation/KnowledgeWritebackPanel'
 import { KnowledgeCardList } from '@/components/knowledge'
+import { DelegationLiveLog } from '@/components/delegation/DelegationLiveLog'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
   switch (status) {
@@ -549,6 +550,12 @@ export default function DelegationDetailPage() {
             <span>Aktualisiert: {new Date(d.updatedAt).toLocaleString('de-DE')}</span>
           </div>
         </div>
+
+        {/* ── Live Execution Progress ──────────────────────────────────── */}
+        <DelegationLiveLog
+          delegationId={d.id}
+          isRunning={d.status === 'running'}
+        />
 
         {/* ── Timeline ─────────────────────────────────────────────────── */}
         <DelegationTimeline delegation={d} />
