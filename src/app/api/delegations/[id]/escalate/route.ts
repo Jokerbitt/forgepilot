@@ -1,21 +1,9 @@
 import { NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
 import { randomUUID } from 'crypto'
-import type { Delegation } from '@/lib/models/delegation'
 import { upsertAttentionItem } from '@/lib/attention/store'
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 export const dynamic = 'force-dynamic'
-
-const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
-
-function readDelegations(): Delegation[] {
-  try {
-    return JSON.parse(fs.readFileSync(DELEGATIONS_FILE, 'utf-8')) as Delegation[]
-  } catch {
-    return []
-  }
-}
 
 interface EscalateBody {
   problem: string
@@ -34,7 +22,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  const delegation = readDelegations().find(d => d.id === id)
+  const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+
+  const delegation = await repo.findById(id)
   if (!delegation) {
     return NextResponse.json({ error: 'Delegation nicht gefunden' }, { status: 404 })
   }
