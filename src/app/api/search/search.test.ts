@@ -93,7 +93,8 @@ function simulateSearch(
         id: brief.id,
         title: brief.title ?? brief.id,
         excerpt: excerpt(searchText, query),
-        url: `/project-briefs/${brief.id}`,
+        href: `/project-briefs/${brief.id}`,
+        score: 1,
       })
     }
   }
@@ -111,7 +112,8 @@ function simulateSearch(
         id: del.id,
         title: del.title ?? goal ?? del.id,
         excerpt: excerpt([del.title, goal].filter(Boolean).join(' '), query),
-        url: `/delegations/${del.id}`,
+        href: `/delegations/${del.id}`,
+        score: 1,
       })
     }
   }
@@ -123,7 +125,8 @@ function simulateSearch(
         id: item.id,
         title: item.title ?? item.id,
         excerpt: excerpt([item.title, item.description].filter(Boolean).join(' '), query),
-        url: '/work-items',
+        href: '/work-items',
+        score: 1,
       })
     }
   }
@@ -139,7 +142,8 @@ function simulateSearch(
         id: card.id,
         title: card.title,
         excerpt: excerpt([card.title, card.body].filter(Boolean).join(' '), query),
-        url: '/knowledge',
+        href: '/knowledge',
+        score: 1,
       })
     }
   }
@@ -160,7 +164,7 @@ describe('Search API — response structure', () => {
     expect(r).toHaveProperty('id', 'brief-1')
     expect(r).toHaveProperty('title')
     expect(r).toHaveProperty('excerpt')
-    expect(r).toHaveProperty('url')
+    expect(r).toHaveProperty('href')
   })
 
   it('returns empty array for query shorter than 2 characters', () => {
@@ -182,7 +186,7 @@ describe('Search API — finding by entity type', () => {
     expect(results).toHaveLength(1)
     expect(results[0].type).toBe('brief')
     expect(results[0].title).toBe('JWT Authentication System')
-    expect(results[0].url).toBe('/project-briefs/brief-1')
+    expect(results[0].href).toBe('/project-briefs/brief-1')
   })
 
   it('finds a knowledge card by tag', () => {
@@ -190,7 +194,7 @@ describe('Search API — finding by entity type', () => {
     const results = simulateSearch('local-first', [], [], [], [card])
     expect(results).toHaveLength(1)
     expect(results[0].type).toBe('knowledge')
-    expect(results[0].url).toBe('/knowledge')
+    expect(results[0].href).toBe('/knowledge')
   })
 
   it('finds a knowledge card by body text', () => {

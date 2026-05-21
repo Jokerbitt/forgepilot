@@ -1,173 +1,120 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { readFileSync, existsSync } from 'fs'
-import { join } from 'path'
-import type { MemoryCard } from '@/lib/knowledge/types'
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import { createProjectBriefRepository } from '@/lib/repositories/projectBriefRepository'
-
-const CONFIG_DIR = join(process.cwd(), 'config')
+import { createKnowledgeCardRepository } from '@/lib/repositories/knowledgeCardRepository'
 
 export interface SearchResult {
-  type: 'brief' | 'delegation' | 'workitem' | 'knowledge'
   id: string
+  type: 'delegation' | 'brief' | 'knowledge' | 'workitem'
   title: string
   excerpt: string
-  url: string
+  href: string
+  score: number
 }
 
-interface SearchResponse {
-  results: SearchResult[]
+export interface SearchResponse {
   query: string
+  results: SearchResult[]
   total: number
 }
 
-function readJson<T>(filename: string): T[] {
-  const filepath = join(CONFIG_DIR, filename)
-  if (!existsSync(filepath)) return []
-  try {
-    const raw = readFileSync(filepath, 'utf-8')
-    const parsed = JSON.parse(raw) as unknown
-    if (Array.isArray(parsed)) return parsed as T[]
-    return []
-  } catch {
-    return []
-  }
-}
-
-function readJsonObject(filename: string): Record<string, unknown> {
-  const filepath = join(CONFIG_DIR, filename)
-  if (!existsSync(filepath)) return {}
-  try {
-    const raw = readFileSync(filepath, 'utf-8')
-    const parsed = JSON.parse(raw) as unknown
-    if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>
-    }
-    return {}
-  } catch {
-    return {}
-  }
-}
-
-function excerpt(text: string, query: string, maxLen = 120): string {
+function scoreText(text: string, terms: string[]): number {
   const lower = text.toLowerCase()
-  const idx = lower.indexOf(query.toLowerCase())
-  if (idx === -1) return text.slice(0, maxLen).trimEnd() + (text.length > maxLen ? '…' : '')
-  const start = Math.max(0, idx - 30)
-  const end = Math.min(text.length, idx + query.length + 60)
-  const result = (start > 0 ? '…' : '') + text.slice(start, end).trimEnd() + (end < text.length ? '…' : '')
-  return result.slice(0, maxLen + 2)
+  return terms.reduce((score, term) => {
+    const count = (lower.match(new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? []).length
+    return score + count
+  }, 0)
 }
 
-function matches(text: string | undefined | null, query: string): boolean {
-  if (!text) return false
-  return text.toLowerCase().includes(query.toLowerCase())
+function excerpt(text: string, terms: string[], maxLen = 120): string {
+  const lower = text.toLowerCase()
+  let bestIdx = 0
+  for (const term of terms) {
+    const idx = lower.indexOf(term)
+    if (idx > -1) { bestIdx = Math.max(0, idx - 30); break }
+  }
+  const snippet = text.slice(bestIdx, bestIdx + maxLen)
+  return (bestIdx > 0 ? '…' : '') + snippet + (snippet.length === maxLen ? '…' : '')
 }
 
-export async function GET(req: NextRequest): Promise<NextResponse<SearchResponse | { error: string }>> {
-  const { searchParams } = new URL(req.url)
-  const q = searchParams.get('q') ?? ''
-
-  if (q.trim().length < 2) {
-    return NextResponse.json({ error: 'Query must be at least 2 characters' }, { status: 400 })
+export async function GET(request: NextRequest): Promise<Response> {
+  const query = request.nextUrl.searchParams.get('q')?.trim() ?? ''
+  if (query.length < 2) {
+    return NextResponse.json({ query, results: [], total: 0 } satisfies SearchResponse)
   }
 
-  const query = q.trim()
-  const results: SearchResult[] = []
+  const terms = query.toLowerCase().split(/\s+/).filter(t => t.length > 1)
 
-  // ── Project Briefs ───────────────────────────────────────────────
-  const briefRepo = createProjectBriefRepository(SINGLE_TENANT_USER_ID)
-  const briefs = await briefRepo.listAll()
-  for (const brief of briefs) {
-    if (
-      matches(brief.title, query) ||
-      matches(brief.problemStatement, query) ||
-      matches(brief.rawIdea, query)
-    ) {
-      const searchText = [brief.title, brief.problemStatement, brief.rawIdea].filter(Boolean).join(' ')
-      results.push({
-        type: 'brief',
-        id: brief.id,
-        title: brief.title ?? brief.id,
-        excerpt: excerpt(searchText, query),
-        url: `/project-briefs/${brief.id}`,
-      })
+  try {
+    const [delegationRepo, briefRepo, knowledgeRepo] = [
+      createDelegationRepository(SINGLE_TENANT_USER_ID),
+      createProjectBriefRepository(),
+      createKnowledgeCardRepository(),
+    ]
+
+    const [delegations, briefs, cards] = await Promise.all([
+      delegationRepo.listByStatus(),
+      briefRepo.listAll(),
+      knowledgeRepo.listAll(),
+    ])
+
+    const results: SearchResult[] = []
+
+    // Search delegations
+    for (const d of delegations) {
+      const searchText = `${d.title} ${d.contract?.goal ?? ''} ${d.errorMessage ?? ''}`
+      const score = scoreText(searchText, terms)
+      if (score > 0) {
+        results.push({
+          id: d.id,
+          type: 'delegation',
+          title: d.title,
+          excerpt: excerpt(d.contract?.goal ?? d.title, terms),
+          href: `/delegations`,
+          score,
+        })
+      }
     }
-  }
 
-  // ── Delegations ──────────────────────────────────────────────────
-  const delegationRepo = createDelegationRepository(SINGLE_TENANT_USER_ID)
-  const delegations = await delegationRepo.listByStatus()
-  for (const del of delegations) {
-    const goal = del.contract?.goal ?? ''
-    const workItemId = del.contract?.workItemId ?? ''
-    const agentId = del.executionRoute ?? ''
-    if (
-      matches(del.title, query) ||
-      matches(goal, query) ||
-      matches(workItemId, query) ||
-      matches(agentId, query)
-    ) {
-      const searchText = [del.title, goal, workItemId].filter(Boolean).join(' ')
-      results.push({
-        type: 'delegation',
-        id: del.id,
-        title: del.title ?? goal ?? del.id,
-        excerpt: excerpt(searchText, query),
-        url: `/delegations/${del.id}`,
-      })
+    // Search project briefs
+    for (const b of briefs) {
+      const searchText = `${b.title} ${b.problemStatement ?? ''} ${b.rawIdea ?? ''} ${b.desiredOutcome ?? ''}`
+      const score = scoreText(searchText, terms)
+      if (score > 0) {
+        results.push({
+          id: b.id,
+          type: 'brief',
+          title: b.title,
+          excerpt: excerpt(b.problemStatement ?? b.rawIdea ?? b.title, terms),
+          href: `/project-briefs`,
+          score,
+        })
+      }
     }
-  }
 
-  // ── Work Items ───────────────────────────────────────────────────
-  interface RawWorkItem {
-    id: string
-    title?: string
-    description?: string
-    status?: string
-  }
-  const workItems = readJson<RawWorkItem>('local-items.json')
-  for (const item of workItems) {
-    if (matches(item.title, query) || matches(item.description, query)) {
-      const searchText = [item.title, item.description].filter(Boolean).join(' ')
-      results.push({
-        type: 'workitem',
-        id: item.id,
-        title: item.title ?? item.id,
-        excerpt: excerpt(searchText, query),
-        url: `/work-items`,
-      })
+    // Search knowledge cards
+    for (const k of cards) {
+      const searchText = `${k.title ?? ''} ${k.body ?? ''} ${k.tags.join(' ')}`
+      const score = scoreText(searchText, terms)
+      if (score > 0) {
+        results.push({
+          id: k.id,
+          type: 'knowledge',
+          title: k.title ?? 'Knowledge Card',
+          excerpt: excerpt(k.body ?? '', terms),
+          href: `/knowledge`,
+          score,
+        })
+      }
     }
+
+    // Sort by score descending, limit to 20
+    results.sort((a, b) => b.score - a.score)
+    const top = results.slice(0, 20)
+
+    return NextResponse.json({ query, results: top, total: results.length } satisfies SearchResponse)
+  } catch {
+    return NextResponse.json({ error: 'Search failed' }, { status: 500 })
   }
-
-  // ── Knowledge Cards ──────────────────────────────────────────────
-  const knowledgeStore = readJsonObject('knowledge-store.json')
-  const rawCards = knowledgeStore['cards']
-  const cards: MemoryCard[] = Array.isArray(rawCards) ? (rawCards as MemoryCard[]) : []
-  for (const card of cards) {
-    if (
-      matches(card.title, query) ||
-      matches(card.body, query) ||
-      card.tags.some(tag => matches(tag, query))
-    ) {
-      const searchText = [card.title, card.body].filter(Boolean).join(' ')
-      results.push({
-        type: 'knowledge',
-        id: card.id,
-        title: card.title,
-        excerpt: excerpt(searchText, query),
-        url: `/knowledge`,
-      })
-    }
-  }
-
-  // Cap at 50 results
-  const sliced = results.slice(0, 50)
-
-  return NextResponse.json({
-    results: sliced,
-    query,
-    total: sliced.length,
-  })
 }
