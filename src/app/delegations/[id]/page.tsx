@@ -18,6 +18,16 @@ import { GrokCriticCard } from '@/components/delegation/GrokCriticCard'
 import { DelegationPipelineBreadcrumb } from '@/components/delegation/DelegationPipelineBreadcrumb'
 import { KnowledgeWritebackPanel } from '@/components/delegation/KnowledgeWritebackPanel'
 
+function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
+  switch (status) {
+    case 'completed':  return { textClass: 'line-through text-gray-500', icon: '✓', iconClass: 'text-green-500' }
+    case 'cancelled':  return { textClass: 'line-through text-gray-500', icon: '✕', iconClass: 'text-gray-400' }
+    case 'failed':     return { textClass: 'line-through text-red-400',   icon: '✕', iconClass: 'text-red-500' }
+    case 'in_progress': return { textClass: '', icon: '●', iconClass: 'text-yellow-400' }
+    default:           return { textClass: 'text-gray-300', icon: '○', iconClass: 'text-gray-500' }
+  }
+}
+
 const STATUS_COLORS: Record<string, string> = {
   pending:   'bg-gray-800 text-gray-400 border-gray-600',
   approved:  'bg-blue-900/50 text-blue-400 border-blue-700',
@@ -807,16 +817,17 @@ export default function DelegationDetailPage() {
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                 <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Definition of Done</h2>
                 <ul className="space-y-1.5">
-                  {d.contract.definitionOfDone.map((item, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm">
-                      <span className={`mt-0.5 text-xs ${isDone && d.status === 'completed' ? 'text-green-400' : 'text-gray-600'}`}>
-                        {isDone && d.status === 'completed' ? '✓' : '○'}
-                      </span>
-                      <span className={isDone && d.status === 'completed' ? 'text-gray-400 line-through decoration-green-600/40' : 'text-gray-300'}>
-                        {item}
-                      </span>
-                    </li>
-                  ))}
+                  {d.contract.definitionOfDone.map((item, i) => {
+                    const style = getTaskStatusStyle(d.status)
+                    return (
+                      <li key={i} className="flex items-start gap-2 text-sm">
+                        <span className={`mt-0.5 text-xs ${style.iconClass}`}>
+                          {style.icon}
+                        </span>
+                        <span className={style.textClass || 'text-gray-300'}>{item}</span>
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             )}
