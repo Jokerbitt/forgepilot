@@ -20,7 +20,9 @@
     "agent:status": "node scripts/agent-coord.mjs status",
     "agent:preflight": "node scripts/agent-coord.mjs preflight",
     "agent:check": "node scripts/agent-coord.mjs check-staged",
+    "db:migrate": "tsx scripts/db-migrate.ts",
     "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
     "db:backfill": "tsx scripts/backfill-json-to-postgres.ts",
     "seed": "tsx scripts/seed-demo.ts",
     "seed:clean": "rm -f config/local-items.json config/delegations.json config/orchestrated-runs.json && npm run seed"

@@ -23,6 +23,7 @@ services:
     image: ghcr.io/jokerbitt/forgepilot:latest
     container_name: forgepilot
     restart: unless-stopped
+    command: sh -c "npm run db:migrate && node server.js"
     ports:
       - "3002:3000"
     environment:
