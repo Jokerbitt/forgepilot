@@ -1,9 +1,20 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AttentionItem } from '@/lib/models/attention'
 import type { Delegation } from '@/lib/models/delegation'
 import type { ProjectBrief } from '@/lib/models/project-brief'
 import type { MemoryCard } from '@/lib/knowledge/types'
 import { buildDailyReport, renderDailyReportMarkdown } from './daily-report'
+
+vi.mock('@/lib/eval/grok-critic', () => ({
+  getCriticProviderPlan: () => ({
+    mode: 'auto',
+    candidates: [
+      { providerId: 'anthropic', model: 'claude-sonnet-4-5' },
+      { providerId: 'ollama', model: 'qwen2.5-coder:14b' },
+    ],
+    description: 'auto (anthropic:claude-sonnet-4-5, ollama:qwen2.5-coder:14b)',
+  }),
+}))
 
 const now = new Date('2026-05-21T12:00:00.000Z')
 
@@ -97,7 +108,7 @@ function attention(overrides: Partial<AttentionItem>): AttentionItem {
 }
 
 describe('buildDailyReport', () => {
-  it('builds a JSON + Markdown report for Grok and agent handoff', () => {
+  it('builds a JSON + Markdown report for universal LLM handoff', () => {
     const report = buildDailyReport({
       now,
       storageMode: 'dual',
@@ -129,9 +140,11 @@ describe('buildDailyReport', () => {
     expect(report.status.quality.prsCreated).toBe(1)
     expect(report.status.quality.knowledgeWritebacks).toBe(1)
     expect(report.markdown).toContain('ForgePilot Daily Report')
-    expect(report.prompts.some(prompt => prompt.target === 'grok')).toBe(true)
+    expect(report.assistantRouting.recommended.providerId).toBe('anthropic')
+    expect(report.prompts.some(prompt => prompt.target === 'assistant-auto')).toBe(true)
     expect(report.prompts.some(prompt => prompt.title === 'Coding validation pass')).toBe(true)
     expect(report.markdown).toContain('Coding validation pass')
+    expect(report.markdown).toContain('## Assistant Routing')
   })
 
   it('raises critical risk when auth is disabled', () => {
@@ -209,6 +222,7 @@ describe('renderDailyReportMarkdown', () => {
 
     const markdown = renderDailyReportMarkdown(report)
     expect(markdown).toContain('## Executive Verdict')
+    expect(markdown).toContain('## Assistant Routing')
     expect(markdown).toContain('## Top Risks')
     expect(markdown).toContain('## Next Actions')
   })
