@@ -177,3 +177,9 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [ ] M168: SaaS-Readiness Audit — Auth, Multi-Tenancy-Plan, Billing-Hook, DSGVO-Consent-Flow, Pricing-Page Wireframe
 - [x] M169: End-to-End Smoke Tests — Playwright: Login → Idee → Brief → Delegation → Approve → Run (Critical Happy Path)
 - [ ] M170: Public Launch Prep — README for GitHub.com, Demo-Video Script, Pricing Model Entscheidung (Solo vs. Team vs. API-Credits)
+
+## 🔴 High Priority — SaaS Hardening (M171–M176)
+
+- [ ] M171: JSON → PostgreSQL Dual-Write Migration Layer — vorbereitetes Repository-Pattern fuer tenant-aware Persistenz
+- [ ] M172: Billing Subscription Stub — Stripe-Readiness, Pricing-Hypothese, Customer-Portal-URL und fail-closed Webhook-Grenze ohne echte Charges
+- [x] M173: Auth Default + Honest Positioning — Auth standardmaessig aktivieren, lokalen Bypass explizit machen, README/Briefing von ueberzogenen Claims bereinigen

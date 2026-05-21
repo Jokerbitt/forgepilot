@@ -26,7 +26,7 @@ ForgePilot is a **local-first AI Workflow OS** built by Sven Bittl. It turns ide
 **Stack:**
 - Next.js 15 App Router, TypeScript (strict, 0 errors), Tailwind CSS
 - Vitest (1549 tests, 182 test files)
-- File-based JSON persistence under `config/*.json` (no database required)
+- Phase-0 file-based JSON persistence under `config/*.json` for local/single-user use; PostgreSQL/tenant-aware migration is required before serious SaaS usage
 - Multi-provider AI: Claude (primary), Grok (critic), Gemini, Ollama, OpenRouter, etc.
 - Sentry + OpenTelemetry + Pino structured logging
 - Docker deployment on QNAP NAS, optional Vercel
@@ -39,7 +39,7 @@ src/app/              — Next.js pages (delegations, projects, work-items, sett
 config/*.json         — Runtime state (api-keys, nba-settings, delegations, etc.)
 ```
 
-**Current state:** 164 milestones shipped. All tests green, 0 TypeScript errors.
+**Current state:** 165+ milestones shipped. Tests are broad, but SaaS readiness still depends on mandatory auth, tenant-aware persistence, billing state, and UI polish.
 
 ---
 

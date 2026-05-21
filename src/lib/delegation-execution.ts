@@ -47,7 +47,7 @@ export function buildSubTaskPrompt(delegation: Delegation): string {
 
   const skillGuide = buildSkillBlock(c.skillCategory, [])
 
-  return `You are executing **one atomic sub-task** in ForgePilot (Next.js 14, TypeScript strict, Tailwind, Vitest).
+  return `You are executing **one atomic sub-task** in ForgePilot (Next.js 15, TypeScript strict, Tailwind, Vitest).
 
 ## Goal
 ${c.goal}

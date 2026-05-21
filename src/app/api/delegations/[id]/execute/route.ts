@@ -76,7 +76,7 @@ function buildPrompt(delegation: Delegation): string {
 
   const skillBlock = buildSkillBlock(c.skillCategory, c.allowedFilePatterns)
 
-  return `You are an autonomous software engineering agent working on **ForgePilot** — a local-first AI Workflow OS built with Next.js 14, TypeScript strict, Tailwind CSS, and Vitest.
+  return `You are an autonomous software engineering agent working on **ForgePilot** — a local-first AI workflow control plane built with Next.js 15, TypeScript strict, Tailwind CSS, and Vitest.
 
 ## Task
 ${c.goal}
@@ -485,7 +485,7 @@ async function runWithClaudeAPI(id: string, delegation: Delegation, startTime: D
 
   try {
     const result = await generateText({
-      system: `You are an expert software engineering agent working on ForgePilot — a Next.js 14, TypeScript strict, Tailwind CSS project.
+      system: `You are an expert software engineering agent working on ForgePilot — a Next.js 15, TypeScript strict, Tailwind CSS project.
 Analyse the task, produce a concrete implementation plan with specific file changes, commands, and validation steps.
 Be specific: name exact files, functions, and TypeScript types. Identify any risks or blockers.
 End with a one-line DONE: <summary> statement.`,

@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { isForgePilotAuthEnabled, shouldProtectPath } from './config'
 
 describe('auth config', () => {
-  it('keeps auth disabled unless explicitly enabled', () => {
-    expect(isForgePilotAuthEnabled({} as unknown as NodeJS.ProcessEnv)).toBe(false)
+  it('keeps auth enabled by default unless explicitly disabled', () => {
+    expect(isForgePilotAuthEnabled({} as unknown as NodeJS.ProcessEnv)).toBe(true)
     expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_ENABLED: 'true' } as unknown as NodeJS.ProcessEnv)).toBe(true)
     expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_ENABLED: '1' } as unknown as NodeJS.ProcessEnv)).toBe(true)
+    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_ENABLED: 'false' } as unknown as NodeJS.ProcessEnv)).toBe(false)
+    expect(isForgePilotAuthEnabled({ FORGEPILOT_AUTH_DISABLED: 'true' } as unknown as NodeJS.ProcessEnv)).toBe(false)
   })
 
   it('protects app and api routes while allowing operational routes', () => {

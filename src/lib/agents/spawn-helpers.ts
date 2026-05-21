@@ -84,7 +84,7 @@ export function spawnAgentPrompt(task: AgentTask): string {
   return `Du bist ein KI-Entwickler-Agent und implementierst **${task.milestone} — ${task.title}** in ForgePilot.
 
 ## Kontext
-ForgePilot ist ein Next.js 14 App Router Projekt.
+ForgePilot ist ein Next.js 15 App Router Projekt.
 Stack: TypeScript strict, Tailwind CSS, Vitest, file-based JSON unter \`config/*.json\`.
 GitHub: https://github.com/Jokerbitt/forgepilot
 ${ISOLATION_BLOCK}

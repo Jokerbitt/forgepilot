@@ -1,26 +1,26 @@
-# ForgePilot — AI Workflow OS
+# ForgePilot — Local-First AI Workflow Control Plane
 
-> Turn ideas into shipped features. ForgePilot orchestrates AI agents across your entire development workflow.
+> Plan, delegate, supervise and critically review AI-assisted development work without losing scope, context or control.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-violet.svg)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-614%20passing-brightgreen)](./src)
+[![Tests](https://img.shields.io/badge/tests-1560%2B-brightgreen)](./src)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](./tsconfig.json)
-[![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
 ---
 
 ## Features
 
-- **Idea → Brief → Requirements → Delegation → PR** — full workflow automation in one place
+- **Idea → Brief → Requirements → Delegation → PR** — structured workflow from rough idea to reviewable agent work
 - **Multi-provider AI** — Claude, Grok, Gemini, GPT-4, Groq, Mistral, Ollama, LM Studio, and any OpenAI-compatible endpoint
 - **Grok critic** — independent AI evaluation layer that scores delegations and code reviews
-- **Local-first** — JSON file persistence, no database required
-- **Optional auth** — single-user login gate (M166), disabled by default
+- **Local-first** — Phase-0 JSON persistence for single-user/self-hosted setups, with PostgreSQL migration work in progress
+- **Secure by default** — single-user auth gate is enabled unless explicitly disabled for isolated local development
 - **Knowledge writeback** — execution results flow back into your knowledge base automatically
 - **GDPR-by-design** — PII scrubbing, DSGVO processing ledger, erasure support
 - **Self-hosted** — Docker/NAS deployment, Vercel, or plain `npm run dev`
-- **1560+ tests** — Vitest suite covering core flows end-to-end
+- **1560+ tests** — Vitest and Playwright coverage across core flows
 
 ---
 
@@ -29,7 +29,7 @@
 1. **Idea → Brief** — Describe an idea in plain language, AI expands it into a structured project brief
 2. **Brief → Requirements** — AI generates prioritized requirements, use cases and risks
 3. **Requirements → Delegation** — Top work items become AI delegations with contracts
-4. **Delegation → Execution** — AI decomposes tasks and orchestrates autonomous agent runs
+4. **Delegation → Execution** — ForgePilot supervises scoped agent runs and keeps humans in control
 5. **Execution → Knowledge** — Results write back to your knowledge base automatically
 
 ---
@@ -40,8 +40,6 @@
 git clone https://github.com/Jokerbitt/forgepilot
 cd forgepilot
 npm install
-cp .env.example .env.local
-# Add your API key (free options below)
 npm run dev
 ```
 
@@ -63,11 +61,30 @@ Go to `/settings/providers` to configure.
 
 ## Stack
 
-- **Next.js 14** App Router + TypeScript strict
+- **Next.js 15** App Router + TypeScript strict
 - **Tailwind CSS** dark theme
-- **Vitest** — 614 tests
-- **Local-first** — JSON file persistence, no database required
-- **Optional**: Supabase, Railway deployment
+- **Vitest + Playwright** — broad unit, API and smoke coverage
+- **Local-first Phase 0** — JSON runtime state under `config/*.json` for single-user use
+- **Migration path**: PostgreSQL/Drizzle work is in progress for tenant-aware persistence
+- **Optional**: Supabase, Vercel, NAS/Docker deployment
+
+## Security Defaults
+
+ForgePilot handles prompts, code context and provider credentials. Auth is therefore enabled by default.
+
+For shared deployments, set:
+
+```bash
+NEXTAUTH_SECRET=
+FORGEPILOT_ADMIN_EMAIL=
+FORGEPILOT_ADMIN_PASSWORD=
+```
+
+For an isolated local machine only, auth can be disabled explicitly:
+
+```bash
+FORGEPILOT_AUTH_DISABLED=true
+```
 
 ---
 
@@ -87,7 +104,7 @@ docker build -t forgepilot . && docker run -p 3000:3000 forgepilot
 ```
 forgepilot/
 ├── src/
-│   ├── app/                    # Next.js 14 App Router
+│   ├── app/                    # Next.js 15 App Router
 │   │   ├── api/                # API routes (all Zod-validated)
 │   │   └── (pages)/            # Command Center, Delegations, Projects, ...
 │   └── lib/
@@ -98,7 +115,7 @@ forgepilot/
 │       ├── knowledge/          # Knowledge cards + semantic search
 │       ├── nba-engine/         # Next Best Action engine
 │       └── validation/         # Zod schemas + parseBody() helper
-├── config/                     # File-based JSON persistence (runtime state)
+├── config/                     # Phase-0 local JSON runtime state
 └── scripts/                    # Seed, deploy, and validation scripts
 ```
 
