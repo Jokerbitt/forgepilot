@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { GrokCriticResult } from '@/lib/eval/grok-critic'
+import type { CriticScore } from '@/lib/models/delegation'
 
 interface GrokCriticCardProps {
   delegationId: string
@@ -9,6 +10,8 @@ interface GrokCriticCardProps {
   agentOutput: string
   /** If false, show "not configured" placeholder */
   grokConfigured: boolean
+  /** Auto-populated CriticScore from M181 post-execution — shown immediately without API call */
+  existingScore?: CriticScore
 }
 
 const GRADE_COLORS: Record<string, string> = {
@@ -23,6 +26,18 @@ const VERDICT_STYLES: Record<string, string> = {
   PASS: 'bg-emerald-900/40 text-emerald-300 border-emerald-800',
   NEEDS_REVISION: 'bg-yellow-900/40 text-yellow-300 border-yellow-800',
   FAIL: 'bg-red-900/40 text-red-300 border-red-800',
+}
+
+export const CRITIC_SCORE_VERDICT_STYLES: Record<CriticScore['verdict'], string> = {
+  approved: 'bg-green-900/40 text-green-300 border-green-800',
+  'needs-revision': 'bg-yellow-900/40 text-yellow-300 border-yellow-800',
+  rejected: 'bg-red-900/40 text-red-300 border-red-800',
+}
+
+export const CRITIC_SCORE_VERDICT_LABELS: Record<CriticScore['verdict'], string> = {
+  approved: 'Bestanden',
+  'needs-revision': 'Überarbeitung nötig',
+  rejected: 'Nicht bestanden',
 }
 
 function ScoreBar({ value, label }: { value: number; label: string }) {
@@ -49,34 +64,12 @@ function ScoreBar({ value, label }: { value: number; label: string }) {
   )
 }
 
-export function GrokCriticCard({ delegationId, agentOutput, grokConfigured }: GrokCriticCardProps) {
+export function GrokCriticCard({ delegationId, agentOutput, grokConfigured, existingScore }: GrokCriticCardProps) {
   const [result, setResult] = useState<GrokCriticResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  if (!grokConfigured) {
-    return (
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-        <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-gray-600" />
-          Grok Critic Review
-        </h2>
-        <div className="flex items-center gap-3 py-2">
-          <div className="h-8 w-8 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-600 shrink-0">
-            X
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">Grok Critic nicht konfiguriert</p>
-            <p className="text-xs text-gray-700 mt-0.5">
-              <code className="font-mono text-gray-600">XAI_API_KEY</code> in{' '}
-              <code className="font-mono text-gray-600">.env.local</code> hinzufügen
-            </p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
+  // Defined here — before any early returns — so it's always in scope
   const handleRunCritic = async () => {
     setLoading(true)
     setError(null)
@@ -102,6 +95,85 @@ export function GrokCriticCard({ delegationId, agentOutput, grokConfigured }: Gr
     } finally {
       setLoading(false)
     }
+  }
+
+  if (!grokConfigured) {
+    return (
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-gray-600" />
+          Grok Critic Review
+        </h2>
+        <div className="flex items-center gap-3 py-2">
+          <div className="h-8 w-8 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center text-gray-600 shrink-0">
+            X
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Grok Critic nicht konfiguriert</p>
+            <p className="text-xs text-gray-700 mt-0.5">
+              <code className="font-mono text-gray-600">XAI_API_KEY</code> in{' '}
+              <code className="font-mono text-gray-600">.env.local</code> hinzufügen
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Auto-Review: existing score from M181 (no manual review yet) ─────────
+  if (existingScore && !result) {
+    return (
+      <div className="bg-gray-900 border border-gray-700 rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-gray-500" />
+            Grok Critic Review
+            <span className="ml-1 px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-500 text-[10px] font-normal normal-case tracking-normal">
+              Auto-Review
+            </span>
+          </h2>
+          <button
+            onClick={handleRunCritic}
+            disabled={loading}
+            className="text-xs text-violet-500 hover:text-violet-300 transition-colors disabled:opacity-40"
+          >
+            {loading ? 'Analysiert…' : '↻ Erneut reviewen'}
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {/* Verdict + Timestamp */}
+          <div className="flex items-center gap-3">
+            <span className={`px-2.5 py-1 text-xs font-bold rounded border ${CRITIC_SCORE_VERDICT_STYLES[existingScore.verdict]}`}>
+              {CRITIC_SCORE_VERDICT_LABELS[existingScore.verdict]}
+            </span>
+            <span className="text-xs text-gray-600 ml-auto">
+              Reviewed at {new Date(existingScore.runAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+
+          {/* Score bars */}
+          <div className="space-y-2">
+            <ScoreBar value={existingScore.correctness} label="Korrektheit" />
+            <ScoreBar value={existingScore.efficiency} label="Effizienz" />
+            <ScoreBar value={100 - existingScore.drift} label="Scope-Fokus" />
+          </div>
+
+          {/* Summary */}
+          {existingScore.summary && (
+            <p className="text-xs text-gray-400 leading-relaxed border-t border-gray-800 pt-3">
+              {existingScore.summary}
+            </p>
+          )}
+
+          {error && (
+            <p className="text-xs text-red-400 border border-red-900/40 bg-red-950/20 rounded px-2 py-1.5">
+              ⚠ {error}
+            </p>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (

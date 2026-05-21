@@ -36,6 +36,7 @@ import { VersionBadge } from '@/components/delegation/VersionBadge'
 import { Badge, EmptyState, Metric, Panel, buttonClassName, cx } from '@/components/ui/primitives'
 import { checkBudget, formatCostUsd } from '@/lib/delegations/cost-format'
 import { SlaBadge } from '@/components/shared/SlaBadge'
+import { CriticScorePill } from '@/components/delegation/CriticScorePill'
 
 type ApprovalFilter = 'Alle' | 'approval-required' | 'auto-approved' | 'risk-blocked'
 
@@ -1175,11 +1176,21 @@ function DelegationsContent() {
 
                           {/* Status */}
                           <td className="p-3">
-                            <span className={`px-2 py-0.5 text-xs rounded-md border font-medium uppercase tracking-wider whitespace-nowrap ${
-                              STATUS_COLORS[del.status] || STATUS_COLORS.pending
-                            } ${del.status === 'running' ? 'animate-pulse' : ''}`}>
-                              {STATUS_LABELS[del.status] || del.status}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`px-2 py-0.5 text-xs rounded-md border font-medium uppercase tracking-wider whitespace-nowrap ${
+                                STATUS_COLORS[del.status] || STATUS_COLORS.pending
+                              } ${del.status === 'running' ? 'animate-pulse' : ''}`}>
+                                {STATUS_LABELS[del.status] || del.status}
+                              </span>
+                              {del.criticScore?.verdict && (
+                                <CriticScorePill
+                                  verdict={del.criticScore.verdict}
+                                  correctness={del.criticScore.correctness}
+                                  efficiency={del.criticScore.efficiency}
+                                  drift={del.criticScore.drift}
+                                />
+                              )}
+                            </div>
                           </td>
 
                           {/* Time */}
