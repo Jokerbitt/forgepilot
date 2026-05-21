@@ -40,12 +40,12 @@ import { SlaBadge } from '@/components/shared/SlaBadge'
 type ApprovalFilter = 'Alle' | 'approval-required' | 'auto-approved' | 'risk-blocked'
 
 const STATUS_COLORS: Record<string, string> = {
-  pending:   'bg-yellow-900/50 text-yellow-500 border-yellow-700',
+  pending:   'bg-gray-800 text-gray-400 border-gray-600',
   approved:  'bg-blue-900/50 text-blue-400 border-blue-700',
-  running:   'bg-green-900/50 text-green-400 border-green-500',
-  completed: 'bg-gray-800 text-gray-400 border-gray-600',
+  running:   'bg-violet-900/50 text-violet-300 border-violet-600',
+  completed: 'bg-emerald-900/40 text-emerald-400 border-emerald-800',
   failed:    'bg-red-900/50 text-red-400 border-red-700',
-  cancelled: 'bg-gray-900 text-gray-600 border-gray-800',
+  cancelled: 'bg-gray-950 text-gray-600 border-gray-800',
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -1177,7 +1177,7 @@ function DelegationsContent() {
                           <td className="p-3">
                             <span className={`px-2 py-0.5 text-xs rounded-md border font-medium uppercase tracking-wider whitespace-nowrap ${
                               STATUS_COLORS[del.status] || STATUS_COLORS.pending
-                            }`}>
+                            } ${del.status === 'running' ? 'animate-pulse' : ''}`}>
                               {STATUS_LABELS[del.status] || del.status}
                             </span>
                           </td>
@@ -1261,25 +1261,27 @@ function DelegationsContent() {
                                 </div>
                               ) : (
                                 <>
-                                  {/* Approve waiting Class A/B delegations */}
+                                  {/* Approve — pending Class A/B: prominent button */}
                                   {canApprove && (
                                     <button
                                       onClick={e => handleApproveDelegation(del.id, e)}
-                                      className="text-xs bg-green-900/50 text-green-300 hover:bg-green-900 px-2 py-1 rounded border border-green-800/70 transition-colors"
-                                      title="Freigeben"
+                                      className="flex items-center gap-1 text-xs bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg border border-green-600 transition-colors font-semibold shadow-sm shadow-green-900/40"
+                                      title="Delegation freigeben"
                                     >
-                                      Freigeben
+                                      <Check size={12} />
+                                      Genehmigen
                                     </button>
                                   )}
 
-                                  {/* Start — approved delegations */}
+                                  {/* Start — approved: prominent "Ausführen" button */}
                                   {canStart && (
                                     <button
                                       onClick={e => handleStartDelegation(del.id, e)}
-                                      className="text-xs bg-blue-900/50 text-blue-300 hover:bg-blue-900 px-2 py-1 rounded border border-blue-800/70 transition-colors font-medium"
+                                      className="flex items-center gap-1 text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg border border-blue-500 transition-colors font-semibold shadow-sm shadow-blue-900/40"
                                       title="Agent starten"
                                     >
-                                      ▶
+                                      <Play size={12} />
+                                      Ausführen
                                     </button>
                                   )}
 
