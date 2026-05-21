@@ -168,3 +168,12 @@ The GitHub Actions `autonomous-dev.yml` picks the next `[ ]` item each day, buil
 - [x] M162: SSE Stream für Agent Scope — `/api/agents/scope/stream` ersetzt 5s-Polling in ScopeBoard; Live/Poll-Toggle; EventSource mit Fallback
 - [x] M163: Approval-Stack im Header — ausstehende Delegations-Genehmigungen als Sticky-Banner in Navigation (Zahl + Quick-Approve-Button) statt nur in /delegations
 - [x] M164: Delegation Live-Timeline — Live-Ansicht laufender Delegations mit Logs, Cost-Anzeige, Risk-Badge, Trace-Link; Polling durch SSE ersetzen
+
+## 🔴 High Priority — Quality & Market-Readiness (M165–M170)
+
+- [x] M165: Grok Dual-Critic — xAI Grok als unabhängiger Evaluator: runGrokCritic() + runGrokCodeReview() + mergeCriticScores(); POST /api/eval/critic; graceful degradation wenn kein XAI_API_KEY
+- [ ] M166: Auth Layer (NextAuth) — Login/Session für Single-User und Vorbereitung Multi-Tenant; schützt alle /api/* Routes hinter Session-Check
+- [ ] M167: Onboarding Wizard — 3-Step-Flow: Provider konfigurieren → erste Idee eingeben → erste Delegation starten; für Erstnutzer ohne Docs-Lesen
+- [ ] M168: SaaS-Readiness Audit — Auth, Multi-Tenancy-Plan, Billing-Hook, DSGVO-Consent-Flow, Pricing-Page Wireframe
+- [ ] M169: End-to-End Smoke Tests — Playwright: Login → Idee → Brief → Delegation → Approve → Run (Critical Happy Path)
+- [ ] M170: Public Launch Prep — README for GitHub.com, Demo-Video Script, Pricing Model Entscheidung (Solo vs. Team vs. API-Credits)
