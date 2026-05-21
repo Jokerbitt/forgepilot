@@ -1,6 +1,64 @@
 import type { WorkItem } from '../models/work-item'
 import type { NBAScore } from '../models/nba'
 import { getNBAConfig } from './nba-config'
+import type { WorkItem as JokWorkItem, ScoringContext } from './types'
+
+// ─── JOK-31: scoreWorkItem ────────────────────────────────────────────────────
+// Pure scoring function for the simplified JOK WorkItem type.
+// Returns a score 0–100 based on priority, status, dueDate, riskClass, recency.
+export function scoreWorkItem(item: JokWorkItem, context?: ScoringContext): number {
+  const now = context?.currentDate ? new Date(context.currentDate) : new Date()
+  let score = 0
+
+  // Priority: 0=None(0), 4=Low(10), 3=Medium(20), 2=High(35), 1=Urgent(50)
+  const priorityPoints: Record<number, number> = { 0: 0, 4: 10, 3: 20, 2: 35, 1: 50 }
+  score += priorityPoints[item.priority] ?? 0
+
+  // Status bonuses/penalties
+  const statusLower = item.status.toLowerCase()
+  if (statusLower === 'in_progress' || statusLower === 'in-progress') {
+    score += 15
+  } else if (statusLower === 'backlog') {
+    score -= 10
+  }
+
+  // DueDate proximity
+  if (item.dueDate) {
+    const due = new Date(item.dueDate)
+    const msPerDay = 1000 * 60 * 60 * 24
+    const daysUntilDue = (due.getTime() - now.getTime()) / msPerDay
+
+    if (daysUntilDue < 0) {
+      score += 25 // overdue
+    } else if (daysUntilDue < 3) {
+      score += 20 // due in < 3 days
+    } else if (daysUntilDue < 7) {
+      score += 10 // due in < 7 days
+    }
+  }
+
+  // Risk class bonus
+  const riskPoints: Record<string, number> = {
+    critical: 15,
+    high: 8,
+    medium: 3,
+    low: 0,
+  }
+  if (item.riskClass) {
+    score += riskPoints[item.riskClass] ?? 0
+  }
+
+  // Recency: updated in last 24h +5
+  if (item.lastUpdated) {
+    const updatedMs = new Date(item.lastUpdated).getTime()
+    const diffHours = (now.getTime() - updatedMs) / (1000 * 60 * 60)
+    if (diffHours <= 24) {
+      score += 5
+    }
+  }
+
+  return Math.max(0, Math.min(100, score))
+}
 
 export function calculateScore(item: WorkItem): NBAScore {
   // Urgency (0-25)
