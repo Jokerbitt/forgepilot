@@ -1,6 +1,27 @@
 version: '3.8'
 
 services:
+  # ─── PostgreSQL ───────────────────────────────────────────────────────────────
+  # M171: Postgres for Dual-Write migration. Set POSTGRES_MODE=dual to activate.
+  postgres:
+    image: postgres:16-alpine
+    container_name: forgepilot-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"            # expose to host for drizzle-kit studio / migrations
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-forgepilot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-forgepilot}
+      POSTGRES_DB: ${POSTGRES_DB:-forgepilot}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-forgepilot} -d ${POSTGRES_DB:-forgepilot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   forgepilot:
     image: ghcr.io/jokerbitt/forgepilot:latest
     container_name: forgepilot
@@ -15,8 +36,14 @@ services:
       - GITHUB_OWNER=${GITHUB_OWNER:-Jokerbitt}
       - GITHUB_REPOSITORIES=${GITHUB_REPOSITORIES:-forgepilot}
       - NODE_ENV=production
+      # M171: Postgres migration flags
+      - DATABASE_URL=${DATABASE_URL:-postgresql://forgepilot:forgepilot@postgres:5432/forgepilot}
+      - POSTGRES_MODE=${POSTGRES_MODE:-off}
     volumes:
       - forgepilot-config:/app/config
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       # M160: use /api/ready (comprehensive) instead of /api/health (trivial)
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/ready || exit 1"]
@@ -56,4 +83,6 @@ volumes:
   forgepilot-config:
     driver: local
   n8n-data:
+    driver: local
+  postgres-data:
     driver: local
