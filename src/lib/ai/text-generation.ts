@@ -16,6 +16,8 @@ import type { AIProviderConfig } from '@/lib/ai/providers/types'
 import { logProcessing } from '@/lib/dsgvo/processing-ledger'
 import { aiLogger } from '@/lib/logger'
 import { withSpan } from '@/lib/tracing/tracer'
+import { withRetry } from './retry'
+import { withFallback } from './fallback'
 
 type ModelPurpose = 'fast' | 'coding'
 
@@ -63,27 +65,37 @@ export async function generateText(options: GenerateTextOptions): Promise<Genera
     ? selection.codingFallbackModel
     : selection.fastFallbackModel
 
-  try {
-    return await callProvider(primaryProviderId, primaryModelId, purpose, options)
-  } catch (primaryError) {
-    // M128: Try fallback provider if configured and primary failed
-    if (fallbackProviderId && fallbackProviderId !== primaryProviderId) {
-      aiLogger.warn({
-        event: 'ai.fallback',
-        primaryProvider: primaryProviderId,
-        fallbackProvider: fallbackProviderId,
-        reason: primaryError instanceof Error ? primaryError.message : String(primaryError),
-      }, 'Primary provider failed — switching to fallback')
+  const hasFallback = Boolean(
+    fallbackProviderId && fallbackProviderId !== primaryProviderId
+  )
 
-      return await callProvider(
-        fallbackProviderId,
-        fallbackModelId ?? primaryModelId,
-        purpose,
-        options,
-      )
-    }
-    throw primaryError
+  const { result, usedFallback } = await withFallback(
+    () => withRetry(
+      () => callProvider(primaryProviderId, primaryModelId, purpose, options),
+      { maxAttempts: 3 }
+    ),
+    hasFallback
+      ? () => withRetry(
+          () => callProvider(
+            fallbackProviderId!,
+            fallbackModelId ?? primaryModelId,
+            purpose,
+            options,
+          ),
+          { maxAttempts: 2 }
+        )
+      : undefined,
+    { primaryId: primaryProviderId, fallbackId: fallbackProviderId }
+  )
+
+  if (usedFallback) {
+    aiLogger.info(
+      { event: 'ai.used_fallback', fallbackId: fallbackProviderId },
+      'Used fallback provider'
+    )
   }
+
+  return result
 }
 
 async function callProvider(
