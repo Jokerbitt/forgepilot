@@ -124,7 +124,7 @@ export async function buildContext(input: ContextBuildInput): Promise<BuiltConte
 
   // ── Layer 5: Knowledge memory ─────────────────────────────────────────
   if (usedTokens < budget * 0.95) {
-    const memContent = fetchRecentKnowledge(input.skillCategory)
+    const memContent = fetchRecentKnowledge(input.skillCategory, input.taskDescription)
     if (memContent) {
       const memTokens = approxTokens(memContent)
       if (usedTokens + memTokens <= budget) {
@@ -221,7 +221,27 @@ function fetchConventions(): string {
   return `## Project Conventions (excerpt)\n\n${content}`
 }
 
-function fetchRecentKnowledge(skillCategory?: string): string {
+// Card types surfaced in the context window — excludes 'risk' (too noisy)
+// and 'requirement' (handled via task layer).
+const KNOWLEDGE_TYPES = new Set(['learning', 'context', 'pattern', 'decision', 'reference'])
+
+function scoreKnowledgeCard(
+  card: { title: string; body: string; tags: string[]; type: string },
+  terms: string[],
+): number {
+  if (terms.length === 0) return 1
+  const titleL = card.title.toLowerCase()
+  const bodyL  = card.body.toLowerCase()
+  let score = 0
+  for (const t of terms) {
+    if (titleL.includes(t)) score += 10
+    if (bodyL.includes(t))  score += 2
+    if (card.tags.some(tag => tag.toLowerCase().includes(t))) score += 4
+  }
+  return score
+}
+
+function fetchRecentKnowledge(skillCategory?: string, goal?: string): string {
   try {
     const storePath = path.join(getDataDir(), 'knowledge-store.json')
     if (!fs.existsSync(storePath)) return ''
@@ -230,16 +250,22 @@ function fetchRecentKnowledge(skillCategory?: string): string {
       cards: Array<{ title: string; body: string; tags: string[]; type: string }>
     }
 
-    const relevant = store.cards
-      .filter(c =>
-        c.type === 'learning' &&
-        (!skillCategory || c.tags.some(t => t.includes(skillCategory) || skillCategory.includes(t)))
-      )
-      .slice(0, 3)
+    // Collect search terms from skill category + goal keywords
+    const terms: string[] = [
+      ...(skillCategory ? [skillCategory.toLowerCase()] : []),
+      ...(goal ? goal.toLowerCase().split(/\s+/).filter(w => w.length > 4).slice(0, 8) : []),
+    ]
 
-    if (!relevant.length) return ''
+    const scored = store.cards
+      .filter(c => KNOWLEDGE_TYPES.has(c.type))
+      .map(c => ({ card: c, score: scoreKnowledgeCard(c, terms) }))
+      .filter(({ score }) => score > 0 || terms.length === 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5)
 
-    const snippets = relevant.map(c => `**${c.title}**\n${c.body.slice(0, 300)}`)
+    if (!scored.length) return ''
+
+    const snippets = scored.map(({ card }) => `**[${card.type}] ${card.title}**\n${card.body.slice(0, 300)}`)
     return `## Relevant Knowledge\n\n${snippets.join('\n\n')}`
   } catch {
     return ''
