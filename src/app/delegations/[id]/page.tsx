@@ -24,6 +24,7 @@ import { PreflightCheckList } from '@/components/delegation/PreflightCheckList'
 import { CostMeter } from '@/components/delegation/CostMeter'
 import { downloadLogsAsText } from '@/lib/delegations/log-export'
 import { InlineNoteEditor } from '@/components/delegation/InlineNoteEditor'
+import { DelegationTagEditor } from '@/components/delegation/DelegationTagEditor'
 import type { PreflightResult } from '@/lib/preflight'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
@@ -1021,6 +1022,16 @@ export default function DelegationDetailPage() {
                 </ul>
               </div>
             )}
+
+            {/* Tags */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Tags</h2>
+              <DelegationTagEditor
+                delegationId={d.id}
+                initialTags={d.tags ?? []}
+                onSaved={(tags) => setDelegation(prev => prev ? { ...prev, tags } : prev)}
+              />
+            </div>
 
             {/* Note — inline editable */}
             <div className="bg-gray-900 border border-yellow-900/40 rounded-xl p-4">
