@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { indexNasFiles } from '@/lib/knowledge/nas-indexer'
 import { logger } from '@/lib/logger'
+import { isCronAuthorized } from '@/lib/cron/auth'
 
 /**
  * GET/POST /api/cron/knowledge-index
@@ -11,20 +12,12 @@ import { logger } from '@/lib/logger'
  * Reads Markdown files from FORGEPILOT_DOCS_DIR, extracts sections as
  * MemoryCards, and writes them to the knowledge store.
  *
- * Auth: Bearer CRON_SECRET in production (skipped in development).
+ * Auth: Bearer CRON_SECRET, using the central cron guard.
  *
  * Scheduled: daily at 4:00 UTC (configured in vercel.json).
  */
-function isAuthorized(request: NextRequest): boolean {
-  if (process.env.NODE_ENV !== 'production') return true
-  const secret = process.env.CRON_SECRET
-  if (!secret) return true
-  const auth = request.headers.get('authorization') ?? ''
-  return auth === `Bearer ${secret}`
-}
-
 async function runIndex(request: NextRequest) {
-  if (!isAuthorized(request)) {
+  if (!isCronAuthorized(request, 'knowledge-index')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

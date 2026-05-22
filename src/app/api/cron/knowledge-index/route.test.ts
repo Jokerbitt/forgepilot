@@ -78,17 +78,13 @@ describe('GET /api/cron/knowledge-index', () => {
     expect(mockIndexNasFiles).toHaveBeenCalledOnce()
   })
 
-  it('skips auth when CRON_SECRET is not set in production', async () => {
+  it('rejects production calls when CRON_SECRET is not set', async () => {
     vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('CRON_SECRET', '')
 
-    mockIndexNasFiles.mockResolvedValue({
-      sourcesIndexed: 0, itemsIndexed: 0, cardsCreated: 0,
-      skipped: 0, sensitiveSkipped: 0, errors: [],
-    })
-
     const res = await GET(makeRequest('GET'))
-    expect(res.status).toBe(200)
+    expect(res.status).toBe(401)
+    expect(mockIndexNasFiles).not.toHaveBeenCalled()
   })
 })
 
