@@ -22,6 +22,18 @@ import crypto from 'crypto'
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
 
+function buildInternalHeaders(req: Request, includeJson = false): HeadersInit {
+  const headers: Record<string, string> = includeJson ? { 'Content-Type': 'application/json' } : {}
+  const apiKey = process.env.FORGEPILOT_API_KEY
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`
+    return headers
+  }
+  const cookie = req.headers.get('cookie')
+  if (cookie) headers.Cookie = cookie
+  return headers
+}
+
 export async function POST(req: Request, { params }: { params: Promise<{ runId: string }> }) {
   const { runId } = await params
   const run = getRun(runId)
@@ -33,16 +45,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ runId: 
   const { skipFailed = false } = await req.json().catch(() => ({})) as { skipFailed?: boolean }
 
   updateRunStatus(runId, 'running')
+  const jsonHeaders = buildInternalHeaders(req, true)
+  const authHeaders = buildInternalHeaders(req)
 
   // Fire-and-forget — respond immediately, execution happens async
-  executeRunAsync(runId, skipFailed).catch((err: unknown) => {
+  executeRunAsync(runId, skipFailed, jsonHeaders, authHeaders).catch((err: unknown) => {
     orchestrationLogger.error({ event: 'orchestration.error', runId: runId, error: String(err) }, 'Async run failed')
   })
 
   return NextResponse.json({ started: true, runId: runId })
 }
 
-async function executeRunAsync(runId: string, skipFailed: boolean): Promise<void> {
+async function executeRunAsync(
+  runId: string,
+  skipFailed: boolean,
+  jsonHeaders: HeadersInit,
+  authHeaders: HeadersInit,
+): Promise<void> {
   const run = getRun(runId)
   if (!run) return
 
@@ -57,12 +76,13 @@ async function executeRunAsync(runId: string, skipFailed: boolean): Promise<void
 
     try {
       // 1. Create child delegation for this sub-task
+      const childDelegationId = crypto.randomUUID()
       const delegationPayload = {
-        id: `orch-${runId.slice(-6)}-${task.id.slice(-6)}`,
+        id: childDelegationId,
         title: task.title,
         status: 'approved',
         contract: {
-          id: `contract-orch-${task.id.slice(-6)}`,
+          id: crypto.randomUUID(),
           workItemId: `orch-${runId.slice(-6)}`,
           goal: `${task.title}\n\nDescription: ${task.description}\n\nAcceptance Criteria:\n${task.acceptanceCriteria.map(c => `- ${c}`).join('\n')}`,
           context: `Part of orchestrated run ${runId}. Skill: ${task.skillCategory}. Patterns: ${task.filePatterns.join(', ')}`,
@@ -89,17 +109,28 @@ async function executeRunAsync(runId: string, skipFailed: boolean): Promise<void
       // Save delegation
       await fetch(`${BASE_URL}/api/delegations`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: jsonHeaders,
         body: JSON.stringify(delegationPayload),
+      }).then(async (res) => {
+        if (!res.ok) {
+          const body = await res.text().catch(() => '')
+          throw new Error(`Child delegation create failed: ${res.status} ${body.slice(0, 200)}`)
+        }
       })
 
       // 2. Execute delegation
       await fetch(`${BASE_URL}/api/delegations/${delegationPayload.id}/execute`, {
         method: 'POST',
+        headers: authHeaders,
+      }).then(async (res) => {
+        if (!res.ok) {
+          const body = await res.text().catch(() => '')
+          throw new Error(`Child delegation execute failed: ${res.status} ${body.slice(0, 200)}`)
+        }
       })
 
       // 3. Poll for completion (max 10 min)
-      const result = await pollDelegationCompletion(delegationPayload.id, 600_000)
+      const result = await pollDelegationCompletion(delegationPayload.id, 600_000, authHeaders)
 
       const durationMinutes = Math.round((Date.now() - startedAt) / 60_000)
 
@@ -202,6 +233,7 @@ function writeRunKnowledgeCard(runId: string): void {
 async function pollDelegationCompletion(
   delegationId: string,
   timeoutMs: number,
+  authHeaders: HeadersInit,
 ): Promise<{ testsPassed: boolean; typeErrorCount: number; lintErrorCount: number; filesChanged: number }> {
   const deadline = Date.now() + timeoutMs
   const pollInterval = 5_000
@@ -209,7 +241,7 @@ async function pollDelegationCompletion(
   while (Date.now() < deadline) {
     await sleep(pollInterval)
     try {
-      const res = await fetch(`${BASE_URL}/api/delegations/${delegationId}`)
+      const res = await fetch(`${BASE_URL}/api/delegations/${delegationId}`, { headers: authHeaders })
       if (!res.ok) continue
       const d = await res.json() as { status: string; summaryReport?: { filesModified?: string[]; filesAdded?: string[]; testsPassed?: number; warnings?: string[] } }
 

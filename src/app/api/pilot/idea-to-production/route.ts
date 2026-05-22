@@ -181,16 +181,18 @@ export async function POST(req: Request) {
 
   // Step 6: Create Delegation
   const now = new Date().toISOString()
+  const delegationId = crypto.randomUUID()
   const delegation: Delegation = {
-    id: `del-idea-${Date.now()}`,
+    id: delegationId,
     title: topItem.title,
     status: 'approved',
     executionRoute: 'runner',
     costEstimateUsd: 0,
+    briefId: brief.id,
     createdAt: now,
     updatedAt: now,
     contract: {
-      id: `contract-idea-${Date.now()}`,
+      id: `contract-${delegationId}`,
       workItemId: topItem.id,
       goal: topItem.title,
       context: `Project: ${brief.title}. ${brief.problemStatement}`,

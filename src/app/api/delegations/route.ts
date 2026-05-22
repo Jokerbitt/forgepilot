@@ -23,7 +23,7 @@ const DelegationInputSchema = z.object({
     skillCategory:    z.string().optional(),
     acceptanceCriteria: z.array(z.string()).optional(),
     context:          z.string().optional(),
-  }),
+  }).passthrough(),
   autoOrchestrate: z.boolean().optional(),
   dataSubjectId:   z.string().optional(),
 }).passthrough()  // allow extra fields from existing clients

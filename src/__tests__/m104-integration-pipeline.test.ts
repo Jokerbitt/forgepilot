@@ -142,6 +142,48 @@ describe('M104 — Delegation Pipeline', () => {
     expect(fetched.status).toBe('approved')
   })
 
+  it('preserves extended contract fields used by the runner', async () => {
+    const { POST } = await import('@/app/api/delegations/route')
+
+    const req = makeRequest({
+      id: 'del-runner-contract-fields',
+      title: 'Runner contract preservation',
+      status: 'approved',
+      contract: {
+        id: 'contract-runner-contract-fields',
+        workItemId: 'work-item-123',
+        goal: 'Preserve runner contract fields for prompt building',
+        riskClass: 'A',
+        privacyMode: 'private-cloud',
+        requiresApproval: false,
+        branchStrategy: 'feature',
+        maxBudgetUsd: 2,
+        allowedTools: [],
+        definitionOfDone: ['Runner can build a prompt'],
+        skillCategory: 'test',
+        allowedFilePatterns: ['src/**/*'],
+      },
+      executionRoute: 'local-agent',
+      costEstimateUsd: 0,
+    })
+
+    const res = await POST(req)
+    expect([200, 201]).toContain(res.status)
+    const delegation = await jsonBody<{
+      contract: {
+        workItemId?: string
+        branchStrategy?: string
+        definitionOfDone?: string[]
+        allowedFilePatterns?: string[]
+      }
+    }>(res)
+
+    expect(delegation.contract.workItemId).toBe('work-item-123')
+    expect(delegation.contract.branchStrategy).toBe('feature')
+    expect(delegation.contract.definitionOfDone).toEqual(['Runner can build a prompt'])
+    expect(delegation.contract.allowedFilePatterns).toEqual(['src/**/*'])
+  })
+
   it('auto-approves Risk-A delegations without requiresApproval flag', async () => {
     vi.resetModules()
     const { POST } = await import('@/app/api/delegations/route')

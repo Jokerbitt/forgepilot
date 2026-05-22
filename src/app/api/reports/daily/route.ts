@@ -7,6 +7,22 @@ import { readExecuteLoopEvidence } from '@/lib/reports/execute-loop-evidence-sto
 import { createDelegationRepository, getDelegationStorageMode, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import { createKnowledgeCardRepository } from '@/lib/repositories/knowledgeCardRepository'
 import { createProjectBriefRepository } from '@/lib/repositories/projectBriefRepository'
+import { formatErrorInfo, listErrorInfo, type ErrorInfo } from '@/app/models/error'
+
+const ERROR_LIMIT = 10
+
+function renderErrorMarkdownSection(errors: ErrorInfo[]): string {
+  const lines: string[] = ['', '## Recent Errors']
+  if (errors.length === 0) {
+    lines.push('- No recent errors recorded.')
+    return lines.join('\n')
+  }
+  for (const error of errors) {
+    lines.push(formatErrorInfo(error, { includeStack: false }))
+    lines.push('')
+  }
+  return lines.join('\n')
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -33,8 +49,11 @@ export async function GET(request: NextRequest) {
       executeLoopEvidence: readExecuteLoopEvidence(),
     })
 
+    const errors = listErrorInfo({ limit: ERROR_LIMIT })
+
     if (format === 'markdown') {
-      return new NextResponse(report.markdown, {
+      const body = `${report.markdown}\n${renderErrorMarkdownSection(errors)}\n`
+      return new NextResponse(body, {
         headers: {
           'content-type': 'text/markdown; charset=utf-8',
           'cache-control': 'no-store',
@@ -42,7 +61,7 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    return NextResponse.json(report, {
+    return NextResponse.json({ ...report, errors }, {
       headers: { 'cache-control': 'no-store' },
     })
   } catch (error) {
