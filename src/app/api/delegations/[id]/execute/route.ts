@@ -328,6 +328,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       const finalStatus = success ? 'completed' : 'failed'
       const finishedDelegation = await repo.update(id, {
         status: finalStatus,
+        completedAt: new Date().toISOString(),
         ...(actualCost ? { actualCostUsd: actualCost } : {}),
         ...(report ? { summaryReport: report } : {}),
         logs: [...(current.logs ?? []), ...logBuffer, finalLog],
@@ -761,9 +762,13 @@ export async function POST(
     return NextResponse.json({ started: true, mode: 'orchestrated', delegationId: id, runId: run.id })
   }
 
-  // Immediately mark as running
+  // Immediately mark as running + record start time
   const startLog = buildExecutionStartLog(delegation)
   await appendLogs(id, [startLog], 'running')
+  {
+    const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+    await repo.update(id, { startedAt: new Date().toISOString() })
+  }
 
   const startTime = new Date()
 
