@@ -156,4 +156,117 @@ describe('buildContextPackage', () => {
     const uniqueSources = [...new Set(result.sources)]
     expect(result.sources).toEqual(uniqueSources)
   })
+
+  // ── M288: TF-IDF-like scoring improvements ────────────────────────────────────
+
+  it('M288: title match scores higher than body-only match', async () => {
+    const titleCard = makeCard({
+      id: 'title-match',
+      title: 'Authentication system design',
+      body: 'Some unrelated content here',
+      tags: [],
+    })
+    const bodyCard = makeCard({
+      id: 'body-match',
+      title: 'Unrelated topic',
+      body: 'authentication is mentioned here once',
+      tags: [],
+    })
+
+    vi.mocked(createKnowledgeCardRepository).mockReturnValue({
+      listAll: vi.fn().mockResolvedValue([bodyCard, titleCard]),
+      create: vi.fn(),
+      findById: vi.fn(),
+      listByDelegation: vi.fn(),
+      listByType: vi.fn(),
+      upsert: vi.fn(),
+    })
+
+    const result = await buildContextPackage('authentication system')
+    // Title card should rank first because title matches are weighted 3x
+    expect(result.cards[0].id).toBe('title-match')
+  })
+
+  it('M288: tag match boosts score above body-only match', async () => {
+    const tagCard = makeCard({
+      id: 'tag-match',
+      title: 'Unrelated title',
+      body: 'some body content without keywords',
+      tags: ['authentication', 'jwt'],
+    })
+    const bodyCard = makeCard({
+      id: 'body-match',
+      title: 'No tag here',
+      body: 'authentication mentioned in body once',
+      tags: [],
+    })
+
+    vi.mocked(createKnowledgeCardRepository).mockReturnValue({
+      listAll: vi.fn().mockResolvedValue([bodyCard, tagCard]),
+      create: vi.fn(),
+      findById: vi.fn(),
+      listByDelegation: vi.fn(),
+      listByType: vi.fn(),
+      upsert: vi.fn(),
+    })
+
+    const result = await buildContextPackage('authentication token')
+    // tag-match has "authentication" in tags (2pt) + body body (0) vs body-match body (1pt)
+    expect(result.cards[0].id).toBe('tag-match')
+  })
+
+  it('M288: repeated keyword in body increases score', async () => {
+    const highFreqCard = makeCard({
+      id: 'high-freq',
+      title: 'Some card',
+      body: 'authentication authentication authentication is very important here for proper authentication',
+      tags: [],
+    })
+    const lowFreqCard = makeCard({
+      id: 'low-freq',
+      title: 'Some other card',
+      body: 'authentication is mentioned once',
+      tags: [],
+    })
+
+    vi.mocked(createKnowledgeCardRepository).mockReturnValue({
+      listAll: vi.fn().mockResolvedValue([lowFreqCard, highFreqCard]),
+      create: vi.fn(),
+      findById: vi.fn(),
+      listByDelegation: vi.fn(),
+      listByType: vi.fn(),
+      upsert: vi.fn(),
+    })
+
+    const result = await buildContextPackage('authentication token')
+    expect(result.cards[0].id).toBe('high-freq')
+  })
+
+  it('M288: bigrams score higher than individual terms', async () => {
+    const bigramCard = makeCard({
+      id: 'bigram-match',
+      title: 'Component library patterns',
+      body: 'react hooks are essential for modern frontend development',
+      tags: [],
+    })
+    const unigramCard = makeCard({
+      id: 'unigram-match',
+      title: 'Some page about react',
+      body: 'hooks can also be used in testing',
+      tags: [],
+    })
+
+    vi.mocked(createKnowledgeCardRepository).mockReturnValue({
+      listAll: vi.fn().mockResolvedValue([unigramCard, bigramCard]),
+      create: vi.fn(),
+      findById: vi.fn(),
+      listByDelegation: vi.fn(),
+      listByType: vi.fn(),
+      upsert: vi.fn(),
+    })
+
+    // "react hooks" is a bigram → bigramCard body contains "react hooks" → extra score
+    const result = await buildContextPackage('migrate react hooks component')
+    expect(result.cards[0].id).toBe('bigram-match')
+  })
 })
