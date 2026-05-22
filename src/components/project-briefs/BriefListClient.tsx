@@ -2,7 +2,9 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import type { WorkspaceBrief } from '@/lib/project-briefs-workspace'
+import type { ProjectBrief } from '@/lib/models/project-brief'
 import {
   Badge,
   Panel,
@@ -41,8 +43,26 @@ interface Props {
 }
 
 export function BriefListClient({ active, archived, milestonesPerBrief, metrics }: Props) {
+  const router = useRouter()
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [promotingId, setPromotingId] = useState<string | null>(null)
+
+  async function handlePromote(briefId: string, toStatus: ProjectBrief['status'], e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    setPromotingId(briefId)
+    try {
+      await fetch(`/api/project-briefs/${briefId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: toStatus }),
+      })
+      router.refresh()
+    } finally {
+      setPromotingId(null)
+    }
+  }
 
   const allBriefs = useMemo(() => [...active, ...archived], [active, archived])
 
@@ -108,7 +128,13 @@ export function BriefListClient({ active, archived, milestonesPerBrief, metrics 
         <>
           <div className="divide-y divide-slate-800">
             {filteredActive.map(brief => (
-              <BriefRow key={brief.id} brief={brief} milestoneCount={milestonesPerBrief[brief.id] ?? 0} />
+              <BriefRow
+                key={brief.id}
+                brief={brief}
+                milestoneCount={milestonesPerBrief[brief.id] ?? 0}
+                promoting={promotingId === brief.id}
+                onPromote={handlePromote}
+              />
             ))}
           </div>
 
@@ -119,7 +145,13 @@ export function BriefListClient({ active, archived, milestonesPerBrief, metrics 
               </div>
               <div className="divide-y divide-slate-800">
                 {filteredArchived.map(brief => (
-                  <BriefRow key={brief.id} brief={brief} milestoneCount={milestonesPerBrief[brief.id] ?? 0} />
+                  <BriefRow
+                    key={brief.id}
+                    brief={brief}
+                    milestoneCount={milestonesPerBrief[brief.id] ?? 0}
+                    promoting={false}
+                    onPromote={handlePromote}
+                  />
                 ))}
               </div>
             </div>
@@ -130,7 +162,20 @@ export function BriefListClient({ active, archived, milestonesPerBrief, metrics 
   )
 }
 
-function BriefRow({ brief, milestoneCount }: { brief: WorkspaceBrief; milestoneCount: number }) {
+function BriefRow({
+  brief,
+  milestoneCount,
+  promoting,
+  onPromote,
+}: {
+  brief: WorkspaceBrief
+  milestoneCount: number
+  promoting: boolean
+  onPromote: (briefId: string, toStatus: ProjectBrief['status'], e: React.MouseEvent) => void
+}) {
+  const canPromoteToReview = brief.status === 'draft' && brief.readiness >= 50
+  const canAccept = (brief.status === 'draft' || brief.status === 'in_review') && brief.readiness >= 75
+
   return (
     <Link
       href={`/project-briefs/${brief.id}`}
@@ -185,6 +230,19 @@ function BriefRow({ brief, milestoneCount }: { brief: WorkspaceBrief; milestoneC
         <p className="text-xs font-medium uppercase tracking-wide text-slate-600">Naechste Aktion</p>
         <p className="mt-2 text-sm font-medium text-slate-200">{brief.nextAction}</p>
         <p className="mt-1 text-xs text-slate-500">{brief.updatedAtLabel}</p>
+        {(canAccept || canPromoteToReview) && brief.status !== 'accepted' && (
+          <button
+            onClick={e => onPromote(brief.id, canAccept ? 'accepted' : 'in_review', e)}
+            disabled={promoting}
+            className={`mt-2 inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded border transition-all ${
+              canAccept
+                ? 'bg-emerald-900/30 border-emerald-700/50 text-emerald-400 hover:bg-emerald-800/50'
+                : 'bg-blue-900/30 border-blue-700/50 text-blue-400 hover:bg-blue-800/50'
+            } disabled:opacity-40 disabled:cursor-not-allowed`}
+          >
+            {promoting ? '…' : canAccept ? '✓ Freigeben' : '→ In Review'}
+          </button>
+        )}
       </div>
     </Link>
   )
