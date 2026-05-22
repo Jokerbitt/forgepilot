@@ -59,6 +59,12 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
+const STALE_THRESHOLD_DAYS = 30
+
+function isCardStale(updatedAt: string): boolean {
+  return (Date.now() - new Date(updatedAt).getTime()) > STALE_THRESHOLD_DAYS * 86_400_000
+}
+
 function formatRelativeDate(iso: string): string {
   const now = Date.now()
   const then = new Date(iso).getTime()
@@ -165,6 +171,7 @@ export default function KnowledgeCenterPage() {
     ))
 
   const staleCount = sources.filter(s => s.isStale).length
+  const staleCardCount = cards.filter(c => isCardStale(c.updatedAt)).length
 
   const toggleTag = (tag: string) => {
     setActiveTags(prev =>
@@ -225,10 +232,11 @@ export default function KnowledgeCenterPage() {
           )}
         </header>
 
-        <section className="mb-6 grid gap-3 md:grid-cols-4">
+        <section className="mb-6 grid gap-3 md:grid-cols-5">
           <KnowledgeMetric label="Memory Cards" value={cards.length} detail="kuratierte Agenten-Erinnerungen" />
           <KnowledgeMetric label="Quellen" value={sources.length} detail="registrierte Wissensquellen" />
-          <KnowledgeMetric label="Veraltet" value={staleCount} detail="brauchen Refresh" tone={staleCount > 0 ? 'warn' : 'neutral'} />
+          <KnowledgeMetric label="Karten veraltet" value={staleCardCount} detail={`älter als ${STALE_THRESHOLD_DAYS} Tage`} tone={staleCardCount > 0 ? 'warn' : 'neutral'} />
+          <KnowledgeMetric label="Quellen veraltet" value={staleCount} detail="brauchen Refresh" tone={staleCount > 0 ? 'warn' : 'neutral'} />
           <KnowledgeMetric label="Privacy Guard" value={indexResult?.sensitiveSkipped ?? 0} detail="sensitive Dateien übersprungen" tone="good" />
         </section>
 
@@ -450,6 +458,7 @@ function KnowledgeCard({
   onToggle: () => void
 }) {
   const bodyPreview = truncate(card.body, 120)
+  const stale = isCardStale(card.updatedAt)
 
   return (
     <button
@@ -458,6 +467,8 @@ function KnowledgeCard({
         'group w-full rounded-xl border p-4 text-left transition-all duration-200',
         expanded
           ? 'border-sky-700/60 bg-sky-900/10 shadow-lg shadow-sky-900/10'
+          : stale
+          ? 'border-amber-800/30 bg-slate-900 hover:border-amber-700/40 hover:bg-slate-800/60 hover:shadow-md hover:shadow-black/20'
           : 'border-slate-800 bg-slate-900 hover:border-slate-600 hover:bg-slate-800/60 hover:shadow-md hover:shadow-black/20',
         'cursor-pointer'
       )}
@@ -471,6 +482,11 @@ function KnowledgeCard({
           <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-400">
             {sourceBadgeLabel(card)}
           </span>
+          {stale && (
+            <span className="rounded border border-amber-700/50 bg-amber-900/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">
+              veraltet
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1.5">
           <span className={cx('text-[10px] font-medium', confidenceColor(card.confidence))}>
