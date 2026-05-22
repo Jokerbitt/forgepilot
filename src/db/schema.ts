@@ -18,6 +18,7 @@ export const delegationStatusEnum = pgEnum('delegation_status', [
   'completed',
   'failed',
   'cancelled',
+  'rejected',
 ])
 
 export const riskClassEnum = pgEnum('risk_class', ['A', 'B', 'C'])

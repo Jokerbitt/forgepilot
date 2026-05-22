@@ -28,11 +28,28 @@ export async function buildContextPackage(
         const allCards = await repo.listAll()
         if (!allCards.length) return { cards: [], tokenEstimate: 0, sources: [] }
 
-        // Keyword scoring
-        const words = goal.toLowerCase().split(/\s+/).filter(w => w.length > 3)
+        // M288: TF-IDF-like scoring with title/tag boost and bigrams
+        const tokens = goal.toLowerCase().split(/\s+/).filter(w => w.length > 3)
+        const bigrams = tokens.slice(0, -1).map((w, i) => `${w} ${tokens[i + 1]}`)
+        const allTerms = [...tokens, ...bigrams]
+
         const scored = allCards.map(card => {
-          const text = `${card.title} ${card.body} ${(card.tags ?? []).join(' ')}`.toLowerCase()
-          const score = words.reduce((acc, w) => acc + (text.includes(w) ? 1 : 0), 0)
+          const titleLow = card.title.toLowerCase()
+          const bodyLow  = card.body.toLowerCase()
+          const tagsJoin = (card.tags ?? []).join(' ').toLowerCase()
+
+          let score = 0
+          for (const term of allTerms) {
+            // count occurrences in body (1 pt each)
+            const bodyCount = (bodyLow.match(new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? []).length
+            score += bodyCount
+
+            // title match: 3× weight
+            if (titleLow.includes(term)) score += 3
+
+            // tag exact match: 2× weight (normalized comparison)
+            if (tagsJoin.includes(term)) score += 2
+          }
           return { card, score }
         })
 

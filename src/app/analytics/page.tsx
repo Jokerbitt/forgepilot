@@ -13,6 +13,7 @@ import {
   DollarSign,
   GitMerge,
   GraduationCap,
+  RotateCcw,
   Server,
   Shield,
   Tag,
@@ -27,6 +28,7 @@ import type { Delegation } from '@/lib/models/delegation'
 import { cx } from '@/components/ui/primitives'
 import type { CostAnalytics } from '@/lib/analytics/cost-types'
 import type { AnalyticsData } from '@/app/api/analytics/route'
+import type { DelegationAnalytics } from '@/app/api/delegations/analytics/route'
 
 interface ResearchStats {
   total: number
@@ -252,6 +254,7 @@ export default function AnalyticsPage() {
   const [researchStats, setResearchStats] = useState<ResearchStats | null>(null)
   const [costAnalytics, setCostAnalytics] = useState<CostAnalytics | null>(null)
   const [executionAnalytics, setExecutionAnalytics] = useState<AnalyticsData | null>(null)
+  const [delegationAnalytics, setDelegationAnalytics] = useState<DelegationAnalytics | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -260,11 +263,13 @@ export default function AnalyticsPage() {
       fetch('/api/knowledge/research/stats').then(r => r.json() as Promise<ResearchStats>).catch(() => null),
       fetch('/api/analytics/costs').then(r => r.json() as Promise<CostAnalytics>).catch(() => null),
       fetch('/api/analytics').then(r => r.json() as Promise<AnalyticsData>).catch(() => null),
-    ]).then(([dels, rs, ca, ea]) => {
+      fetch('/api/delegations/analytics?days=30').then(r => r.json() as Promise<DelegationAnalytics>).catch(() => null),
+    ]).then(([dels, rs, ca, ea, da]) => {
       setDelegations(dels)
       setResearchStats(rs)
       setCostAnalytics(ca)
       setExecutionAnalytics(ea)
+      setDelegationAnalytics(da)
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
@@ -702,6 +707,57 @@ export default function AnalyticsPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* ── M294: Risk Class Breakdown (from /api/delegations/analytics) ─── */}
+        {delegationAnalytics && (
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Shield className="h-4 w-4 text-slate-500" />
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                  Risk Class Breakdown · 30 Days
+                </p>
+              </div>
+              <span className="text-[10px] text-slate-600">
+                Overall {delegationAnalytics.successRate}% success · ${delegationAnalytics.totalCostUsd.toFixed(3)} total
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {(['A', 'B', 'C'] as const).map(rc => {
+                const m = delegationAnalytics.byRiskClass[rc]
+                const color = rc === 'A' ? 'emerald' : rc === 'B' ? 'amber' : 'rose'
+                return (
+                  <div key={rc} className={`rounded-lg border border-${color}-900/40 bg-${color}-950/20 p-3`}>
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className={`text-xs font-bold text-${color}-400`}>Class {rc}</span>
+                      <span className={`text-[10px] font-medium text-${color}-400`}>{m.successRate}%</span>
+                    </div>
+                    <div className="space-y-0.5 text-[10px] text-slate-500">
+                      <div className="flex justify-between"><span>Total</span><span className="font-mono text-slate-400">{m.total}</span></div>
+                      <div className="flex justify-between"><span>Completed</span><span className="font-mono text-emerald-600">{m.completed}</span></div>
+                      <div className="flex justify-between"><span>Failed</span><span className={`font-mono ${m.failed > 0 ? 'text-rose-600' : 'text-slate-600'}`}>{m.failed}</span></div>
+                      <div className="flex justify-between"><span>Avg cost</span><span className="font-mono text-slate-400">${m.avgCostUsd.toFixed(3)}</span></div>
+                      {m.retried > 0 && (
+                        <div className="flex justify-between"><span>Retried</span><span className="font-mono text-amber-500">{m.retried}</span></div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {delegationAnalytics.criticRetryStats.total > 0 && (
+              <div className="mt-3 flex items-center gap-3 rounded-lg border border-white/[0.05] bg-white/[0.02] px-3 py-2 text-[10px] text-slate-500">
+                <RotateCcw className="h-3 w-3 text-amber-500" />
+                <span>Critic auto-retry:</span>
+                <span className="font-mono text-amber-400">{delegationAnalytics.criticRetryStats.total} retries</span>
+                <span>·</span>
+                <span className="font-mono text-emerald-400">{delegationAnalytics.criticRetryStats.successAfterRetry} succeeded after retry</span>
+                <span>·</span>
+                <span className="font-mono text-slate-400">{delegationAnalytics.criticRetryStats.triggerRate}% trigger rate</span>
+              </div>
+            )}
           </div>
         )}
 
