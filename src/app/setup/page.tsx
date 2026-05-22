@@ -49,10 +49,26 @@ NEXTAUTH_SECRET=<output von: openssl rand -base64 32>`}</code>
           {/* Step 3: restart */}
           <div className="mb-8">
             <h2 className="mb-3 text-sm font-semibold text-slate-200">
-              3. Entwicklungsserver neu starten
+              3. Optional: feste URL fuer lokale Nutzung setzen
             </h2>
             <pre className="overflow-x-auto rounded-lg border border-white/[0.06] bg-[#07070c] p-4 text-xs leading-6 text-slate-300">
-              <code>npm run dev</code>
+              <code>NEXTAUTH_URL=http://localhost:3000</code>
+            </pre>
+            <p className="mt-2 text-xs text-slate-500">
+              Passe den Port an, wenn ForgePilot z.B. auf{' '}
+              <code className="rounded bg-slate-950 px-1 py-0.5 text-slate-400">3026</code>{' '}
+              laeuft.
+            </p>
+          </div>
+
+          {/* Step 4: restart */}
+          <div className="mb-8">
+            <h2 className="mb-3 text-sm font-semibold text-slate-200">
+              4. Entwicklungsserver neu starten und Readiness pruefen
+            </h2>
+            <pre className="overflow-x-auto rounded-lg border border-white/[0.06] bg-[#07070c] p-4 text-xs leading-6 text-slate-300">
+              <code>{`npm run dev
+curl http://localhost:3000/api/auth/readiness`}</code>
             </pre>
           </div>
 

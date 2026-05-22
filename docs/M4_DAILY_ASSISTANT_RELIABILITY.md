@@ -19,6 +19,7 @@ keine unkontrollierte Agenten-Automation.
 
 - `FORGEPILOT_AUTH_DISABLED=true` ist nur fuer lokale Tests erlaubt.
 - Produktiv oder im Netzwerk nur mit Login, `NEXTAUTH_SECRET`, `NEXTAUTH_URL` und starkem Admin-Passwort starten.
+- Vor produktiver Nutzung `GET /api/auth/readiness` pruefen. Der Endpunkt gibt nur Status, fehlende Env-Namen und Handlungshinweise aus, niemals Secret-Werte.
 - Secrets bleiben in `.env.local`, Keychain, Vault oder der lokalen Settings-API. Sie werden nie in Reports, Prompts oder PRs kopiert.
 - Ollama/LM Studio sind fuer Zusammenfassung, Triage und Low-Risk-Planung erste Wahl.
 - Cloud-Modelle sind fuer Security, Architektur, komplexe Implementierung und Final Review reserviert.
@@ -28,6 +29,7 @@ keine unkontrollierte Agenten-Automation.
 Der Daily Report bewertet diese Punkte:
 
 - Auth aktiv
+- Auth produktionsbereit (`FORGEPILOT_ADMIN_PASSWORD`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, kein Bypass)
 - Persistenz stabil
 - Critic-Router bereit
 - Execute-Beweise vorhanden
