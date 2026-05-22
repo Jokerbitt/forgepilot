@@ -11,6 +11,7 @@ import {
   Clock,
   Cpu,
   DollarSign,
+  GitMerge,
   GraduationCap,
   Server,
   Shield,
@@ -273,6 +274,12 @@ export default function AnalyticsPage() {
   const ollamaRuns = delegations.filter(d => d.executionRoute === 'ollama-agent' && d.status === 'completed')
   const totalSavedUsd = delegations.reduce((s, d) => s + (d.summaryReport?.costSavings?.savedUsd ?? 0), 0)
   const totalTokens = delegations.reduce((s, d) => s + (d.summaryReport?.costSavings?.tokensUsed.totalTokens ?? 0), 0)
+
+  // PR lifecycle metrics (M267)
+  const prCreated = delegations.filter(d => d.summaryReport?.prUrl).length
+  const prMerged  = delegations.filter(d => d.summaryReport?.prState === 'merged').length
+  const prOpen    = delegations.filter(d => d.summaryReport?.prUrl && (!d.summaryReport.prState || d.summaryReport.prState === 'open')).length
+  const mergeRate = prCreated > 0 ? Math.round((prMerged / prCreated) * 100) : null
   const totalActualCost = delegations.reduce((s, d) => s + (d.actualCostUsd ?? 0), 0)
   const avgSavingsPerRun = ollamaRuns.length > 0 ? totalSavedUsd / ollamaRuns.length : 0
   const modelBreakdowns = buildModelBreakdowns(delegations)
@@ -505,6 +512,38 @@ export default function AnalyticsPage() {
         )}
 
         <RecentRunsTable delegations={delegations} />
+
+        {/* ── M267: PR Lifecycle Strip ─────────────────────────────────────── */}
+        {prCreated > 0 && (
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <GitMerge className="h-4 w-4 text-violet-400" />
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Pull Requests</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-lg border border-white/[0.06] bg-white/[0.03] p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-1">Erstellt</p>
+                <p className="text-xl font-bold tabular-nums text-white">{prCreated}</p>
+                <p className="mt-0.5 text-[10px] text-slate-600">von {completed.length} Runs</p>
+              </div>
+              <div className="rounded-lg border border-white/[0.06] bg-white/[0.03] p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-1">Gemergt</p>
+                <p className="text-xl font-bold tabular-nums text-violet-400">{prMerged}</p>
+                <p className="mt-0.5 text-[10px] text-slate-600">abgeschlossen</p>
+              </div>
+              <div className="rounded-lg border border-white/[0.06] bg-white/[0.03] p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-1">Offen</p>
+                <p className="text-xl font-bold tabular-nums text-amber-400">{prOpen}</p>
+                <p className="mt-0.5 text-[10px] text-slate-600">warten auf Review</p>
+              </div>
+              <div className="rounded-lg border border-white/[0.06] bg-white/[0.03] p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-1">Merge-Rate</p>
+                <p className="text-xl font-bold tabular-nums text-emerald-400">{mergeRate !== null ? `${mergeRate}%` : '—'}</p>
+                <p className="mt-0.5 text-[10px] text-slate-600">gemergt / erstellt</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── M198: Execution Analytics Dashboard ──────────────────────────── */}
         {executionAnalytics && (

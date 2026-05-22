@@ -13,6 +13,7 @@ import {
   ChevronUp,
   Download,
   FileText,
+  GitMerge,
   ListChecks,
   Play,
   Plus,
@@ -1462,6 +1463,33 @@ function DelegationsContent() {
                                     {new Date(del.updatedAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}
                                   </div>
                                 )}
+                                {del.summaryReport?.prUrl && (() => {
+                                  const prNum = del.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1]
+                                  const state = del.summaryReport.prState
+                                  return (
+                                    <div className="mt-1 flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                      <a
+                                        href={del.summaryReport.prUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-0.5 text-[10px] text-slate-400 hover:text-slate-200 transition-colors"
+                                        title={del.summaryReport.prUrl}
+                                      >
+                                        <GitMerge size={9} />
+                                        {prNum ? `#${prNum}` : 'PR'}
+                                      </a>
+                                      <span className={`text-[9px] font-semibold px-1 py-0.5 rounded ${
+                                        state === 'merged'
+                                          ? 'bg-violet-950/60 text-violet-300 border border-violet-800/40'
+                                          : state === 'closed'
+                                          ? 'bg-red-950/60 text-red-400 border border-red-800/40'
+                                          : 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40'
+                                      }`}>
+                                        {state === 'merged' ? 'Merged' : state === 'closed' ? 'Closed' : 'Open'}
+                                      </span>
+                                    </div>
+                                  )
+                                })()}
                               </div>
                             ) : (del.status === 'pending' || del.status === 'approved') ? (() => {
                               const age = formatAge(del.createdAt)

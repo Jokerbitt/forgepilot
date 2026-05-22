@@ -1,6 +1,7 @@
 import type { Delegation } from '@/lib/models/delegation'
 import type { AttentionItem, AttentionType, AttentionSeverity } from '@/lib/models/attention'
 import { getOpenAttentionItems, upsertAttentionItem, resolveItemsByDelegation } from './store'
+import { getSlaStatus, formatSlaRemaining } from '@/lib/delegations/sla'
 
 const STALL_THRESHOLD_MS = 10 * 60 * 1000 // 10 minutes without log update
 
@@ -9,8 +10,8 @@ function makeId(type: AttentionType, delegationId: string): string {
 }
 
 function severityFor(type: AttentionType): AttentionSeverity {
-  if (type === 'delegation_failed' || type === 'budget_exceeded' || type === 'system_error') return 'critical'
-  if (type === 'delegation_stalled' || type === 'escalation') return 'warning'
+  if (type === 'delegation_failed' || type === 'budget_exceeded' || type === 'system_error' || type === 'sla_breached') return 'critical'
+  if (type === 'delegation_stalled' || type === 'escalation' || type === 'sla_warning') return 'warning'
   return 'info'
 }
 
@@ -92,6 +93,35 @@ export function syncAttentionFromDelegations(delegations: Delegation[]): void {
           `Bereit zum Start: ${label}`,
           `Delegation ist freigegeben und wartet auf Ausführungsstart.`,
         ))
+      }
+    }
+
+    // SLA warning / breach — non-terminal delegations only
+    if (!['completed', 'failed', 'cancelled'].includes(d.status)) {
+      const sla = getSlaStatus(d)
+
+      if (sla === 'warning') {
+        const id = makeId('sla_warning', d.id)
+        if (!existingIds.has(id)) {
+          const remaining = formatSlaRemaining(d)
+          upsertAttentionItem(buildItem(
+            'sla_warning', d,
+            `SLA läuft ab: ${label}`,
+            `Verbleibende Zeit bis zum SLA-Ziel: ${remaining}. Delegation sollte bald gestartet oder abgeschlossen werden.`,
+          ))
+        }
+      }
+
+      if (sla === 'breached') {
+        const id = makeId('sla_breached', d.id)
+        if (!existingIds.has(id)) {
+          const overdue = formatSlaRemaining(d)
+          upsertAttentionItem(buildItem(
+            'sla_breached', d,
+            `SLA verletzt: ${label}`,
+            `${overdue}. Delegation hat das vereinbarte Zeitziel überschritten.`,
+          ))
+        }
       }
     }
 

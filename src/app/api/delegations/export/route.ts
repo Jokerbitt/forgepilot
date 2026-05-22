@@ -28,6 +28,9 @@ function buildCSV(delegations: Delegation[]): string {
     'durationMin',
     'actualCostUsd',
     'tokenCount',
+    'prUrl',
+    'prState',
+    'prMergedAt',
   ]
 
   const lines: string[] = [header.join(',')]
@@ -55,6 +58,9 @@ function buildCSV(delegations: Delegation[]): string {
       escapeCSVField(durationMin != null ? String(durationMin) : null),
       escapeCSVField(d.actualCostUsd != null ? String(d.actualCostUsd) : null),
       escapeCSVField(tokenCount != null ? String(tokenCount) : null),
+      escapeCSVField(d.summaryReport?.prUrl ?? null),
+      escapeCSVField(d.summaryReport?.prState ?? null),
+      escapeCSVField(d.summaryReport?.prMergedAt ?? null),
     ]
 
     lines.push(row.join(','))

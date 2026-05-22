@@ -55,6 +55,11 @@ export interface DelegationReport {
   nextSuggestions?: string[]
   // Token tracking (M27)
   costSavings?: CostSavings
+  // PR lifecycle tracking (M264)
+  prState?: 'open' | 'merged' | 'closed'
+  prMergedAt?: string
+  /** G1: true when this report was produced by the API plan-only fallback (no code was written) */
+  planOnly?: boolean
 }
 
 export interface DelegationNote {
@@ -89,6 +94,8 @@ export interface TaskContract {
   orchestratedRunId?: string
   /** M206: If true, auto-approve and execute the next chained delegation when this completes */
   autoChain?: boolean
+  /** G2: If true, automatically queue a retry delegation when critic score < 70 */
+  autoRetryOnCriticFail?: boolean
   createdAt: string
 }
 

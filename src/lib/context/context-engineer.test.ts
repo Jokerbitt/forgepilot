@@ -259,6 +259,64 @@ describe('buildContext', () => {
     // 'UI card' has no matching tag — may or may not be included depending on implementation
   })
 
+  it('includes context and pattern card types in memory layer', async () => {
+    setKnowledgeStore([
+      { title: 'Auth architecture', body: 'JWT best practices for SaaS.', tags: [], type: 'context' },
+      { title: 'Retry pattern', body: 'Exponential backoff with jitter.', tags: [], type: 'pattern' },
+      { title: 'Decision: use Zod', body: 'ADR: use Zod for schema validation.', tags: [], type: 'decision' },
+    ])
+    vi.resetModules()
+    const { buildContext } = await import('./context-engineer')
+    const result = await buildContext({
+      taskTitle: 'Task',
+      taskDescription: '',
+      acceptanceCriteria: [],
+    })
+    const memContent = result.layers.find(l => l.name === 'memory')?.content ?? ''
+    expect(memContent).toContain('Auth architecture')
+    expect(memContent).toContain('Retry pattern')
+    expect(memContent).toContain('Decision: use Zod')
+  })
+
+  it('matches knowledge cards by goal keywords in taskDescription', async () => {
+    setKnowledgeStore([
+      { title: 'Postgres migration guide', body: 'Steps for migrating to Postgres.', tags: [], type: 'context' },
+      { title: 'Unrelated card', body: 'Cooking recipes.', tags: [], type: 'learning' },
+    ])
+    vi.resetModules()
+    const { buildContext } = await import('./context-engineer')
+    const result = await buildContext({
+      taskTitle: 'Migrate database',
+      taskDescription: 'Migrate our JSON store to Postgres with zero downtime.',
+      acceptanceCriteria: [],
+    })
+    const memContent = result.layers.find(l => l.name === 'memory')?.content ?? ''
+    expect(memContent).toContain('Postgres migration guide')
+    // Unrelated card has no matching terms — should not appear
+    expect(memContent).not.toContain('Unrelated card')
+  })
+
+  it('scores title matches higher than body matches', async () => {
+    setKnowledgeStore([
+      { title: 'Delegation workflow', body: 'Some generic content.', tags: [], type: 'context' },
+      { title: 'Generic entry', body: 'The delegation workflow is described in detail here.', tags: [], type: 'context' },
+    ])
+    vi.resetModules()
+    const { buildContext } = await import('./context-engineer')
+    const result = await buildContext({
+      taskTitle: 'Task',
+      taskDescription: 'Improve the delegation workflow in ForgePilot.',
+      acceptanceCriteria: [],
+    })
+    const memContent = result.layers.find(l => l.name === 'memory')?.content ?? ''
+    // Both should match, title match should rank higher (appears first)
+    const titleIdx = memContent.indexOf('Delegation workflow')
+    const bodyIdx = memContent.indexOf('Generic entry')
+    expect(titleIdx).toBeGreaterThanOrEqual(0)
+    expect(bodyIdx).toBeGreaterThanOrEqual(0)
+    expect(titleIdx).toBeLessThan(bodyIdx)
+  })
+
   it('omits memory layer when knowledge store is empty', async () => {
     setKnowledgeStore([])
     vi.resetModules()

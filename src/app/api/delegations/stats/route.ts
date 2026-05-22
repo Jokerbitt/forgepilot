@@ -28,6 +28,10 @@ export interface DelegationStats {
   totalActualUsd: number
   todayCount: number
   todayActualUsd: number
+  // PR lifecycle (M266)
+  prCreated: number
+  prMerged: number
+  prOpen: number
 }
 
 export async function GET() {
@@ -39,6 +43,9 @@ export async function GET() {
   let totalActualUsd = 0
   let todayCount = 0
   let todayActualUsd = 0
+  let prCreated = 0
+  let prMerged = 0
+  let prOpen = 0
 
   for (const d of delegations) {
     byStatus[d.status] = (byStatus[d.status] ?? 0) + 1
@@ -47,6 +54,11 @@ export async function GET() {
     if (isToday(d.createdAt)) {
       todayCount++
       if (d.actualCostUsd != null) todayActualUsd += d.actualCostUsd
+    }
+    if (d.summaryReport?.prUrl) {
+      prCreated++
+      if (d.summaryReport.prState === 'merged') prMerged++
+      else if (!d.summaryReport.prState || d.summaryReport.prState === 'open') prOpen++
     }
   }
 
@@ -63,6 +75,9 @@ export async function GET() {
     totalActualUsd,
     todayCount,
     todayActualUsd,
+    prCreated,
+    prMerged,
+    prOpen,
   }
 
   return NextResponse.json(stats)

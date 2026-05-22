@@ -41,6 +41,9 @@ describe('GET /api/mission-control', () => {
     expect(typeof pulse['delegationsPendingApproval']).toBe('number')
     expect(typeof pulse['delegationsCompletedToday']).toBe('number')
     expect(typeof pulse['openPRs']).toBe('number')
+    expect(typeof pulse['prCreated']).toBe('number')
+    expect(typeof pulse['prMerged']).toBe('number')
+    expect(typeof pulse['prOpen']).toBe('number')
 
     // health shape
     const health = body['health'] as Record<string, unknown>
@@ -79,5 +82,18 @@ describe('GET /api/mission-control', () => {
     const pulse = body['pulse'] as Record<string, unknown>
     expect(typeof pulse['delegationsPendingApproval']).toBe('number')
     expect(pulse['delegationsPendingApproval'] as number).toBeGreaterThanOrEqual(0)
+  })
+
+  it('pulse.prCreated, prMerged, prOpen are all numbers >= 0', async () => {
+    const { GET } = await import('./route')
+    const response = await GET()
+    const body = (await response.json()) as Record<string, unknown>
+    const pulse = body['pulse'] as Record<string, unknown>
+    expect(pulse['prCreated'] as number).toBeGreaterThanOrEqual(0)
+    expect(pulse['prMerged'] as number).toBeGreaterThanOrEqual(0)
+    expect(pulse['prOpen'] as number).toBeGreaterThanOrEqual(0)
+    // invariant: merged + open <= created
+    expect((pulse['prMerged'] as number) + (pulse['prOpen'] as number))
+      .toBeLessThanOrEqual(pulse['prCreated'] as number)
   })
 })

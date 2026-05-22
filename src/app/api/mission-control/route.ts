@@ -22,6 +22,9 @@ export interface MissionControlData {
     delegationsPendingApproval: number
     delegationsCompletedToday: number
     openPRs: number
+    prCreated: number
+    prMerged: number
+    prOpen: number
   }
   health: {
     status: 'ok' | 'warn' | 'error'
@@ -174,6 +177,13 @@ export async function GET(): Promise<NextResponse<MissionControlData>> {
   ).length
   const openPRs = countOpenPRs()
 
+  const prCreated = delegations.filter(d => d.summaryReport?.prUrl).length
+  const prMerged  = delegations.filter(d => d.summaryReport?.prState === 'merged').length
+  const prOpen    = delegations.filter(d =>
+    d.summaryReport?.prUrl &&
+    (!d.summaryReport.prState || d.summaryReport.prState === 'open')
+  ).length
+
   // --- health ---
   const health = computeHealth(delegations)
 
@@ -189,6 +199,9 @@ export async function GET(): Promise<NextResponse<MissionControlData>> {
       delegationsPendingApproval,
       delegationsCompletedToday,
       openPRs,
+      prCreated,
+      prMerged,
+      prOpen,
     },
     health,
   }

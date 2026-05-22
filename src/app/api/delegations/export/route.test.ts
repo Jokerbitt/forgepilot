@@ -113,7 +113,7 @@ describe('GET /api/delegations/export', () => {
     const text = await res.text()
     const firstLine = text.split('\n')[0]
     expect(firstLine).toBe(
-      'id,title,goal,status,riskClass,route,workItemId,briefTitle,createdAt,startedAt,completedAt,durationMin,actualCostUsd,tokenCount'
+      'id,title,goal,status,riskClass,route,workItemId,briefTitle,createdAt,startedAt,completedAt,durationMin,actualCostUsd,tokenCount,prUrl,prState,prMergedAt'
     )
   })
 
@@ -142,5 +142,75 @@ describe('GET /api/delegations/export', () => {
     const text = await res.text()
     // The title 'He said "hello, world"' should be escaped to '"He said ""hello, world"""'
     expect(text).toContain('"He said ""hello, world"""')
+  })
+
+  it('to filter returns only delegations on or before the given date (inclusive end of day)', async () => {
+    // to=2026-05-02 should include del-001 and del-002, exclude del-003 and del-004
+    const res = await GET(makeRequest({ format: 'json', to: '2026-05-02' }))
+    expect(res.status).toBe(200)
+    const data = await res.json() as Delegation[]
+    expect(data.some(d => d.id === 'del-001')).toBe(true)
+    expect(data.some(d => d.id === 'del-002')).toBe(true)
+    expect(data.some(d => d.id === 'del-003')).toBe(false)
+    expect(data.some(d => d.id === 'del-004')).toBe(false)
+  })
+
+  it('combining from and to returns the intersection', async () => {
+    // from=2026-05-02, to=2026-05-03 → del-002 and del-003 only
+    const res = await GET(makeRequest({ format: 'json', from: '2026-05-02', to: '2026-05-03' }))
+    expect(res.status).toBe(200)
+    const data = await res.json() as Delegation[]
+    expect(data.some(d => d.id === 'del-001')).toBe(false)
+    expect(data.some(d => d.id === 'del-002')).toBe(true)
+    expect(data.some(d => d.id === 'del-003')).toBe(true)
+    expect(data.some(d => d.id === 'del-004')).toBe(false)
+  })
+
+  it('invalid from date returns 400', async () => {
+    const res = await GET(makeRequest({ format: 'json', from: 'not-a-date' }))
+    expect(res.status).toBe(400)
+    const body = await res.json() as { error: string }
+    expect(body.error).toMatch(/invalid/i)
+  })
+
+  it('invalid to date returns 400', async () => {
+    const res = await GET(makeRequest({ format: 'json', to: 'banana' }))
+    expect(res.status).toBe(400)
+    const body = await res.json() as { error: string }
+    expect(body.error).toMatch(/invalid/i)
+  })
+
+  it('invalid format returns 400', async () => {
+    const res = await GET(makeRequest({ format: 'xml' }))
+    expect(res.status).toBe(400)
+    const body = await res.json() as { error: string }
+    expect(body.error).toMatch(/invalid format/i)
+  })
+
+  it('invalid status returns 400', async () => {
+    const res = await GET(makeRequest({ format: 'json', status: 'banana' }))
+    expect(res.status).toBe(400)
+  })
+
+  it('CSV includes prUrl, prState, prMergedAt columns', async () => {
+    const withPR = makeDelegation({
+      id: 'del-006',
+      status: 'completed',
+      summaryReport: {
+        keyPoints: [],
+        changes: [],
+        timeTakenMinutes: 5,
+        prUrl: 'https://github.com/org/repo/pull/42',
+        prState: 'merged',
+        prMergedAt: '2026-05-01T12:00:00.000Z',
+      },
+    })
+    const { default: fs } = await import('fs')
+    vi.mocked(fs.readFileSync).mockReturnValueOnce(JSON.stringify([withPR]))
+    const res = await GET(makeRequest({ format: 'csv' }))
+    const text = await res.text()
+    expect(text).toContain('https://github.com/org/repo/pull/42')
+    expect(text).toContain(',merged,')
+    expect(text).toContain('2026-05-01T12:00:00.000Z')
   })
 })

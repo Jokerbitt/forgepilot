@@ -23,12 +23,17 @@ const SEVERITY_LABEL: Record<AttentionSeverity, string> = {
 }
 
 const TYPE_ICON: Record<string, string> = {
-  delegation_failed:  '❌',
-  delegation_stalled: '⏸',
-  budget_exceeded:    '💸',
-  approval_pending:   '⏳',
-  escalation:         '🚨',
-  system_error:       '⚠️',
+  delegation_completed: '✅',
+  delegation_failed:    '❌',
+  delegation_stalled:   '⏸',
+  budget_exceeded:      '💸',
+  approval_pending:     '⏳',
+  escalation:           '🚨',
+  system_error:         '⚠️',
+  review_passed:        '👍',
+  review_failed:        '🔴',
+  sla_warning:          '🕐',
+  sla_breached:         '🔥',
 }
 
 export default function InboxPage() {
