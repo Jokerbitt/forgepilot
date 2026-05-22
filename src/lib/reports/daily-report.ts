@@ -49,6 +49,22 @@ export interface DailyReportAssistantRouting {
   criticPlan: ReturnType<typeof getCriticProviderPlan>
 }
 
+export interface DailyReportAssistantChecklistItem {
+  id: 'auth' | 'storage' | 'critic-router' | 'execute-evidence' | 'failed-delegations' | 'attention-items'
+  label: string
+  status: 'ready' | 'warning' | 'blocker'
+  detail: string
+  action: string
+  href: string
+}
+
+export interface DailyReportAssistantReadiness {
+  status: 'ready' | 'attention' | 'blocked'
+  score: number
+  nextFocus: string
+  checklist: DailyReportAssistantChecklistItem[]
+}
+
 export interface DailyReportLoopStep {
   id: 'brief' | 'delegation' | 'execute' | 'pr' | 'critic' | 'writeback'
   label: string
@@ -135,6 +151,7 @@ export interface DailyReport {
   firstRealValueLoop: DailyReportFirstRealValueLoop
   executeLoopEvidence: DailyReportExecuteLoopEvidence
   assistantRouting: DailyReportAssistantRouting
+  dailyAssistant: DailyReportAssistantReadiness
   prompts: DailyReportPrompt[]
   markdown: string
 }
@@ -549,6 +566,90 @@ function buildAssistantRouting(): DailyReportAssistantRouting {
   }
 }
 
+function buildDailyAssistantReadiness(input: {
+  status: DailyReport['status']
+  executeLoopEvidence: DailyReportExecuteLoopEvidence
+  assistantRouting: DailyReportAssistantRouting
+}): DailyReportAssistantReadiness {
+  const hasCriticProvider = input.assistantRouting.criticPlan.candidates.some(candidate => candidate.configured !== false)
+  const checklist: DailyReportAssistantChecklistItem[] = [
+    {
+      id: 'auth',
+      label: 'Auth aktiv',
+      status: input.status.operations.authDisabled ? 'blocker' : 'ready',
+      detail: input.status.operations.authDisabled
+        ? 'Testmodus ist aktiv. Produktiv nur mit Login und starken Secrets nutzen.'
+        : 'Login-Guard ist aktiv und der Daily Assistant kann sicherer genutzt werden.',
+      action: input.status.operations.authDisabled ? 'Auth konfigurieren' : 'Auth pruefen',
+      href: '/settings',
+    },
+    {
+      id: 'storage',
+      label: 'Persistenz stabil',
+      status: input.status.operations.storageMode === 'json' ? 'warning' : 'ready',
+      detail: input.status.operations.storageMode === 'json'
+        ? 'JSON ist noch primaer. Fuer produktive Agentenarbeit Postgres bevorzugen.'
+        : `Storage laeuft im Modus ${input.status.operations.storageMode}.`,
+      action: 'Storage ansehen',
+      href: '/api/storage-status',
+    },
+    {
+      id: 'critic-router',
+      label: 'Critic-Router bereit',
+      status: hasCriticProvider ? 'ready' : 'blocker',
+      detail: hasCriticProvider
+        ? `${input.assistantRouting.recommended.providerId ?? 'Auto'} ist als beste verfuegbare Route vorgesehen.`
+        : 'Kein lokaler oder Cloud-Critic ist verfuegbar.',
+      action: 'Provider pruefen',
+      href: '/settings',
+    },
+    {
+      id: 'execute-evidence',
+      label: 'Execute-Beweise',
+      status: input.executeLoopEvidence.provenRuns >= input.executeLoopEvidence.targetRuns
+        ? 'ready'
+        : input.executeLoopEvidence.provenRuns > 0
+          ? 'warning'
+          : 'blocker',
+      detail: `${input.executeLoopEvidence.provenRuns}/${input.executeLoopEvidence.targetRuns} echte Runs belegt.`,
+      action: 'Evidence ansehen',
+      href: '/api/reports/daily?format=markdown',
+    },
+    {
+      id: 'failed-delegations',
+      label: 'Fehler-Triage',
+      status: input.status.delegations.failed > 0 ? 'blocker' : 'ready',
+      detail: input.status.delegations.failed > 0
+        ? `${input.status.delegations.failed} fehlerhafte Delegationen brauchen Entscheidung.`
+        : 'Keine fehlerhaften Delegationen blockieren den Alltag.',
+      action: input.status.delegations.failed > 0 ? 'Fehler pruefen' : 'Delegations ansehen',
+      href: input.status.delegations.failed > 0 ? '/delegations?filter=failed' : '/delegations',
+    },
+    {
+      id: 'attention-items',
+      label: 'Offene Entscheidungen',
+      status: input.status.operations.openAttentionItems > 0 ? 'warning' : 'ready',
+      detail: input.status.operations.openAttentionItems > 0
+        ? `${input.status.operations.openAttentionItems} offene Attention Items sollten aufgeraeumt werden.`
+        : 'Keine offenen Attention Items.',
+      action: 'Attention ansehen',
+      href: '/',
+    },
+  ]
+
+  const itemScores: number[] = checklist.map(item => item.status === 'ready' ? 100 : item.status === 'warning' ? 60 : 0)
+  const score = Math.round(itemScores.reduce((sum, value) => sum + value, 0) / checklist.length)
+  const blockingItem = checklist.find(item => item.status === 'blocker')
+  const warningItem = checklist.find(item => item.status === 'warning')
+
+  return {
+    status: blockingItem ? 'blocked' : warningItem ? 'attention' : 'ready',
+    score,
+    nextFocus: blockingItem?.action ?? warningItem?.action ?? 'Naechsten kleinen echten Loop starten',
+    checklist,
+  }
+}
+
 function buildPrompts(): DailyReportPrompt[] {
   return [
     {
@@ -633,6 +734,12 @@ export function renderDailyReportMarkdown(report: Omit<DailyReport, 'markdown'>)
     }).join(' -> ')}`,
     `- Config: ${report.assistantRouting.policy.configurableVia.join('; ')}`,
     ``,
+    `## Daily Assistant Readiness`,
+    `- Status: ${report.dailyAssistant.status}`,
+    `- Score: ${report.dailyAssistant.score}/100`,
+    `- Next focus: ${report.dailyAssistant.nextFocus}`,
+    ...report.dailyAssistant.checklist.map(item => `- [${item.status.toUpperCase()}] ${item.label}: ${item.detail} Action: ${item.action}`),
+    ``,
     `## Top Risks`,
   ]
 
@@ -716,6 +823,7 @@ export function buildDailyReport(input: BuildDailyReportInput): DailyReport {
   const executeLoopEvidence = buildExecuteLoopEvidence(status, generatedAt, input.executeLoopEvidence)
   const nextActions = buildNextActions(risks, firstRealValueLoop)
   const assistantRouting = buildAssistantRouting()
+  const dailyAssistant = buildDailyAssistantReadiness({ status, executeLoopEvidence, assistantRouting })
   const prompts = buildPrompts()
   const withoutMarkdown = {
     version: 1 as const,
@@ -728,6 +836,7 @@ export function buildDailyReport(input: BuildDailyReportInput): DailyReport {
     firstRealValueLoop,
     executeLoopEvidence,
     assistantRouting,
+    dailyAssistant,
     prompts,
   }
 
