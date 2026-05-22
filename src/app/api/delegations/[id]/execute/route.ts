@@ -17,6 +17,7 @@ import {
   getExecutionStartBlocker,
   buildSubTaskPrompt,
   buildSkillBlock,
+  buildRetryContext,
 } from '@/lib/delegation-execution'
 import { OllamaAgentRunner, isOllamaReachable } from '@/lib/agent-runner/ollama-runner'
 import { budgetToMaxTurns } from '@/lib/budget-utils'
@@ -46,7 +47,7 @@ async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Dele
   })
 }
 
-function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[]): string {
+function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryContext?: string): string {
   const c = delegation.contract
   const slug = c.workItemId.replace(/[^a-z0-9-]/gi, '-').toLowerCase()
   const branch = `${c.branchStrategy}/${slug}-task`
@@ -65,8 +66,8 @@ function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[]): strin
       : ''
 
   const context = c.context?.trim()
-    ? `\n## Context\n${c.context.trim()}\n${contextCardsBlock}`
-    : contextCardsBlock
+    ? `\n## Context\n${c.context.trim()}\n${contextCardsBlock}${retryContext ?? ''}`
+    : `${contextCardsBlock}${retryContext ?? ''}`
 
   const skillBlock = buildSkillBlock(c.skillCategory, c.allowedFilePatterns)
 
@@ -783,9 +784,10 @@ export async function POST(
   }
 
   // Use focused sub-task prompt when this is part of an orchestrated run
+  const retryContext = buildRetryContext(delegation)
   const prompt = delegation.contract.orchestratedRunId
     ? buildSubTaskPrompt(delegation)
-    : buildPrompt(delegation, contextCards)
+    : buildPrompt(delegation, contextCards, retryContext || undefined)
 
   // OTel: trace execution start + routing decision
   const mode = delegation.executionRoute === 'ollama-agent'

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildSubTaskPrompt, buildSkillBlock } from './delegation-execution'
+import { buildSubTaskPrompt, buildSkillBlock, buildRetryContext } from './delegation-execution'
 import type { Delegation } from '@/lib/models/delegation'
 
 function makeDelegation(overrides: Partial<Delegation['contract']> = {}): Delegation {
@@ -100,5 +100,81 @@ describe('buildSkillBlock', () => {
     const block = buildSkillBlock('refactor', ['src/lib/**'])
     expect(block).toContain('src/lib/**')
     expect(block).toContain('Skill: Refactor')
+  })
+})
+
+function makeDelegationWithLogs(logs: Delegation['logs']): Delegation {
+  return {
+    id: 'd1',
+    title: 'Test',
+    status: 'failed',
+    executionRoute: 'local-agent',
+    costEstimateUsd: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    logs,
+    contract: {
+      id: 'tc1',
+      createdAt: new Date().toISOString(),
+      workItemId: 'WI-1',
+      goal: 'Test goal',
+      context: '',
+      riskClass: 'A',
+      requiresApproval: false,
+      branchStrategy: 'feature',
+      privacyMode: 'local',
+      maxBudgetUsd: 1,
+      definitionOfDone: [],
+      allowedTools: [],
+    },
+  } as Delegation
+}
+
+describe('buildRetryContext', () => {
+  it('returns empty string when no logs', () => {
+    const d = makeDelegationWithLogs([])
+    expect(buildRetryContext(d)).toBe('')
+  })
+
+  it('returns empty string when only info/success logs', () => {
+    const d = makeDelegationWithLogs([
+      { timestamp: new Date().toISOString(), type: 'info', message: 'Started' },
+      { timestamp: new Date().toISOString(), type: 'success', message: 'Done' },
+    ])
+    expect(buildRetryContext(d)).toBe('')
+  })
+
+  it('returns retry block with error messages', () => {
+    const d = makeDelegationWithLogs([
+      { timestamp: new Date().toISOString(), type: 'error', message: 'TypeScript error: TS2345' },
+    ])
+    const ctx = buildRetryContext(d)
+    expect(ctx).toContain('Previous Attempt Failed')
+    expect(ctx).toContain('TypeScript error: TS2345')
+  })
+
+  it('includes only last 5 error logs', () => {
+    const logs = Array.from({ length: 8 }, (_, i) => ({
+      timestamp: new Date().toISOString(),
+      type: 'error' as const,
+      message: `Error ${i + 1}`,
+    }))
+    const d = makeDelegationWithLogs(logs)
+    const ctx = buildRetryContext(d)
+    expect(ctx).toContain('Error 4')
+    expect(ctx).toContain('Error 8')
+    expect(ctx).not.toContain('Error 1')
+    expect(ctx).not.toContain('Error 2')
+    expect(ctx).not.toContain('Error 3')
+  })
+
+  it('truncates long error messages to 200 chars', () => {
+    const long = 'x'.repeat(300)
+    const d = makeDelegationWithLogs([
+      { timestamp: new Date().toISOString(), type: 'error', message: long },
+    ])
+    const ctx = buildRetryContext(d)
+    const errorLine = ctx.split('\n').find(l => l.startsWith('- '))!
+    expect(errorLine.length).toBeLessThanOrEqual(202) // "- " + 200 chars
   })
 })
