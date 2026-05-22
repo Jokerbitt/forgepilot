@@ -4,6 +4,7 @@ import type { Delegation } from '@/lib/models/delegation'
 import type { ProjectBrief } from '@/lib/models/project-brief'
 import type { MemoryCard } from '@/lib/knowledge/types'
 import { buildDailyReport, renderDailyReportMarkdown } from './daily-report'
+import { getAuthReadiness } from '@/lib/auth/readiness'
 
 vi.mock('@/lib/eval/grok-critic', () => ({
   getCriticProviderPlan: () => ({
@@ -356,6 +357,27 @@ describe('buildDailyReport', () => {
     expect(report.dailyAssistant.checklist.find(item => item.id === 'auth')?.status).toBe('blocker')
     expect(report.nextActions[0]?.id).toBe('secure-local-auth')
     expect(report.firstRealValueLoop.currentStep.id).toBe('brief')
+  })
+
+  it('surfaces auth readiness blockers when auth is enabled but misconfigured', () => {
+    const report = buildDailyReport({
+      now,
+      storageMode: 'postgres',
+      authDisabled: false,
+      authReadiness: getAuthReadiness({
+        NEXTAUTH_URL: 'http://localhost:3000',
+      } as unknown as NodeJS.ProcessEnv),
+      projectBriefs: [],
+      knowledgeCards: [],
+      attentionItems: [],
+      delegations: [],
+    })
+
+    expect(report.executiveVerdict.status).toBe('yellow')
+    expect(report.risks.map(risk => risk.id)).toContain('auth-not-production-ready')
+    expect(report.dailyAssistant.checklist.find(item => item.id === 'auth')?.status).toBe('blocker')
+    expect(report.dailyAssistant.checklist.find(item => item.id === 'auth')?.detail).toContain('Admin password is missing')
+    expect(report.markdown).toContain('Auth readiness: blocked')
   })
 
   it('flags JSON primary storage and low critic coverage', () => {

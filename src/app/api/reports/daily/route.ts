@@ -8,6 +8,7 @@ import { createDelegationRepository, getDelegationStorageMode, SINGLE_TENANT_USE
 import { createKnowledgeCardRepository } from '@/lib/repositories/knowledgeCardRepository'
 import { createProjectBriefRepository } from '@/lib/repositories/projectBriefRepository'
 import { formatErrorInfo, listErrorInfo, type ErrorInfo } from '@/lib/models/error'
+import { getAuthReadiness } from '@/lib/auth/readiness'
 
 const ERROR_LIMIT = 10
 
@@ -46,6 +47,7 @@ export async function GET(request: NextRequest) {
       attentionItems: getOpenAttentionItems(),
       storageMode: getDelegationStorageMode(process.env),
       authDisabled: process.env.FORGEPILOT_AUTH_DISABLED === 'true',
+      authReadiness: getAuthReadiness(process.env),
       executeLoopEvidence: readExecuteLoopEvidence(),
     })
 

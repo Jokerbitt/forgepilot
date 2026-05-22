@@ -5,6 +5,7 @@ import type { MemoryCard } from '@/lib/knowledge/types'
 import type { DelegationStorageMode } from '@/lib/repositories/delegationRepository'
 import { getCriticProviderPlan } from '@/lib/eval/grok-critic'
 import { buildFailedDelegationTriage, type FailedDelegationTriageSummary } from '@/lib/delegations/triage'
+import { getAuthReadiness, type AuthReadiness } from '@/lib/auth/readiness'
 
 export type DailyReportVerdict = 'green' | 'yellow' | 'red'
 export type DailyReportRiskSeverity = 'critical' | 'high' | 'medium' | 'low'
@@ -145,6 +146,7 @@ export interface DailyReport {
       staleRunningDelegations: number
       storageMode: DelegationStorageMode
       authDisabled: boolean
+      authReadiness: AuthReadiness
     }
   }
   risks: DailyReportRisk[]
@@ -166,6 +168,7 @@ export interface BuildDailyReportInput {
   attentionItems: AttentionItem[]
   storageMode: DelegationStorageMode
   authDisabled: boolean
+  authReadiness?: AuthReadiness
   executeLoopEvidence?: DailyReportExecuteLoopEvidenceRun[]
 }
 
@@ -218,6 +221,7 @@ function isKnowledgeWriteback(card: MemoryCard, delegationIds: Set<string>): boo
 
 function buildRisks(input: {
   authDisabled: boolean
+  authReadiness: AuthReadiness
   storageMode: DelegationStorageMode
   failedDelegations: number
   openAttentionItems: number
@@ -234,6 +238,22 @@ function buildRisks(input: {
       title: 'Auth is disabled',
       why: 'Prompts, outputs, logs and connector settings may be exposed if the app is reachable beyond localhost.',
       mitigation: 'Set a strong FORGEPILOT_ADMIN_PASSWORD, NEXTAUTH_SECRET and NEXTAUTH_URL; use auth bypass only for local automated tests.',
+    })
+  } else if (input.authReadiness.status === 'blocked') {
+    risks.push({
+      id: 'auth-not-production-ready',
+      severity: 'high',
+      title: 'Auth is not production-ready',
+      why: input.authReadiness.nextAction,
+      mitigation: 'Set a strong FORGEPILOT_ADMIN_PASSWORD, NEXTAUTH_SECRET and NEXTAUTH_URL, then verify /api/auth/readiness before daily use.',
+    })
+  } else if (input.authReadiness.status === 'warning') {
+    risks.push({
+      id: 'auth-readiness-warning',
+      severity: 'medium',
+      title: 'Auth has a setup warning',
+      why: input.authReadiness.nextAction,
+      mitigation: 'Resolve the warning before exposing ForgePilot beyond localhost.',
     })
   }
 
@@ -579,11 +599,17 @@ function buildDailyAssistantReadiness(input: {
     {
       id: 'auth',
       label: 'Auth aktiv',
-      status: input.status.operations.authDisabled ? 'blocker' : 'ready',
+      status: input.status.operations.authReadiness.status === 'ready'
+        ? 'ready'
+        : input.status.operations.authReadiness.status === 'warning'
+          ? 'warning'
+          : 'blocker',
       detail: input.status.operations.authDisabled
         ? 'Testmodus ist aktiv. Produktiv nur mit Login und starken Secrets nutzen.'
-        : 'Login-Guard ist aktiv und der Daily Assistant kann sicherer genutzt werden.',
-      action: input.status.operations.authDisabled ? 'Auth konfigurieren' : 'Auth pruefen',
+        : input.status.operations.authReadiness.readyForProduction
+          ? 'Login-Guard und Auth-Secrets sind produktionsbereit.'
+          : input.status.operations.authReadiness.nextAction,
+      action: input.status.operations.authReadiness.readyForProduction ? 'Auth pruefen' : 'Auth konfigurieren',
       href: '/settings',
     },
     {
@@ -706,6 +732,7 @@ export function renderDailyReportMarkdown(report: Omit<DailyReport, 'markdown'>)
     `- Open attention items: ${report.status.operations.openAttentionItems}`,
     `- Storage mode: ${report.status.operations.storageMode}`,
     `- Auth disabled: ${report.status.operations.authDisabled ? 'yes' : 'no'}`,
+    `- Auth readiness: ${report.status.operations.authReadiness.status} (${report.status.operations.authReadiness.readyForProduction ? 'production-ready' : report.status.operations.authReadiness.nextAction})`,
     ``,
     `## First Real Value Loop`,
     `- Goal: ${report.firstRealValueLoop.goal}`,
@@ -799,6 +826,12 @@ export function buildDailyReport(input: BuildDailyReportInput): DailyReport {
   const prsCreated = input.delegations.filter(d => Boolean(d.summaryReport?.prUrl)).length
   const staleRunningDelegations = input.delegations.filter(d => isStaleRunning(d, now)).length
   const knowledgeWritebacks = input.knowledgeCards.filter(card => isKnowledgeWriteback(card, delegationIds)).length
+  const authReadiness = input.authReadiness ?? getAuthReadiness({
+    FORGEPILOT_AUTH_DISABLED: input.authDisabled ? 'true' : undefined,
+    FORGEPILOT_ADMIN_PASSWORD: 'redacted-strong-password',
+    NEXTAUTH_SECRET: 'x'.repeat(40),
+    NEXTAUTH_URL: 'http://localhost:3000',
+  } as unknown as NodeJS.ProcessEnv)
 
   const status: DailyReport['status'] = {
     delegations: delegationCounts,
@@ -821,11 +854,13 @@ export function buildDailyReport(input: BuildDailyReportInput): DailyReport {
       staleRunningDelegations,
       storageMode: input.storageMode,
       authDisabled: input.authDisabled,
+      authReadiness,
     },
   }
 
   const risks = buildRisks({
     authDisabled: status.operations.authDisabled,
+    authReadiness: status.operations.authReadiness,
     storageMode: status.operations.storageMode,
     failedDelegations: status.delegations.failed,
     openAttentionItems: status.operations.openAttentionItems,
