@@ -215,4 +215,10 @@ describe('budgetToMaxTurns', () => {
     const { budgetToMaxTurns } = await import('@/lib/budget-utils')
     expect(budgetToMaxTurns(0.5)).toBe(8)
   })
+
+  it('uses a production-safe minimum for Claude CLI turns', async () => {
+    const { budgetToClaudeCliMaxTurns } = await import('@/lib/budget-utils')
+    expect(budgetToClaudeCliMaxTurns(0.5)).toBe(20)
+    expect(budgetToClaudeCliMaxTurns(5)).toBe(60)
+  })
 })
