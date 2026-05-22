@@ -34,7 +34,7 @@ import {
   GraduationCap,
   ClipboardList,
 } from 'lucide-react'
-import type { Delegation } from '@/lib/models/delegation'
+import type { DelegationStats } from '@/app/api/delegations/stats/route'
 import type { AttentionItem } from '@/lib/models/attention'
 import type { Notification } from '@/lib/models/notification'
 import type { AutonomousConfig } from '@/lib/config/autonomous-config'
@@ -102,15 +102,15 @@ export function AppNav() {
     const fetchStatus = async () => {
       try {
         const [delRes, attRes, notifRes, autoRes] = await Promise.all([
-          fetch('/api/delegations'),
+          fetch('/api/delegations/stats'),
           fetch('/api/attention'),
           fetch('/api/notifications?unread=true'),
           fetch('/api/settings/autonomous'),
         ])
-        const data = await delRes.json() as Delegation[]
-        if (Array.isArray(data)) {
-          setRunning(data.filter(d => d.status === 'running').length)
-          setPending(data.filter(d => d.status === 'pending' || d.status === 'approved').length)
+        const stats = await delRes.json() as DelegationStats
+        if (stats && typeof stats.running === 'number') {
+          setRunning(stats.running)
+          setPending((stats.pending ?? 0) + (stats.approved ?? 0))
         }
         const att = await attRes.json() as AttentionItem[]
         if (Array.isArray(att)) {
