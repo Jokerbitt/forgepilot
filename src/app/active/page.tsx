@@ -16,6 +16,7 @@ import { ElapsedTimer } from '@/components/shared/ElapsedTimer'
 import { cx } from '@/components/ui/primitives'
 import { AgentStatusMatrix } from '@/components/delegation/AgentStatusMatrix'
 import { DelegationLiveTimeline } from '@/components/delegation/DelegationLiveTimeline'
+import { DailyOpsSummary } from '@/components/delegation/DailyOpsSummary'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -625,6 +626,9 @@ function ActiveRunsContent() {
   return (
     <main className="min-h-screen p-6 text-white">
       <div className="mx-auto max-w-7xl space-y-5">
+
+        {/* Daily ops summary strip */}
+        <DailyOpsSummary delegations={delegations} />
 
         {/* Page header */}
         <div className="flex items-start justify-between gap-4">
