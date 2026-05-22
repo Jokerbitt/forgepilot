@@ -29,7 +29,7 @@ interface Guidance {
   borderClass: string
 }
 
-function getGuidance(d: Delegation, props: Omit<Props, 'delegation'>): Guidance | null {
+export function getGuidance(d: Delegation, props: Omit<Props, 'delegation'>): Guidance | null {
   const hasPr = !!d.summaryReport?.prUrl
   const hasCritic = !!d.criticScore
 
