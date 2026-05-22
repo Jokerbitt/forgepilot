@@ -549,7 +549,7 @@ export default function DelegationDetailPage() {
           </div>
 
           {/* ── Metrics Tiles (above-the-fold trust layer) ──────────── */}
-          <div className="mt-4 pt-4 border-t border-gray-800 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="mt-4 pt-4 border-t border-gray-800 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" style={(d.retryCount ?? 0) > 0 ? { gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' } : undefined}>
 
             {/* Status tile */}
             <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
@@ -637,6 +637,14 @@ export default function DelegationDetailPage() {
                 <span className="text-xs text-gray-700">–</span>
               )}
             </div>
+            {/* Retry tile — only shown when retryCount > 0 */}
+            {(d.retryCount ?? 0) > 0 && (
+              <div className="bg-amber-950/30 border border-amber-800/40 rounded-lg px-3 py-2 flex flex-col gap-0.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Retries</span>
+                <span className="text-sm font-bold text-amber-400">↺ {d.retryCount}</span>
+                <span className="text-[10px] text-amber-700/70">Versuche</span>
+              </div>
+            )}
           </div>
 
           {/* ── Simulation-mode info ─────────────────────────────────── */}
