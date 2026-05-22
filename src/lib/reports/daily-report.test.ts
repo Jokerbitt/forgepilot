@@ -340,6 +340,60 @@ describe('buildDailyReport', () => {
     expect(report.executeLoopEvidence.currentStatus).toBe('collecting')
   })
 
+  it('shows real proven evidence before dry-run examples in the display list', () => {
+    const report = buildDailyReport({
+      now,
+      storageMode: 'postgres',
+      authDisabled: false,
+      projectBriefs: [],
+      knowledgeCards: [],
+      attentionItems: [],
+      delegations: [],
+      executeLoopEvidence: [
+        {
+          id: 'harness-first-in-file',
+          title: 'Harness example',
+          status: 'partial',
+          source: 'harness-dry-run',
+          recordedAt: '2026-05-22T10:00:00.000Z',
+          steps: {
+            brief: true,
+            delegation: true,
+            execute: true,
+            tests: true,
+            pr: false,
+            critic: true,
+            writeback: false,
+          },
+        },
+        {
+          id: 'real-proven',
+          title: 'Real value loop',
+          status: 'success',
+          source: 'manual',
+          recordedAt: '2026-05-22T09:00:00.000Z',
+          prUrl: 'https://github.com/Jokerbitt/forgepilot/pull/459',
+          steps: {
+            brief: true,
+            delegation: true,
+            execute: true,
+            tests: true,
+            pr: true,
+            critic: true,
+            writeback: true,
+          },
+        },
+      ],
+    })
+
+    expect(report.executeLoopEvidence.provenRuns).toBe(1)
+    expect(report.executeLoopEvidence.runs[0]).toMatchObject({
+      id: 'real-proven',
+      source: 'manual',
+    })
+    expect(report.markdown.indexOf('Real value loop')).toBeLessThan(report.markdown.indexOf('Harness example'))
+  })
+
   it('raises critical risk when auth is disabled', () => {
     const report = buildDailyReport({
       now,

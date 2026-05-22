@@ -426,6 +426,13 @@ function isEvidenceRunProven(run: DailyReportExecuteLoopEvidenceRun): boolean {
     && run.steps.writeback
 }
 
+function evidenceDisplayRank(run: DailyReportExecuteLoopEvidenceRun): number {
+  if (isEvidenceRunProven(run)) return 0
+  if (run.source !== 'harness-dry-run' && run.status === 'blocked') return 1
+  if (run.source !== 'harness-dry-run') return 2
+  return 3
+}
+
 function inferRuntimeEvidenceRun(
   status: DailyReport['status'],
   generatedAt: string,
@@ -465,6 +472,11 @@ function buildExecuteLoopEvidence(
   const realRuns = runs.filter(run => run.source !== 'harness-dry-run')
   const provenRuns = runs.filter(isEvidenceRunProven).length
   const blockedRuns = realRuns.filter(run => run.status === 'blocked').length
+  const displayRuns = [...runs].sort((a, b) => {
+    const rankDelta = evidenceDisplayRank(a) - evidenceDisplayRank(b)
+    if (rankDelta !== 0) return rankDelta
+    return new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+  })
   const currentStatus: DailyReportExecuteLoopEvidence['currentStatus'] =
     provenRuns >= targetRuns ? 'proven'
     : blockedRuns > 0 && provenRuns === 0 ? 'blocked'
@@ -482,7 +494,7 @@ function buildExecuteLoopEvidence(
     nextAction: remainingRuns === 0
       ? 'Summarize V1 readiness and decide whether ForgePilot is ready for daily use.'
       : `Run and record ${remainingRuns} more real small ticket loop${remainingRuns === 1 ? '' : 's'} with PR, critic review and writeback evidence.`,
-    runs: runs.slice(0, targetRuns),
+    runs: displayRuns.slice(0, targetRuns),
   }
 }
 
