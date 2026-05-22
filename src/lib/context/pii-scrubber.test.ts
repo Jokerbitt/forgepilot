@@ -221,4 +221,11 @@ describe('budgetToMaxTurns', () => {
     expect(budgetToClaudeCliMaxTurns(0.5)).toBe(20)
     expect(budgetToClaudeCliMaxTurns(5)).toBe(60)
   })
+
+  it('keeps a $1 Claude CLI task at the 20-turn floor while budgetToMaxTurns(1) stays 15', async () => {
+    const { budgetToMaxTurns, budgetToClaudeCliMaxTurns } = await import('@/lib/budget-utils')
+    expect(budgetToMaxTurns(1)).toBe(15)
+    expect(budgetToClaudeCliMaxTurns(1)).toBeGreaterThanOrEqual(20)
+    expect(budgetToClaudeCliMaxTurns(1)).toBe(20)
+  })
 })
