@@ -113,8 +113,27 @@ describe('GET /api/delegations/export', () => {
     const text = await res.text()
     const firstLine = text.split('\n')[0]
     expect(firstLine).toBe(
-      'id,title,status,riskClass,route,workItemId,createdAt,completedAt,actualCostUsd,tokenCount'
+      'id,title,goal,status,riskClass,route,workItemId,briefTitle,createdAt,startedAt,completedAt,durationMin,actualCostUsd,tokenCount'
     )
+  })
+
+  it('CSV includes goal and durationMin columns', async () => {
+    const withTiming = makeDelegation({
+      id: 'del-005',
+      status: 'completed',
+      startedAt: '2026-05-01T10:05:00.000Z',
+      completedAt: '2026-05-01T10:35:00.000Z',
+    })
+    const { default: fs } = await import('fs')
+    vi.mocked(fs.readFileSync).mockReturnValueOnce(JSON.stringify([withTiming]))
+    const res = await GET(makeRequest({ format: 'csv' }))
+    const text = await res.text()
+    const rows = text.split('\n')
+    const dataRow = rows[1]
+    // durationMin = (10:35 - 10:05) = 30 minutes
+    expect(dataRow).toContain(',30,')
+    // goal should be present
+    expect(dataRow).toContain('Write unit tests')
   })
 
   it('CSV escapes double-quotes in field values', async () => {
