@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
-import type { ErrorInfo } from '@/app/models/error'
+import type { ErrorInfo } from '@/lib/models/error'
 
 vi.mock('@/lib/reports/daily-report', () => ({
   buildDailyReport: vi.fn(() => ({
@@ -50,8 +50,8 @@ vi.mock('@/lib/attention/store', () => ({
 }))
 
 const mockErrors: ErrorInfo[] = []
-vi.mock('@/app/models/error', async () => {
-  const actual = await vi.importActual<typeof import('@/app/models/error')>('@/app/models/error')
+vi.mock('@/lib/models/error', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/models/error')>('@/lib/models/error')
   return {
     ...actual,
     listErrorInfo: vi.fn(() => mockErrors),

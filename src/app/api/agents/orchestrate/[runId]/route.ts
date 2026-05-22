@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
-import { getRun, updateTaskStatus, updateRunStatus } from '@/lib/agents/orchestrated-run'
+import { getRun, reapStaleRuns, updateTaskStatus, updateRunStatus } from '@/lib/agents/orchestrated-run'
 import type { TaskResult, RunStatus } from '@/lib/agents/orchestrated-run'
 import type { AtomicTaskStatus } from '@/lib/agents/atomic-task'
 import { parseBody, isValidationError } from '@/lib/validation/api'
@@ -8,6 +8,7 @@ import { OrchestratedRunPatchSchema } from '@/lib/validation/schemas'
 
 export async function GET(_req: Request, { params }: { params: Promise<{ runId: string }> }) {
   const { runId } = await params
+  reapStaleRuns()
   const run = getRun(runId)
   if (!run) return NextResponse.json({ error: 'Run not found' }, { status: 404 })
   return NextResponse.json(run)

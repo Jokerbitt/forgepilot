@@ -7,6 +7,7 @@ import {
   createDelegationRepository,
   SINGLE_TENANT_USER_ID,
 } from '@/lib/repositories/delegationRepository'
+import { reapStaleDelegations } from '@/lib/delegations/watchdog'
 
 // Zod schema for creating/updating a delegation via POST
 const DelegationInputSchema = z.object({
@@ -35,6 +36,7 @@ function backfillTitle(d: Delegation): Delegation {
 
 export async function GET(request: NextRequest) {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+  await reapStaleDelegations(repo)
 
   // Optional status filter: ?statuses=pending,approved,running
   const statusesParam = request.nextUrl.searchParams.get('statuses')

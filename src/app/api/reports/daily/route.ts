@@ -7,7 +7,7 @@ import { readExecuteLoopEvidence } from '@/lib/reports/execute-loop-evidence-sto
 import { createDelegationRepository, getDelegationStorageMode, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import { createKnowledgeCardRepository } from '@/lib/repositories/knowledgeCardRepository'
 import { createProjectBriefRepository } from '@/lib/repositories/projectBriefRepository'
-import { formatErrorInfo, listErrorInfo, type ErrorInfo } from '@/app/models/error'
+import { formatErrorInfo, listErrorInfo, type ErrorInfo } from '@/lib/models/error'
 
 const ERROR_LIMIT = 10
 

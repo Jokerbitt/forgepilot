@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
  */
 
 import { NextResponse } from 'next/server'
-import { getRun, updateTaskStatus, updateRunStatus, retryTask, canRetry } from '@/lib/agents/orchestrated-run'
+import { getRun, setTaskAgentId, updateTaskStatus, updateRunStatus, retryTask, canRetry } from '@/lib/agents/orchestrated-run'
 import { scoreWork } from '@/lib/agents/work-quality'
 import { recordOutcome } from '@/lib/agents/skill-evolver'
 import { upsertCard } from '@/lib/knowledge/store'
@@ -117,6 +117,7 @@ async function executeRunAsync(
           throw new Error(`Child delegation create failed: ${res.status} ${body.slice(0, 200)}`)
         }
       })
+      setTaskAgentId(runId, task.id, delegationPayload.id)
 
       // 2. Execute delegation
       await fetch(`${BASE_URL}/api/delegations/${delegationPayload.id}/execute`, {

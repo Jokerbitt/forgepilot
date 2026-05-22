@@ -16,6 +16,8 @@ vi.mock('fs', () => ({
 import {
   createRun,
   getRun,
+  reapStaleRuns,
+  setTaskAgentId,
   updateTaskStatus,
   retryTask,
   canRetry,
@@ -123,5 +125,45 @@ describe('orchestrated-run', () => {
     createRun('del-2', 'Other', 'goal', [makeTask('t3')])
     const forDel1 = listRuns('del-1')
     expect(forDel1.every(r => r.delegationId === 'del-1')).toBe(true)
+  })
+
+  it('stores the child delegation id for a running task', () => {
+    updateTaskStatus(runId, 't1', 'running')
+    const updated = setTaskAgentId(runId, 't1', 'child-delegation-1')
+    expect(updated?.tasks[0].agentId).toBe('child-delegation-1')
+    expect(getRun(runId)?.tasks[0].agentId).toBe('child-delegation-1')
+  })
+
+  it('watchdog fails a stale running task when no process is alive', () => {
+    updateTaskStatus(runId, 't1', 'running')
+    setTaskAgentId(runId, 't1', 'child-delegation-1')
+    const started = new Date(getRun(runId)!.tasks[0].startedAt!)
+    const reaped = reapStaleRuns({
+      now: new Date(started.getTime() + 5 * 60_000),
+      runningTaskGraceMinutes: 2,
+      processAlive: () => false,
+    })
+
+    expect(reaped).toHaveLength(1)
+    expect(reaped[0].runId).toBe(runId)
+    const run = getRun(runId)
+    expect(run?.status).toBe('failed')
+    expect(run?.tasks[0].status).toBe('failed')
+    expect(run?.tasks[0].result?.issues[0]).toContain('Watchdog marked task stale')
+  })
+
+  it('watchdog leaves a running task alone while its process is alive', () => {
+    updateTaskStatus(runId, 't1', 'running')
+    setTaskAgentId(runId, 't1', 'child-delegation-1')
+    const started = new Date(getRun(runId)!.tasks[0].startedAt!)
+    const reaped = reapStaleRuns({
+      now: new Date(started.getTime() + 20 * 60_000),
+      runningTaskGraceMinutes: 2,
+      processAlive: () => true,
+    })
+
+    expect(reaped).toEqual([])
+    expect(getRun(runId)?.status).toBe('running')
+    expect(getRun(runId)?.tasks[0].status).toBe('running')
   })
 })
