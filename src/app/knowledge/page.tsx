@@ -66,12 +66,6 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
-const STALE_THRESHOLD_DAYS = 30
-
-function isCardStale(updatedAt: string): boolean {
-  return (Date.now() - new Date(updatedAt).getTime()) > STALE_THRESHOLD_DAYS * 86_400_000
-}
-
 function formatRelativeDate(iso: string): string {
   const now = Date.now()
   const then = new Date(iso).getTime()
@@ -503,11 +497,7 @@ function KnowledgeCard({
   onToggle: () => void
 }) {
   const bodyPreview = truncate(card.body, 120)
-<<<<<<< HEAD
-  const stale = isCardStale(card.updatedAt)
-=======
   const stale = isCardStale(card.updatedAt ?? card.createdAt)
->>>>>>> c9483ab (feat(m258): knowledge stale detection and coverage gap panel)
 
   return (
     <button
@@ -517,13 +507,8 @@ function KnowledgeCard({
         expanded
           ? 'border-sky-700/60 bg-sky-900/10 shadow-lg shadow-sky-900/10'
           : stale
-<<<<<<< HEAD
-          ? 'border-amber-800/30 bg-slate-900 hover:border-amber-700/40 hover:bg-slate-800/60 hover:shadow-md hover:shadow-black/20'
-          : 'border-slate-800 bg-slate-900 hover:border-slate-600 hover:bg-slate-800/60 hover:shadow-md hover:shadow-black/20',
-=======
             ? 'border-amber-800/40 bg-amber-950/5 hover:border-amber-700/60 hover:bg-amber-950/10'
             : 'border-slate-800 bg-slate-900 hover:border-slate-600 hover:bg-slate-800/60 hover:shadow-md hover:shadow-black/20',
->>>>>>> c9483ab (feat(m258): knowledge stale detection and coverage gap panel)
         'cursor-pointer'
       )}
     >
@@ -537,11 +522,7 @@ function KnowledgeCard({
             {sourceBadgeLabel(card)}
           </span>
           {stale && (
-<<<<<<< HEAD
-            <span className="rounded border border-amber-700/50 bg-amber-900/20 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">
-=======
             <span className="rounded border border-amber-700/50 bg-amber-950/30 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400">
->>>>>>> c9483ab (feat(m258): knowledge stale detection and coverage gap panel)
               veraltet
             </span>
           )}
