@@ -3,6 +3,8 @@ export type NotificationType =
   | 'research-complete'
   | 'delegation-blocked'
   | 'delegation_pending'
+  | 'delegation_completed'
+  | 'delegation_failed'
   | 'milestone-at-risk'
   | 'orchestration-complete'
   | 'orchestration-failed'

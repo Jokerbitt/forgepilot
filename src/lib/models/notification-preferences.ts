@@ -37,7 +37,8 @@ const DEFAULT_CHANNEL: ChannelConfig = { bell: true, telegram: true, email: fals
 const ALL_TYPES: NotificationType[] = [
   'pm-alert', 'research-complete', 'delegation-blocked', 'milestone-at-risk',
   'orchestration-complete', 'orchestration-failed', 'run_complete', 'run_failed',
-  'delegation_approved', 'delegation_pending', 'brief_ready', 'system',
+  'delegation_approved', 'delegation_pending', 'delegation_completed', 'delegation_failed',
+  'brief_ready', 'system',
 ]
 
 /** Sensible defaults: all types enabled, badge shown, telegram on, email off */
@@ -61,6 +62,8 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   'run_failed':            'Agent-Run fehlgeschlagen',
   'delegation_approved':   'Delegation freigegeben',
   'delegation_pending':    'Delegation wartet auf Freigabe',
+  'delegation_completed':  'Delegation abgeschlossen',
+  'delegation_failed':     'Delegation fehlgeschlagen',
   'brief_ready':           'Project Brief bereit',
   'system':                'Systemmeldungen',
 }

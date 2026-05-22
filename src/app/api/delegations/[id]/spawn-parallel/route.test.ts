@@ -27,7 +27,7 @@ function makeParams(id: string) {
 }
 
 describe('POST /api/delegations/[id]/spawn-parallel', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 400 when subTasks is missing', async () => {
     const { POST } = await import('./route')

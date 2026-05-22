@@ -21,7 +21,7 @@ function makeEntry(overrides: Partial<AuditEntry> = {}): AuditEntry {
     action: 'delegation.created',
     entityId: 'del-001',
     entityType: 'delegation',
-    userId: 'user-1',
+    actor: 'user-1',
     createdAt: '2026-05-01T10:00:00.000Z',
     ...overrides,
   }
@@ -35,7 +35,7 @@ function makeRequest(url: string) {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('GET /api/audit', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('returns audit log entries', async () => {
     const entries = [makeEntry({ id: 'aud-001' }), makeEntry({ id: 'aud-002' })]

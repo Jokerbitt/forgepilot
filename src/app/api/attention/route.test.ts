@@ -39,7 +39,6 @@ function makeAttentionItem(overrides: Partial<AttentionItem> = {}): AttentionIte
     title: 'Test Item',
     body: 'Description',
     createdAt: '2026-05-01T10:00:00.000Z',
-    resolved: false,
     ...overrides,
   }
 }
@@ -56,7 +55,7 @@ function makePostRequest(body: Record<string, unknown>) {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('GET /api/attention', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('syncs from delegations and returns open items', async () => {
     const items = [makeAttentionItem({ id: 'att-001' }), makeAttentionItem({ id: 'att-002' })]
@@ -81,7 +80,7 @@ describe('GET /api/attention', () => {
 })
 
 describe('POST /api/attention', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('creates attention item and returns 201', async () => {
     const { POST } = await import('./route')

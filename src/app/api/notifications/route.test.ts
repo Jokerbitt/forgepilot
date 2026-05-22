@@ -35,7 +35,7 @@ function makeRequest(url: string) {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('GET /api/notifications', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('returns all notifications', async () => {
     const notifications = [

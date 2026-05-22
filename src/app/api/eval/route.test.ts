@@ -56,7 +56,7 @@ function makePostRequest(body: unknown) {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('GET /api/eval', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('returns eval cases by default', async () => {
     listEvalCases.mockReturnValueOnce([makeCase()])
@@ -93,7 +93,7 @@ describe('GET /api/eval', () => {
 })
 
 describe('POST /api/eval', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('creates eval case and returns it', async () => {
     const created = makeCase({ id: 'case-new' })
@@ -137,7 +137,7 @@ describe('POST /api/eval', () => {
 })
 
 describe('DELETE /api/eval', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 400 when caseId is missing', async () => {
     const { DELETE } = await import('./route')

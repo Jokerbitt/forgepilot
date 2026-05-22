@@ -59,7 +59,7 @@ function makeParams(id: string): { params: Promise<{ id: string }> } {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('POST /api/delegations/[id]/clone', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 404 when source delegation not found', async () => {
     repoFindById.mockResolvedValueOnce(null)

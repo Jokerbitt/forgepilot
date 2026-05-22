@@ -63,7 +63,7 @@ function makeDelegation(overrides: Partial<Delegation> = {}): Delegation {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('GET /api/delegations', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   function makeGetRequest(url: string) {
     const { NextRequest } = require('next/server') as typeof import('next/server')
@@ -121,7 +121,7 @@ describe('GET /api/delegations', () => {
 })
 
 describe('POST /api/delegations', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   function makePostRequest(body: unknown) {
     const { NextRequest } = require('next/server') as typeof import('next/server')
@@ -164,7 +164,7 @@ describe('POST /api/delegations', () => {
 })
 
 describe('PUT /api/delegations (bulk update)', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 400 when body is not an array', async () => {
     const { PUT } = await import('./route')
@@ -216,7 +216,7 @@ describe('PUT /api/delegations (bulk update)', () => {
 })
 
 describe('DELETE /api/delegations', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('deletes single delegation by ?id=', async () => {
     repoDelete.mockResolvedValueOnce(true)

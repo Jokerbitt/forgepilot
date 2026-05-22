@@ -67,7 +67,7 @@ function makeParams(id: string): { params: Promise<{ id: string }> } {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('GET /api/delegations/[id]', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 200 with delegation when found', async () => {
     const delegation = makeDelegation({ id: 'del-001' })
@@ -91,7 +91,7 @@ describe('GET /api/delegations/[id]', () => {
 })
 
 describe('PATCH /api/delegations/[id]', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('updates status and returns 200', async () => {
     const updated = makeDelegation({ id: 'del-001', status: 'approved' })

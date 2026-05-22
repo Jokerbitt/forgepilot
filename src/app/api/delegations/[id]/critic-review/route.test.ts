@@ -22,7 +22,7 @@ vi.mock('@/lib/repositories/delegationRepository', () => ({
 const runGrokCritic     = vi.fn<[unknown], Promise<GrokCriticResult | null>>()
 const runGrokCodeReview = vi.fn<[unknown], Promise<CodeReviewResult | null>>()
 const getCriticProviderPlan = vi.fn(() => 'mock-plan')
-const mapGrokResultToCriticScore = vi.fn(() => ({ score: 85 }))
+const mapGrokResultToCriticScore = vi.fn(() => ({ correctness: 85, efficiency: 80, drift: 90, verdict: 'approved', summary: 'ok', runAt: '' }))
 
 vi.mock('@/lib/eval/grok-critic', () => ({ runGrokCritic, runGrokCodeReview, getCriticProviderPlan }))
 vi.mock('@/lib/eval/auto-grok-critic', () => ({ mapGrokResultToCriticScore }))
@@ -71,7 +71,7 @@ function makeParams(id: string) {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('POST /api/delegations/[id]/critic-review', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 404 when delegation not found', async () => {
     repoFindById.mockResolvedValueOnce(null)
@@ -82,11 +82,16 @@ describe('POST /api/delegations/[id]/critic-review', () => {
 
   it('runs delegation review and persists critic score', async () => {
     const mockResult: GrokCriticResult = {
-      score: 90,
-      passed: true,
-      summary: 'Well done',
+      correctnessScore: 90,
+      efficiencyScore: 80,
+      driftScore: 85,
+      overallGrade: 'A',
+      criteriaHit: [true],
       issues: [],
-      suggestions: [],
+      verdict: 'PASS',
+      reason: 'Well done',
+      providerId: 'xai',
+      evaluatedAt: '2026-05-01T10:00:00.000Z',
     }
     repoFindById.mockResolvedValueOnce(makeDelegation())
     runGrokCritic.mockResolvedValueOnce(mockResult)
@@ -98,7 +103,7 @@ describe('POST /api/delegations/[id]/critic-review', () => {
     )
     expect(res.status).toBe(200)
     const body = await res.json() as GrokCriticResult
-    expect(body.score).toBe(90)
+    expect(body.correctnessScore).toBe(90)
     expect(repoUpdate).toHaveBeenCalledOnce()
   })
 
@@ -116,11 +121,12 @@ describe('POST /api/delegations/[id]/critic-review', () => {
 
   it('runs code review when type=code and filePath provided', async () => {
     const mockCodeResult: CodeReviewResult = {
-      score: 80,
-      passed: true,
+      securityIssues: [],
+      correctnessIssues: [],
+      verdict: 'APPROVE',
       summary: 'Code looks good',
-      issues: [],
-      suggestions: [],
+      providerId: 'xai',
+      reviewedAt: '2026-05-01T10:00:00.000Z',
     }
     repoFindById.mockResolvedValueOnce(makeDelegation())
     runGrokCodeReview.mockResolvedValueOnce(mockCodeResult)

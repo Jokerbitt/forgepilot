@@ -34,8 +34,10 @@ function makeProvider(overrides: Partial<AIProviderConfig> = {}): AIProviderConf
     name: 'Anthropic',
     type: 'anthropic',
     enabled: true,
-    models: ['claude-sonnet-4-6'],
+    models: [{ id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', purpose: 'coding' as const }],
     apiKeyRef: 'ANTHROPIC_API_KEY',
+    isBuiltIn: true,
+    dataResidency: 'us' as const,
     ...overrides,
   }
 }
@@ -47,7 +49,7 @@ function makeParams(id: string) {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('POST /api/ai/providers/[id]/test', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 404 when provider config not found', async () => {
     getAllProviderConfigs.mockReturnValueOnce([])

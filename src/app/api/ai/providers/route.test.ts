@@ -36,8 +36,10 @@ function makeProvider(overrides: Partial<AIProviderConfig> = {}): AIProviderConf
     name: 'Anthropic',
     type: 'anthropic',
     enabled: true,
-    models: ['claude-3-5-sonnet-20241022'],
+    models: [{ id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', purpose: 'coding' as const }],
     apiKeyRef: 'ANTHROPIC_API_KEY',
+    isBuiltIn: true,
+    dataResidency: 'us' as const,
     ...overrides,
   }
 }
@@ -73,7 +75,7 @@ function makeDeleteRequest(id: string) {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('GET /api/ai/providers', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('returns providers list and selection', async () => {
     getAllProviderConfigs.mockReturnValueOnce([makeProvider()])
@@ -107,7 +109,7 @@ describe('GET /api/ai/providers', () => {
 })
 
 describe('POST /api/ai/providers', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('upserts provider config when provider field is present', async () => {
     const { POST } = await import('./route')
@@ -149,7 +151,7 @@ describe('POST /api/ai/providers', () => {
 })
 
 describe('DELETE /api/ai/providers', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 400 when id param is missing', async () => {
     const { NextRequest } = require('next/server') as typeof import('next/server')

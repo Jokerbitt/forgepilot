@@ -19,7 +19,7 @@ function makeParams(id: string) {
 }
 
 describe('POST /api/attention/[id]/resolve', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 404 when item not found', async () => {
     resolveAttentionItem.mockReturnValueOnce(null)
@@ -36,7 +36,6 @@ describe('POST /api/attention/[id]/resolve', () => {
       title: 'Resolved item',
       body: '',
       createdAt: '2026-05-01T10:00:00.000Z',
-      resolved: true,
       resolvedAt: new Date().toISOString(),
       resolvedBy: 'user',
     })

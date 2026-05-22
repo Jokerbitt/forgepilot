@@ -46,7 +46,7 @@ function makeRequest(url: string) {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('GET /api/knowledge-cards', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('returns all cards sorted by createdAt descending', async () => {
     const cards = [

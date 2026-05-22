@@ -14,7 +14,7 @@ vi.mock('@/lib/storage/cutover-config', () => ({ getStorageStatus }))
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('GET /api/storage-status', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('returns storage status', async () => {
     getStorageStatus.mockReturnValueOnce({ mode: 'json', hasDatabase: false })

@@ -23,7 +23,7 @@ function makePostRequest(body: unknown) {
 }
 
 describe('POST /api/policy', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 400 when required fields are missing', async () => {
     const { POST } = await import('./route')

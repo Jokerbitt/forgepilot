@@ -35,6 +35,7 @@ import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/reposit
 import { buildContextPackage } from '@/lib/knowledge/context-package'
 import type { MemoryCard } from '@/lib/knowledge/types'
 import { checkParallelCompletion } from '@/lib/delegation-parallel'
+import { triggerCriticRetry } from '@/lib/delegations/critic-retry'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
@@ -251,9 +252,12 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     fullOutput += text
     const lines = text.split('\n').filter(l => l.trim())
     for (const line of lines) {
+      // Detect agent-emitted signals: ESCALATION and PROGRESS lines
+      const isEscalation = line.startsWith('ESCALATION:')
+      const isProgress   = line.startsWith('PROGRESS:')
       logBuffer.push({
         timestamp: new Date().toISOString(),
-        type: line.startsWith('$') ? 'command' : 'info',
+        type: isEscalation ? 'error' : isProgress ? 'thought' : line.startsWith('$') ? 'command' : 'info',
         message: line.substring(0, 500),
       })
     }
@@ -438,9 +442,18 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
 
       if (success && report) {
         persistGrokCriticForDelegation(finishedDelegation, report)
-          .then(criticScore => {
+          .then(async criticScore => {
             if (criticScore) {
               void writebackExecutionInsights({ ...finishedDelegation, criticScore })
+              // G2: Critic Auto-Retry — queue retry if score below threshold
+              const retryId = await triggerCriticRetry(finishedDelegation, criticScore).catch(() => null)
+              if (retryId) {
+                void appendLogs(id, [{
+                  timestamp: new Date().toISOString(),
+                  type: 'info',
+                  message: `🔄 Critic-Auto-Retry gestartet → Delegation ${retryId}`,
+                }])
+              }
             }
           })
           .catch(() => {})
@@ -595,7 +608,12 @@ async function runWithClaudeAPI(id: string, delegation: Delegation, startTime: D
     type: 'info',
     message: '🤖 Claude API-Runner gestartet (kein CLI verfügbar — API-Modus)',
   }
-  await appendLogs(id, [startLogEntry])
+  const planOnlyWarning: AgentLog = {
+    timestamp: new Date().toISOString(),
+    type: 'error',
+    message: '⚠️ PLAN-ONLY MODUS: Kein Code wird geschrieben. Installiere die Claude CLI für echte Ausführung: npm install -g @anthropic-ai/claude-code',
+  }
+  await appendLogs(id, [startLogEntry, planOnlyWarning])
 
   try {
     const result = await generateText({
@@ -633,6 +651,7 @@ End with a one-line DONE: <summary> statement.`,
       keyPoints: [summaryText, `Analysiert via ${result.provider}/${result.model}`],
       changes: [],
       timeTakenMinutes: elapsed,
+      planOnly: true,
     }
 
     await appendLogs(id, [...planLogs, finalLog], 'completed', report)

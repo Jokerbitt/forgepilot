@@ -61,7 +61,7 @@ function makeParams(id: string) {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('POST /api/delegations/[id]/import-logs', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => { vi.clearAllMocks() })
 
   it('returns 404 when delegation not found', async () => {
     repoFindById.mockResolvedValueOnce(null)
