@@ -10,6 +10,8 @@ export type AttentionType =
   | 'system_error'
   | 'review_passed'
   | 'review_failed'
+  | 'sla_warning'
+  | 'sla_breached'
 
 export interface AttentionItem {
   id: string
