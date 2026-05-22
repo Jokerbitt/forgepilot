@@ -182,6 +182,7 @@ function DelegationsContent() {
   const [todayOnly, setTodayOnly] = useState(searchParams.get('today') === '1')
   const [hideTerminal, setHideTerminal] = useState(searchParams.get('hideTerminal') === '1')
   const [tagFilter, setTagFilter] = useState<string>(searchParams.get('tag') ?? 'Alle')
+  const [groupByBrief, setGroupByBrief] = useState(searchParams.get('groupByBrief') === '1')
   const [showAllRows, setShowAllRows] = useState(false)
   const currentSearch = searchParams.toString()
 
@@ -195,13 +196,14 @@ function DelegationsContent() {
     if (todayOnly)                 params.set('today',    '1')
     if (hideTerminal)              params.set('hideTerminal', '1')
     if (tagFilter !== 'Alle')      params.set('tag',      tagFilter)
+    if (groupByBrief)              params.set('groupByBrief', '1')
     const qs = params.toString()
     const nextUrl = qs ? `${pathname}?${qs}` : pathname
     if (currentSearch !== qs) {
       router.replace(nextUrl, { scroll: false })
     }
     setShowAllRows(false)
-  }, [statusFilter, projectFilter, approvalFilter, searchQuery, todayOnly, hideTerminal, tagFilter, pathname, router, currentSearch])
+  }, [statusFilter, projectFilter, approvalFilter, searchQuery, todayOnly, hideTerminal, tagFilter, groupByBrief, pathname, router, currentSearch])
 
   // Sort
   type SortKey = 'goal' | 'status' | 'time' | 'cost' | 'priority'
@@ -671,6 +673,31 @@ function DelegationsContent() {
   const visibleDelegations = showAllRows ? sortedDelegations : sortedDelegations.slice(0, 50)
   const hiddenRowCount = Math.max(0, sortedDelegations.length - visibleDelegations.length)
 
+  // Group-by-brief: map briefId → { label, briefId, items[] }
+  type BriefGroup = { briefId: string | null; label: string; href: string | null; items: typeof visibleDelegations }
+  const briefGroups: BriefGroup[] = useMemo(() => {
+    if (!groupByBrief) return []
+    const map = new Map<string, BriefGroup>()
+    for (const d of visibleDelegations) {
+      const key = d.briefId ?? '__none__'
+      if (!map.has(key)) {
+        map.set(key, {
+          briefId: d.briefId ?? null,
+          label: d.briefTitle ?? (d.briefId ? `Brief ${d.briefId.slice(0, 8)}` : 'Kein Brief'),
+          href: d.briefId ? `/project-briefs/${d.briefId}` : null,
+          items: [],
+        })
+      }
+      map.get(key)!.items.push(d)
+    }
+    // Sort: groups with a brief first (alphabetically), then "Kein Brief"
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.briefId === null) return 1
+      if (b.briefId === null) return -1
+      return a.label.localeCompare(b.label)
+    })
+  }, [groupByBrief, visibleDelegations])
+
   const runningCount = delegations.filter(d => d.status === 'running').length
   const pendingCount = delegations.filter(d => d.status === 'pending').length
   const failedCount = delegations.filter(d => d.status === 'failed').length
@@ -1024,6 +1051,17 @@ function DelegationsContent() {
                 >
                   ⚡ Nur aktive
                 </button>
+                <button
+                  onClick={() => setGroupByBrief(v => !v)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    groupByBrief
+                      ? 'bg-indigo-700 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700'
+                  }`}
+                  title="Delegationen nach Projektbrief gruppieren"
+                >
+                  ◇ Nach Brief
+                </button>
               </div>
 
               {/* Search input */}
@@ -1186,13 +1224,49 @@ function DelegationsContent() {
                   </thead>
                   <tbody className="divide-y divide-gray-800/70">
                     {visibleDelegations.map((del, index) => {
+                      // Group header row: render before first item of a new brief group
+                      const prevDel = visibleDelegations[index - 1]
+                      const isNewGroup = groupByBrief && (
+                        index === 0 ||
+                        (prevDel?.briefId ?? null) !== (del.briefId ?? null)
+                      )
+                      const groupCount = groupByBrief
+                        ? briefGroups.find(g => g.briefId === (del.briefId ?? null))?.items.length ?? 0
+                        : 0
                       const isDone = del.status === 'completed' || del.status === 'failed' || del.status === 'cancelled'
                       const canCancel = del.status === 'pending' || del.status === 'approved'
                       const canDelete = isDone
                       const canApprove = del.status === 'pending' && del.contract.requiresApproval && del.contract.riskClass !== 'C'
                       const canStart = del.status === 'approved'
 
+                      const briefGroupLabel = del.briefTitle ?? (del.briefId ? `Brief ${del.briefId.slice(0, 8)}` : 'Kein Brief')
+                      const briefGroupHref = del.briefId ? `/project-briefs/${del.briefId}` : null
+
                       return (
+                        <>
+                          {isNewGroup && (
+                            <tr key={`group-hdr-${del.briefId ?? 'none'}`} className="bg-gray-900/70 border-t-2 border-indigo-900/40">
+                              <td colSpan={7} className="px-4 py-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-indigo-400/70 text-xs">◇</span>
+                                  {briefGroupHref ? (
+                                    <a
+                                      href={briefGroupHref}
+                                      className="text-xs font-semibold text-indigo-300 hover:text-indigo-200 transition-colors"
+                                      onClick={e => e.stopPropagation()}
+                                    >
+                                      {briefGroupLabel}
+                                    </a>
+                                  ) : (
+                                    <span className="text-xs font-semibold text-gray-500">{briefGroupLabel}</span>
+                                  )}
+                                  <span className="text-[10px] bg-gray-800 border border-gray-700 rounded-full px-2 py-0.5 text-gray-500">
+                                    {groupCount}
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
                         <tr
                           key={del.id}
                           className={`hover:bg-gray-800/40 transition-colors group cursor-pointer ${
@@ -1568,6 +1642,7 @@ function DelegationsContent() {
                             </div>
                           </td>
                         </tr>
+                        </>
                       )
                     })}
                   </tbody>
