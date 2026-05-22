@@ -1,9 +1,20 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AttentionItem } from '@/lib/models/attention'
 import type { Delegation } from '@/lib/models/delegation'
 import type { ProjectBrief } from '@/lib/models/project-brief'
 import type { MemoryCard } from '@/lib/knowledge/types'
 import { buildDailyReport, renderDailyReportMarkdown } from './daily-report'
+
+vi.mock('@/lib/eval/grok-critic', () => ({
+  getCriticProviderPlan: () => ({
+    mode: 'auto',
+    candidates: [
+      { providerId: 'anthropic', model: 'claude-sonnet-4-5' },
+      { providerId: 'ollama', model: 'qwen2.5-coder:14b' },
+    ],
+    description: 'auto (anthropic:claude-sonnet-4-5, ollama:qwen2.5-coder:14b)',
+  }),
+}))
 
 const now = new Date('2026-05-21T12:00:00.000Z')
 
@@ -97,7 +108,7 @@ function attention(overrides: Partial<AttentionItem>): AttentionItem {
 }
 
 describe('buildDailyReport', () => {
-  it('builds a JSON + Markdown report for Grok and agent handoff', () => {
+  it('builds a JSON + Markdown report for universal LLM handoff', () => {
     const report = buildDailyReport({
       now,
       storageMode: 'dual',
@@ -129,9 +140,57 @@ describe('buildDailyReport', () => {
     expect(report.status.quality.prsCreated).toBe(1)
     expect(report.status.quality.knowledgeWritebacks).toBe(1)
     expect(report.markdown).toContain('ForgePilot Daily Report')
-    expect(report.prompts.some(prompt => prompt.target === 'grok')).toBe(true)
+    expect(report.assistantRouting.recommended.providerId).toBe('anthropic')
+    expect(report.firstRealValueLoop.progressPct).toBeGreaterThanOrEqual(80)
+    expect(report.firstRealValueLoop.currentStep.id).toBe('writeback')
+    expect(report.prompts.some(prompt => prompt.target === 'assistant-auto')).toBe(true)
     expect(report.prompts.some(prompt => prompt.title === 'Coding validation pass')).toBe(true)
     expect(report.markdown).toContain('Coding validation pass')
+    expect(report.markdown).toContain('## Assistant Routing')
+    expect(report.markdown).toContain('## First Real Value Loop')
+  })
+
+  it('counts repository memory cards linked by sourceId as knowledge writebacks', () => {
+    const linkedCard = card({
+      id: 'card-linked-by-source',
+      sourceIds: ['11111111-1111-4111-8111-111111111111'],
+      tags: ['completed', 'approved', 'local-agent'],
+    })
+
+    const report = buildDailyReport({
+      now,
+      storageMode: 'postgres',
+      authDisabled: false,
+      projectBriefs: [brief({ status: 'accepted' })],
+      knowledgeCards: [linkedCard],
+      attentionItems: [],
+      delegations: [
+        delegation({
+          status: 'completed',
+          summaryReport: {
+            keyPoints: ['Done'],
+            changes: [],
+            timeTakenMinutes: 3,
+            prUrl: 'https://github.com/Jokerbitt/forgepilot/pull/2',
+          },
+          criticScore: {
+            correctness: 90,
+            efficiency: 80,
+            drift: 95,
+            verdict: 'approved',
+            summary: 'Good',
+            runAt: '2026-05-21T11:05:00.000Z',
+          },
+        }),
+      ],
+    })
+
+    expect(report.status.quality.knowledgeWritebacks).toBe(1)
+    expect(report.firstRealValueLoop.progressPct).toBe(100)
+    expect(report.firstRealValueLoop.currentStep.id).toBe('writeback')
+    expect(report.firstRealValueLoop.currentStep.status).toBe('done')
+    expect(report.firstRealValueLoop.currentStep.href).toMatch(/^\/idea\?prompt=/)
+    expect(decodeURIComponent(report.firstRealValueLoop.currentStep.href)).toContain('kleines reales ForgePilot-Entwicklungsticket')
   })
 
   it('raises critical risk when auth is disabled', () => {
@@ -148,6 +207,7 @@ describe('buildDailyReport', () => {
     expect(report.executiveVerdict.status).toBe('red')
     expect(report.risks.map(risk => risk.id)).toContain('auth-disabled')
     expect(report.nextActions[0]?.id).toBe('secure-local-auth')
+    expect(report.firstRealValueLoop.currentStep.id).toBe('brief')
   })
 
   it('flags JSON primary storage and low critic coverage', () => {
@@ -155,7 +215,7 @@ describe('buildDailyReport', () => {
       now,
       storageMode: 'json',
       authDisabled: false,
-      projectBriefs: [],
+      projectBriefs: [brief({ status: 'accepted' })],
       knowledgeCards: [],
       attentionItems: [],
       delegations: [
@@ -169,6 +229,8 @@ describe('buildDailyReport', () => {
       expect.arrayContaining(['json-primary-storage', 'failed-delegations', 'low-critic-coverage']),
     )
     expect(report.nextActions.map(action => action.id)).toContain('postgres-cutover-checklist')
+    expect(report.firstRealValueLoop.currentStep.id).toBe('pr')
+    expect(report.firstRealValueLoop.currentStep.status).toBe('active')
   })
 
   it('detects stale running delegations and open attention items', () => {
@@ -209,6 +271,8 @@ describe('renderDailyReportMarkdown', () => {
 
     const markdown = renderDailyReportMarkdown(report)
     expect(markdown).toContain('## Executive Verdict')
+    expect(markdown).toContain('## First Real Value Loop')
+    expect(markdown).toContain('## Assistant Routing')
     expect(markdown).toContain('## Top Risks')
     expect(markdown).toContain('## Next Actions')
   })

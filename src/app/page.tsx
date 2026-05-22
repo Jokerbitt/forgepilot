@@ -1,10 +1,14 @@
 import Link from 'next/link'
 import { ConnectorHealthBar } from '@/components/command-center/ConnectorHealthBar'
 import { ApiKeysBanner } from '@/components/shared/ApiKeysBanner'
+import { NoAIProviderBanner } from '@/components/shared/NoAIProviderBanner'
 import { CommandCenterOverview, CommandCenterPrinciples } from '@/components/command-center/CommandCenterOverview'
 import { OnboardingBanner } from '@/components/command-center/OnboardingBanner'
 import { OnboardingBanner as OnboardingWizardBanner } from '@/components/onboarding/OnboardingBanner'
+import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist'
 import { buttonClassName } from '@/components/ui/primitives'
+import { CriticalPathWidget } from '@/components/critical-path'
+import { MissionControlPanel } from '@/components/mission-control'
 
 export default function Home() {
   return (
@@ -19,7 +23,7 @@ export default function Home() {
               Reduziert auf Entscheidung, Ausfuehrung und Review. Alles Weitere bleibt bewusst zweitrangig.
             </p>
           </div>
-          <div className="flex shrink-0 flex-row gap-2">
+          <div className="flex shrink-0 flex-row flex-wrap gap-2">
             <Link href="/idea" className={buttonClassName('secondary')}>
               Neue Idee
             </Link>
@@ -29,12 +33,21 @@ export default function Home() {
           </div>
         </header>
 
+        <OnboardingChecklist />
+
+        <MissionControlPanel />
+
         <div className="mb-5">
           <CommandCenterPrinciples />
         </div>
         <CommandCenterOverview />
 
+        <section className="mt-6">
+          <CriticalPathWidget />
+        </section>
+
         <section className="mt-6 space-y-4" aria-label="Setup-Hinweise">
+          <NoAIProviderBanner />
           <ApiKeysBanner />
           <OnboardingWizardBanner />
           <OnboardingBanner />

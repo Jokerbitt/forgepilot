@@ -1,8 +1,9 @@
 import type { WorkItem } from '../models/work-item'
 import type { NBARecommendation, SuggestedAction } from '../models/nba'
 import type { ExecutionRoute } from '../models/delegation'
-import { calculateScore } from './scorer'
+import { calculateScore, scoreWorkItem } from './scorer'
 import { getNBAConfig } from './nba-config'
+import type { WorkItem as JokWorkItem, ScoredItem, ScoringContext } from './types'
 
 export function prioritizeItems(items: WorkItem[]): NBARecommendation[] {
   const config = getNBAConfig()
@@ -88,4 +89,87 @@ export function prioritizeItems(items: WorkItem[]): NBARecommendation[] {
   }
 
   return sortedRecs.slice(0, config.maxRecommendations)
+}
+
+// ─── JOK-31: prioritizeItems (simplified JOK WorkItem type) ──────────────────
+// Scores all items, sorts descending, generates reasoning per item.
+export function prioritizeJokItems(
+  items: JokWorkItem[],
+  context?: ScoringContext,
+): ScoredItem[] {
+  if (items.length === 0) return []
+
+  return items
+    .map((item) => {
+      const score = scoreWorkItem(item, context)
+      const reasoning = buildReasoning(item, score, context)
+      return { item, score, reasoning }
+    })
+    .sort((a, b) => b.score - a.score)
+}
+
+function buildReasoning(
+  item: JokWorkItem,
+  score: number,
+  context?: ScoringContext,
+): string[] {
+  const reasons: string[] = []
+  const now = context?.currentDate ? new Date(context.currentDate) : new Date()
+
+  // Priority
+  const priorityLabels: Record<number, string> = {
+    1: 'Urgent priority',
+    2: 'High priority',
+    3: 'Medium priority',
+    4: 'Low priority',
+    0: 'No priority set',
+  }
+  const priorityLabel = priorityLabels[item.priority] ?? `Priority ${item.priority}`
+  reasons.push(priorityLabel)
+
+  // Status
+  const statusLower = item.status.toLowerCase()
+  if (statusLower === 'in_progress' || statusLower === 'in-progress') {
+    reasons.push('Currently in progress (+15)')
+  } else if (statusLower === 'backlog') {
+    reasons.push('In backlog (-10)')
+  }
+
+  // DueDate
+  if (item.dueDate) {
+    const due = new Date(item.dueDate)
+    const msPerDay = 1000 * 60 * 60 * 24
+    const daysUntilDue = (due.getTime() - now.getTime()) / msPerDay
+    if (daysUntilDue < 0) {
+      reasons.push('Overdue (+25)')
+    } else if (daysUntilDue < 3) {
+      reasons.push(`Due in ${Math.ceil(daysUntilDue)} day(s) (+20)`)
+    } else if (daysUntilDue < 7) {
+      reasons.push(`Due in ${Math.ceil(daysUntilDue)} day(s) (+10)`)
+    }
+  }
+
+  // Risk class
+  if (item.riskClass === 'critical') {
+    reasons.push('Critical risk class (+15)')
+  } else if (item.riskClass === 'high') {
+    reasons.push('High risk class (+8)')
+  }
+
+  // Recency
+  if (item.lastUpdated) {
+    const diffHours =
+      (now.getTime() - new Date(item.lastUpdated).getTime()) / (1000 * 60 * 60)
+    if (diffHours <= 24) {
+      reasons.push('Updated in the last 24h (+5)')
+    }
+  }
+
+  // Score summary fallback if no reasons were added beyond priority
+  if (reasons.length === 1) {
+    reasons.push(`Total score: ${score}`)
+  }
+
+  // Return max 3 bullet points
+  return reasons.slice(0, 3)
 }

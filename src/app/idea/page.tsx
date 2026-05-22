@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { cx } from '@/components/ui/primitives'
 import type { IdeaHistoryEntry } from '@/lib/pilot/idea-history-store'
 import { IdeaRefinementWizard } from '@/components/idea/IdeaRefinementWizard'
@@ -83,6 +83,7 @@ function taskStatusIcon(s: TaskStatus): string {
 
 export default function IdeaPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [idea, setIdea] = useState('')
   const [stage, setStage] = useState<Stage>('idle')
   const [result, setResult] = useState<PipelineResult | null>(null)
@@ -94,6 +95,8 @@ export default function IdeaPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const historyPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const queryPrompt = searchParams.get('prompt')?.trim() ?? ''
+  const hasAssistantPrompt = Boolean(queryPrompt)
 
   /** M136: Create project brief from refined wizard output and navigate to it */
   const handleWizardBriefReady = useCallback(async (rawIdea: string, brief: RefinedBriefDraft) => {
@@ -133,6 +136,11 @@ export default function IdeaPage() {
   useEffect(() => {
     refreshHistory()
   }, [refreshHistory])
+
+  useEffect(() => {
+    if (!queryPrompt) return
+    setIdea(current => current.trim() ? current : queryPrompt)
+  }, [queryPrompt])
 
   // Adaptive history polling: faster when entries are in-flight
   useEffect(() => {
@@ -317,6 +325,24 @@ export default function IdeaPage() {
         {/* Input Box */}
         {stage === 'idle' || stage === 'error' ? (
           <div className="w-full space-y-4">
+            {hasAssistantPrompt && (
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-5 py-4 shadow-lg shadow-emerald-950/20">
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-sm text-emerald-300">
+                    ✓
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-emerald-200">
+                      Daily Report hat den nächsten Schritt vorbereitet
+                    </p>
+                    <p className="mt-1 text-sm leading-relaxed text-emerald-100/70">
+                      Der Vorschlag ist bereits eingefügt. Prüfe ihn kurz, passe Details an und erstelle daraus den nächsten fokussierten Brief.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className={cx(
               'relative w-full rounded-2xl border transition-all duration-200',
               idea.trim()
@@ -358,7 +384,7 @@ export default function IdeaPage() {
                     )}
                   >
                     <span>🚀</span>
-                    Build It
+                    {hasAssistantPrompt ? 'Brief aus Vorschlag erstellen' : 'Build It'}
                   </button>
                 </div>
               </div>

@@ -290,7 +290,14 @@ ${researchQuestionsText}`
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unbekannter Fehler'
     if (err instanceof AIProviderConfigurationError) {
-      return NextResponse.json({ error: message }, { status: 503 })
+      return NextResponse.json(
+        {
+          error: 'no_ai_provider',
+          message: 'Kein KI-Anbieter konfiguriert. Starte Ollama oder setze einen API Key.',
+          settingsUrl: '/settings',
+        },
+        { status: 503 },
+      )
     }
     return NextResponse.json({ error: `Research Run fehlgeschlagen: ${message}` }, { status: 500 })
   }

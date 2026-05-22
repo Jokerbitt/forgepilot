@@ -1,8 +1,8 @@
 /**
  * POST /api/eval/critic
  *
- * Sends delegation output to Grok for independent evaluation.
- * Returns a GrokCriticResult if xAI is configured, or 503 if not.
+ * Sends delegation output to the configured critic chain for independent evaluation.
+ * Returns a critic result if any configured provider works, or 503 if none do.
  *
  * Body: GrokCriticInput
  * Response: GrokCriticResult | { error: string }
@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { parseBody, isValidationError } from '@/lib/validation/api'
-import { runGrokCritic, runGrokCodeReview } from '@/lib/eval/grok-critic'
+import { getCriticProviderPlan, runGrokCritic, runGrokCodeReview } from '@/lib/eval/grok-critic'
 
 const CriticEvalSchema = z.object({
   type: z.literal('delegation'),
@@ -41,7 +41,10 @@ export async function POST(request: NextRequest) {
     const result = await runGrokCritic(body)
     if (!result) {
       return NextResponse.json(
-        { error: 'Grok (xAI) is not configured. Add XAI_API_KEY in Settings → AI Providers.' },
+        {
+          error: 'No critic provider is available. Configure FORGEPILOT_CRITIC_PROVIDERS or keep auto mode with xAI/Grok, Claude/OpenAI/OpenRouter, Ollama, or LM Studio configured.',
+          criticPlan: getCriticProviderPlan(),
+        },
         { status: 503 },
       )
     }
@@ -52,7 +55,10 @@ export async function POST(request: NextRequest) {
   const result = await runGrokCodeReview(body)
   if (!result) {
     return NextResponse.json(
-      { error: 'Grok (xAI) is not configured. Add XAI_API_KEY in Settings → AI Providers.' },
+      {
+        error: 'No critic provider is available. Configure FORGEPILOT_CRITIC_PROVIDERS or keep auto mode with xAI/Grok, Claude/OpenAI/OpenRouter, Ollama, or LM Studio configured.',
+        criticPlan: getCriticProviderPlan(),
+      },
       { status: 503 },
     )
   }

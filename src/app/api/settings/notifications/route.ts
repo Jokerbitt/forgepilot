@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth } from '@/lib/auth/require-auth'
 import { z } from 'zod'
 import {
   readNotificationPreferences,
@@ -22,11 +23,17 @@ const UpdatePrefsSchema = z.object({
 })
 
 export async function GET() {
+  const authError = await requireAuth()
+  if (authError) return authError
+
   const prefs = readNotificationPreferences()
   return NextResponse.json(prefs)
 }
 
 export async function PUT(request: NextRequest) {
+  const authError = await requireAuth()
+  if (authError) return authError
+
   let body: unknown
   try {
     body = await request.json()

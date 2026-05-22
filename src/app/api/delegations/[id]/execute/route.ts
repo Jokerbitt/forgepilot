@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth } from '@/lib/auth/require-auth'
 import { delegationLogger } from '@/lib/logger'
 import { withSpan } from '@/lib/tracing/tracer'
 import { checkRateLimit, buildRateLimitHeaders } from '@/lib/rate-limit'
@@ -27,6 +28,7 @@ import { persistGrokCriticForDelegation } from '@/lib/eval/auto-grok-critic'
 import { writebackExecutionInsights, writebackDelegationKnowledge } from '@/lib/knowledge/writeback'
 import { notifyExecutionResult } from '@/lib/notifications'
 import { checkBudget, wouldExceedBudget } from '@/lib/budget/guard'
+import { triggerChain } from '@/lib/delegations/chaining'
 
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import { buildContextPackage } from '@/lib/knowledge/context-package'
@@ -343,6 +345,11 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       // M207: Fan-in — notify parent if this is a parallel sub-delegation
       void checkParallelCompletion(finishedDelegation)
 
+      // M230: Delegation chaining — fire-and-forget, never blocks or fails the parent
+      if (success) {
+        void triggerChain(finishedDelegation, fullOutput).catch(() => {})
+      }
+
       {
 
       // Record quality outcome in skill-history (feeds Performance tab)
@@ -508,6 +515,11 @@ async function runWithOllamaAgent(
     if (finished) {
       // M207: Fan-in — notify parent if this is a parallel sub-delegation
       void checkParallelCompletion(finished)
+
+      // M230: Delegation chaining — fire-and-forget
+      if (result.success) {
+        void triggerChain(finished, result.summary).catch(() => {})
+      }
 
       const label = finished.title || finished.contract.goal.slice(0, 60)
       const savedStr = result.costSavings.savedUsd > 0
@@ -681,6 +693,9 @@ export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const authError = await requireAuth()
+  if (authError) return authError
+
   // Rate limit: 10 executions per minute per IP (AI calls are expensive)
   const rateCheck = checkRateLimit(_req, { limit: 10, windowSec: 60, keyPrefix: 'execute' })
   if (!rateCheck.allowed) {

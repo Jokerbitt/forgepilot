@@ -27,8 +27,15 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:backfill": "tsx scripts/backfill-json-to-postgres.ts",
+    "db:verify-cutover": "tsx scripts/verify-postgres-cutover.ts",
+    "critic:backfill": "tsx scripts/backfill-critic-scores.ts",
+    "knowledge:backfill": "tsx scripts/backfill-knowledge-writebacks.ts",
     "seed": "tsx scripts/seed-demo.ts",
-    "seed:clean": "rm -f config/local-items.json config/delegations.json config/orchestrated-runs.json && npm run seed"
+    "seed:clean": "rm -f config/local-items.json config/delegations.json config/orchestrated-runs.json && npm run seed",
+    "test:flow": "tsx scripts/test-flow.ts",
+    "test:flow:verbose": "tsx scripts/test-flow.ts --verbose",
+    "test:flow:ollama": "tsx scripts/test-flow.ts --provider=ollama --verbose",
+    "test:flow:dry": "tsx scripts/test-flow.ts --dry-run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",

@@ -75,7 +75,7 @@ NEXTAUTH_SECRET=<output von: openssl rand -base64 32>`}</code>
 
           {/* Footer: explicit local-only bypass hint */}
           <p className="text-xs leading-5 text-slate-600">
-            Unsicherer Dev-Bypass nur fuer isolierte lokale Tests:{' '}
+            Unsicherer Dev-Bypass nur fuer isolierte lokale Tests, in Production ignoriert:{' '}
             <code className="rounded bg-slate-950 px-1 py-0.5 text-slate-400">
               FORGEPILOT_AUTH_DISABLED=true
             </code>

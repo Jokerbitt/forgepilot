@@ -1,11 +1,15 @@
 export const dynamic = 'force-dynamic'
 import { type NextRequest, NextResponse } from 'next/server'
+import { requireAuth } from '@/lib/auth/require-auth'
 import { getNBAConfig, saveNBAConfig } from '@/lib/nba-engine/nba-config'
 import { parseBody } from '@/lib/validation/api'
 import { NBAConfigUpdateSchema } from '@/lib/validation/schemas'
 import { apiLogger } from '@/lib/logger'
 
 export async function GET() {
+  const authError = await requireAuth()
+  if (authError) return authError
+
   try {
     const config = getNBAConfig()
     return NextResponse.json(config)
@@ -16,6 +20,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const authError = await requireAuth()
+  if (authError) return authError
+
   const result = await parseBody(request, NBAConfigUpdateSchema)
   if (result instanceof NextResponse) return result
 

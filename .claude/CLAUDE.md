@@ -77,7 +77,7 @@ Ausnahmen — immer stoppen und fragen:
 - Add or update tests for behavior changes.
 - Do not commit secrets.
 - Treat `config/*.json` as runtime state unless the task is explicitly about fixtures/defaults.
-- RiskClass C always needs human approval.
+- RiskClass C always needs human approval AND an ADR in docs/adr/.
 - Keep meaningful decisions and handoffs in the NAS SSOT.
 
 ## Verification

@@ -5,6 +5,8 @@
  * Used for bidirectional sync: close Linear tickets when linked PRs merge.
  */
 
+import { readStoredApiKeys } from '@/lib/connectors/config'
+
 const LINEAR_API = 'https://api.linear.app/graphql'
 
 export interface LinearIssue {
@@ -131,7 +133,7 @@ export function extractLinearIssueIds(text: string): string[] {
 }
 
 export function createLinearClient(): LinearClient | null {
-  const key = process.env.LINEAR_API_KEY
+  const key = process.env.LINEAR_API_KEY ?? readStoredApiKeys().LINEAR_API_KEY
   if (!key) return null
   return new LinearClient(key)
 }

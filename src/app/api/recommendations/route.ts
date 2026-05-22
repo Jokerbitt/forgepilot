@@ -1,67 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
-import { readConnectorConfigs } from '@/lib/connectors/config'
-import { fetchLinearWorkItems } from '@/lib/connectors/linear-items'
-import { fetchGitHubWorkItems } from '@/lib/connectors/github-items'
-import { prioritizeItems } from '@/lib/nba-engine/prioritizer'
-import type { WorkItem } from '@/lib/models/work-item'
+import { prioritizeJokItems } from '@/lib/nba-engine/prioritizer'
+import type { WorkItem, RecommendationResult } from '@/lib/nba-engine/types'
 
 export const dynamic = 'force-dynamic'
 
-const LOCAL_ITEMS_FILE = path.join(process.cwd(), 'config', 'local-items.json')
+const DEFAULT_LIMIT = 10
+const MAX_LIMIT = 20
 
-function readLocalWorkItems(): WorkItem[] {
+const DELEGATIONS_FILE = path.join(process.cwd(), 'config', 'delegations.json')
+const LINEAR_FILE = path.join(process.cwd(), 'config', 'linear-issues.json')
+
+function readJsonFile<T>(filePath: string): T[] {
   try {
-    if (!fs.existsSync(LOCAL_ITEMS_FILE)) {
-      return []
-    }
-
-    return JSON.parse(fs.readFileSync(LOCAL_ITEMS_FILE, 'utf8')) as WorkItem[]
+    if (!fs.existsSync(filePath)) return []
+    const raw = fs.readFileSync(filePath, 'utf-8')
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed as T[]
   } catch {
     return []
   }
 }
 
-export async function GET(request: NextRequest) {
-  const configs = readConnectorConfigs()
-
+export async function GET(request: NextRequest): Promise<NextResponse<RecommendationResult>> {
   try {
-    const fetchers: Promise<WorkItem[]>[] = [
-      fetchLinearWorkItems(configs.linear ?? {}),
-      fetchGitHubWorkItems(configs.github ?? {})
+    const { searchParams } = new URL(request.url)
+    const limitParam = searchParams.get('limit')
+    const limit = Math.min(
+      MAX_LIMIT,
+      Math.max(1, limitParam ? parseInt(limitParam, 10) || DEFAULT_LIMIT : DEFAULT_LIMIT),
+    )
+
+    const items: WorkItem[] = [
+      ...readJsonFile<WorkItem>(DELEGATIONS_FILE),
+      ...readJsonFile<WorkItem>(LINEAR_FILE),
     ]
 
-    const results = await Promise.allSettled(fetchers)
+    const scored = prioritizeJokItems(items)
+    const top = scored.slice(0, limit)
 
-    const items: WorkItem[] = []
-    const errors: string[] = []
-    
-    items.push(...readLocalWorkItems())
-
-    for (const result of results) {
-      if (result.status === 'fulfilled') {
-        items.push(...result.value)
-      } else {
-        errors.push(result.reason instanceof Error ? result.reason.message : String(result.reason))
-      }
+    const result: RecommendationResult = {
+      items: top,
+      generatedAt: new Date().toISOString(),
+      totalItems: scored.length,
     }
 
-    // Pass all items through the NBA prioritizer
-    const recommendations = prioritizeItems(items)
-
-    return NextResponse.json({
-      recommendations,
-      total: recommendations.length,
-      ...(errors.length > 0 ? { errors } : {}),
-    })
-  } catch (error) {
-    return NextResponse.json(
-      {
-        error: 'Failed to fetch recommendations',
-        message: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 },
-    )
+    return NextResponse.json(result)
+  } catch {
+    const fallback: RecommendationResult = {
+      items: [],
+      generatedAt: new Date().toISOString(),
+      totalItems: 0,
+    }
+    return NextResponse.json(fallback)
   }
 }

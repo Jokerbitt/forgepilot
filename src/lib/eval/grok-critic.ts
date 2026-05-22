@@ -10,10 +10,231 @@
  *   if (criticResult) mergeWithPrimaryScore(primaryScore, criticResult)
  */
 
-import { generateText } from '@/lib/ai/text-generation'
+import { generateText, stripJsonCodeFence, type GenerateTextResult } from '@/lib/ai/text-generation'
+import { getModelSelection } from '@/lib/ai/providers/config-store'
 import { logger } from '@/lib/logger'
 
 const log = logger.child({ module: 'grok-critic' })
+
+const DEFAULT_LOCAL_CRITIC_MODEL = 'qwen2.5-coder:14b'
+const CRITIC_MODE_ENV = 'FORGEPILOT_CRITIC_MODE'
+const CRITIC_PROVIDERS_ENV = 'FORGEPILOT_CRITIC_PROVIDERS'
+const LEGACY_CRITIC_PROVIDER_ENV = 'FORGEPILOT_CRITIC_PROVIDER'
+const LEGACY_CRITIC_MODEL_ENV = 'FORGEPILOT_CRITIC_MODEL'
+
+interface CriticProviderCandidate {
+  providerId: string
+  model?: string
+}
+
+function parseCriticProviderList(value: string | undefined): CriticProviderCandidate[] {
+  if (!value) return []
+
+  return value
+    .split(',')
+    .map(entry => entry.trim())
+    .filter(Boolean)
+    .map(entry => {
+      const equalsIdx = entry.indexOf('=')
+      if (equalsIdx > 0) {
+        return {
+          providerId: entry.slice(0, equalsIdx).trim(),
+          model: entry.slice(equalsIdx + 1).trim() || undefined,
+        }
+      }
+
+      const colonIdx = entry.indexOf(':')
+      if (colonIdx > 0) {
+        return {
+          providerId: entry.slice(0, colonIdx).trim(),
+          model: entry.slice(colonIdx + 1).trim() || undefined,
+        }
+      }
+
+      return { providerId: entry }
+    })
+    .filter(candidate => Boolean(candidate.providerId))
+}
+
+function addCandidate(candidates: CriticProviderCandidate[], candidate: CriticProviderCandidate): void {
+  if (!candidate.providerId) return
+  candidates.push(candidate)
+}
+
+function getCriticProviderCandidates(
+  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>
+): CriticProviderCandidate[] {
+  const mode = String(env[CRITIC_MODE_ENV] ?? 'auto').trim().toLowerCase()
+  const configuredModel = env[LEGACY_CRITIC_MODEL_ENV]?.trim()
+  const candidates: CriticProviderCandidate[] = []
+  const explicitCandidates = parseCriticProviderList(env[CRITIC_PROVIDERS_ENV])
+
+  for (const candidate of explicitCandidates) addCandidate(candidates, candidate)
+
+  const configuredProvider = env[LEGACY_CRITIC_PROVIDER_ENV]?.trim()
+  if (configuredProvider && !explicitCandidates.length) {
+    addCandidate(candidates, { providerId: configuredProvider, model: configuredModel || undefined })
+  }
+
+  if (mode === 'single') {
+    return dedupeCriticCandidates(candidates.length > 0 ? candidates : [{ providerId: 'xai', model: configuredModel || undefined }])
+  }
+
+  try {
+    const selection = getModelSelection()
+    addCandidate(candidates, { providerId: selection.codingProvider, model: selection.codingModel })
+    if (selection.codingFallbackProvider) {
+      addCandidate(candidates, {
+        providerId: selection.codingFallbackProvider,
+        model: selection.codingFallbackModel,
+      })
+    }
+    addCandidate(candidates, { providerId: selection.fastProvider, model: selection.fastModel })
+    if (selection.fastFallbackProvider) {
+      addCandidate(candidates, {
+        providerId: selection.fastFallbackProvider,
+        model: selection.fastFallbackModel,
+      })
+    }
+  } catch (err) {
+    log.warn({ event: 'critic.model_selection_unavailable', reason: err instanceof Error ? err.message : String(err) })
+  }
+
+  for (const candidate of [
+    { providerId: 'xai', model: 'grok-3-mini' },
+    { providerId: 'anthropic', model: 'claude-sonnet-4-5' },
+    { providerId: 'openai', model: 'o3-mini' },
+    { providerId: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free' },
+    { providerId: 'groq', model: 'llama-3.3-70b-versatile' },
+    { providerId: 'deepseek', model: 'deepseek-reasoner' },
+    { providerId: 'gemini', model: 'gemini-1.5-pro' },
+    { providerId: 'ollama', model: DEFAULT_LOCAL_CRITIC_MODEL },
+    { providerId: 'lm-studio', model: 'local-model' },
+  ]) {
+    addCandidate(candidates, candidate)
+  }
+
+  return dedupeCriticCandidates(candidates)
+}
+
+function dedupeCriticCandidates(candidates: CriticProviderCandidate[]): CriticProviderCandidate[] {
+  const seen = new Set<string>()
+  return candidates.filter(candidate => {
+    const providerId = candidate.providerId.trim()
+    const model = candidate.model?.trim()
+    const key = `${providerId}:${model ?? ''}`
+    if (!providerId || seen.has(key)) return false
+    seen.add(key)
+    candidate.providerId = providerId
+    candidate.model = model || undefined
+    return true
+  })
+}
+
+function describeCriticConfig(env: Record<string, string | undefined> = process.env as Record<string, string | undefined>): string {
+  const mode = String(env[CRITIC_MODE_ENV] ?? 'auto').trim().toLowerCase()
+  const providers = getCriticProviderCandidates(env)
+    .map(candidate => candidate.model ? `${candidate.providerId}:${candidate.model}` : candidate.providerId)
+    .join(', ')
+
+  return `${mode || 'auto'} (${providers})`
+}
+
+export function getCriticProviderPlan(env?: Record<string, string | undefined>): {
+  mode: string
+  candidates: CriticProviderCandidate[]
+  description: string
+} {
+  const source = env ?? process.env as Record<string, string | undefined>
+  const mode = String(source[CRITIC_MODE_ENV] ?? 'auto').trim().toLowerCase() || 'auto'
+  const candidates = getCriticProviderCandidates(source)
+  return {
+    mode,
+    candidates,
+    description: describeCriticConfig(source),
+  }
+}
+
+function buildCriticUnavailableMessage(): string {
+  return (
+    'No critic provider returned valid JSON. Configure ' +
+    `${CRITIC_PROVIDERS_ENV}="xai:grok-3-mini,anthropic:claude-sonnet-4-5,ollama:qwen2.5-coder:14b" ` +
+    `or leave ${CRITIC_MODE_ENV}=auto to try configured cloud providers and local Ollama/LM Studio.`
+  )
+}
+
+async function generateCriticJson(options: {
+  system: string
+  prompt: string
+  maxTokens: number
+  event: string
+}) {
+  let lastError: unknown
+
+  for (const candidate of getCriticProviderCandidates()) {
+    try {
+      return await generateText({
+        system: options.system,
+        prompt: options.prompt,
+        purpose: 'fast',
+        providerId: candidate.providerId,
+        anthropicModel: candidate.model,
+        maxTokens: options.maxTokens,
+      })
+    } catch (err) {
+      lastError = err
+      log.warn({
+        event: options.event,
+        providerId: candidate.providerId,
+        reason: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(buildCriticUnavailableMessage())
+}
+
+async function generateParsedCriticJson<T>(options: {
+  system: string
+  prompt: string
+  maxTokens: number
+  event: string
+  parseEvent: string
+}): Promise<{ parsed: T; result: GenerateTextResult }> {
+  let lastError: unknown
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const prompt = attempt === 0
+      ? options.prompt
+      : `${options.prompt}
+
+Your previous response was invalid JSON. Retry with compact JSON only. Escape all quotes inside strings. Do not include markdown fences or commentary.`
+
+    const result = await generateCriticJson({
+      system: options.system,
+      prompt,
+      maxTokens: options.maxTokens,
+      event: options.event,
+    })
+
+    try {
+      return {
+        parsed: JSON.parse(stripJsonCodeFence(result.text)) as T,
+        result,
+      }
+    } catch (err) {
+      lastError = err
+      log.warn({
+        event: options.parseEvent,
+        providerId: result.provider,
+        attempt: attempt + 1,
+        reason: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(buildCriticUnavailableMessage())
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -86,8 +307,8 @@ Respond ONLY with valid JSON. No markdown fences. No prose.`
 // ─── Delegation output evaluator ──────────────────────────────────────────────
 
 /**
- * Send delegation output to Grok for scoring.
- * Returns null if xAI is not configured (graceful degradation).
+ * Send delegation output to a critic provider for scoring.
+ * Prefers Grok/xAI, then falls back to local Ollama for local-first coverage.
  */
 export async function runGrokCritic(input: GrokCriticInput): Promise<GrokCriticResult | null> {
   const criteriaList = input.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n')
@@ -120,19 +341,18 @@ Respond with JSON exactly matching this schema:
 }`
 
   try {
-    const result = await generateText({
+    const { parsed, result } = await generateParsedCriticJson<Omit<GrokCriticResult, 'providerId' | 'evaluatedAt' | 'rawResponse'>>({
       system: CRITIC_SYSTEM_PROMPT,
       prompt,
-      purpose: 'fast',
-      providerId: 'xai',
       maxTokens: 1000,
+      event: 'grok.critic.provider_failed',
+      parseEvent: 'grok.critic.invalid_json',
     })
-
-    const parsed = JSON.parse(result.text) as Omit<GrokCriticResult, 'providerId' | 'evaluatedAt' | 'rawResponse'>
 
     log.info({
       event: 'grok.critic.eval',
       delegation: input.delegationTitle,
+      providerId: result.provider,
       verdict: parsed.verdict,
       grade: parsed.overallGrade,
     })
@@ -152,8 +372,8 @@ Respond with JSON exactly matching this schema:
 // ─── Code reviewer ────────────────────────────────────────────────────────────
 
 /**
- * Ask Grok to review a single file for security + correctness issues.
- * Returns null if xAI is not configured.
+ * Ask the critic to review a single file for security + correctness issues.
+ * Prefers Grok/xAI, then falls back to local Ollama for local-first coverage.
  */
 export async function runGrokCodeReview(input: CodeReviewInput): Promise<CodeReviewResult | null> {
   const diffSection = input.diff ? `\nDIFF:\n${input.diff.slice(0, 3000)}` : ''
@@ -175,19 +395,18 @@ Respond with JSON exactly matching this schema:
 }`
 
   try {
-    const result = await generateText({
+    const { parsed, result } = await generateParsedCriticJson<Omit<CodeReviewResult, 'providerId' | 'reviewedAt' | 'rawResponse'>>({
       system: CODE_REVIEW_SYSTEM_PROMPT,
       prompt,
-      purpose: 'fast',
-      providerId: 'xai',
       maxTokens: 1500,
+      event: 'grok.critic.review.provider_failed',
+      parseEvent: 'grok.critic.review.invalid_json',
     })
-
-    const parsed = JSON.parse(result.text) as Omit<CodeReviewResult, 'providerId' | 'reviewedAt' | 'rawResponse'>
 
     log.info({
       event: 'grok.critic.review',
       file: input.filePath,
+      providerId: result.provider,
       verdict: parsed.verdict,
       securityCount: parsed.securityIssues.length,
     })

@@ -18,6 +18,10 @@ vi.mock('@/lib/ai/providers/registry', () => ({
   getProviderInstance: vi.fn(),
 }))
 
+vi.mock('../auto-router', () => ({
+  resolveProvider: vi.fn(),
+}))
+
 vi.mock('@/lib/connectors/config', () => ({
   readStoredApiKeys: vi.fn(() => ({})),
 }))
@@ -41,6 +45,7 @@ vi.mock('@/lib/logger', () => ({
 // ── Imports after mocks ────────────────────────────────────────────────────────
 
 import { generateText, AIProviderConfigurationError } from '../text-generation'
+import { resolveProvider } from '../auto-router'
 import { getModelSelection, getAllProviderConfigs } from '@/lib/ai/providers/config-store'
 import { getProviderInstance } from '@/lib/ai/providers/registry'
 import { aiLogger } from '@/lib/logger'
@@ -81,6 +86,16 @@ const DEFAULT_OPTIONS = {
 describe('generateText — M128 Multi-Provider Fallback', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(resolveProvider).mockResolvedValue({
+      mode: 'auto',
+      providerId: 'placeholder',
+      model: 'none',
+      isFree: true,
+      isLocal: true,
+      reason: 'test default',
+    })
+    delete process.env.LLM_MODE
+    delete process.env.ANTHROPIC_API_KEY
   })
 
   it('returns primary provider result when it succeeds', async () => {
@@ -227,5 +242,41 @@ describe('generateText — M128 Multi-Provider Fallback', () => {
     expect(fallback.generateText).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'fallback-model-v2' }),
     )
+  })
+
+  it('auto-routes when the configured primary provider is missing its API key', async () => {
+    const localProvider = makeProvider('ollama', 'local-response')
+
+    vi.mocked(getModelSelection).mockReturnValue({
+      fastProvider: 'anthropic',
+      fastModel: 'claude-haiku-4-5',
+      codingProvider: 'anthropic',
+      codingModel: 'claude-sonnet-4-5',
+    })
+    vi.mocked(getAllProviderConfigs).mockReturnValue([
+      { ...makeConfig('anthropic'), apiKeyRef: 'ANTHROPIC_API_KEY' },
+      makeConfig('ollama'),
+    ] as never)
+    vi.mocked(resolveProvider).mockResolvedValue({
+      mode: 'auto',
+      providerId: 'ollama',
+      model: 'llama3.2:3b',
+      isFree: true,
+      isLocal: true,
+      reason: 'auto: Ollama running with model "llama3.2:3b"',
+    })
+    vi.mocked(getProviderInstance).mockReturnValue(localProvider as never)
+
+    const result = await generateText(DEFAULT_OPTIONS)
+
+    expect(resolveProvider).toHaveBeenCalledWith('fast')
+    expect(getProviderInstance).toHaveBeenCalledWith('ollama')
+    expect(localProvider.generateText).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'llama3.2:3b' }),
+    )
+    expect(result).toMatchObject({
+      provider: 'ollama',
+      text: 'local-response',
+    })
   })
 })

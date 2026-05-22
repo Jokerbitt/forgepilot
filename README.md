@@ -98,7 +98,7 @@ Add any OpenAI-compatible provider via Settings → Providers — no code change
 **Infrastructure**
 - Multi-provider with hot-swap (no restart needed)
 - PostgreSQL persistence (Drizzle ORM) with local Docker or any hosted Postgres
-- Mandatory auth — secure by default, even on localhost; only `FORGEPILOT_AUTH_DISABLED=true` bypasses it for isolated local development
+- Mandatory auth — secure by default, even on localhost; `FORGEPILOT_AUTH_DISABLED=true` works only outside production for isolated local development
 - Command Center with next-best-action focus
 - Basic project and delegation overview
 - JSON export / import
@@ -134,6 +134,7 @@ npm run dev
 docker-compose up -d
 npm run db:push
 FORGEPILOT_DELEGATION_STORAGE=dual npm run db:backfill  # one-time migration if needed
+npm run db:verify-cutover
 ```
 
 **Any hosted Postgres** (Supabase, Neon, Railway, Fly.io)
@@ -142,6 +143,30 @@ DATABASE_URL=postgresql://... npm run db:push
 ```
 
 For a cautious migration, start with `FORGEPILOT_DELEGATION_STORAGE=dual`: ForgePilot keeps JSON as the primary read path and mirrors delegation writes into Postgres. After backfill and validation, switch to `FORGEPILOT_DELEGATION_STORAGE=postgres`.
+
+---
+
+## Storage & Persistenz
+
+ForgePilot unterstützt drei Storage-Modi (env var `STORAGE_MODE`):
+
+| Modus | Geeignet für | Anforderungen |
+|---|---|---|
+| `json` (Default) | Entwicklung, lokaler Test, Bootstrap | keine |
+| `dual` | Migration zu PostgreSQL | `DATABASE_URL` |
+| `postgres` | Produktion | `DATABASE_URL` |
+
+**JSON ist kein Production-Persistenzpfad** — kein ACID, Race Conditions bei parallelen Schreibzugriffen möglich.
+
+```bash
+# Status prüfen
+curl http://localhost:3000/api/storage-status
+
+# Migration (dry-run zuerst)
+npx tsx scripts/backfill-json-to-postgres.ts --dry-run
+npx tsx scripts/backfill-json-to-postgres.ts
+npm run db:verify-cutover
+```
 
 ---
 

@@ -18,6 +18,7 @@ import { aiLogger } from '@/lib/logger'
 import { withSpan } from '@/lib/tracing/tracer'
 import { withRetry } from './retry'
 import { withFallback } from './fallback'
+import { resolveProvider } from './auto-router'
 
 type ModelPurpose = 'fast' | 'coding'
 
@@ -64,6 +65,26 @@ export async function generateText(options: GenerateTextOptions): Promise<Genera
   const fallbackModelId = purpose === 'coding'
     ? selection.codingFallbackModel
     : selection.fastFallbackModel
+
+  // ── Auto-mode safety route ────────────────────────────────────────────────
+  // If LLM_MODE is explicitly set, honor it. If no mode is set but the stored
+  // primary provider is missing its required credential, fail over to the best
+  // available provider instead of breaking local-first workflows.
+  const llmModeEnvSet = typeof process.env.LLM_MODE === 'string' && process.env.LLM_MODE.trim().length > 0
+  const primaryConfig = getAllProviderConfigs().find(c => c.id === primaryProviderId)
+  const primaryMissingCredential = Boolean(
+    primaryConfig?.apiKeyRef && resolveApiKey(primaryConfig).length === 0
+  )
+
+  if (!options.providerId && (llmModeEnvSet || primaryMissingCredential)) {
+    const autoResult = await resolveProvider(purpose)
+    if (autoResult.providerId !== 'placeholder') {
+      return callProvider(autoResult.providerId, autoResult.model, purpose, options)
+    }
+    // placeholder = no provider available; fall through so the configured
+    // provider path still returns its established, specific error message.
+  }
+  // ── end auto-mode safety route ────────────────────────────────────────────
 
   const hasFallback = Boolean(
     fallbackProviderId && fallbackProviderId !== primaryProviderId

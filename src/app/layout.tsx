@@ -24,7 +24,7 @@ export default function RootLayout({
         {/* Blocking theme script — prevents flash of wrong theme */}
         <script dangerouslySetInnerHTML={{ __html: themeScriptContent }} />
       </head>
-      <body className="bg-[#07070c] text-white min-h-screen dark:bg-[#07070c] dark:text-white">
+      <body className="bg-[#07070c] text-white min-h-screen overflow-x-hidden dark:bg-[#07070c] dark:text-white">
         <ToastProvider>
           <GlobalKeyboardHandler />
           <GlobalSearch />

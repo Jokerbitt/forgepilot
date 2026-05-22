@@ -30,6 +30,7 @@ import { formatAge, isCreatedToday } from '@/lib/utils/delegation-age'
 import { DelegationDrawer } from '@/components/delegation/DelegationDrawer'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
 import { NewDelegationDialog } from '@/components/delegation/NewDelegationDialog'
+import { QuickCreateDelegationModal } from '@/components/delegation/QuickCreateDelegationModal'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
 import { CriticScorePill } from '@/components/delegation/CriticScorePill'
 import { AutopilotReadinessPill } from '@/components/delegation/AutopilotReadinessBadge'
@@ -65,6 +66,16 @@ const GOAL_STYLE: Record<string, string> = {
   completed: 'line-through text-gray-500 decoration-green-500/50 decoration-2',
   failed:    'line-through text-red-400/60 decoration-red-600/60',
   cancelled: 'line-through text-gray-600',
+}
+
+function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
+  switch (status) {
+    case 'completed':  return { textClass: 'line-through text-gray-500', icon: '✓', iconClass: 'text-green-500' }
+    case 'cancelled':  return { textClass: 'line-through text-gray-500', icon: '✕', iconClass: 'text-gray-400' }
+    case 'failed':     return { textClass: 'line-through text-red-400',   icon: '✕', iconClass: 'text-red-500' }
+    case 'in_progress': return { textClass: '', icon: '●', iconClass: 'text-yellow-400' }
+    default:           return { textClass: 'text-gray-300', icon: '○', iconClass: 'text-gray-500' }
+  }
 }
 
 const APPROVAL_FILTER_LABELS: Record<ApprovalFilter, string> = {
@@ -106,10 +117,12 @@ function DelegationsContent() {
   const [loading, setLoading] = useState(true)
   const [selectedDelegation, setSelectedDelegation] = useState<Delegation | null>(null)
   const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set())
-  // ?new=1 or ?template=<id> auto-opens the dialog on mount
+  // ?new=1 or ?template=<id> auto-opens the full dialog on mount
   const [showNewDialog, setShowNewDialog] = useState(
     searchParams.get('new') === '1' || !!searchParams.get('template')
   )
+  // Quick-create modal — direct path, bypasses NBA recommendation flow (JOK-76)
+  const [showQuickCreate, setShowQuickCreate] = useState(false)
   // Template contract pre-fill — loaded when ?template=<id> is in URL
   const [templateContract, setTemplateContract] = useState<Partial<TaskContract> | undefined>(undefined)
   const [prefillBrief, setPrefillBrief] = useState<ProjectBrief | null>(null)
@@ -250,10 +263,11 @@ function DelegationsContent() {
 
       if (e.key === 'Escape') {
         if (selectedDelegation) { setSelectedDelegation(null); return }
+        if (showQuickCreate) { setShowQuickCreate(false); return }
         if (showNewDialog) { setShowNewDialog(false); return }
       } else if (e.key === 'n' || e.key === 'N') {
         e.preventDefault()
-        setShowNewDialog(true)
+        setShowQuickCreate(true)
       } else if (e.key === '/') {
         e.preventDefault()
         searchInputRef.current?.focus()
@@ -261,7 +275,7 @@ function DelegationsContent() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [selectedDelegation, showNewDialog])
+  }, [selectedDelegation, showNewDialog, showQuickCreate])
 
   // ── Optimistic helpers ──────────────────────────────────────────────────
   const applyUpdate = useCallback((updated: Delegation) => {
@@ -673,7 +687,7 @@ function DelegationsContent() {
               {delegations.length} Delegation{delegations.length !== 1 ? 'en' : ''} gesamt
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Bulk delete confirm */}
             {terminalCount > 0 && (
               confirmBulkDelete ? (
@@ -925,7 +939,7 @@ function DelegationsContent() {
               </div>
 
               {/* Today filter toggle */}
-              <div className="flex items-center gap-1.5 pl-4 border-l border-gray-800">
+              <div className="flex items-center gap-1.5 sm:pl-4 sm:border-l sm:border-gray-800">
                 <button
                   onClick={() => setTodayOnly(v => !v)}
                   className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
@@ -940,14 +954,14 @@ function DelegationsContent() {
               </div>
 
               {/* Search input */}
-              <div className="flex items-center gap-2 pl-4 border-l border-gray-800 ml-auto">
+              <div className="flex w-full items-center gap-2 sm:w-auto sm:pl-4 sm:border-l sm:border-gray-800 sm:ml-auto">
                 <input
                   ref={searchInputRef}
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Suchen… [/]"
-                  className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 w-44 transition-colors"
+                  className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 w-full sm:w-44 transition-colors"
                 />
                 {searchQuery && (
                   <button
@@ -1153,8 +1167,13 @@ function DelegationsContent() {
                               />
                               <VersionBadge delegationId={del.id} compact />
                             </div>
-                            <div className={`text-sm font-medium ${GOAL_STYLE[del.status] || 'text-gray-200'}`}>
-                              {getDelegationGoal(del)}
+                            <div className="flex items-baseline gap-1.5">
+                              <span className={`text-xs flex-shrink-0 ${getTaskStatusStyle(del.status).iconClass}`}>
+                                {getTaskStatusStyle(del.status).icon}
+                              </span>
+                              <span className={`text-sm font-medium ${GOAL_STYLE[del.status] || 'text-gray-200'}`}>
+                                {getDelegationGoal(del)}
+                              </span>
                             </div>
                             {del.note?.text && (
                               <div className="text-xs text-yellow-400/70 mt-0.5 truncate max-w-xs">
@@ -1477,7 +1496,18 @@ function DelegationsContent() {
         />
       )}
 
-      {/* ── New Delegation Dialog ─────────────────────────────────────── */}
+      {/* ── Quick Create Delegation Modal — direct path, bypasses NBA (JOK-76) */}
+      {showQuickCreate && (
+        <QuickCreateDelegationModal
+          onClose={() => setShowQuickCreate(false)}
+          onCreate={newDel => {
+            applyAdd(newDel)
+            setShowQuickCreate(false)
+          }}
+        />
+      )}
+
+      {/* ── New Delegation Dialog — full form with templates / expert options */}
       {showNewDialog && (
         <NewDelegationDialog
           onClose={() => { setShowNewDialog(false); setTemplateContract(undefined); setPrefillBrief(null) }}

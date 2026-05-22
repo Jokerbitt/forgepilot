@@ -28,6 +28,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { cx } from '@/components/ui/primitives'
+import { AIProviderStatus } from '@/components/settings/AIProviderStatus'
 
 const panelClassName = 'rounded-lg border border-white/[0.07] bg-white/[0.035] p-4 shadow-sm shadow-black/10'
 const inputClassName = 'w-full rounded-md border border-white/[0.09] bg-[#080912] px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/25'
@@ -211,7 +212,7 @@ function SentryDsnInput() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface ApiKeyField {
-  key: 'GITHUB_TOKEN' | 'LINEAR_API_KEY' | 'LINEAR_TEAM_ID' | 'ANTHROPIC_API_KEY'
+  key: 'GITHUB_TOKEN' | 'LINEAR_API_KEY' | 'LINEAR_TEAM_ID' | 'ANTHROPIC_API_KEY' | 'GROQ_API_KEY'
   label: string
   placeholder: string
   hint: string
@@ -244,6 +245,12 @@ const API_KEY_FIELDS: ApiKeyField[] = [
     placeholder: 'sk-ant-api03-...',
     hint: 'Für die NBA Engine und Magic Create. console.anthropic.com',
   },
+  {
+    key: 'GROQ_API_KEY',
+    label: 'Groq API Key',
+    placeholder: 'gsk_...',
+    hint: 'Kostenlos: console.groq.com — schnelle Inferenz mit Llama & Mixtral',
+  },
 ]
 
 interface AutoPmStatus {
@@ -275,8 +282,14 @@ export default function SettingsPage() {
     LINEAR_API_KEY: '',
     LINEAR_TEAM_ID: '',
     ANTHROPIC_API_KEY: '',
+    GROQ_API_KEY: '',
     OLLAMA_BASE_URL: '',
+    LM_STUDIO_BASE_URL: '',
   })
+  const [llmModeDraft, setLlmModeDraft] = useState<string>('auto')
+  const [llmModeSet, setLlmModeSet] = useState(false)
+  const [llmModeSaving, setLlmModeSaving] = useState(false)
+  const [llmModeSaved, setLlmModeSaved] = useState(false)
   const [apiKeySaving, setApiKeySaving] = useState(false)
   const [apiKeySaved, setApiKeySaved] = useState(false)
   const [confirmClearKey, setConfirmClearKey] = useState<string | null>(null)
@@ -300,7 +313,13 @@ export default function SettingsPage() {
       .then(setConfig)
     fetch('/api/api-keys')
       .then(res => res.json())
-      .then((data: { _set: Record<string, boolean> }) => setApiKeySet(data._set ?? {}))
+      .then((data: { _set: Record<string, boolean>; LLM_MODE?: string }) => {
+        setApiKeySet(data._set ?? {})
+        if (data.LLM_MODE) {
+          setLlmModeDraft(data.LLM_MODE)
+          setLlmModeSet(true)
+        }
+      })
     fetch('/api/local-ai/status')
       .then(res => res.json())
       .then(setExecStatus)
@@ -391,7 +410,7 @@ export default function SettingsPage() {
     })
     const data = await res.json() as { _set: Record<string, boolean> }
     setApiKeySet(data._set ?? {})
-    setApiKeyDraft({ GITHUB_TOKEN: '', LINEAR_API_KEY: '', LINEAR_TEAM_ID: '', ANTHROPIC_API_KEY: '', OLLAMA_BASE_URL: '' })
+    setApiKeyDraft({ GITHUB_TOKEN: '', LINEAR_API_KEY: '', LINEAR_TEAM_ID: '', ANTHROPIC_API_KEY: '', GROQ_API_KEY: '', OLLAMA_BASE_URL: '', LM_STUDIO_BASE_URL: '' })
     setApiKeySaving(false)
     setApiKeySaved(true)
     setTimeout(() => setApiKeySaved(false), 3000)
@@ -410,6 +429,21 @@ export default function SettingsPage() {
     setApiKeySaving(false)
     setApiKeySaved(true)
     setTimeout(() => setApiKeySaved(false), 3000)
+  }
+
+  const handleSaveLlmMode = async () => {
+    setLlmModeSaving(true)
+    const res = await fetch('/api/api-keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ LLM_MODE: llmModeDraft }),
+    })
+    const data = await res.json() as { _set: Record<string, boolean> }
+    setApiKeySet(data._set ?? {})
+    setLlmModeSet(true)
+    setLlmModeSaving(false)
+    setLlmModeSaved(true)
+    setTimeout(() => setLlmModeSaved(false), 3000)
   }
 
   const handleSave = async () => {
@@ -491,6 +525,15 @@ export default function SettingsPage() {
               </p>
             )}
           </div>
+        </section>
+
+        {/* AI Provider Status Section */}
+        <section className="space-y-4">
+          <SectionHeading
+            icon={Cpu}
+            title="KI-Anbieter Status"
+          />
+          <AIProviderStatus />
         </section>
 
         {/* API Keys Section */}
@@ -576,14 +619,14 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* Ollama / Local AI Section */}
+        {/* Lokale KI — Ollama + LM Studio */}
         <section className="space-y-4">
-          <SectionHeading icon={Server} title="Lokale KI (Ollama)" badge={<StatusPill>Optional</StatusPill>} />
-          <div className={cx(panelClassName, 'space-y-3')}>
+          <SectionHeading icon={Server} title="Lokale KI (Ollama / LM Studio)" badge={<StatusPill>Optional</StatusPill>} />
+          <div className={cx(panelClassName, 'space-y-4')}>
             <p className="text-sm text-gray-400">
-              Verbinde einen lokalen Ollama-Server (z.B. auf dem Mac mit M5 Pro) als kostenlose Alternative zu Anthropic.
-              <span className="block mt-1 text-xs text-gray-600">Ollama läuft auf <code className="bg-gray-800 px-1 rounded">localhost:11434</code> — von außen per LAN oder Tailscale erreichbar.</span>
+              Verbinde lokale Inferenz-Server als kostenlose Alternative zu Cloud-Providern.
             </p>
+            {/* Ollama URL */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="text-sm font-medium text-gray-300">Ollama Base URL</label>
@@ -599,15 +642,78 @@ export default function SettingsPage() {
                 className={cx(inputClassName, 'font-mono')}
               />
               <p className="text-xs text-gray-500 mt-1">
-                Wird für zukünftige lokale Inferenz genutzt. Noch nicht aktiv — Vorbereitung für Mac-Setup.
+                Standard: <code className="bg-gray-800 px-1 rounded">http://localhost:11434</code> — auch per LAN oder Tailscale erreichbar.
+              </p>
+            </div>
+            {/* LM Studio URL */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm font-medium text-gray-300">LM Studio Base URL</label>
+                <StatusPill tone={apiKeySet['LM_STUDIO_BASE_URL'] ? 'success' : 'neutral'}>
+                  {apiKeySet['LM_STUDIO_BASE_URL'] ? 'Gesetzt' : 'Nicht gesetzt'}
+                </StatusPill>
+              </div>
+              <input
+                type="text"
+                value={apiKeyDraft['LM_STUDIO_BASE_URL'] ?? ''}
+                onChange={e => setApiKeyDraft(prev => ({ ...prev, LM_STUDIO_BASE_URL: e.target.value }))}
+                placeholder={apiKeySet['LM_STUDIO_BASE_URL'] ? 'URL gesetzt — neu eingeben zum Ändern' : 'http://localhost:1234'}
+                className={cx(inputClassName, 'font-mono')}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Standard: <code className="bg-gray-800 px-1 rounded">http://localhost:1234</code> — LM Studio lokaler Server.
               </p>
             </div>
             <button
               onClick={handleSaveApiKeys}
-              disabled={apiKeySaving || !apiKeyDraft['OLLAMA_BASE_URL']?.trim()}
+              disabled={apiKeySaving || (!apiKeyDraft['OLLAMA_BASE_URL']?.trim() && !apiKeyDraft['LM_STUDIO_BASE_URL']?.trim())}
               className={cx(secondaryButtonClassName, 'w-full')}
             >
-              {apiKeySaving ? 'Speichere...' : 'Ollama URL speichern'}
+              {apiKeySaving ? 'Speichere...' : 'Lokale KI URLs speichern'}
+            </button>
+          </div>
+        </section>
+
+        {/* LLM-Modus Selector */}
+        <section className="space-y-4">
+          <SectionHeading
+            icon={Cpu}
+            title="LLM-Modus"
+            badge={
+              llmModeSaved
+                ? <StatusPill tone="success"><Check className="h-3 w-3" /> Gespeichert</StatusPill>
+                : llmModeSet
+                ? <StatusPill tone="success">Aktiv: {llmModeDraft}</StatusPill>
+                : <StatusPill>auto</StatusPill>
+            }
+          />
+          <div className={cx(panelClassName, 'space-y-4')}>
+            <p className="text-sm text-gray-400">
+              Wähle, welcher Provider für die KI-Generierung verwendet wird. <strong>auto</strong> wählt automatisch den besten verfügbaren Provider.
+            </p>
+            <div>
+              <label className="block text-xs text-gray-500 mb-2">Provider-Modus</label>
+              <select
+                value={llmModeDraft}
+                onChange={e => setLlmModeDraft(e.target.value)}
+                className={cx(inputClassName, 'cursor-pointer')}
+              >
+                <option value="auto">auto — Bester verfügbarer Provider (empfohlen)</option>
+                <option value="anthropic">anthropic — Anthropic API</option>
+                <option value="groq">groq — Groq (kostenlos, schnell)</option>
+                <option value="ollama">ollama — Ollama lokal (kostenlos)</option>
+                <option value="lmstudio">lmstudio — LM Studio lokal (kostenlos)</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Wird als Fallback genutzt wenn kein Provider explizit per ENV gesetzt ist.
+              </p>
+            </div>
+            <button
+              onClick={() => void handleSaveLlmMode()}
+              disabled={llmModeSaving}
+              className={cx(primaryButtonClassName)}
+            >
+              {llmModeSaving ? 'Speichere...' : 'LLM-Modus speichern'}
             </button>
           </div>
         </section>

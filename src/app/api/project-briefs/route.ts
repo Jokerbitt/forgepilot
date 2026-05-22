@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuth } from '@/lib/auth/require-auth'
 import {
   buildProjectBrief,
 } from '@/lib/project-briefs'
@@ -24,6 +25,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const authError = await requireAuth()
+  if (authError) return authError
+
   const result = await parseBody(request, ProjectBriefSchema)
   if (isValidationError(result)) return result
 

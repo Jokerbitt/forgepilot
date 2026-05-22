@@ -17,6 +17,18 @@ import { AgentRunReplayView } from '@/components/delegation/AgentRunReplayView'
 import { GrokCriticCard } from '@/components/delegation/GrokCriticCard'
 import { DelegationPipelineBreadcrumb } from '@/components/delegation/DelegationPipelineBreadcrumb'
 import { KnowledgeWritebackPanel } from '@/components/delegation/KnowledgeWritebackPanel'
+import { KnowledgeCardList } from '@/components/knowledge'
+import { DelegationLiveLog } from '@/components/delegation/DelegationLiveLog'
+
+function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
+  switch (status) {
+    case 'completed':  return { textClass: 'line-through text-gray-500', icon: '✓', iconClass: 'text-green-500' }
+    case 'cancelled':  return { textClass: 'line-through text-gray-500', icon: '✕', iconClass: 'text-gray-400' }
+    case 'failed':     return { textClass: 'line-through text-red-400',   icon: '✕', iconClass: 'text-red-500' }
+    case 'in_progress': return { textClass: '', icon: '●', iconClass: 'text-yellow-400' }
+    default:           return { textClass: 'text-gray-300', icon: '○', iconClass: 'text-gray-500' }
+  }
+}
 
 const STATUS_COLORS: Record<string, string> = {
   pending:   'bg-gray-800 text-gray-400 border-gray-600',
@@ -537,7 +549,37 @@ export default function DelegationDetailPage() {
             <span>Erstellt: {new Date(d.createdAt).toLocaleString('de-DE')}</span>
             <span>Aktualisiert: {new Date(d.updatedAt).toLocaleString('de-DE')}</span>
           </div>
+
+          {/* ── M230: Chain links ────────────────────────────────────── */}
+          {(d.chainedDelegationId || d.chainedFromId) && (
+            <div className="mt-3 flex flex-wrap gap-3 text-xs">
+              {d.chainedFromId && (
+                <Link
+                  href={`/delegations/${d.chainedFromId}`}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gray-700 bg-gray-900 text-gray-400 hover:text-violet-300 hover:border-violet-800 transition-colors"
+                >
+                  <span className="text-gray-600">←</span>
+                  Fortgesetzt von: <span className="font-mono text-gray-500 truncate max-w-[160px]">{d.chainedFromId.slice(0, 8)}…</span>
+                </Link>
+              )}
+              {d.chainedDelegationId && (
+                <Link
+                  href={`/delegations/${d.chainedDelegationId}`}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-violet-900/60 bg-violet-950/30 text-violet-300 hover:text-violet-200 hover:border-violet-700 transition-colors"
+                >
+                  <span>→</span>
+                  Weiter mit: <span className="font-mono text-violet-400 truncate max-w-[160px]">{d.chainedDelegationId.slice(0, 8)}…</span>
+                </Link>
+              )}
+            </div>
+          )}
         </div>
+
+        {/* ── Live Execution Progress ──────────────────────────────────── */}
+        <DelegationLiveLog
+          delegationId={d.id}
+          isRunning={d.status === 'running'}
+        />
 
         {/* ── Timeline ─────────────────────────────────────────────────── */}
         <DelegationTimeline delegation={d} />
@@ -649,6 +691,24 @@ export default function DelegationDetailPage() {
         {/* ── Knowledge Writeback ───────────────────────────────────────── */}
         {(d.status === 'completed' || d.status === 'failed') && (
           <KnowledgeWritebackPanel delegationId={id} />
+        )}
+
+        {/* ── Gelerntes Wissen (full KnowledgeCardList with delegation link) ── */}
+        {d.status === 'completed' && (
+          <section className="bg-gray-900 border border-emerald-900/30 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">
+                Gelerntes Wissen
+              </h2>
+              <a
+                href="/knowledge-cards"
+                className="text-xs text-emerald-600 hover:text-emerald-400 transition-colors"
+              >
+                Alle Wissenskarten →
+              </a>
+            </div>
+            <KnowledgeCardList delegationId={id} />
+          </section>
         )}
 
         {/* ── PR Details (wenn PR vorhanden) ────────────────────────────── */}
@@ -807,16 +867,17 @@ export default function DelegationDetailPage() {
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                 <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Definition of Done</h2>
                 <ul className="space-y-1.5">
-                  {d.contract.definitionOfDone.map((item, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm">
-                      <span className={`mt-0.5 text-xs ${isDone && d.status === 'completed' ? 'text-green-400' : 'text-gray-600'}`}>
-                        {isDone && d.status === 'completed' ? '✓' : '○'}
-                      </span>
-                      <span className={isDone && d.status === 'completed' ? 'text-gray-400 line-through decoration-green-600/40' : 'text-gray-300'}>
-                        {item}
-                      </span>
-                    </li>
-                  ))}
+                  {d.contract.definitionOfDone.map((item, i) => {
+                    const style = getTaskStatusStyle(d.status)
+                    return (
+                      <li key={i} className="flex items-start gap-2 text-sm">
+                        <span className={`mt-0.5 text-xs ${style.iconClass}`}>
+                          {style.icon}
+                        </span>
+                        <span className={style.textClass || 'text-gray-300'}>{item}</span>
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             )}
