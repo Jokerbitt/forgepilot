@@ -19,6 +19,7 @@ import { DelegationPipelineBreadcrumb } from '@/components/delegation/Delegation
 import { KnowledgeWritebackPanel } from '@/components/delegation/KnowledgeWritebackPanel'
 import { KnowledgeCardList } from '@/components/knowledge'
 import { DelegationLiveLog } from '@/components/delegation/DelegationLiveLog'
+import { DelegationNextActionPanel } from '@/components/delegation/DelegationNextActionPanel'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
   switch (status) {
@@ -140,6 +141,26 @@ export default function DelegationDetailPage() {
     setDelegation(prev => prev ? { ...prev, status: 'running', updatedAt: new Date().toISOString() } : prev)
     await fetch(`/api/delegations/${id}/execute`, { method: 'POST' })
     setTimeout(loadDelegation, 1500)
+  }
+
+  // Retry with escalation: reset to pending, bump LLM model preference to best available
+  const handleRetryEscalate = async () => {
+    if (!delegation) return
+    const updated: Delegation = {
+      ...delegation,
+      status: 'pending',
+      contract: {
+        ...delegation.contract,
+        llmModel: 'auto-best', // signals auto-router to pick cloud/best model
+      },
+      updatedAt: new Date().toISOString(),
+    }
+    setDelegation(updated)
+    await fetch('/api/delegations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    })
   }
 
   const [orchestratedRun, setOrchestratedRun] = useState<OrchestratedRun | null>(null)
@@ -574,6 +595,17 @@ export default function DelegationDetailPage() {
             </div>
           )}
         </div>
+
+        {/* ── Next Action Panel ────────────────────────────────────────── */}
+        <DelegationNextActionPanel
+          delegation={d}
+          onApprove={handleApprove}
+          onStart={handleStart}
+          onRetry={() => updateStatus('pending')}
+          onRetryEscalate={handleRetryEscalate}
+          onCreatePR={handleCreatePR}
+          creatingPR={creatingPR}
+        />
 
         {/* ── Live Execution Progress ──────────────────────────────────── */}
         <DelegationLiveLog
