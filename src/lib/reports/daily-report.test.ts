@@ -404,7 +404,10 @@ describe('buildDailyReport', () => {
     expect(report.dailyAssistant.checklist.find(item => item.id === 'failed-delegations')?.status).toBe('blocker')
     expect(report.dailyAssistant.checklist.find(item => item.id === 'failed-delegations')?.detail).toContain('1 ohne Fehlertext')
     expect(report.failedDelegationTriage.missingFeedback).toBe(1)
+    expect(report.failedDelegationActionPlan.retryableIds).toEqual([])
+    expect(report.failedDelegationActionPlan.nextAction).toContain('Improve error capture')
     expect(report.markdown).toContain('Missing feedback: 1')
+    expect(report.markdown).toContain('Safe retry batch: none')
     expect(report.markdown).toContain('No errorMessage, failureFeedback, warning or error log found.')
     expect(report.firstRealValueLoop.currentStep.id).toBe('pr')
     expect(report.firstRealValueLoop.currentStep.status).toBe('active')
@@ -429,12 +432,15 @@ describe('buildDailyReport', () => {
     })
 
     expect(report.failedDelegationTriage.retryable).toBe(1)
+    expect(report.failedDelegationActionPlan.retryableIds).toEqual(['33333333-3333-4333-8333-333333333333'])
+    expect(report.failedDelegationActionPlan.retryEndpoints[0].href).toBe('/api/delegations/33333333-3333-4333-8333-333333333333/retry')
     expect(report.failedDelegationTriage.topItems[0]).toMatchObject({
       title: 'Provider timeout',
       category: 'retryable',
       failureCause: 'timeout',
     })
     expect(report.markdown).toContain('Retryable: 1')
+    expect(report.markdown).toContain('Safe next action: Retry 1 safe delegation first')
     expect(report.markdown).toContain('Provider timeout: retryable/timeout')
   })
 
