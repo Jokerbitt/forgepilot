@@ -10,6 +10,8 @@ function makeDelegation(overrides: Partial<Delegation>): Delegation {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     contract: {
+      id: 'tc-1',
+      createdAt: new Date().toISOString(),
       workItemId: 'WI-1',
       goal: 'Test goal',
       context: '',
@@ -30,14 +32,14 @@ const noProps = {}
 
 describe('getGuidance', () => {
   it('pending + requiresApproval Risk A → approve guidance', () => {
-    const d = makeDelegation({ status: 'pending', contract: { workItemId: 'WI-1', goal: 'g', context: '', riskClass: 'A', requiresApproval: true, branchStrategy: 'feature', privacyMode: 'local', maxBudgetUsd: 1, definitionOfDone: [], allowedTools: [] } })
+    const d = makeDelegation({ status: 'pending', contract: { id: 'tc-1', createdAt: new Date().toISOString(), workItemId: 'WI-1', goal: 'g', context: '', riskClass: 'A', requiresApproval: true, branchStrategy: 'feature', privacyMode: 'local', maxBudgetUsd: 1, definitionOfDone: [], allowedTools: [] } })
     const g = getGuidance(d, noProps)
     expect(g?.title).toContain('Freigabe')
     expect(g?.actions.some(a => a.label.includes('Freigeben'))).toBe(true)
   })
 
   it('pending + requiresApproval Risk C → locked message, no action buttons', () => {
-    const d = makeDelegation({ status: 'pending', contract: { workItemId: 'WI-1', goal: 'g', context: '', riskClass: 'C', requiresApproval: true, branchStrategy: 'feature', privacyMode: 'local', maxBudgetUsd: 1, definitionOfDone: [], allowedTools: [] } })
+    const d = makeDelegation({ status: 'pending', contract: { id: 'tc-1', createdAt: new Date().toISOString(), workItemId: 'WI-1', goal: 'g', context: '', riskClass: 'C', requiresApproval: true, branchStrategy: 'feature', privacyMode: 'local', maxBudgetUsd: 1, definitionOfDone: [], allowedTools: [] } })
     const g = getGuidance(d, noProps)
     expect(g?.title).toContain('Risk C')
     expect(g?.actions).toHaveLength(0)
@@ -89,7 +91,7 @@ describe('getGuidance', () => {
     const d = makeDelegation({
       status: 'completed',
       summaryReport: { keyPoints: [], changes: [], timeTakenMinutes: 1, prUrl: 'https://github.com/x/y/pull/1' },
-      criticScore: { verdict: 'approved', correctness: 90, efficiency: 85, drift: 80, summary: '', model: 'test', createdAt: new Date().toISOString() },
+      criticScore: { verdict: 'approved', correctness: 90, efficiency: 85, drift: 80, summary: '', runAt: new Date().toISOString() },
     })
     const g = getGuidance(d, noProps)
     expect(g?.title).toContain('Vollständig')
@@ -100,7 +102,7 @@ describe('getGuidance', () => {
     const d = makeDelegation({
       status: 'completed',
       summaryReport: { keyPoints: [], changes: [], timeTakenMinutes: 1, prUrl: 'https://github.com/x/y/pull/1' },
-      criticScore: { verdict: 'needs-revision', correctness: 60, efficiency: 55, drift: 50, summary: '', model: 'test', createdAt: new Date().toISOString() },
+      criticScore: { verdict: 'needs-revision', correctness: 60, efficiency: 55, drift: 50, summary: '', runAt: new Date().toISOString() },
     })
     const g = getGuidance(d, noProps)
     expect(g?.title).toContain('Revision')
