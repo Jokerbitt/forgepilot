@@ -7,6 +7,7 @@ import { useDelegationStream } from '@/hooks/useDelegationStream'
 interface Props {
   delegationId: string
   isRunning: boolean
+  onCostUpdate?: (cost: number) => void
 }
 
 /**
@@ -15,9 +16,16 @@ interface Props {
  * Renders nothing when isRunning=false.
  * Auto-refreshes the page (router.refresh) 1.5 s after completion.
  */
-export function DelegationLiveLog({ delegationId, isRunning }: Props) {
+export function DelegationLiveLog({ delegationId, isRunning, onCostUpdate }: Props) {
   const router = useRouter()
-  const { events, isConnected, lastEvent } = useDelegationStream(delegationId, isRunning)
+  const { events, isConnected, lastEvent, actualCostUsd } = useDelegationStream(delegationId, isRunning)
+
+  useEffect(() => {
+    if (actualCostUsd !== null && onCostUpdate) {
+      onCostUpdate(actualCostUsd)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actualCostUsd])
   const bottomRef = useRef<HTMLDivElement>(null)
   const refreshedRef = useRef(false)
 
