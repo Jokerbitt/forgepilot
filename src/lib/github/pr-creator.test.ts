@@ -126,6 +126,39 @@ describe('createGitHubPRIfNeeded', () => {
     vi.unstubAllGlobals()
   })
 
+  it('supports GITHUB_OWNER plus GITHUB_REPOSITORIES comma-list configuration', async () => {
+    vi.stubEnv('GITHUB_TOKEN', 'tok')
+    vi.stubEnv('GITHUB_REPOSITORY', '')
+    vi.stubEnv('GITHUB_REPO', '')
+    vi.stubEnv('GITHUB_OWNER', 'Jokerbitt')
+    vi.stubEnv('GITHUB_REPOSITORIES', 'forgepilot,other')
+
+    const fetchSpy = vi.fn().mockResolvedValue({
+      status: 201,
+      ok: true,
+      json: async () => ({
+        html_url: 'https://github.com/Jokerbitt/forgepilot/pull/363',
+        number: 363,
+      }),
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const result = await createGitHubPRIfNeeded(
+      base,
+      'git checkout -b feature/jok-363-m3-real-pr-task created',
+    )
+
+    expect(result.skipped).toBe(false)
+    expect(result.prUrl).toBe('https://github.com/Jokerbitt/forgepilot/pull/363')
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://api.github.com/repos/Jokerbitt/forgepilot/pulls',
+      expect.objectContaining({ method: 'POST' }),
+    )
+
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+  })
+
   it('supports GITHUB_OWNER plus repo-only GITHUB_REPO configuration', async () => {
     vi.stubEnv('GITHUB_TOKEN', 'tok')
     vi.stubEnv('GITHUB_OWNER', 'owner')

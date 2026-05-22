@@ -20,7 +20,7 @@ import {
   buildRetryContext,
 } from '@/lib/delegation-execution'
 import { OllamaAgentRunner, isOllamaReachable } from '@/lib/agent-runner/ollama-runner'
-import { budgetToMaxTurns } from '@/lib/budget-utils'
+import { budgetToClaudeCliMaxTurns, budgetToMaxTurns } from '@/lib/budget-utils'
 import { scoreWork } from '@/lib/agents/work-quality'
 import { recordOutcome } from '@/lib/agents/skill-evolver'
 import { generateText } from '@/lib/ai/text-generation'
@@ -52,7 +52,7 @@ function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryC
   const slug = c.workItemId.replace(/[^a-z0-9-]/gi, '-').toLowerCase()
   const branch = `${c.branchStrategy}/${slug}-task`
   const commitPrefix = c.taskType || 'feat'
-  const maxTurns = budgetToMaxTurns(c.maxBudgetUsd)
+  const maxTurns = budgetToClaudeCliMaxTurns(c.maxBudgetUsd)
   const checkpointTurn = Math.max(10, Math.floor(maxTurns * 0.4))
 
   const dod = (c.definitionOfDone ?? [])
@@ -201,7 +201,7 @@ function isClaudeAvailable(): boolean {
 function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd: number, riskClass: string) {
   const storedKeys = readStoredApiKeys()
   const anthropicKey = storedKeys.ANTHROPIC_API_KEY?.trim() || undefined
-  const maxTurns = budgetToMaxTurns(budgetUsd)
+  const maxTurns = budgetToClaudeCliMaxTurns(budgetUsd)
 
   // Strip ANTHROPIC_API_KEY from inherited env so Claude CLI uses its own
   // session auth (Max subscription). Only re-inject if a key is explicitly
