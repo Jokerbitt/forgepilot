@@ -66,13 +66,14 @@ export async function POST(request: Request) {
         return
       }
 
-      void logAuditEvent({
-        action: 'delegation.bulk_approve',
+      logAuditEvent({
+        action: 'delegation.approved',
         actor: source,
-        resourceType: 'delegation',
-        resourceId: id,
-        details: { note },
-      }).catch(() => {})
+        entityId: id,
+        entityType: 'delegation',
+        entityTitle: delegation.title,
+        metadata: { bulk: true, note },
+      })
 
       results.push({ id, ok: true })
     }),
