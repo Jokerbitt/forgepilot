@@ -21,6 +21,7 @@ const { values } = parseArgs({
   options: {
     title: { type: 'string' },
     status: { type: 'string', default: 'success' },
+    source: { type: 'string', default: 'manual' },
     id: { type: 'string' },
     'delegation-id': { type: 'string' },
     'brief-id': { type: 'string' },
@@ -46,6 +47,11 @@ function status(value: string | undefined): DailyReportExecuteLoopEvidenceRun['s
   throw new Error('Invalid --status. Use success, partial or blocked.')
 }
 
+function source(value: string | undefined): DailyReportExecuteLoopEvidenceRun['source'] {
+  if (value === 'manual' || value === 'harness-dry-run') return value
+  throw new Error('Invalid --source. Use manual or harness-dry-run.')
+}
+
 function numberValue(value: string | undefined): number | undefined {
   if (!value) return undefined
   const parsed = Number(value)
@@ -59,7 +65,7 @@ const run: DailyReportExecuteLoopEvidenceRun = {
   id: values.id ?? `evidence-${randomUUID()}`,
   title: values.title ?? 'Untitled execute loop evidence run',
   status: runStatus,
-  source: 'manual',
+  source: source(values.source),
   recordedAt: new Date().toISOString(),
   delegationId: values['delegation-id'],
   briefId: values['brief-id'],

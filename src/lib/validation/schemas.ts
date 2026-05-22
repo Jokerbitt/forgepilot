@@ -278,6 +278,42 @@ export const EscalateSchema = z.object({
 
 export type EscalateInput = z.infer<typeof EscalateSchema>
 
+// ─── Execute Loop Evidence ───────────────────────────────────────────────────
+
+export const ExecuteLoopEvidenceStepsSchema = z.object({
+  brief:      z.boolean().default(false),
+  delegation: z.boolean().default(false),
+  execute:    z.boolean().default(false),
+  tests:      z.boolean().default(false),
+  pr:         z.boolean().default(false),
+  critic:     z.boolean().default(false),
+  writeback:  z.boolean().default(false),
+})
+
+export const ExecuteLoopEvidenceRunSchema = z.object({
+  id:                  z.string().min(3).max(120).optional(),
+  title:               z.string().min(3).max(200),
+  status:              z.enum(['success', 'partial', 'blocked']).default('partial'),
+  source:              z.enum(['manual', 'harness-dry-run']).default('manual'),
+  delegationId:        z.string().max(120).optional(),
+  briefId:             z.string().max(120).optional(),
+  prUrl:               z.string().url().optional(),
+  timeSavedMinutes:    z.number().int().min(0).max(24 * 60).optional(),
+  manualInterventions: z.number().int().min(0).max(100).optional(),
+  blocker:             z.string().max(500).optional(),
+  notes:               z.string().max(1000).optional(),
+  steps:               ExecuteLoopEvidenceStepsSchema,
+}).strict()
+
+export type ExecuteLoopEvidenceRunInput = z.infer<typeof ExecuteLoopEvidenceRunSchema>
+
+export const ExecuteLoopHarnessSchema = z.object({
+  record:      z.boolean().default(true),
+  scenarioSet: z.enum(['v1-core']).default('v1-core'),
+}).strict()
+
+export type ExecuteLoopHarnessInput = z.infer<typeof ExecuteLoopHarnessSchema>
+
 // ─── Import Logs ─────────────────────────────────────────────────────────────
 
 export const ImportLogsSchema = z.object({
