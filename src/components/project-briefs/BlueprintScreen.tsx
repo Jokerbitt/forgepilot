@@ -111,6 +111,8 @@ export function BlueprintScreen({ initialBrief }: Props) {
   const [milestonesError, setMilestonesError] = useState('')
   const [wpDelegating, setWpDelegating] = useState<Record<string, boolean>>({})
   const [wpDelegationErrors, setWpDelegationErrors] = useState<Record<string, string>>({})
+  const [reqDelegating, setReqDelegating] = useState<Record<string, boolean>>({})
+  const [reqDelegationErrors, setReqDelegationErrors] = useState<Record<string, string>>({})
   const [versions, setVersions] = useState<BriefVersionView[]>([])
   const [versionsLoading, setVersionsLoading] = useState(false)
   const [savingSnapshot, setSavingSnapshot] = useState(false)
@@ -326,6 +328,57 @@ export function BlueprintScreen({ initialBrief }: Props) {
       }
     } finally {
       setWpDelegating(prev => ({ ...prev, [wpId]: false }))
+    }
+  }
+
+  async function handleDelegateRequirement(req: import('@/lib/models/project-brief').Requirement) {
+    setReqDelegating(prev => ({ ...prev, [req.id]: true }))
+    setReqDelegationErrors(prev => ({ ...prev, [req.id]: '' }))
+    try {
+      const res = await fetch('/api/delegations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: req.title.slice(0, 80),
+          briefId: brief.id,
+          briefTitle: brief.title,
+          executionRoute: 'local-agent',
+          costEstimateUsd: 0.5,
+          status: 'pending',
+          contract: {
+            workItemId: `REQ-${req.id.slice(0, 8)}`,
+            goal: req.title,
+            context: [
+              `Brief: ${brief.title}`,
+              `Problem: ${brief.problemStatement}`,
+              req.description ? `Requirement: ${req.description}` : '',
+              `Priorität: ${req.priority}`,
+              `Typ: ${req.type}`,
+            ].filter(Boolean).join('\n'),
+            definitionOfDone: [
+              `"${req.title}" ist vollständig implementiert`,
+              'Implementation ist getestet',
+              'Code ist reviewbereit',
+            ],
+            riskClass: req.priority === 'must' ? 'B' : 'A',
+            maxBudgetUsd: 1,
+            allowedTools: ['read_file', 'write_file', 'search_code', 'run_tests'],
+            branchStrategy: 'feature',
+            requiresApproval: req.priority === 'must',
+            privacyMode: 'local',
+            taskType: 'feature',
+          },
+        }),
+      })
+      if (res.ok) {
+        const delegation = await res.json() as { id: string }
+        router.push(`/delegations/${delegation.id}`)
+      } else {
+        const err = await res.json() as { error?: string }
+        setReqDelegationErrors(prev => ({ ...prev, [req.id]: err.error ?? 'Fehler beim Erstellen der Delegation' }))
+      }
+    } finally {
+      setReqDelegating(prev => ({ ...prev, [req.id]: false }))
     }
   }
 
@@ -571,6 +624,9 @@ export function BlueprintScreen({ initialBrief }: Props) {
                             req={req}
                             allFindings={brief.lastResearchRun?.findings ?? []}
                             onStatusChange={patchRequirement}
+                            onDelegate={() => handleDelegateRequirement(req)}
+                            delegating={reqDelegating[req.id] ?? false}
+                            delegationError={reqDelegationErrors[req.id]}
                           />
                         ))}
                       </div>
@@ -1230,10 +1286,16 @@ function RequirementCard({
   req,
   allFindings,
   onStatusChange,
+  onDelegate,
+  delegating,
+  delegationError,
 }: {
   req: Requirement
   allFindings: Finding[]
   onStatusChange: (id: string, status: Requirement['status']) => void
+  onDelegate?: () => void
+  delegating?: boolean
+  delegationError?: string
 }) {
   const [evidenceExpanded, setEvidenceExpanded] = useState(false)
   const isAccepted = req.status === 'accepted'
@@ -1268,9 +1330,23 @@ function RequirementCard({
         </div>
       )}
       {isAccepted && (
-        <button onClick={() => onStatusChange(req.id, 'proposed')} className="mt-3 text-xs text-slate-500 hover:text-slate-300">
-          Zurueck auf offen
-        </button>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {onDelegate && (
+            <button
+              onClick={onDelegate}
+              disabled={delegating}
+              className="inline-flex items-center gap-1 rounded border border-blue-700 bg-blue-950/30 px-2 py-1 text-xs font-medium text-blue-300 hover:bg-blue-900/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {delegating ? '⏳ Erstelle…' : '→ Delegation erstellen'}
+            </button>
+          )}
+          <button onClick={() => onStatusChange(req.id, 'proposed')} className="text-xs text-slate-500 hover:text-slate-300">
+            Zurück auf offen
+          </button>
+        </div>
+      )}
+      {delegationError && (
+        <p className="mt-1 text-xs text-red-400">{delegationError}</p>
       )}
 
       {linkedFindings.length > 0 && (
