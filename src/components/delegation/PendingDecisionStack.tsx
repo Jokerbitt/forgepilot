@@ -20,12 +20,13 @@ const RISK_STYLE: Record<'A' | 'B' | 'C', string> = {
 function DecisionCard({
   delegation,
   onApproved,
+  onDismiss,
 }: {
   delegation: Delegation
   onApproved: (id: string) => void
+  onDismiss: (id: string) => void
 }) {
   const [approving, setApproving] = useState(false)
-  const [dismissed, setDismissed] = useState(false)
   const rc = delegation.contract.riskClass
   const isRiskC = rc === 'C'
 
@@ -40,8 +41,6 @@ function DecisionCard({
       setApproving(false)
     }
   }, [delegation.id, isRiskC, onApproved])
-
-  if (dismissed) return null
 
   return (
     <div
@@ -71,7 +70,7 @@ function DecisionCard({
           )}
         </div>
         <button
-          onClick={() => setDismissed(true)}
+          onClick={() => onDismiss(delegation.id)}
           className="text-slate-600 transition-colors hover:text-slate-400"
           title="Ausblenden"
         >
@@ -132,21 +131,27 @@ function DecisionCard({
  * Only renders when there are pending delegations requiring approval.
  */
 export function PendingDecisionStack({ delegations, onApproved }: Props) {
-  const pending = delegations
-    .filter(d => d.status === 'pending' && d.contract.requiresApproval !== false)
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
+
+  const handleDismiss = useCallback((id: string) => {
+    setDismissedIds(prev => new Set([...prev, id]))
+  }, [])
+
+  const visible = delegations
+    .filter(d => d.status === 'pending' && d.contract.requiresApproval !== false && !dismissedIds.has(d.id))
     .sort((a, b) => {
       const order = { C: 0, B: 1, A: 2 }
       return order[a.contract.riskClass] - order[b.contract.riskClass]
     })
 
-  if (pending.length === 0) return null
+  if (visible.length === 0) return null
 
   return (
     <div className="rounded-xl border border-amber-700/20 bg-amber-950/5 p-3">
       <div className="mb-2.5 flex items-center gap-2">
         <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
         <span className="text-xs font-semibold text-amber-300">
-          {pending.length} Entscheidung{pending.length === 1 ? '' : 'en'} ausstehend
+          {visible.length} Entscheidung{visible.length === 1 ? '' : 'en'} ausstehend
         </span>
         <Link
           href="/delegations?approval=approval-required"
@@ -156,8 +161,8 @@ export function PendingDecisionStack({ delegations, onApproved }: Props) {
         </Link>
       </div>
       <div className="flex gap-3 overflow-x-auto pb-1">
-        {pending.map(d => (
-          <DecisionCard key={d.id} delegation={d} onApproved={onApproved} />
+        {visible.map(d => (
+          <DecisionCard key={d.id} delegation={d} onApproved={onApproved} onDismiss={handleDismiss} />
         ))}
       </div>
     </div>
