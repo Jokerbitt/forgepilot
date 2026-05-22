@@ -180,6 +180,7 @@ function DelegationsContent() {
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>((searchParams.get('approval') as ApprovalFilter) ?? 'Alle')
   const [searchQuery, setSearchQuery] = useState<string>(searchParams.get('q') ?? '')
   const [todayOnly, setTodayOnly] = useState(searchParams.get('today') === '1')
+  const [tagFilter, setTagFilter] = useState<string>(searchParams.get('tag') ?? 'Alle')
   const [showAllRows, setShowAllRows] = useState(false)
   const currentSearch = searchParams.toString()
 
@@ -191,13 +192,14 @@ function DelegationsContent() {
     if (approvalFilter !== 'Alle') params.set('approval', approvalFilter)
     if (searchQuery)               params.set('q',        searchQuery)
     if (todayOnly)                 params.set('today',    '1')
+    if (tagFilter !== 'Alle')      params.set('tag',      tagFilter)
     const qs = params.toString()
     const nextUrl = qs ? `${pathname}?${qs}` : pathname
     if (currentSearch !== qs) {
       router.replace(nextUrl, { scroll: false })
     }
     setShowAllRows(false)
-  }, [statusFilter, projectFilter, approvalFilter, searchQuery, todayOnly, pathname, router, currentSearch])
+  }, [statusFilter, projectFilter, approvalFilter, searchQuery, todayOnly, tagFilter, pathname, router, currentSearch])
 
   // Sort
   type SortKey = 'goal' | 'status' | 'time' | 'cost'
@@ -598,6 +600,10 @@ function DelegationsContent() {
     new Set(delegations.map(getProjectKey))
   ).sort()
 
+  const uniqueTags = Array.from(
+    new Set(delegations.flatMap(d => d.tags ?? []))
+  ).sort()
+
   const filteredDelegations = delegations.filter(d => {
     const matchStatus  = statusFilter === 'Alle' || d.status === statusFilter
     const workItemId = getWorkItemId(d)
@@ -616,8 +622,9 @@ function DelegationsContent() {
       (d.contract.context || '').toLowerCase().includes(q) ||
       (d.briefTitle || '').toLowerCase().includes(q)
     const matchToday = !todayOnly || isCreatedToday(d.createdAt)
+    const matchTag = tagFilter === 'Alle' || (d.tags ?? []).includes(tagFilter)
 
-    return matchStatus && matchProject && matchApproval && matchSearch && matchToday
+    return matchStatus && matchProject && matchApproval && matchSearch && matchToday && matchTag
   })
 
   const STATUS_SORT_WEIGHT: Record<string, number> = {
@@ -974,6 +981,35 @@ function DelegationsContent() {
                 )}
               </div>
 
+              {uniqueTags.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 pl-4 border-l border-gray-800">
+                  <span className="text-xs text-gray-500 mr-1 uppercase tracking-wide">Tag</span>
+                  <button
+                    onClick={() => setTagFilter('Alle')}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                      tagFilter === 'Alle'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700'
+                    }`}
+                  >
+                    Alle
+                  </button>
+                  {uniqueTags.map(tag => (
+                    <button
+                      key={tag}
+                      onClick={() => setTagFilter(tagFilter === tag ? 'Alle' : tag)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                        tagFilter === tag
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700'
+                      }`}
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {uniqueProjects.length > 1 && (
                 <div className="flex flex-wrap items-center gap-1.5 pl-4 border-l border-gray-800">
                   <span className="text-xs text-gray-500 mr-1 uppercase tracking-wide">Projekt</span>
@@ -1018,6 +1054,7 @@ function DelegationsContent() {
                     setApprovalFilter('Alle')
                     setSearchQuery('')
                     setTodayOnly(false)
+                    setTagFilter('Alle')
                   }}
                   className="text-blue-500 hover:text-blue-400 transition-colors"
                 >
@@ -1178,6 +1215,23 @@ function DelegationsContent() {
                             {del.note?.text && (
                               <div className="text-xs text-yellow-400/70 mt-0.5 truncate max-w-xs">
                                 📝 {del.note.text}
+                              </div>
+                            )}
+                            {(del.tags ?? []).length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {(del.tags ?? []).map(tag => (
+                                  <button
+                                    key={tag}
+                                    onClick={e => { e.stopPropagation(); setTagFilter(tag) }}
+                                    className={`px-1.5 py-0.5 rounded text-xs font-medium transition-colors ${
+                                      tagFilter === tag
+                                        ? 'bg-purple-600 text-white'
+                                        : 'bg-purple-900/40 text-purple-300 hover:bg-purple-800/60'
+                                    }`}
+                                  >
+                                    #{tag}
+                                  </button>
+                                ))}
                               </div>
                             )}
                           </td>
