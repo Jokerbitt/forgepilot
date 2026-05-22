@@ -1298,6 +1298,11 @@ function DelegationsContent() {
                                   drift={del.criticScore.drift}
                                 />
                               )}
+                              {(del.retryCount ?? 0) > 0 && (
+                                <span className="px-1.5 py-0.5 text-xs rounded bg-amber-900/40 border border-amber-700/50 text-amber-400 font-mono whitespace-nowrap">
+                                  ↺ {del.retryCount}
+                                </span>
+                              )}
                             </div>
                           </td>
 
