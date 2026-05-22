@@ -180,6 +180,7 @@ function DelegationsContent() {
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>((searchParams.get('approval') as ApprovalFilter) ?? 'Alle')
   const [searchQuery, setSearchQuery] = useState<string>(searchParams.get('q') ?? '')
   const [todayOnly, setTodayOnly] = useState(searchParams.get('today') === '1')
+  const [hideTerminal, setHideTerminal] = useState(searchParams.get('hideTerminal') === '1')
   const [tagFilter, setTagFilter] = useState<string>(searchParams.get('tag') ?? 'Alle')
   const [showAllRows, setShowAllRows] = useState(false)
   const currentSearch = searchParams.toString()
@@ -192,6 +193,7 @@ function DelegationsContent() {
     if (approvalFilter !== 'Alle') params.set('approval', approvalFilter)
     if (searchQuery)               params.set('q',        searchQuery)
     if (todayOnly)                 params.set('today',    '1')
+    if (hideTerminal)              params.set('hideTerminal', '1')
     if (tagFilter !== 'Alle')      params.set('tag',      tagFilter)
     const qs = params.toString()
     const nextUrl = qs ? `${pathname}?${qs}` : pathname
@@ -199,7 +201,7 @@ function DelegationsContent() {
       router.replace(nextUrl, { scroll: false })
     }
     setShowAllRows(false)
-  }, [statusFilter, projectFilter, approvalFilter, searchQuery, todayOnly, tagFilter, pathname, router, currentSearch])
+  }, [statusFilter, projectFilter, approvalFilter, searchQuery, todayOnly, hideTerminal, tagFilter, pathname, router, currentSearch])
 
   // Sort
   type SortKey = 'goal' | 'status' | 'time' | 'cost' | 'priority'
@@ -638,8 +640,9 @@ function DelegationsContent() {
       (d.tags ?? []).some(tag => tag.toLowerCase().includes(q))
     const matchToday = !todayOnly || isCreatedToday(d.createdAt)
     const matchTag = tagFilter === 'Alle' || (d.tags ?? []).includes(tagFilter)
+    const matchTerminal = !hideTerminal || (d.status !== 'completed' && d.status !== 'cancelled')
 
-    return matchStatus && matchProject && matchApproval && matchSearch && matchToday && matchTag
+    return matchStatus && matchProject && matchApproval && matchSearch && matchToday && matchTag && matchTerminal
   })
 
   const STATUS_SORT_WEIGHT: Record<string, number> = {
@@ -1009,6 +1012,17 @@ function DelegationsContent() {
                   title="Nur Delegationen von heute anzeigen"
                 >
                   📅 Heute
+                </button>
+                <button
+                  onClick={() => setHideTerminal(v => !v)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    hideTerminal
+                      ? 'bg-emerald-700 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700'
+                  }`}
+                  title="Erledigte und Abgebrochene ausblenden"
+                >
+                  ⚡ Nur aktive
                 </button>
               </div>
 
