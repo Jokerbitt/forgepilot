@@ -175,6 +175,69 @@ function ModelBreakdownTable({ models }: { models: ModelBreakdown[] }) {
   )
 }
 
+function CostTrendChart({ data }: { data: AnalyticsData['costTrend'] }) {
+  const width = 600
+  const height = 120
+  const padLeft = 42
+  const padRight = 12
+  const padTop = 8
+  const padBottom = 22
+  const innerW = width - padLeft - padRight
+  const innerH = height - padTop - padBottom
+
+  const nonZero = data.filter(p => p.actualCostUsd > 0 || p.estimatedCostUsd > 0)
+  if (nonZero.length < 2) {
+    return (
+      <p className="py-4 text-center text-[11px] text-slate-600 italic">Noch keine Kostendaten — führe Delegations aus.</p>
+    )
+  }
+
+  const maxVal = Math.max(...data.map(p => Math.max(p.actualCostUsd, p.estimatedCostUsd)), 0.0001)
+  const xOf  = (i: number) => padLeft + (i / (data.length - 1)) * innerW
+  const yOf  = (v: number) => padTop + innerH - (v / maxVal) * innerH
+
+  const toPath = (key: 'actualCostUsd' | 'estimatedCostUsd') =>
+    data.map((p, i) => `${i === 0 ? 'M' : 'L'}${xOf(i).toFixed(1)},${yOf(p[key]).toFixed(1)}`).join(' ')
+
+  const ticks = 4
+  const labelIdxs = [0, Math.floor(data.length / 3), Math.floor(2 * data.length / 3), data.length - 1]
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full" style={{ height }}>
+      {/* Y-axis grid + labels */}
+      {Array.from({ length: ticks + 1 }).map((_, i) => {
+        const v = (maxVal / ticks) * (ticks - i)
+        const y = yOf(v)
+        return (
+          <g key={i}>
+            <line x1={padLeft} y1={y} x2={width - padRight} y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth={1} />
+            <text x={padLeft - 4} y={y + 3.5} textAnchor="end" fontSize={8} fill="#64748b">
+              ${v < 0.001 ? v.toFixed(5) : v < 0.01 ? v.toFixed(4) : v.toFixed(3)}
+            </text>
+          </g>
+        )
+      })}
+
+      {/* X-axis date labels */}
+      {labelIdxs.map(i => (
+        <text key={i} x={xOf(i)} y={height - 4} textAnchor="middle" fontSize={8} fill="#64748b">
+          {data[i]?.date.slice(5)}
+        </text>
+      ))}
+
+      {/* Estimated line (dashed) */}
+      <path d={toPath('estimatedCostUsd')} fill="none" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="4 3" opacity={0.6} />
+      {/* Actual line */}
+      <path d={toPath('actualCostUsd')} fill="none" stroke="#10b981" strokeWidth={2} />
+
+      {/* Dots for non-zero actual */}
+      {data.map((p, i) => p.actualCostUsd > 0 ? (
+        <circle key={i} cx={xOf(i)} cy={yOf(p.actualCostUsd)} r={2.5} fill="#10b981" />
+      ) : null)}
+    </svg>
+  )
+}
+
 function RecentRunsTable({ delegations }: { delegations: Delegation[] }) {
   const runs = delegations
     .filter(d => ['completed', 'failed', 'running'].includes(d.status))
@@ -707,6 +770,23 @@ export default function AnalyticsPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* M298: 30-Day Cost Trend Line Chart */}
+            {executionAnalytics.costTrend.length > 0 && (
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-slate-500" />
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">30-Day Cost Trend</p>
+                  </div>
+                  <div className="flex items-center gap-4 text-[10px] text-slate-500">
+                    <span className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-5 rounded bg-emerald-500" />Tatsächlich</span>
+                    <span className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-5 rounded border-t-2 border-amber-400/60 border-dashed" />Geschätzt</span>
+                  </div>
+                </div>
+                <CostTrendChart data={executionAnalytics.costTrend} />
+              </div>
+            )}
           </div>
         )}
 
