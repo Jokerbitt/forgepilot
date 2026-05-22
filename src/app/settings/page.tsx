@@ -121,6 +121,15 @@ function SettingsImportExport() {
             <Download className="h-4 w-4" />
             Konfiguration exportieren
           </a>
+          <a
+            href="/api/admin/backup"
+            download
+            className={cx(secondaryButtonClassName, 'flex items-center gap-2')}
+            title="Vollständiges Backup aller config/*.json Dateien (inkl. API Keys — vertraulich behandeln)"
+          >
+            <Download className="h-4 w-4" />
+            Vollständiges Backup
+          </a>
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={importStatus === 'importing'}
