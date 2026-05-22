@@ -556,9 +556,12 @@ export default function DelegationDetailPage() {
                 {STATUS_LABELS[d.status] || d.status}
               </span>
               {d.status === 'running' && (
-                <ElapsedTimer startedAt={d.updatedAt || d.createdAt} className="text-[10px] text-green-400 font-mono" />
+                <ElapsedTimer startedAt={d.startedAt ?? d.updatedAt ?? d.createdAt} className="text-[10px] text-green-400 font-mono" />
               )}
-              {isDone && d.summaryReport && (
+              {isDone && d.startedAt && d.completedAt && (
+                <span className="text-[10px] text-gray-600 font-mono">{formatCompletedDuration(d.startedAt, d.completedAt)}</span>
+              )}
+              {isDone && (!d.startedAt || !d.completedAt) && d.summaryReport && (
                 <span className="text-[10px] text-gray-600 font-mono">{formatCompletedDuration(d.createdAt, d.updatedAt)}</span>
               )}
             </div>

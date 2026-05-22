@@ -158,6 +158,10 @@ export interface Delegation {
   childIds?: string[]
   /** M207: Group identifier shared by all parallel sub-delegations from the same fan-out */
   parallelGroup?: string
+  /** M233: ISO timestamp when execution started (status → running) */
+  startedAt?: string
+  /** M233: ISO timestamp when execution reached a terminal state */
+  completedAt?: string
   createdAt: string
   updatedAt: string
 }
