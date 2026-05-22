@@ -20,6 +20,8 @@ import { KnowledgeWritebackPanel } from '@/components/delegation/KnowledgeWriteb
 import { KnowledgeCardList } from '@/components/knowledge'
 import { DelegationLiveLog } from '@/components/delegation/DelegationLiveLog'
 import { DelegationNextActionPanel } from '@/components/delegation/DelegationNextActionPanel'
+import { PreflightCheckList } from '@/components/delegation/PreflightCheckList'
+import type { PreflightResult } from '@/lib/preflight'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
   switch (status) {
@@ -138,6 +140,29 @@ export default function DelegationDetailPage() {
 
   const handleStart = async () => {
     if (!delegation || delegation.status !== 'approved') return
+
+    // Run preflight checks; block on blockers, allow warnings through
+    setPreflightLoading(true)
+    setPreflightResult(null)
+    try {
+      const res = await fetch('/api/delegations/preflight', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delegationId: id }),
+      })
+      if (res.ok) {
+        const result = await res.json() as PreflightResult
+        setPreflightResult(result)
+        if (!result.canStart) {
+          setPreflightLoading(false)
+          return // blockers present — do not execute
+        }
+      }
+    } catch {
+      // preflight unavailable — proceed anyway
+    }
+    setPreflightLoading(false)
+
     setDelegation(prev => prev ? { ...prev, status: 'running', updatedAt: new Date().toISOString() } : prev)
     await fetch(`/api/delegations/${id}/execute`, { method: 'POST' })
     setTimeout(loadDelegation, 1500)
@@ -180,6 +205,10 @@ export default function DelegationDetailPage() {
     title: string
   } | null>(null)
   const [prStatusLoading, setPrStatusLoading] = useState(false)
+
+  // M224: preflight checks shown before execute
+  const [preflightResult, setPreflightResult] = useState<PreflightResult | null>(null)
+  const [preflightLoading, setPreflightLoading] = useState(false)
 
   const handleCreatePR = async () => {
     if (!delegation) return
@@ -606,6 +635,11 @@ export default function DelegationDetailPage() {
           onCreatePR={handleCreatePR}
           creatingPR={creatingPR}
         />
+
+        {/* ── Preflight Results (M224) ─────────────────────────────────── */}
+        {(preflightLoading || preflightResult) && (
+          <PreflightCheckList result={preflightResult} loading={preflightLoading} />
+        )}
 
         {/* ── Live Execution Progress ──────────────────────────────────── */}
         <DelegationLiveLog
