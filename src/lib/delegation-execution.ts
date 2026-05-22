@@ -116,3 +116,12 @@ export function buildSimulationBudgetLog(delegation: Delegation): Pick<AgentLog,
     message: `Budget: $${budget.toFixed(2)} | Schaetzung: $${estimate.toFixed(2)}`,
   }
 }
+
+export function buildRetryContext(delegation: Delegation): string {
+  const errorLogs = (delegation.logs ?? [])
+    .filter(l => l.type === 'error')
+    .slice(-5)
+  if (errorLogs.length === 0) return ''
+  const lines = errorLogs.map(l => `- ${l.message.slice(0, 200)}`).join('\n')
+  return `\n## Previous Attempt Failed\nThe last execution failed. Avoid these errors in the new attempt:\n${lines}\n`
+}
