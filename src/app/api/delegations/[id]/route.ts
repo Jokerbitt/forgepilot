@@ -33,6 +33,7 @@ export async function PATCH(
   const patch: Partial<Delegation> = {}
   if (result.status !== undefined) patch.status = result.status
   if (result.agentRunId !== undefined) patch.agentRunId = result.agentRunId
+  if ('note' in result) patch.note = result.note ?? undefined
   const updated = await repo.update(id, patch)
   if (!updated) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })

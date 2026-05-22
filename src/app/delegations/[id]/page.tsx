@@ -23,6 +23,7 @@ import { DelegationNextActionPanel } from '@/components/delegation/DelegationNex
 import { PreflightCheckList } from '@/components/delegation/PreflightCheckList'
 import { CostMeter } from '@/components/delegation/CostMeter'
 import { downloadLogsAsText } from '@/lib/delegations/log-export'
+import { InlineNoteEditor } from '@/components/delegation/InlineNoteEditor'
 import type { PreflightResult } from '@/lib/preflight'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
@@ -1018,13 +1019,20 @@ export default function DelegationDetailPage() {
               </div>
             )}
 
-            {/* Note */}
-            {d.note?.text && (
-              <div className="bg-gray-900 border border-yellow-900/40 rounded-xl p-4">
-                <h2 className="text-xs font-semibold text-yellow-600 uppercase tracking-wider mb-2">Notiz</h2>
-                <p className="text-sm text-yellow-400/80 leading-relaxed">{d.note.text}</p>
-              </div>
-            )}
+            {/* Note — inline editable */}
+            <div className="bg-gray-900 border border-yellow-900/40 rounded-xl p-4">
+              <h2 className="text-xs font-semibold text-yellow-600 uppercase tracking-wider mb-2">Notiz</h2>
+              <InlineNoteEditor
+                delegationId={d.id}
+                initialText={d.note?.text}
+                onSaved={(text) =>
+                  setDelegation(prev => prev ? {
+                    ...prev,
+                    note: text ? { text, updatedAt: new Date().toISOString() } : undefined,
+                  } : prev)
+                }
+              />
+            </div>
           </div>
 
           {/* Right column: Logs (collapsed by default) */}
