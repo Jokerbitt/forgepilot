@@ -620,7 +620,10 @@ function DelegationsContent() {
       goal.toLowerCase().includes(q) ||
       workItemId.toLowerCase().includes(q) ||
       (d.contract.context || '').toLowerCase().includes(q) ||
-      (d.briefTitle || '').toLowerCase().includes(q)
+      (d.briefTitle || '').toLowerCase().includes(q) ||
+      (d.note?.text || '').toLowerCase().includes(q) ||
+      (d.errorMessage || '').toLowerCase().includes(q) ||
+      (d.tags ?? []).some(tag => tag.toLowerCase().includes(q))
     const matchToday = !todayOnly || isCreatedToday(d.createdAt)
     const matchTag = tagFilter === 'Alle' || (d.tags ?? []).includes(tagFilter)
 
@@ -1002,7 +1005,7 @@ function DelegationsContent() {
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Suchen… [/]"
+                  placeholder="Titel, Ziel, Tags, Notiz… [/]"
                   className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 w-full sm:w-44 transition-colors"
                 />
                 {searchQuery && (
