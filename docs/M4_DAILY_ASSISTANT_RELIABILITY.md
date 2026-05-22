@@ -57,6 +57,23 @@ Jede fehlerhafte Delegation bekommt eine Entscheidung:
 - Follow-up-Task, wenn ein kleiner Codefix noetig ist.
 - Archive, wenn der Auftrag veraltet oder doppelt ist.
 
+Zusaetzlich gibt es einen sicheren Vorschau-Endpunkt:
+
+```bash
+GET /api/delegations/failed-triage
+```
+
+Dieser Endpunkt veraendert keine Daten. Er liefert:
+
+- die gleiche Triage wie der Daily Report,
+- eine kleine sichere Retry-Batch mit maximal zwei Delegationen,
+- direkte Einzel-Retry-Endpunkte wie `POST /api/delegations/<id>/retry`,
+- Warnungen, wenn Fehler erst menschlich geklaert oder besser geloggt werden muessen.
+
+Produktivregel: nicht alle fehlgeschlagenen Delegationen blind neu starten. Erst die Vorschau
+lesen, maximal die empfohlene Batch retryen, dann Daily Report aktualisieren und das Ergebnis
+bewerten.
+
 ## Handoff fuer Kritiker-LLMs
 
 Grok, Claude, Codex oder lokale Modelle bekommen nur den Daily Report oder das sichere Handoff-Paket.

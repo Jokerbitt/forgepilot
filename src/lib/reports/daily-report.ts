@@ -5,6 +5,7 @@ import type { MemoryCard } from '@/lib/knowledge/types'
 import type { DelegationStorageMode } from '@/lib/repositories/delegationRepository'
 import { getCriticProviderPlan } from '@/lib/eval/grok-critic'
 import { buildFailedDelegationTriage, type FailedDelegationTriageSummary } from '@/lib/delegations/triage'
+import { buildFailedDelegationActionPlan, type FailedDelegationActionPlan } from '@/lib/delegations/triage-actions'
 import { getAuthReadiness, type AuthReadiness } from '@/lib/auth/readiness'
 
 export type DailyReportVerdict = 'green' | 'yellow' | 'red'
@@ -156,6 +157,7 @@ export interface DailyReport {
   assistantRouting: DailyReportAssistantRouting
   dailyAssistant: DailyReportAssistantReadiness
   failedDelegationTriage: FailedDelegationTriageSummary
+  failedDelegationActionPlan: FailedDelegationActionPlan
   prompts: DailyReportPrompt[]
   markdown: string
 }
@@ -776,6 +778,9 @@ export function renderDailyReportMarkdown(report: Omit<DailyReport, 'markdown'>)
     `- Retryable: ${report.failedDelegationTriage.retryable}`,
     `- Known cause: ${report.failedDelegationTriage.knownCause}`,
     `- Needs human review: ${report.failedDelegationTriage.needsHumanReview}`,
+    `- Safe next action: ${report.failedDelegationActionPlan.nextAction}`,
+    `- Safe retry batch: ${report.failedDelegationActionPlan.retryableIds.length > 0 ? report.failedDelegationActionPlan.retryableIds.join(', ') : 'none'}`,
+    ...report.failedDelegationActionPlan.warnings.map(warning => `- Warning: ${warning}`),
     ...(
       report.failedDelegationTriage.topItems.length > 0
         ? report.failedDelegationTriage.topItems.map(item => `- [${item.severity.toUpperCase()}] ${item.title}: ${item.category}/${item.failureCause}. Action: ${item.recommendedAction} Evidence: ${item.evidence}`)
@@ -874,6 +879,7 @@ export function buildDailyReport(input: BuildDailyReportInput): DailyReport {
   const nextActions = buildNextActions(risks, firstRealValueLoop)
   const assistantRouting = buildAssistantRouting()
   const failedDelegationTriage = buildFailedDelegationTriage(input.delegations)
+  const failedDelegationActionPlan = buildFailedDelegationActionPlan(failedDelegationTriage)
   const dailyAssistant = buildDailyAssistantReadiness({ status, executeLoopEvidence, assistantRouting, failedDelegationTriage })
   const prompts = buildPrompts()
   const withoutMarkdown = {
@@ -889,6 +895,7 @@ export function buildDailyReport(input: BuildDailyReportInput): DailyReport {
     assistantRouting,
     dailyAssistant,
     failedDelegationTriage,
+    failedDelegationActionPlan,
     prompts,
   }
 
