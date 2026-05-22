@@ -62,6 +62,19 @@ describe('failed delegation triage', () => {
     expect(item?.evidence).toContain('ETIMEDOUT')
   })
 
+  it('allows one retry when evidence exists but the exact cause is unknown', () => {
+    const item = classifyFailedDelegation(makeDelegation({
+      errorMessage: 'Watchdog marked delegation stale after 15m without a live agent process.',
+    }))
+
+    expect(item).toMatchObject({
+      category: 'retryable',
+      severity: 'medium',
+      retryable: true,
+      failureCause: 'unknown',
+    })
+  })
+
   it('pulls evidence from errorMessage, feedback, warnings and error logs', () => {
     const evidence = getDelegationFailureEvidence(makeDelegation({
       errorMessage: 'TypeScript compilation failed',
