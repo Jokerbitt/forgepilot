@@ -8,17 +8,20 @@ import type { AutonomousConfig } from '@/lib/config/autonomous-config'
 import {
   Activity,
   AlertTriangle,
+  BookOpen,
   Bot,
   Check,
   ChevronDown,
   ChevronUp,
   Clock,
   Cpu,
+  Database,
   Download,
   Gauge,
   Info,
   KeyRound,
   Lock,
+  RefreshCw,
   Rocket,
   Server,
   Settings as SettingsIcon,
@@ -214,6 +217,111 @@ function SentryDsnInput() {
       >
         {status === 'saving' ? '…' : status === 'saved' ? 'Gespeichert' : status === 'error' ? 'Fehler' : 'Speichern'}
       </button>
+    </div>
+  )
+}
+
+// ─── Knowledge Index Panel ───────────────────────────────────────────────────
+interface KnowledgeStatsData {
+  cardCount: number
+  sourceCount: number
+  lastIndexedAt: string | null
+  cardsByType: Record<string, number>
+  nasAvailable: boolean
+}
+
+function KnowledgeIndexPanel() {
+  const [stats, setStats] = useState<KnowledgeStatsData | null>(null)
+  const [indexing, setIndexing] = useState(false)
+  const [indexResult, setIndexResult] = useState<{ sourcesIndexed?: number; cardsCreated?: number; error?: string } | null>(null)
+
+  const loadStats = async () => {
+    try {
+      const res = await fetch('/api/knowledge/stats')
+      if (res.ok) setStats(await res.json() as KnowledgeStatsData)
+    } catch { /* ignore */ }
+  }
+
+  useEffect(() => { void loadStats() }, [])
+
+  const handleIndex = async () => {
+    setIndexing(true)
+    setIndexResult(null)
+    try {
+      const res = await fetch('/api/knowledge/index-nas', { method: 'POST' })
+      const data = await res.json() as { sourcesIndexed?: number; cardsCreated?: number; error?: string }
+      setIndexResult(data)
+      await loadStats()
+    } catch {
+      setIndexResult({ error: 'Indexierung fehlgeschlagen' })
+    } finally {
+      setIndexing(false)
+    }
+  }
+
+  const lastIndexed = stats?.lastIndexedAt
+    ? new Date(stats.lastIndexedAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })
+    : 'Noch nicht indexiert'
+
+  return (
+    <div className={cx(panelClassName, 'space-y-4')}>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="rounded-md border border-white/[0.06] bg-white/[0.025] px-3 py-2">
+          <p className="text-xs text-slate-500">Memory Cards</p>
+          <p className="mt-0.5 text-xl font-semibold tabular-nums text-slate-100">{stats?.cardCount ?? '—'}</p>
+        </div>
+        <div className="rounded-md border border-white/[0.06] bg-white/[0.025] px-3 py-2">
+          <p className="text-xs text-slate-500">Quellen</p>
+          <p className="mt-0.5 text-xl font-semibold tabular-nums text-slate-100">{stats?.sourceCount ?? '—'}</p>
+        </div>
+        <div className="rounded-md border border-white/[0.06] bg-white/[0.025] px-3 py-2 sm:col-span-2">
+          <p className="text-xs text-slate-500">Letzter Index</p>
+          <p className="mt-0.5 text-sm font-medium text-slate-200 truncate">{lastIndexed}</p>
+        </div>
+      </div>
+
+      {stats?.cardsByType && Object.keys(stats.cardsByType).length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(stats.cardsByType).map(([type, count]) => (
+            <span key={type} className="rounded-full bg-white/[0.06] px-2.5 py-1 text-xs text-slate-400">
+              {type} <span className="font-semibold text-slate-200">{count}</span>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => void handleIndex()}
+          disabled={indexing}
+          className={cx(primaryButtonClassName, 'flex items-center gap-2')}
+        >
+          <RefreshCw className={cx('h-4 w-4', indexing && 'animate-spin')} />
+          {indexing ? 'Indexiere…' : 'Jetzt indexieren'}
+        </button>
+        {!stats?.nasAvailable && (
+          <p className="text-xs text-amber-400">NAS / FORGEPILOT_DOCS_DIR nicht erreichbar</p>
+        )}
+      </div>
+
+      {indexResult && (
+        <div className={cx(
+          'rounded-md px-3 py-2 text-xs',
+          indexResult.error
+            ? 'bg-red-500/10 text-red-300'
+            : 'bg-emerald-500/10 text-emerald-300'
+        )}>
+          {indexResult.error
+            ? indexResult.error
+            : `${indexResult.sourcesIndexed ?? 0} Quellen · ${indexResult.cardsCreated ?? 0} neue Cards`}
+        </div>
+      )}
+
+      <p className="text-xs text-slate-600">
+        Liest Markdown-Dateien aus <code className="text-slate-500">FORGEPILOT_DOCS_DIR</code> (oder NAS-Standardpfad)
+        und extrahiert Abschnitte als Memory Cards für den Context Engineer.
+        Automatisch täglich um 04:00 UTC via Vercel Cron.
+      </p>
     </div>
   )
 }
@@ -992,6 +1100,16 @@ export default function SettingsPage() {
               10 % der Requests werden getrackt (Sampling). Kein DSN = kein Tracking.
             </p>
           </div>
+        </section>
+
+        {/* ─── Knowledge Index ──────────────────────────────────────────────── */}
+        <section className="space-y-4">
+          <SectionHeading
+            icon={BookOpen}
+            title="Wissen &amp; NAS-Indexer"
+            badge={<StatusPill>Phase 8C</StatusPill>}
+          />
+          <KnowledgeIndexPanel />
         </section>
 
         <section className="space-y-4">
