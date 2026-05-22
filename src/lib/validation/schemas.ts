@@ -262,6 +262,7 @@ export const PatchDelegationSchema = z.object({
   status:     z.enum(['pending', 'approved', 'running', 'completed', 'failed', 'cancelled']).optional(),
   agentRunId: z.string().optional(),
   note:       z.object({ text: z.string().max(2000), updatedAt: z.string() }).optional().nullable(),
+  tags:       z.array(z.string().max(32)).max(10).optional(),
 })
 
 export type PatchDelegationInput = z.infer<typeof PatchDelegationSchema>
