@@ -111,7 +111,7 @@ export function MissionControlPanel() {
 
       <div className="border-t border-gray-700" />
 
-      {/* ── Pulse: 3 Stat-Boxen ── */}
+      {/* ── Pulse: Delegation Stats ── */}
       <div className="grid grid-cols-3 gap-px bg-gray-700">
         <div className="bg-gray-900 px-4 py-3">
           <PulseBox icon="⚡" label="Läuft" value={pulse.delegationsRunning} />
@@ -123,6 +123,24 @@ export function MissionControlPanel() {
           <PulseBox icon="✅" label="Heute fertig" value={pulse.delegationsCompletedToday} />
         </div>
       </div>
+
+      {/* ── Pulse: PR Lifecycle (shown only when there are delegation-linked PRs) ── */}
+      {pulse.prCreated > 0 && (
+        <>
+          <div className="border-t border-gray-700/50" />
+          <div className="grid grid-cols-3 gap-px bg-gray-700/50">
+            <div className="bg-gray-900/80 px-4 py-3">
+              <PulseBox icon="⎇" label="PRs erstellt" value={pulse.prCreated} />
+            </div>
+            <div className="bg-gray-900/80 px-4 py-3">
+              <PulseBox icon="🟣" label="Gemergt" value={pulse.prMerged} />
+            </div>
+            <div className="bg-gray-900/80 px-4 py-3">
+              <PulseBox icon="🟢" label="Offen" value={pulse.prOpen} />
+            </div>
+          </div>
+        </>
+      )}
 
       <div className="border-t border-gray-700" />
 
