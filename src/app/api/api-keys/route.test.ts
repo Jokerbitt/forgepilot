@@ -64,4 +64,26 @@ describe('/api/api-keys', () => {
 
     expect(data._set.GITHUB_TOKEN).toBe(true)
   })
+
+  it('stores critic routing config without exposing secret values', async () => {
+    const response = await POST(new Request('http://localhost/api/api-keys', {
+      method: 'POST',
+      body: JSON.stringify({
+        XAI_API_KEY: 'xai-secret-9999',
+        FORGEPILOT_CRITIC_MODE: 'local-first',
+        FORGEPILOT_CRITIC_PROVIDERS: 'grok:grok-3-mini,ollama:qwen2.5-coder:14b',
+      }),
+    }))
+    const postData = await response.json()
+    expect(postData._set.XAI_API_KEY).toBe(true)
+    expect(postData._set.FORGEPILOT_CRITIC_MODE).toBe(true)
+
+    const getResponse = await GET()
+    const data = await getResponse.json()
+
+    expect(data.XAI_API_KEY).toContain('9999')
+    expect(data.XAI_API_KEY).not.toContain('xai-secret')
+    expect(data.FORGEPILOT_CRITIC_MODE).toBe('local-first')
+    expect(data.FORGEPILOT_CRITIC_PROVIDERS).toBe('grok:grok-3-mini,ollama:qwen2.5-coder:14b')
+  })
 })

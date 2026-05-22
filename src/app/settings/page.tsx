@@ -212,7 +212,18 @@ function SentryDsnInput() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface ApiKeyField {
-  key: 'GITHUB_TOKEN' | 'LINEAR_API_KEY' | 'LINEAR_TEAM_ID' | 'ANTHROPIC_API_KEY' | 'GROQ_API_KEY'
+  key:
+    | 'GITHUB_TOKEN'
+    | 'LINEAR_API_KEY'
+    | 'LINEAR_TEAM_ID'
+    | 'ANTHROPIC_API_KEY'
+    | 'OPENAI_API_KEY'
+    | 'XAI_API_KEY'
+    | 'GOOGLE_API_KEY'
+    | 'GROQ_API_KEY'
+    | 'OPENROUTER_API_KEY'
+    | 'MISTRAL_API_KEY'
+    | 'DEEPSEEK_API_KEY'
   label: string
   placeholder: string
   hint: string
@@ -246,10 +257,46 @@ const API_KEY_FIELDS: ApiKeyField[] = [
     hint: 'Für die NBA Engine und Magic Create. console.anthropic.com',
   },
   {
+    key: 'XAI_API_KEY',
+    label: 'xAI / Grok API Key',
+    placeholder: 'xai-...',
+    hint: 'Für Grok-Critic, Daily Report und unabhängige Validierung. console.x.ai',
+  },
+  {
+    key: 'OPENAI_API_KEY',
+    label: 'OpenAI API Key',
+    placeholder: 'sk-...',
+    hint: 'Optionaler Cloud-Fallback für anspruchsvolle Reviews und Planung.',
+  },
+  {
+    key: 'GOOGLE_API_KEY',
+    label: 'Google Gemini API Key',
+    placeholder: 'AIza...',
+    hint: 'Optionaler Critic-/Planning-Fallback. Google AI Studio.',
+  },
+  {
     key: 'GROQ_API_KEY',
     label: 'Groq API Key',
     placeholder: 'gsk_...',
     hint: 'Kostenlos: console.groq.com — schnelle Inferenz mit Llama & Mixtral',
+  },
+  {
+    key: 'OPENROUTER_API_KEY',
+    label: 'OpenRouter API Key',
+    placeholder: 'sk-or-...',
+    hint: 'Optionaler Multi-Modell-Fallback, auch mit kostenlosen Modellen.',
+  },
+  {
+    key: 'MISTRAL_API_KEY',
+    label: 'Mistral API Key',
+    placeholder: '...',
+    hint: 'Optionaler EU-naher Cloud-Fallback.',
+  },
+  {
+    key: 'DEEPSEEK_API_KEY',
+    label: 'DeepSeek API Key',
+    placeholder: 'sk-...',
+    hint: 'Optionaler günstiger Coding-/Reasoning-Fallback.',
   },
 ]
 
@@ -282,7 +329,13 @@ export default function SettingsPage() {
     LINEAR_API_KEY: '',
     LINEAR_TEAM_ID: '',
     ANTHROPIC_API_KEY: '',
+    OPENAI_API_KEY: '',
+    XAI_API_KEY: '',
+    GOOGLE_API_KEY: '',
     GROQ_API_KEY: '',
+    OPENROUTER_API_KEY: '',
+    MISTRAL_API_KEY: '',
+    DEEPSEEK_API_KEY: '',
     OLLAMA_BASE_URL: '',
     LM_STUDIO_BASE_URL: '',
   })
@@ -290,6 +343,10 @@ export default function SettingsPage() {
   const [llmModeSet, setLlmModeSet] = useState(false)
   const [llmModeSaving, setLlmModeSaving] = useState(false)
   const [llmModeSaved, setLlmModeSaved] = useState(false)
+  const [criticModeDraft, setCriticModeDraft] = useState<string>('auto')
+  const [criticProvidersDraft, setCriticProvidersDraft] = useState('')
+  const [criticConfigSaved, setCriticConfigSaved] = useState(false)
+  const [criticConfigSaving, setCriticConfigSaving] = useState(false)
   const [apiKeySaving, setApiKeySaving] = useState(false)
   const [apiKeySaved, setApiKeySaved] = useState(false)
   const [confirmClearKey, setConfirmClearKey] = useState<string | null>(null)
@@ -313,11 +370,22 @@ export default function SettingsPage() {
       .then(setConfig)
     fetch('/api/api-keys')
       .then(res => res.json())
-      .then((data: { _set: Record<string, boolean>; LLM_MODE?: string }) => {
+      .then((data: {
+        _set: Record<string, boolean>
+        LLM_MODE?: string
+        FORGEPILOT_CRITIC_MODE?: string
+        FORGEPILOT_CRITIC_PROVIDERS?: string
+      }) => {
         setApiKeySet(data._set ?? {})
         if (data.LLM_MODE) {
           setLlmModeDraft(data.LLM_MODE)
           setLlmModeSet(true)
+        }
+        if ('FORGEPILOT_CRITIC_MODE' in data) {
+          setCriticModeDraft(String(data.FORGEPILOT_CRITIC_MODE ?? 'auto'))
+        }
+        if ('FORGEPILOT_CRITIC_PROVIDERS' in data) {
+          setCriticProvidersDraft(String(data.FORGEPILOT_CRITIC_PROVIDERS ?? ''))
         }
       })
     fetch('/api/local-ai/status')
@@ -410,7 +478,21 @@ export default function SettingsPage() {
     })
     const data = await res.json() as { _set: Record<string, boolean> }
     setApiKeySet(data._set ?? {})
-    setApiKeyDraft({ GITHUB_TOKEN: '', LINEAR_API_KEY: '', LINEAR_TEAM_ID: '', ANTHROPIC_API_KEY: '', GROQ_API_KEY: '', OLLAMA_BASE_URL: '', LM_STUDIO_BASE_URL: '' })
+    setApiKeyDraft({
+      GITHUB_TOKEN: '',
+      LINEAR_API_KEY: '',
+      LINEAR_TEAM_ID: '',
+      ANTHROPIC_API_KEY: '',
+      OPENAI_API_KEY: '',
+      XAI_API_KEY: '',
+      GOOGLE_API_KEY: '',
+      GROQ_API_KEY: '',
+      OPENROUTER_API_KEY: '',
+      MISTRAL_API_KEY: '',
+      DEEPSEEK_API_KEY: '',
+      OLLAMA_BASE_URL: '',
+      LM_STUDIO_BASE_URL: '',
+    })
     setApiKeySaving(false)
     setApiKeySaved(true)
     setTimeout(() => setApiKeySaved(false), 3000)
@@ -444,6 +526,23 @@ export default function SettingsPage() {
     setLlmModeSaving(false)
     setLlmModeSaved(true)
     setTimeout(() => setLlmModeSaved(false), 3000)
+  }
+
+  const handleSaveCriticConfig = async () => {
+    setCriticConfigSaving(true)
+    const res = await fetch('/api/api-keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        FORGEPILOT_CRITIC_MODE: criticModeDraft,
+        FORGEPILOT_CRITIC_PROVIDERS: criticProvidersDraft.trim(),
+      }),
+    })
+    const data = await res.json() as { _set: Record<string, boolean> }
+    setApiKeySet(data._set ?? {})
+    setCriticConfigSaving(false)
+    setCriticConfigSaved(true)
+    setTimeout(() => setCriticConfigSaved(false), 3000)
   }
 
   const handleSave = async () => {
@@ -714,6 +813,59 @@ export default function SettingsPage() {
               className={cx(primaryButtonClassName)}
             >
               {llmModeSaving ? 'Speichere...' : 'LLM-Modus speichern'}
+            </button>
+          </div>
+        </section>
+
+        {/* Critic Router */}
+        <section className="space-y-4">
+          <SectionHeading
+            icon={ShieldCheck}
+            title="Daily Report & Critic Router"
+            badge={
+              criticConfigSaved
+                ? <StatusPill tone="success"><Check className="h-3 w-3" /> Gespeichert</StatusPill>
+                : <StatusPill tone="success">Auto empfohlen</StatusPill>
+            }
+          />
+          <div className={cx(panelClassName, 'space-y-4')}>
+            <p className="text-sm text-gray-400">
+              Steuert, welche LLMs als Kritiker für Daily Report, Code-Review und Validierung genutzt werden.
+              <strong className="text-slate-200"> Auto</strong> bevorzugt die besten konfigurierten Modelle und fällt bei Bedarf auf lokale KI zurück.
+            </p>
+            <div>
+              <label className="block text-xs text-gray-500 mb-2">Critic-Modus</label>
+              <select
+                value={criticModeDraft}
+                onChange={e => setCriticModeDraft(e.target.value)}
+                className={cx(inputClassName, 'cursor-pointer')}
+              >
+                <option value="auto">auto — Beste konfigurierte Kette (empfohlen)</option>
+                <option value="local-first">local-first — Ollama / LM Studio zuerst</option>
+                <option value="cloud-first">cloud-first — nur konfigurierte Cloud-Critics</option>
+                <option value="single">single — nur explizite Provider-Kette verwenden</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-2">Optionale Provider-Kette</label>
+              <input
+                type="text"
+                value={criticProvidersDraft}
+                onChange={e => setCriticProvidersDraft(e.target.value)}
+                placeholder="xai:grok-3-mini,anthropic:claude-sonnet-4-5,ollama:qwen2.5-coder:14b"
+                className={cx(inputClassName, 'font-mono')}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Leer lassen für Auto-Routing. Format: <code className="bg-gray-800 px-1 rounded">provider:model,provider:model</code>.
+                Aliase wie <code className="bg-gray-800 px-1 rounded">grok</code>, <code className="bg-gray-800 px-1 rounded">gemini</code> und <code className="bg-gray-800 px-1 rounded">lmstudio</code> werden verstanden.
+              </p>
+            </div>
+            <button
+              onClick={() => void handleSaveCriticConfig()}
+              disabled={criticConfigSaving}
+              className={cx(primaryButtonClassName)}
+            >
+              {criticConfigSaving ? 'Speichere...' : 'Critic-Routing speichern'}
             </button>
           </div>
         </section>

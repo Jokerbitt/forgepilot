@@ -22,6 +22,7 @@ const CRITIC_MODE_ENV = 'FORGEPILOT_CRITIC_MODE'
 const CRITIC_PROVIDERS_ENV = 'FORGEPILOT_CRITIC_PROVIDERS'
 const LEGACY_CRITIC_PROVIDER_ENV = 'FORGEPILOT_CRITIC_PROVIDER'
 const LEGACY_CRITIC_MODEL_ENV = 'FORGEPILOT_CRITIC_MODEL'
+const LOCAL_PROVIDER_IDS = new Set(['ollama', 'lm-studio'])
 
 interface CriticProviderCandidate {
   providerId: string
@@ -78,6 +79,14 @@ function resolveApiKey(apiKeyRef: string | undefined): string {
   return process.env[apiKeyRef] ?? stored[apiKeyRef] ?? ''
 }
 
+function getCriticEnvValue(
+  key: typeof CRITIC_MODE_ENV | typeof CRITIC_PROVIDERS_ENV | typeof LEGACY_CRITIC_PROVIDER_ENV | typeof LEGACY_CRITIC_MODEL_ENV,
+  env: Record<string, string | undefined>,
+): string | undefined {
+  const stored = readStoredApiKeys() as Record<string, string | undefined>
+  return env[key] ?? stored[key]
+}
+
 function annotateCriticCandidate(candidate: CriticProviderCandidate): CriticProviderCandidate {
   const config = getAllProviderConfigs().find(provider => provider.id === candidate.providerId)
   if (!config) {
@@ -99,14 +108,14 @@ function annotateCriticCandidate(candidate: CriticProviderCandidate): CriticProv
 function getCriticProviderCandidates(
   env: Record<string, string | undefined> = process.env as Record<string, string | undefined>
 ): CriticProviderCandidate[] {
-  const mode = String(env[CRITIC_MODE_ENV] ?? 'auto').trim().toLowerCase()
-  const configuredModel = env[LEGACY_CRITIC_MODEL_ENV]?.trim()
+  const mode = String(getCriticEnvValue(CRITIC_MODE_ENV, env) ?? 'auto').trim().toLowerCase()
+  const configuredModel = getCriticEnvValue(LEGACY_CRITIC_MODEL_ENV, env)?.trim()
   const candidates: CriticProviderCandidate[] = []
-  const explicitCandidates = parseCriticProviderList(env[CRITIC_PROVIDERS_ENV])
+  const explicitCandidates = parseCriticProviderList(getCriticEnvValue(CRITIC_PROVIDERS_ENV, env))
 
   for (const candidate of explicitCandidates) addCandidate(candidates, candidate)
 
-  const configuredProvider = env[LEGACY_CRITIC_PROVIDER_ENV]?.trim()
+  const configuredProvider = getCriticEnvValue(LEGACY_CRITIC_PROVIDER_ENV, env)?.trim()
   if (configuredProvider && !explicitCandidates.length) {
     addCandidate(candidates, { providerId: configuredProvider, model: configuredModel || undefined })
   }
@@ -135,7 +144,7 @@ function getCriticProviderCandidates(
     log.warn({ event: 'critic.model_selection_unavailable', reason: err instanceof Error ? err.message : String(err) })
   }
 
-  for (const candidate of [
+  const cloudDefaults = [
     { providerId: 'xai', model: 'grok-3-mini' },
     { providerId: 'anthropic', model: 'claude-sonnet-4-5' },
     { providerId: 'openai', model: 'o3-mini' },
@@ -144,9 +153,16 @@ function getCriticProviderCandidates(
     { providerId: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free' },
     { providerId: 'groq', model: 'llama-3.3-70b-versatile' },
     { providerId: 'mistral', model: 'mistral-large-latest' },
+  ]
+  const localDefaults = [
     { providerId: 'ollama', model: DEFAULT_LOCAL_CRITIC_MODEL },
     { providerId: 'lm-studio', model: 'local-model' },
-  ]) {
+  ]
+  const orderedDefaults = mode === 'local-first'
+    ? [...localDefaults, ...cloudDefaults]
+    : [...cloudDefaults, ...localDefaults]
+
+  for (const candidate of orderedDefaults) {
     addCandidate(candidates, candidate)
   }
 
@@ -173,14 +189,20 @@ function dedupeCriticCandidates(candidates: CriticProviderCandidate[]): CriticPr
 function getRunnableCriticCandidates(): CriticProviderCandidate[] {
   const source = process.env as Record<string, string | undefined>
   const plan = getCriticProviderPlan(source)
-  if (plan.mode === 'single' || source[CRITIC_PROVIDERS_ENV] || source[LEGACY_CRITIC_PROVIDER_ENV]) {
+  if (
+    plan.mode === 'single'
+    || getCriticEnvValue(CRITIC_PROVIDERS_ENV, source)
+    || getCriticEnvValue(LEGACY_CRITIC_PROVIDER_ENV, source)
+  ) {
     return plan.candidates
   }
-  return plan.candidates.filter(candidate => candidate.configured !== false)
+  const configured = plan.candidates.filter(candidate => candidate.configured !== false)
+  if (plan.mode === 'cloud-first') return configured.filter(candidate => !LOCAL_PROVIDER_IDS.has(candidate.providerId))
+  return configured
 }
 
 function describeCriticConfig(env: Record<string, string | undefined> = process.env as Record<string, string | undefined>): string {
-  const mode = String(env[CRITIC_MODE_ENV] ?? 'auto').trim().toLowerCase()
+  const mode = String(getCriticEnvValue(CRITIC_MODE_ENV, env) ?? 'auto').trim().toLowerCase()
   const providers = getCriticProviderCandidates(env)
     .map(candidate => candidate.model ? `${candidate.providerId}:${candidate.model}` : candidate.providerId)
     .join(', ')
@@ -194,7 +216,7 @@ export function getCriticProviderPlan(env?: Record<string, string | undefined>):
   description: string
 } {
   const source = env ?? process.env as Record<string, string | undefined>
-  const mode = String(source[CRITIC_MODE_ENV] ?? 'auto').trim().toLowerCase() || 'auto'
+  const mode = String(getCriticEnvValue(CRITIC_MODE_ENV, source) ?? 'auto').trim().toLowerCase() || 'auto'
   const candidates = getCriticProviderCandidates(source)
   return {
     mode,
