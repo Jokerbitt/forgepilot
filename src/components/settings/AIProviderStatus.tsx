@@ -10,9 +10,10 @@ interface ProviderRowProps {
   label: string
   status: 'ok' | 'warn' | 'off'
   detail: string
+  meta?: string
 }
 
-function ProviderRow({ label, status, detail }: ProviderRowProps) {
+function ProviderRow({ label, status, detail, meta }: ProviderRowProps) {
   const icon =
     status === 'ok'
       ? <span className="text-emerald-400 text-sm font-bold">✓</span>
@@ -31,9 +32,12 @@ function ProviderRow({ label, status, detail }: ProviderRowProps) {
     <div className="flex items-center justify-between gap-3">
       <div className="flex items-center gap-2 min-w-0">
         <span className="w-5 text-center shrink-0">{icon}</span>
-        <span className={cx('text-sm font-medium', labelColor)}>{label}</span>
+        <div className="min-w-0">
+          <span className={cx('block truncate text-sm font-medium', labelColor)}>{label}</span>
+          {meta && <span className="block truncate text-[10px] text-slate-500">{meta}</span>}
+        </div>
       </div>
-      <span className="text-xs text-slate-400 text-right">{detail}</span>
+      <span className="shrink-0 text-xs text-slate-400 text-right">{detail}</span>
     </div>
   )
 }
@@ -72,28 +76,13 @@ export function AIProviderStatus() {
     )
   }
 
-  const anthropicDetail = status.anthropicConfigured ? 'API Key konfiguriert' : 'Kein Key'
-  const anthropicStatus: ProviderRowProps['status'] = status.anthropicConfigured ? 'ok' : 'off'
+  const visibleProviders = status.providerAvailability
+    .filter(provider => provider.available || provider.isLocal || ['anthropic', 'xai', 'openai', 'groq', 'google-gemini', 'openrouter'].includes(provider.id))
+    .slice(0, 10)
 
-  let ollamaDetail: string
-  let ollamaStatus: ProviderRowProps['status']
-  if (!status.ollamaRunning) {
-    ollamaDetail = 'Nicht erreichbar'
-    ollamaStatus = 'off'
-  } else if (status.ollamaModels.length === 0) {
-    ollamaDetail = 'Läuft, aber keine Modelle'
-    ollamaStatus = 'warn'
-  } else {
-    ollamaDetail = `${status.ollamaModels.length} Modell${status.ollamaModels.length !== 1 ? 'e' : ''} installiert`
-    ollamaStatus = 'ok'
-  }
-
-  const activeLabel =
-    status.activeProvider === 'anthropic'
-      ? 'Anthropic API'
-      : status.activeProvider === 'ollama'
-      ? `Ollama${status.activeModel ? ` (${status.activeModel})` : ''}`
-      : '—'
+  const activeLabel = status.activeProvider === 'none'
+    ? '—'
+    : `${status.activeProvider}${status.activeModel ? ` (${status.activeModel})` : ''}`
 
   const activeTone =
     status.activeProvider === 'none'
@@ -104,19 +93,30 @@ export function AIProviderStatus() {
 
   return (
     <div className={cx(panelClassName, 'space-y-3')}>
-      <ProviderRow
-        label="Anthropic API"
-        status={anthropicStatus}
-        detail={anthropicDetail}
-      />
-      <ProviderRow
-        label="Ollama lokal"
-        status={ollamaStatus}
-        detail={ollamaDetail}
-      />
+      {visibleProviders.map(provider => {
+        const rowStatus: ProviderRowProps['status'] = provider.available
+          ? 'ok'
+          : provider.status === 'local-offline'
+            ? 'warn'
+            : 'off'
+        const detail = provider.available
+          ? 'verbunden'
+          : provider.isLocal
+            ? 'nicht aktiv'
+            : 'Key fehlt'
+        return (
+          <ProviderRow
+            key={provider.id}
+            label={provider.name}
+            status={rowStatus}
+            detail={detail}
+            meta={provider.available ? provider.model : provider.reason}
+          />
+        )
+      })}
 
       <div className="border-t border-white/[0.06] pt-3 flex items-center justify-between gap-2">
-        <span className="text-xs text-slate-500">Aktiv:</span>
+        <span className="text-xs text-slate-500">Auto-Router:</span>
         <span className={cx('text-xs font-semibold', activeTone)}>{activeLabel}</span>
       </div>
 
@@ -126,23 +126,9 @@ export function AIProviderStatus() {
         </div>
       )}
 
-      {!status.ollamaRunning && (
-        <a
-          href="https://ollama.ai"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 transition-colors"
-        >
-          Ollama installieren →
-        </a>
-      )}
-
-      {status.ollamaRunning && status.ollamaModels.length === 0 && (
-        <p className="text-xs text-slate-500">
-          Kein Modell installiert — Terminal:{' '}
-          <code className="bg-slate-800 px-1 rounded text-slate-300">ollama pull llama3.2</code>
-        </p>
-      )}
+      <p className="text-[11px] leading-relaxed text-slate-500">
+        Geheimwerte werden nie angezeigt. Auto bevorzugt den besten konfigurierten Provider und nutzt lokale Modelle, wenn sie verfuegbar sind.
+      </p>
     </div>
   )
 }
