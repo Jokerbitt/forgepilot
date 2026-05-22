@@ -20,6 +20,7 @@ import path from 'path'
 import { NextResponse } from 'next/server'
 import { getAllProviderConfigs } from '@/lib/ai/providers/config-store'
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
+import { getAuthSecurityIssues, isProductionRuntime } from '@/lib/auth/config'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -100,6 +101,21 @@ async function checkScopeLock(): Promise<Omit<CheckResult, 'durationMs'>> {
   }
 }
 
+async function checkAuthSecurity(): Promise<Omit<CheckResult, 'durationMs'>> {
+  const issues = getAuthSecurityIssues()
+  if (issues.length === 0) {
+    return { name: 'auth_security', status: 'pass', message: 'Auth credentials meet security requirements' }
+  }
+  // In production: fail the probe so the deployment is flagged immediately.
+  // In dev/staging: warn only — allows local dev with FORGEPILOT_AUTH_DISABLED.
+  const status: CheckStatus = isProductionRuntime() ? 'fail' : 'warn'
+  return {
+    name: 'auth_security',
+    status,
+    message: issues.join('; '),
+  }
+}
+
 async function checkNotificationStore(): Promise<Omit<CheckResult, 'durationMs'>> {
   const file = path.join(CONFIG_DIR, 'notifications.json')
   try {
@@ -124,6 +140,7 @@ export async function GET(): Promise<NextResponse> {
     timed(checkAIProviders),
     timed(checkScopeLock),
     timed(checkNotificationStore),
+    timed(checkAuthSecurity),
   ])
 
   const hasFail = checks.some(c => c.status === 'fail')
