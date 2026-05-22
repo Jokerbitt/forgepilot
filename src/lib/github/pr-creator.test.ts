@@ -161,6 +161,8 @@ describe('createGitHubPRIfNeeded', () => {
 
   it('supports GITHUB_OWNER plus repo-only GITHUB_REPO configuration', async () => {
     vi.stubEnv('GITHUB_TOKEN', 'tok')
+    vi.stubEnv('GITHUB_REPOSITORY', '')      // clear CI-injected env var
+    vi.stubEnv('GITHUB_REPOSITORIES', '')
     vi.stubEnv('GITHUB_OWNER', 'owner')
     vi.stubEnv('GITHUB_REPO', 'repo')
 
