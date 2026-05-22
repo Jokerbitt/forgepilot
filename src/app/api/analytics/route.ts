@@ -32,6 +32,12 @@ export interface AnalyticsData {
     failed: number
     avgScore: number
   }>
+  costTrend: Array<{
+    date: string
+    actualCostUsd: number
+    estimatedCostUsd: number
+    count: number
+  }>
 }
 
 export async function GET(): Promise<Response> {
@@ -106,6 +112,31 @@ export async function GET(): Promise<Response> {
         avgScore: e.scoreCount > 0 ? Math.round(e.scoreSum / e.scoreCount) : 0,
       }))
 
+    // Cost trend (last 30 days)
+    const costDays = 30
+    const costMap = new Map<string, { actualCostUsd: number; estimatedCostUsd: number; count: number }>()
+    for (let i = 0; i < costDays; i++) {
+      const d = new Date(now - i * 86_400_000)
+      costMap.set(d.toISOString().slice(0, 10), { actualCostUsd: 0, estimatedCostUsd: 0, count: 0 })
+    }
+    for (const d of executed) {
+      const date = (d.updatedAt ?? d.createdAt ?? '').slice(0, 10)
+      if (costMap.has(date)) {
+        const entry = costMap.get(date)!
+        entry.actualCostUsd += d.actualCostUsd ?? 0
+        entry.estimatedCostUsd += d.costEstimateUsd ?? 0
+        entry.count++
+      }
+    }
+    const costTrend = Array.from(costMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, e]) => ({
+        date,
+        actualCostUsd:    Math.round(e.actualCostUsd    * 100000) / 100000,
+        estimatedCostUsd: Math.round(e.estimatedCostUsd * 100000) / 100000,
+        count: e.count,
+      }))
+
     const data: AnalyticsData = {
       summary: {
         totalExecutions: executed.length,
@@ -125,6 +156,7 @@ export async function GET(): Promise<Response> {
       },
       byRoute,
       recentTrend,
+      costTrend,
     }
 
     return NextResponse.json(data)
