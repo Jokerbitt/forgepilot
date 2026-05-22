@@ -1,27 +1,20 @@
 export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { markAsRead, markAllAsRead } from '@/lib/notifications/notification-store'
-
-interface MarkReadBody {
-  id?: string
-  all?: boolean
-}
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { NotificationMarkReadSchema } from '@/lib/validation/schemas'
 
 export async function POST(request: NextRequest) {
-  let body: MarkReadBody
-  try {
-    body = await request.json() as MarkReadBody
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
-  }
+  const result = await parseBody(request, NotificationMarkReadSchema)
+  if (isValidationError(result)) return result
 
-  if (body.all === true) {
+  if (result.all === true) {
     markAllAsRead()
     return NextResponse.json({ success: true })
   }
 
-  if (typeof body.id === 'string') {
-    const success = markAsRead(body.id)
+  if (typeof result.id === 'string') {
+    const success = markAsRead(result.id)
     if (!success) {
       return NextResponse.json({ error: 'Notification not found' }, { status: 404 })
     }

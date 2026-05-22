@@ -698,3 +698,41 @@ export const ProjectBriefSchema = z.object({
 })
 
 export type ProjectBriefInput = z.infer<typeof ProjectBriefSchema>
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+export const NotificationMarkReadSchema = z.object({
+  id:  z.string().optional(),
+  all: z.boolean().optional(),
+}).refine(d => d.id !== undefined || d.all === true, {
+  message: 'Either id or all:true must be provided',
+})
+
+export type NotificationMarkReadInput = z.infer<typeof NotificationMarkReadSchema>
+
+// ─── Magic Create ─────────────────────────────────────────────────────────────
+
+export const MagicCreateSchema = z.object({
+  mode:            z.enum(['manual', 'delegation', 'magic']).optional(),
+  title:           z.string().max(200).optional(),
+  description:     z.string().optional(),
+  projectId:       z.string().optional(),
+  milestone:       z.string().optional(),
+  riskClass:       RiskClassSchema.optional(),
+  priority:        z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
+  estimate:        z.number().min(0).max(480).optional(),
+  prompt:          z.string().optional(),
+  existingTicketId: z.string().optional(),
+})
+
+export type MagicCreateInput = z.infer<typeof MagicCreateSchema>
+
+// ─── Telegram Config ──────────────────────────────────────────────────────────
+
+export const TelegramConfigSchema = z.object({
+  botToken: z.string().min(1).optional(),
+  chatId:   z.string().min(1).optional(),
+  enabled:  z.boolean().optional(),
+})
+
+export type TelegramConfigInput = z.infer<typeof TelegramConfigSchema>
