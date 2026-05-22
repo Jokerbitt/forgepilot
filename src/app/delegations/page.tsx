@@ -39,6 +39,7 @@ import { VersionBadge } from '@/components/delegation/VersionBadge'
 import { Badge, EmptyState, Metric, Panel, buttonClassName, cx } from '@/components/ui/primitives'
 import { checkBudget, formatCostUsd } from '@/lib/delegations/cost-format'
 import { SlaBadge } from '@/components/shared/SlaBadge'
+import { PendingDecisionStack } from '@/components/delegation/PendingDecisionStack'
 
 type ApprovalFilter = 'Alle' | 'approval-required' | 'auto-approved' | 'risk-blocked'
 
@@ -1167,6 +1168,16 @@ function DelegationsContent() {
                 </button>
               </div>
             )}
+
+            {/* ── Pending Decision Stack ──────────────────────────────── */}
+            <PendingDecisionStack
+              delegations={delegations}
+              onApproved={id => {
+                setDelegations(prev => prev.map(d =>
+                  d.id === id ? { ...d, status: 'approved', updatedAt: new Date().toISOString() } : d
+                ))
+              }}
+            />
 
             {/* ── Table ───────────────────────────────────────────────── */}
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
