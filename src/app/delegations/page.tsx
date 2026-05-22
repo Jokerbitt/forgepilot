@@ -664,6 +664,19 @@ function DelegationsContent() {
     .reduce((sum, d) => sum + (d.actualCostUsd ?? 0), 0)
   const hasActualCosts = delegations.some(d => d.actualCostUsd != null)
 
+  // KPI: average completed duration in minutes
+  const avgDurationMin = useMemo(() => {
+    const completed = delegations.filter(d =>
+      d.status === 'completed' && d.startedAt && d.completedAt
+    )
+    if (completed.length === 0) return null
+    const total = completed.reduce((sum, d) => {
+      const ms = new Date(d.completedAt!).getTime() - new Date(d.startedAt!).getTime()
+      return sum + ms
+    }, 0)
+    return Math.round(total / completed.length / 60000)
+  }, [delegations])
+
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6 md:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -893,6 +906,28 @@ function DelegationsContent() {
           </div>
         ) : (
           <div className="space-y-4">
+
+            {/* ── KPI Strip ───────────────────────────────────────────── */}
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              {[
+                { label: 'Gesamt',       value: delegations.length,    color: 'text-gray-200',    onClick: undefined },
+                { label: 'Laufend',      value: runningCount,          color: 'text-violet-400',  onClick: () => setStatusFilter('running') },
+                { label: 'Fertig',       value: completedCount,        color: 'text-emerald-400', onClick: () => setStatusFilter('completed') },
+                { label: 'Fehler',       value: failedCount,           color: failedCount > 0 ? 'text-red-400' : 'text-gray-600', onClick: failedCount > 0 ? () => setStatusFilter('failed') : undefined },
+                { label: 'Ø Dauer',      value: avgDurationMin != null ? `${avgDurationMin}m` : '–', color: 'text-blue-300', onClick: undefined },
+                { label: 'Budget',       value: hasActualCosts ? `$${totalActual.toFixed(3)}` : `~$${totalEstimated.toFixed(2)}`, color: hasActualCosts ? 'text-yellow-400' : 'text-gray-500', onClick: undefined },
+              ].map(({ label, value, color, onClick }) => (
+                <button
+                  key={label}
+                  onClick={onClick}
+                  disabled={!onClick}
+                  className={`bg-gray-900 border border-gray-800 rounded-xl p-3 text-center transition-colors ${onClick ? 'hover:border-gray-600 cursor-pointer' : 'cursor-default'}`}
+                >
+                  <div className={`text-xl font-bold font-mono ${color}`}>{value}</div>
+                  <div className="text-xs text-gray-500 mt-0.5 uppercase tracking-wide">{label}</div>
+                </button>
+              ))}
+            </div>
 
             {/* ── Filters ─────────────────────────────────────────────── */}
             <div className="flex flex-wrap gap-4 items-center bg-gray-900 p-3 rounded-xl border border-gray-800">
