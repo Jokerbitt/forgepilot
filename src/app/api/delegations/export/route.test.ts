@@ -197,6 +197,9 @@ describe('GET /api/delegations/export', () => {
       id: 'del-006',
       status: 'completed',
       summaryReport: {
+        keyPoints: [],
+        changes: [],
+        timeTakenMinutes: 5,
         prUrl: 'https://github.com/org/repo/pull/42',
         prState: 'merged',
         prMergedAt: '2026-05-01T12:00:00.000Z',
