@@ -3,6 +3,8 @@ import {
   isForgePilotAuthEnabled,
   isAuthBypassAllowed,
   isAuthConfigured,
+  isAuthSecure,
+  getAuthSecurityIssues,
   isProductionRuntime,
   shouldProtectPath,
 } from './config'
@@ -100,6 +102,73 @@ describe('isAuthConfigured', () => {
         NEXTAUTH_SECRET: 'some-secret',
       } as unknown as NodeJS.ProcessEnv),
     ).toBe(true)
+  })
+})
+
+describe('isAuthSecure', () => {
+  const strong = (overrides: Record<string, string> = {}) =>
+    ({
+      FORGEPILOT_ADMIN_PASSWORD: 'SuperSecret!2026',
+      NEXTAUTH_SECRET: 'a'.repeat(32),
+      ...overrides,
+    } as unknown as NodeJS.ProcessEnv)
+
+  it('returns true for properly configured secrets', () => {
+    expect(isAuthSecure(strong())).toBe(true)
+  })
+
+  it('rejects placeholder admin password', () => {
+    expect(isAuthSecure(strong({ FORGEPILOT_ADMIN_PASSWORD: 'change-me-before-deploy' }))).toBe(false)
+    expect(isAuthSecure(strong({ FORGEPILOT_ADMIN_PASSWORD: 'changeme' }))).toBe(false)
+  })
+
+  it('rejects placeholder NEXTAUTH_SECRET', () => {
+    expect(isAuthSecure(strong({ NEXTAUTH_SECRET: 'generate-with-openssl-rand-base64-32' }))).toBe(false)
+  })
+
+  it('rejects passwords shorter than 12 characters', () => {
+    expect(isAuthSecure(strong({ FORGEPILOT_ADMIN_PASSWORD: 'short' }))).toBe(false)
+    expect(isAuthSecure(strong({ FORGEPILOT_ADMIN_PASSWORD: '11chars!!!!' }))).toBe(false)
+  })
+
+  it('rejects NEXTAUTH_SECRET shorter than 32 characters', () => {
+    expect(isAuthSecure(strong({ NEXTAUTH_SECRET: 'too-short' }))).toBe(false)
+  })
+})
+
+describe('getAuthSecurityIssues', () => {
+  it('returns no issues for a secure config', () => {
+    expect(
+      getAuthSecurityIssues({
+        FORGEPILOT_ADMIN_PASSWORD: 'SuperSecret!2026',
+        NEXTAUTH_SECRET: 'a'.repeat(32),
+        NEXTAUTH_URL: 'http://localhost:3000',
+      } as unknown as NodeJS.ProcessEnv),
+    ).toHaveLength(0)
+  })
+
+  it('flags missing password and secret', () => {
+    const issues = getAuthSecurityIssues({} as unknown as NodeJS.ProcessEnv)
+    expect(issues.some(i => i.includes('FORGEPILOT_ADMIN_PASSWORD'))).toBe(true)
+    expect(issues.some(i => i.includes('NEXTAUTH_SECRET'))).toBe(true)
+  })
+
+  it('flags placeholder values', () => {
+    const issues = getAuthSecurityIssues({
+      FORGEPILOT_ADMIN_PASSWORD: 'change-me-before-deploy',
+      NEXTAUTH_SECRET: 'generate-with-openssl-rand-base64-32',
+    } as unknown as NodeJS.ProcessEnv)
+    expect(issues.some(i => i.includes('placeholder'))).toBe(true)
+  })
+
+  it('flags non-https NEXTAUTH_URL in production', () => {
+    const issues = getAuthSecurityIssues({
+      FORGEPILOT_ADMIN_PASSWORD: 'SuperSecret!2026',
+      NEXTAUTH_SECRET: 'a'.repeat(32),
+      NEXTAUTH_URL: 'http://myapp.example.com',
+      NODE_ENV: 'production',
+    } as unknown as NodeJS.ProcessEnv)
+    expect(issues.some(i => i.includes('https://'))).toBe(true)
   })
 })
 
