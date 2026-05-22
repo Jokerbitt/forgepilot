@@ -11,8 +11,9 @@ export default function GlobalError({
   reset: () => void
 }) {
   useEffect(() => {
-    // Log to console in dev; will be replaced by Sentry in M193
-    console.error('[GlobalError]', error)
+    // Client component — Pino is Node-only. Sentry (M97) captures this automatically.
+    // eslint-disable-next-line no-console
+    console.error('[page.crash]', { message: error.message, digest: error.digest })
   }, [error])
 
   return (
