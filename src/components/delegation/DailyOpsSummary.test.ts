@@ -160,8 +160,8 @@ describe('buildSummary', () => {
 
   it('computes average critic score', () => {
     const delegations = [
-      makeDelegation({ criticScore: { correctness: 80, efficiency: 70, drift: 20, verdict: 'pass' } }),
-      makeDelegation({ criticScore: { correctness: 60, efficiency: 60, drift: 40, verdict: 'pass' } }),
+      makeDelegation({ criticScore: { correctness: 80, efficiency: 70, drift: 20, verdict: 'approved', summary: 'ok', runAt: new Date().toISOString() } }),
+      makeDelegation({ criticScore: { correctness: 60, efficiency: 60, drift: 40, verdict: 'approved', summary: 'ok', runAt: new Date().toISOString() } }),
     ]
     // d1: (80 + 70 + 80) / 3 = 76.67; d2: (60 + 60 + 60) / 3 = 60 → avg = 68.33 → 68
     expect(buildSummary(delegations).avgCriticScore).toBe(68)
