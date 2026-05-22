@@ -21,6 +21,7 @@ import { KnowledgeCardList } from '@/components/knowledge'
 import { DelegationLiveLog } from '@/components/delegation/DelegationLiveLog'
 import { DelegationNextActionPanel } from '@/components/delegation/DelegationNextActionPanel'
 import { PreflightCheckList } from '@/components/delegation/PreflightCheckList'
+import { CostMeter } from '@/components/delegation/CostMeter'
 import type { PreflightResult } from '@/lib/preflight'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
@@ -523,12 +524,11 @@ export default function DelegationDetailPage() {
             {/* Cost tile */}
             <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Kosten</span>
-              {d.actualCostUsd != null ? (
-                <span className="text-xs font-bold text-yellow-400 font-mono">${d.actualCostUsd.toFixed(4)}</span>
-              ) : (
-                <span className="text-xs font-bold text-gray-400 font-mono">–</span>
-              )}
-              <span className="text-[10px] text-gray-600 font-mono">Budget: ${d.contract.maxBudgetUsd.toFixed(2)}</span>
+              <CostMeter
+                actualCostUsd={d.actualCostUsd}
+                estimateCostUsd={d.costEstimateUsd}
+                maxBudgetUsd={d.contract.maxBudgetUsd}
+              />
             </div>
 
             {/* PR tile */}
