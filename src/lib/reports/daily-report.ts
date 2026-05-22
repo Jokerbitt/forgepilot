@@ -64,6 +64,41 @@ export interface DailyReportFirstRealValueLoop {
   steps: DailyReportLoopStep[]
 }
 
+export interface DailyReportExecuteLoopEvidenceRun {
+  id: string
+  title: string
+  status: 'success' | 'partial' | 'blocked'
+  source: 'manual' | 'runtime-aggregate'
+  recordedAt: string
+  delegationId?: string
+  briefId?: string
+  prUrl?: string
+  timeSavedMinutes?: number
+  manualInterventions?: number
+  blocker?: string
+  notes?: string
+  steps: {
+    brief: boolean
+    delegation: boolean
+    execute: boolean
+    tests: boolean
+    pr: boolean
+    critic: boolean
+    writeback: boolean
+  }
+}
+
+export interface DailyReportExecuteLoopEvidence {
+  targetRuns: number
+  totalRuns: number
+  provenRuns: number
+  blockedRuns: number
+  progressPct: number
+  currentStatus: 'not-started' | 'collecting' | 'proven' | 'blocked'
+  nextAction: string
+  runs: DailyReportExecuteLoopEvidenceRun[]
+}
+
 export interface DailyReport {
   version: 1
   generatedAt: string
@@ -98,6 +133,7 @@ export interface DailyReport {
   risks: DailyReportRisk[]
   nextActions: DailyReportTask[]
   firstRealValueLoop: DailyReportFirstRealValueLoop
+  executeLoopEvidence: DailyReportExecuteLoopEvidence
   assistantRouting: DailyReportAssistantRouting
   prompts: DailyReportPrompt[]
   markdown: string
@@ -111,6 +147,7 @@ export interface BuildDailyReportInput {
   attentionItems: AttentionItem[]
   storageMode: DelegationStorageMode
   authDisabled: boolean
+  executeLoopEvidence?: DailyReportExecuteLoopEvidenceRun[]
 }
 
 const NEXT_REAL_TICKET_PROMPT = [
@@ -336,6 +373,76 @@ function buildFirstRealValueLoop(status: DailyReport['status']): DailyReportFirs
   }
 }
 
+function isEvidenceRunProven(run: DailyReportExecuteLoopEvidenceRun): boolean {
+  return run.status === 'success'
+    && run.steps.brief
+    && run.steps.delegation
+    && run.steps.execute
+    && run.steps.tests
+    && run.steps.pr
+    && run.steps.critic
+    && run.steps.writeback
+}
+
+function inferRuntimeEvidenceRun(
+  status: DailyReport['status'],
+  generatedAt: string,
+): DailyReportExecuteLoopEvidenceRun | null {
+  const steps = {
+    brief: status.projectBriefs.accepted > 0,
+    delegation: status.delegations.total > 0,
+    execute: status.quality.completedDelegations > 0,
+    tests: status.quality.completedDelegations > 0,
+    pr: status.quality.prsCreated > 0,
+    critic: status.quality.criticScoresStored > 0,
+    writeback: status.quality.knowledgeWritebacks > 0,
+  }
+  const completedSteps = Object.values(steps).filter(Boolean).length
+
+  if (completedSteps === 0) return null
+
+  return {
+    id: 'runtime-aggregate-current',
+    title: 'Current runtime aggregate evidence',
+    status: completedSteps === Object.keys(steps).length ? 'success' : 'partial',
+    source: 'runtime-aggregate',
+    recordedAt: generatedAt,
+    notes: 'Derived from current ForgePilot runtime data. Replace with manual evidence runs after each real ticket.',
+    steps,
+  }
+}
+
+function buildExecuteLoopEvidence(
+  status: DailyReport['status'],
+  generatedAt: string,
+  explicitRuns: DailyReportExecuteLoopEvidenceRun[] = [],
+): DailyReportExecuteLoopEvidence {
+  const targetRuns = 5
+  const runtimeRun = explicitRuns.length > 0 ? null : inferRuntimeEvidenceRun(status, generatedAt)
+  const runs = runtimeRun ? [runtimeRun] : explicitRuns
+  const provenRuns = runs.filter(isEvidenceRunProven).length
+  const blockedRuns = runs.filter(run => run.status === 'blocked').length
+  const currentStatus: DailyReportExecuteLoopEvidence['currentStatus'] =
+    provenRuns >= targetRuns ? 'proven'
+    : blockedRuns > 0 && provenRuns === 0 ? 'blocked'
+    : runs.length > 0 ? 'collecting'
+    : 'not-started'
+  const remainingRuns = Math.max(targetRuns - provenRuns, 0)
+
+  return {
+    targetRuns,
+    totalRuns: runs.length,
+    provenRuns,
+    blockedRuns,
+    progressPct: pct(provenRuns, targetRuns),
+    currentStatus,
+    nextAction: remainingRuns === 0
+      ? 'Summarize V1 readiness and decide whether ForgePilot is ready for daily use.'
+      : `Run and record ${remainingRuns} more real small ticket loop${remainingRuns === 1 ? '' : 's'} with PR, critic review and writeback evidence.`,
+    runs: runs.slice(0, targetRuns),
+  }
+}
+
 function buildNextActions(risks: DailyReportRisk[], loop: DailyReportFirstRealValueLoop): DailyReportTask[] {
   const byId = new Set(risks.map(risk => risk.id))
   const actions: DailyReportTask[] = []
@@ -498,6 +605,18 @@ export function renderDailyReportMarkdown(report: Omit<DailyReport, 'markdown'>)
     `- Current step: ${report.firstRealValueLoop.currentStep.label} — ${report.firstRealValueLoop.currentStep.action}`,
     ...report.firstRealValueLoop.steps.map(step => `- [${step.status.toUpperCase()}] ${step.label}: ${step.action}`),
     ``,
+    `## Execute Loop Evidence`,
+    `- Target: ${report.executeLoopEvidence.targetRuns} real runs`,
+    `- Proven: ${report.executeLoopEvidence.provenRuns}/${report.executeLoopEvidence.targetRuns}`,
+    `- Progress: ${report.executeLoopEvidence.progressPct}%`,
+    `- Status: ${report.executeLoopEvidence.currentStatus}`,
+    `- Next action: ${report.executeLoopEvidence.nextAction}`,
+    ...report.executeLoopEvidence.runs.map(run => {
+      const pr = run.prUrl ? `, PR: ${run.prUrl}` : ''
+      const blocker = run.blocker ? `, blocker: ${run.blocker}` : ''
+      return `- [${run.status.toUpperCase()}] ${run.title} (${run.source}${pr}${blocker})`
+    }),
+    ``,
     `## Assistant Routing`,
     `- Mode: ${report.assistantRouting.mode}`,
     `- Recommended: ${report.assistantRouting.recommended.providerId ?? 'configured provider'}${report.assistantRouting.recommended.model ? ` / ${report.assistantRouting.recommended.model}` : ''}`,
@@ -584,6 +703,7 @@ export function buildDailyReport(input: BuildDailyReportInput): DailyReport {
   })
   const executiveVerdict = buildVerdict(risks)
   const firstRealValueLoop = buildFirstRealValueLoop(status)
+  const executeLoopEvidence = buildExecuteLoopEvidence(status, generatedAt, input.executeLoopEvidence)
   const nextActions = buildNextActions(risks, firstRealValueLoop)
   const assistantRouting = buildAssistantRouting()
   const prompts = buildPrompts()
@@ -596,6 +716,7 @@ export function buildDailyReport(input: BuildDailyReportInput): DailyReport {
     risks,
     nextActions,
     firstRealValueLoop,
+    executeLoopEvidence,
     assistantRouting,
     prompts,
   }
