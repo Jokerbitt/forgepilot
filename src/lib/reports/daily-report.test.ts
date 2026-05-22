@@ -150,6 +150,7 @@ describe('buildDailyReport', () => {
     expect(report.markdown).toContain('## First Real Value Loop')
     expect(report.markdown).toContain('## Execute Loop Evidence')
     expect(report.markdown).toContain('## Daily Assistant Readiness')
+    expect(report.markdown).toContain('## Failed Delegation Triage')
     expect(report.dailyAssistant.status).toBe('attention')
     expect(report.dailyAssistant.score).toBeGreaterThanOrEqual(90)
     expect(report.dailyAssistant.checklist.map(item => item.id)).toEqual([
@@ -379,8 +380,40 @@ describe('buildDailyReport', () => {
     expect(report.dailyAssistant.status).toBe('blocked')
     expect(report.dailyAssistant.checklist.find(item => item.id === 'storage')?.status).toBe('warning')
     expect(report.dailyAssistant.checklist.find(item => item.id === 'failed-delegations')?.status).toBe('blocker')
+    expect(report.dailyAssistant.checklist.find(item => item.id === 'failed-delegations')?.detail).toContain('1 ohne Fehlertext')
+    expect(report.failedDelegationTriage.missingFeedback).toBe(1)
+    expect(report.markdown).toContain('Missing feedback: 1')
+    expect(report.markdown).toContain('No errorMessage, failureFeedback, warning or error log found.')
     expect(report.firstRealValueLoop.currentStep.id).toBe('pr')
     expect(report.firstRealValueLoop.currentStep.status).toBe('active')
+  })
+
+  it('shows retryable failed delegation triage in markdown', () => {
+    const report = buildDailyReport({
+      now,
+      storageMode: 'postgres',
+      authDisabled: false,
+      projectBriefs: [brief({ status: 'accepted' })],
+      knowledgeCards: [],
+      attentionItems: [],
+      delegations: [
+        delegation({
+          id: '33333333-3333-4333-8333-333333333333',
+          title: 'Provider timeout',
+          status: 'failed',
+          errorMessage: 'Request timed out while calling Ollama',
+        }),
+      ],
+    })
+
+    expect(report.failedDelegationTriage.retryable).toBe(1)
+    expect(report.failedDelegationTriage.topItems[0]).toMatchObject({
+      title: 'Provider timeout',
+      category: 'retryable',
+      failureCause: 'timeout',
+    })
+    expect(report.markdown).toContain('Retryable: 1')
+    expect(report.markdown).toContain('Provider timeout: retryable/timeout')
   })
 
   it('detects stale running delegations and open attention items', () => {

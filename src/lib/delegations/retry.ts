@@ -54,7 +54,7 @@ export function detectFailureCause(delegation: Delegation): FailureCause {
   if (text.includes('typescript') || text.includes('type error') || text.includes('ts(') || text.includes('tsc')) return 'type-error'
   if (text.includes('eslint') || text.includes('lint')) return 'lint-error'
   if (text.includes('test') && (text.includes('fail') || text.includes('expect(') || text.includes('assertion'))) return 'test-failure'
-  if (text.includes('timed out') || text.includes('timeout') || text.includes('zeitueberschreitung')) return 'timeout'
+  if (text.includes('timed out') || text.includes('timeout') || text.includes('etimedout') || text.includes('econnreset') || text.includes('socket hang up') || text.includes('zeitueberschreitung')) return 'timeout'
   if (text.includes('context window') || text.includes('token limit') || text.includes('context too large')) return 'context-too-large'
   if (text.includes('enoent') || text.includes('cannot find module') || text.includes('module not found')) return 'missing-dependency'
   if (text.includes('ambiguous') || text.includes('unclear') || text.includes('what exactly')) return 'unclear-requirements'

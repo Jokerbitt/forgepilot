@@ -41,6 +41,13 @@ nuetzlich und ruhig arbeitet?
 
 Fehlerhafte Delegationen werden nicht ignoriert und nicht blind neu gestartet.
 
+Der Daily Report enthaelt jetzt eine eigene Triage-Sektion:
+
+- `missing-feedback`: kein `errorMessage`, kein `failureFeedback`, kein Warning- oder Error-Log. Erst Fehlererfassung verbessern, dann retry.
+- `retryable`: transienter Fehler wie Timeout, Rate Limit oder fehlende Abhaengigkeit. Ein enger Retry ist sinnvoll.
+- `known-cause`: Ursache ist sichtbar, aber der Fix braucht eine kleine Reparatur-Delegation.
+- `human-review`: Auth, Budget, Max-Retry oder unklare Anforderungen. Erst entscheiden, dann weiter automatisieren.
+
 Jede fehlerhafte Delegation bekommt eine Entscheidung:
 
 - Retry, wenn Ursache transient ist.

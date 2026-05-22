@@ -4,6 +4,7 @@ import type { ProjectBrief } from '@/lib/models/project-brief'
 import type { MemoryCard } from '@/lib/knowledge/types'
 import type { DelegationStorageMode } from '@/lib/repositories/delegationRepository'
 import { getCriticProviderPlan } from '@/lib/eval/grok-critic'
+import { buildFailedDelegationTriage, type FailedDelegationTriageSummary } from '@/lib/delegations/triage'
 
 export type DailyReportVerdict = 'green' | 'yellow' | 'red'
 export type DailyReportRiskSeverity = 'critical' | 'high' | 'medium' | 'low'
@@ -152,6 +153,7 @@ export interface DailyReport {
   executeLoopEvidence: DailyReportExecuteLoopEvidence
   assistantRouting: DailyReportAssistantRouting
   dailyAssistant: DailyReportAssistantReadiness
+  failedDelegationTriage: FailedDelegationTriageSummary
   prompts: DailyReportPrompt[]
   markdown: string
 }
@@ -570,6 +572,7 @@ function buildDailyAssistantReadiness(input: {
   status: DailyReport['status']
   executeLoopEvidence: DailyReportExecuteLoopEvidence
   assistantRouting: DailyReportAssistantRouting
+  failedDelegationTriage: FailedDelegationTriageSummary
 }): DailyReportAssistantReadiness {
   const hasCriticProvider = input.assistantRouting.criticPlan.candidates.some(candidate => candidate.configured !== false)
   const checklist: DailyReportAssistantChecklistItem[] = [
@@ -620,7 +623,7 @@ function buildDailyAssistantReadiness(input: {
       label: 'Fehler-Triage',
       status: input.status.delegations.failed > 0 ? 'blocker' : 'ready',
       detail: input.status.delegations.failed > 0
-        ? `${input.status.delegations.failed} fehlerhafte Delegationen brauchen Entscheidung.`
+        ? `${input.status.delegations.failed} fehlerhafte Delegationen: ${input.failedDelegationTriage.missingFeedback} ohne Fehlertext, ${input.failedDelegationTriage.retryable} retrybar.`
         : 'Keine fehlerhaften Delegationen blockieren den Alltag.',
       action: input.status.delegations.failed > 0 ? 'Fehler pruefen' : 'Delegations ansehen',
       href: input.status.delegations.failed > 0 ? '/delegations?filter=failed' : '/delegations',
@@ -656,7 +659,7 @@ function buildPrompts(): DailyReportPrompt[] {
       target: 'assistant-auto',
       title: 'Daily assistant review',
       preferredRoute: 'auto',
-      prompt: 'Review this ForgePilot Daily Report as the best available assistant model. Prefer the configured Critic LLM router; local models are fine for summaries and triage, cloud models for complex/security decisions. Return Executive Verdict, Top 5 risks, next 3 tasks for Codex/Claude/local agents, and what not to build yet. Do not ask for secrets or broad write access.',
+      prompt: 'Review this ForgePilot Daily Report as the best available assistant model. Prefer the configured Critic LLM router; local models are fine for summaries and failed-delegation triage, cloud models for complex/security decisions. Return Executive Verdict, Top 5 risks, next 3 tasks for Codex/Claude/local agents, and what not to build yet. Do not ask for secrets or broad write access.',
     },
     {
       target: 'planning-llm',
@@ -674,7 +677,7 @@ function buildPrompts(): DailyReportPrompt[] {
       target: 'coding-agent',
       title: 'Implementation pick',
       preferredRoute: 'best-available',
-      prompt: 'Use the Daily Report to pick the highest-value P0/P1 task. Claim a narrow write scope, implement it, run type-check, focused tests, lint, full tests when risk warrants it, build, then open a PR with verification.',
+      prompt: 'Use the Daily Report to pick the highest-value P0/P1 task. If failed delegation triage shows missing feedback, fix error capture before retrying. Claim a narrow write scope, implement it, run type-check, focused tests, lint, full tests when risk warrants it, build, then open a PR with verification.',
     },
     {
       target: 'ux-agent',
@@ -739,6 +742,18 @@ export function renderDailyReportMarkdown(report: Omit<DailyReport, 'markdown'>)
     `- Score: ${report.dailyAssistant.score}/100`,
     `- Next focus: ${report.dailyAssistant.nextFocus}`,
     ...report.dailyAssistant.checklist.map(item => `- [${item.status.toUpperCase()}] ${item.label}: ${item.detail} Action: ${item.action}`),
+    ``,
+    `## Failed Delegation Triage`,
+    `- Total failed: ${report.failedDelegationTriage.total}`,
+    `- Missing feedback: ${report.failedDelegationTriage.missingFeedback}`,
+    `- Retryable: ${report.failedDelegationTriage.retryable}`,
+    `- Known cause: ${report.failedDelegationTriage.knownCause}`,
+    `- Needs human review: ${report.failedDelegationTriage.needsHumanReview}`,
+    ...(
+      report.failedDelegationTriage.topItems.length > 0
+        ? report.failedDelegationTriage.topItems.map(item => `- [${item.severity.toUpperCase()}] ${item.title}: ${item.category}/${item.failureCause}. Action: ${item.recommendedAction} Evidence: ${item.evidence}`)
+        : ['- No failed delegations to triage.']
+    ),
     ``,
     `## Top Risks`,
   ]
@@ -823,7 +838,8 @@ export function buildDailyReport(input: BuildDailyReportInput): DailyReport {
   const executeLoopEvidence = buildExecuteLoopEvidence(status, generatedAt, input.executeLoopEvidence)
   const nextActions = buildNextActions(risks, firstRealValueLoop)
   const assistantRouting = buildAssistantRouting()
-  const dailyAssistant = buildDailyAssistantReadiness({ status, executeLoopEvidence, assistantRouting })
+  const failedDelegationTriage = buildFailedDelegationTriage(input.delegations)
+  const dailyAssistant = buildDailyAssistantReadiness({ status, executeLoopEvidence, assistantRouting, failedDelegationTriage })
   const prompts = buildPrompts()
   const withoutMarkdown = {
     version: 1 as const,
@@ -837,6 +853,7 @@ export function buildDailyReport(input: BuildDailyReportInput): DailyReport {
     executeLoopEvidence,
     assistantRouting,
     dailyAssistant,
+    failedDelegationTriage,
     prompts,
   }
 
