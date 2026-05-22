@@ -45,6 +45,7 @@ const STATUS_COLORS: Record<string, string> = {
   completed: 'bg-emerald-900/40 text-emerald-400 border-emerald-800',
   failed:    'bg-red-900/50 text-red-400 border-red-700',
   cancelled: 'bg-gray-950 text-gray-600 border-gray-800',
+  rejected:  'bg-red-950 text-red-400 border-red-900',
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -54,6 +55,7 @@ const STATUS_LABELS: Record<string, string> = {
   completed: 'Fertig',
   failed:    'Fehler',
   cancelled: 'Abgebrochen',
+  rejected:  'Abgelehnt',
 }
 
 
@@ -343,6 +345,19 @@ export default function DelegationDetailPage() {
     })
   }
 
+  const handleReject = async () => {
+    if (!delegation) return
+    const res = await fetch(`/api/delegations/${delegation.id}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actor: 'user' }),
+    })
+    if (res.ok) {
+      const updated = await res.json() as Delegation
+      setDelegation(updated)
+    }
+  }
+
   const handleCopy = () => {
     navigator.clipboard.writeText(window.location.href)
     setCopied(true)
@@ -378,6 +393,7 @@ export default function DelegationDetailPage() {
 
   const d = delegation
   const canApprove  = d.status === 'pending' && d.contract.requiresApproval && d.contract.riskClass !== 'C'
+  const canReject   = d.status === 'pending'
   const canStart    = d.status === 'approved'
   const canCancel   = d.status === 'pending' || d.status === 'approved'
   const canStop     = d.status === 'running'
@@ -445,6 +461,12 @@ export default function DelegationDetailPage() {
                 <button onClick={handleApprove}
                   className="px-3 py-1.5 text-sm bg-green-900/50 text-green-300 hover:bg-green-900 border border-green-800 rounded-lg transition-colors">
                   ✔ Freigeben
+                </button>
+              )}
+              {canReject && (
+                <button onClick={handleReject}
+                  className="px-3 py-1.5 text-sm bg-red-950/50 text-red-400 hover:bg-red-950 border border-red-900/60 rounded-lg transition-colors">
+                  ✕ Ablehnen
                 </button>
               )}
               {canStart && (
