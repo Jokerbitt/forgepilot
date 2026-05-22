@@ -6,6 +6,57 @@ export interface NotificationPayload {
   event: 'completed' | 'failed'
 }
 
+export interface BudgetWarningPayload {
+  delegation: Delegation
+  actualCostUsd: number
+  maxBudgetUsd: number
+  usagePct: number
+}
+
+const BUDGET_WARN_THRESHOLD = 0.8
+
+/**
+ * Fire a budget warning notification when actual cost reaches 80%+ of the budget.
+ * Only fires if `usagePct >= BUDGET_WARN_THRESHOLD` and the run succeeded.
+ * Never throws — errors are logged.
+ */
+export async function notifyBudgetWarning(payload: BudgetWarningPayload): Promise<void> {
+  if (payload.usagePct < BUDGET_WARN_THRESHOLD) return
+
+  const channels: Array<() => Promise<void>> = []
+
+  if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
+    channels.push(() => sendTelegramBudgetWarning(payload))
+  }
+
+  if (channels.length === 0) return
+
+  await Promise.allSettled(channels.map(fn => fn().catch(err => {
+    apiLogger.warn(
+      { event: 'notification.budget_warning.error', error: err instanceof Error ? err.message : String(err) },
+      'Budget warning notification failed'
+    )
+  })))
+}
+
+async function sendTelegramBudgetWarning(payload: BudgetWarningPayload): Promise<void> {
+  const { sendTelegramMessage } = await import('@/lib/telegram/bot')
+  const { delegation, actualCostUsd, maxBudgetUsd, usagePct } = payload
+  const pct = Math.round(usagePct * 100)
+  const text = `⚠️ ForgePilot Budget-Warnung\n` +
+    `📋 ${delegation.title}\n` +
+    `💰 $${actualCostUsd.toFixed(4)} / $${maxBudgetUsd.toFixed(4)} (${pct}% verbraucht)\n` +
+    `🔗 /delegations/${delegation.id}`
+
+  const sent = await sendTelegramMessage(text, { parseMode: 'Markdown', disableWebPagePreview: true })
+  if (!sent) throw new Error('Telegram sendMessage returned false')
+
+  apiLogger.info(
+    { event: 'notification.budget_warning.sent', delegationId: delegation.id, usagePct },
+    'Budget warning notification sent'
+  )
+}
+
 /**
  * Send notification about delegation execution result.
  * Respects configured channels (Telegram, email).

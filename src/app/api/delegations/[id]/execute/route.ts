@@ -27,7 +27,7 @@ import { generateText } from '@/lib/ai/text-generation'
 import { extractKnowledge } from '@/lib/knowledge/extraction'
 import { persistGrokCriticForDelegation } from '@/lib/eval/auto-grok-critic'
 import { writebackExecutionInsights, writebackDelegationKnowledge } from '@/lib/knowledge/writeback'
-import { notifyExecutionResult } from '@/lib/notifications'
+import { notifyExecutionResult, notifyBudgetWarning } from '@/lib/notifications'
 import { checkBudget, wouldExceedBudget } from '@/lib/budget/guard'
 import { triggerChain } from '@/lib/delegations/chaining'
 
@@ -462,6 +462,19 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
 
       // M204: fire-and-forget execution notification
       void notifyExecutionResult({ delegation: finishedDelegation, event: finalStatus })
+
+      // M255: budget warning when actual cost ≥ 80% of limit
+      if (success && actualCost) {
+        const maxBudget = finishedDelegation.contract.maxBudgetUsd
+        if (maxBudget && maxBudget > 0) {
+          void notifyBudgetWarning({
+            delegation: finishedDelegation,
+            actualCostUsd: actualCost,
+            maxBudgetUsd: maxBudget,
+            usagePct: actualCost / maxBudget,
+          })
+        }
+      }
       }
     })()
   })
