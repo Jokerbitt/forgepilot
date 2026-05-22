@@ -511,15 +511,6 @@ export const AIWorkloadSchema = z.object({
 
 export type AIWorkloadInput = z.infer<typeof AIWorkloadSchema>
 
-// ─── API Keys ────────────────────────────────────────────────────────────────
-
-export const ApiKeysUpdateSchema = z.record(
-  z.string(),
-  z.string(),
-)
-
-export type ApiKeysUpdate = z.infer<typeof ApiKeysUpdateSchema>
-
 // ─── Model Router ────────────────────────────────────────────────────────────
 
 export const ModelRouterTaskSchema = z.object({
@@ -698,3 +689,60 @@ export const ProjectBriefSchema = z.object({
 })
 
 export type ProjectBriefInput = z.infer<typeof ProjectBriefSchema>
+
+// ─── M286: API Keys Update ────────────────────────────────────────────────────
+
+export const ApiKeysUpdateSchema = z.object({
+  GITHUB_TOKEN:               z.string().max(500).optional(),
+  LINEAR_API_KEY:             z.string().max(500).optional(),
+  LINEAR_TEAM_ID:             z.string().max(200).optional(),
+  ANTHROPIC_API_KEY:          z.string().max(500).optional(),
+  OPENAI_API_KEY:             z.string().max(500).optional(),
+  XAI_API_KEY:                z.string().max(500).optional(),
+  GOOGLE_API_KEY:             z.string().max(500).optional(),
+  GROQ_API_KEY:               z.string().max(500).optional(),
+  OPENROUTER_API_KEY:         z.string().max(500).optional(),
+  MISTRAL_API_KEY:            z.string().max(500).optional(),
+  DEEPSEEK_API_KEY:           z.string().max(500).optional(),
+  OLLAMA_BASE_URL:            z.string().url().max(500).optional().or(z.literal('')),
+  LM_STUDIO_BASE_URL:         z.string().url().max(500).optional().or(z.literal('')),
+  LLM_MODE:                   z.enum(['auto', 'anthropic', 'groq', 'ollama', 'lmstudio']).optional(),
+  FORGEPILOT_CRITIC_MODE:     z.enum(['auto', 'local-first', 'cloud-first', 'single']).optional(),
+  FORGEPILOT_CRITIC_PROVIDERS: z.string().max(500).optional(),
+}).strict()
+
+export type ApiKeysUpdateInput = z.infer<typeof ApiKeysUpdateSchema>
+
+// ─── M286: Magic Create ───────────────────────────────────────────────────────
+
+export const MagicCreateSchema = z.object({
+  mode:             z.enum(['manual', 'delegation', 'magic']).default('magic'),
+  title:            z.string().min(3).max(500).optional(),
+  description:      z.string().max(5000).optional(),
+  projectId:        z.string().max(200).optional(),
+  milestone:        z.string().max(200).optional(),
+  riskClass:        RiskClassSchema.optional(),
+  priority:         z.number().int().min(0).max(10).optional(),
+  estimate:         z.number().int().min(0).optional(),
+  prompt:           z.string().min(5).max(5000).optional(),
+  existingTicketId: z.string().max(200).optional(),
+})
+
+export type MagicCreateInput = z.infer<typeof MagicCreateSchema>
+
+// ─── M286: AI Suggest (Project Brief) ────────────────────────────────────────
+
+export const AISuggestSchema = z.object({
+  rawIdea: z.string().min(10, 'rawIdea must be at least 10 characters').max(5000),
+  scope:   z.enum(['minimal', 'standard', 'full']).default('standard'),
+})
+
+export type AISuggestInput = z.infer<typeof AISuggestSchema>
+
+// ─── M286: Critic Apply (Project Brief) ──────────────────────────────────────
+
+export const CriticApplySchema = z.object({
+  suggestionId: z.string().min(1, 'suggestionId is required'),
+})
+
+export type CriticApplyInput = z.infer<typeof CriticApplySchema>

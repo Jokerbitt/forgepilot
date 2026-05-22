@@ -7,8 +7,10 @@ import type { Delegation } from '@/lib/models/delegation'
 import { getNBAConfig } from '@/lib/nba-engine/nba-config'
 import { shouldRequireApproval } from '@/lib/nba-engine/approval-policy'
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
+import { parseBody } from '@/lib/validation/api'
+import { MagicCreateSchema } from '@/lib/validation/schemas'
 
-interface MagicCreateBody {
+type MagicCreateBody = {
   mode?: 'manual' | 'delegation' | 'magic'
   title?: string
   description?: string
@@ -51,7 +53,9 @@ function estimateScoreForRisk(riskClass: RiskClass): number {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json() as MagicCreateBody
+    const parsed = await parseBody(request, MagicCreateSchema)
+    if (parsed instanceof NextResponse) return parsed
+    const body = parsed as MagicCreateBody
     const { mode } = body // 'magic' or 'manual'
     
     let newItem: WorkItem

@@ -1,12 +1,8 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
-import type { BriefScope } from '@/lib/models/project-brief'
 import { AIProviderConfigurationError, generateText, stripJsonCodeFence } from '@/lib/ai/text-generation'
-
-interface AISuggestRequest {
-  rawIdea: string
-  scope: BriefScope
-}
+import { parseBody } from '@/lib/validation/api'
+import { AISuggestSchema } from '@/lib/validation/schemas'
 
 interface AISuggestResponse {
   title: string
@@ -29,11 +25,9 @@ Regeln:
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as AISuggestRequest
-
-    if (!body.rawIdea?.trim() || body.rawIdea.trim().length < 10) {
-      return NextResponse.json({ error: 'rawIdea is required (min 10 chars)' }, { status: 400 })
-    }
+    const parsed = await parseBody(request, AISuggestSchema)
+    if (parsed instanceof NextResponse) return parsed
+    const body = parsed
 
     const scopeHint = body.scope === 'minimal'
       ? 'Halte die Antworten sehr kurz und fokussiert.'
@@ -66,21 +60,21 @@ Antworte mit folgendem JSON-Objekt:
     })
 
     const cleaned = stripJsonCodeFence(result.text)
-    let parsed: AISuggestResponse
+    let aiResponse: AISuggestResponse
     try {
-      parsed = JSON.parse(cleaned) as AISuggestResponse
+      aiResponse = JSON.parse(cleaned) as AISuggestResponse
     } catch {
       const match = result.text.match(/\{[\s\S]*\}/)
       if (!match) throw new Error('KI-Antwort enthält kein gültiges JSON')
-      parsed = JSON.parse(match[0]) as AISuggestResponse
+      aiResponse = JSON.parse(match[0]) as AISuggestResponse
     }
 
     // Validate required fields
-    if (!parsed.title || !parsed.problemStatement || !parsed.desiredOutcome || !parsed.targetAudience) {
+    if (!aiResponse.title || !aiResponse.problemStatement || !aiResponse.desiredOutcome || !aiResponse.targetAudience) {
       return NextResponse.json({ error: 'AI response missing required fields' }, { status: 502 })
     }
 
-    return NextResponse.json(parsed)
+    return NextResponse.json(aiResponse)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     if (err instanceof AIProviderConfigurationError) {
