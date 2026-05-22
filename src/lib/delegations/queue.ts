@@ -20,6 +20,30 @@ export interface QueueStats {
   total: number
 }
 
+export interface DelegationQueuePlanItem {
+  id: string
+  title: string
+  status: Delegation['status']
+  priority: number
+  riskClass: Delegation['contract']['riskClass']
+  requiresApproval: boolean
+  href: string
+  actionHref?: string
+}
+
+export interface DelegationQueuePlan {
+  mode: 'safe-preview'
+  stats: QueueStats
+  maxConcurrent: number
+  recommendedBatchSize: number
+  recommendedStartIds: string[]
+  pendingApprovalIds: string[]
+  nextAction: string
+  warnings: string[]
+  recommendedBatch: DelegationQueuePlanItem[]
+  pendingApproval: DelegationQueuePlanItem[]
+}
+
 export function readDelegations(): Delegation[] {
   try {
     return JSON.parse(fs.readFileSync(DELEGATIONS_FILE, 'utf-8')) as Delegation[]
@@ -51,6 +75,80 @@ export function selectNextBatch(options: QueueSelectionOptions = {}): Delegation
   if (limit <= 0) return []
 
   return getApprovedDelegations(delegations).slice(0, limit)
+}
+
+function toPlanItem(delegation: Delegation): DelegationQueuePlanItem {
+  return {
+    id: delegation.id,
+    title: delegation.title || delegation.contract.goal.slice(0, 80),
+    status: delegation.status,
+    priority: delegation.priority ?? 0,
+    riskClass: delegation.contract.riskClass,
+    requiresApproval: delegation.contract.requiresApproval,
+    href: `/delegations/${delegation.id}`,
+    actionHref: delegation.status === 'approved'
+      ? `/api/delegations/${delegation.id}/start`
+      : undefined,
+  }
+}
+
+export function buildDelegationQueuePlan(options: QueueSelectionOptions = {}): DelegationQueuePlan {
+  const maxConcurrent = options.maxConcurrent ?? 2
+  const max = options.max ?? 2
+  const delegations = options.delegations ?? readDelegations()
+  const stats = getQueueStats(delegations)
+  const recommendedBatch = selectNextBatch({ max, maxConcurrent, delegations })
+  const pendingApproval = delegations
+    .filter(d => d.status === 'pending' && (d.contract.requiresApproval || d.contract.riskClass !== 'A'))
+    .sort(byPriorityThenAge)
+    .slice(0, 5)
+  const warnings: string[] = []
+
+  if (stats.running >= maxConcurrent) {
+    warnings.push(`Already running ${stats.running} delegation${stats.running === 1 ? '' : 's'}; do not start more until a slot is free.`)
+  }
+
+  if (stats.approved > recommendedBatch.length) {
+    warnings.push(`Start only ${recommendedBatch.length} approved delegation${recommendedBatch.length === 1 ? '' : 's'} first; keep concurrency capped at ${maxConcurrent}.`)
+  }
+
+  if (pendingApproval.length > 0) {
+    warnings.push(`${pendingApproval.length} pending delegation${pendingApproval.length === 1 ? '' : 's'} need approval or clearer risk handling before execution.`)
+  }
+
+  return {
+    mode: 'safe-preview',
+    stats,
+    maxConcurrent,
+    recommendedBatchSize: recommendedBatch.length,
+    recommendedStartIds: recommendedBatch.map(d => d.id),
+    pendingApprovalIds: pendingApproval.map(d => d.id),
+    nextAction: buildQueueNextAction({ stats, recommendedBatch, pendingApproval, maxConcurrent }),
+    warnings,
+    recommendedBatch: recommendedBatch.map(toPlanItem),
+    pendingApproval: pendingApproval.map(toPlanItem),
+  }
+}
+
+function buildQueueNextAction(input: {
+  stats: QueueStats
+  recommendedBatch: Delegation[]
+  pendingApproval: Delegation[]
+  maxConcurrent: number
+}): string {
+  if (input.stats.running >= input.maxConcurrent) {
+    return 'Wait for the running delegation slots to free up before starting more work.'
+  }
+
+  if (input.recommendedBatch.length > 0) {
+    return `Start ${input.recommendedBatch.length} approved delegation${input.recommendedBatch.length === 1 ? '' : 's'} now, then refresh the Daily Report before starting another batch.`
+  }
+
+  if (input.pendingApproval.length > 0) {
+    return 'Review and approve the highest-priority pending delegations before starting execution.'
+  }
+
+  return 'No queued delegation needs action right now; create the next small real-value ticket.'
 }
 
 export function getQueueStats(delegations = readDelegations()): QueueStats {
