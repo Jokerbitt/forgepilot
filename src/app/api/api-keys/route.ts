@@ -4,6 +4,8 @@ import fs from 'fs'
 import path from 'path'
 import { recordKeySet, removeKeyMeta } from '@/lib/api-keys/rotation-tracker'
 import { type ApiKeysConfig, isValidCriticMode, isValidLlmMode } from '@/lib/api-keys/types'
+import { parseBody, isValidationError } from '@/lib/validation/api'
+import { ApiKeysUpdateSchema } from '@/lib/validation/schemas'
 
 const API_KEYS_FILE = path.join(process.cwd(), 'config', 'api-keys.json')
 
@@ -124,7 +126,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const updates = await request.json() as Partial<ApiKeysConfig>
+  const result = await parseBody(request as Parameters<typeof parseBody>[0], ApiKeysUpdateSchema)
+  if (isValidationError(result)) return result
+  const updates = result as Partial<ApiKeysConfig>
   const current = readApiKeys()
 
   const merged: ApiKeysConfig = { ...current }
