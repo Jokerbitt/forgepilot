@@ -662,6 +662,7 @@ export default function DelegationDetailPage() {
         <DelegationLiveLog
           delegationId={d.id}
           isRunning={d.status === 'running'}
+          onCostUpdate={(cost) => setDelegation(prev => prev ? { ...prev, actualCostUsd: cost } : prev)}
         />
 
         {/* ── Timeline ─────────────────────────────────────────────────── */}

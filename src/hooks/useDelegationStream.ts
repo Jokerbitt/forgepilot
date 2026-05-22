@@ -5,6 +5,7 @@ export interface StreamEvent {
   status?: string
   message?: string
   progress?: number // 0-100
+  actualCostUsd?: number
   timestamp: string
 }
 
@@ -12,6 +13,14 @@ interface UseDelegationStreamResult {
   events: StreamEvent[]
   isConnected: boolean
   lastEvent: StreamEvent | null
+  actualCostUsd: number | null
+}
+
+export function extractCostFromPayload(raw: unknown): number | null {
+  if (raw == null || typeof raw !== 'object') return null
+  const obj = raw as Record<string, unknown>
+  if (typeof obj.actualCostUsd === 'number') return obj.actualCostUsd
+  return null
 }
 
 const MAX_EVENTS = 50
@@ -29,6 +38,7 @@ export function useDelegationStream(
   const [events, setEvents] = useState<StreamEvent[]>([])
   const [isConnected, setIsConnected] = useState(false)
   const [lastEvent, setLastEvent] = useState<StreamEvent | null>(null)
+  const [actualCostUsd, setActualCostUsd] = useState<number | null>(null)
   const esRef = useRef<EventSource | null>(null)
 
   const pushEvent = (event: StreamEvent) => {
@@ -64,14 +74,19 @@ export function useDelegationStream(
       try {
         const data = JSON.parse(raw) as {
           status: string
+          actualCostUsd?: number
           logs?: Array<{ timestamp: string; message: string }>
         }
         setIsConnected(true)
+
+        const cost = extractCostFromPayload(data)
+        if (cost !== null) setActualCostUsd(cost)
 
         const initEvent: StreamEvent = {
           type: 'status',
           status: data.status,
           message: `Status: ${data.status}`,
+          actualCostUsd: cost ?? undefined,
           timestamp: new Date().toISOString(),
         }
         pushEvent(initEvent)
@@ -117,11 +132,14 @@ export function useDelegationStream(
     es.addEventListener('status', (e: Event) => {
       const raw = (e as MessageEvent<string>).data
       try {
-        const data = JSON.parse(raw) as { status: string }
+        const data = JSON.parse(raw) as { status: string; actualCostUsd?: number }
         const isTerminal =
           data.status === 'completed' ||
           data.status === 'failed' ||
           data.status === 'cancelled'
+
+        const cost = extractCostFromPayload(data)
+        if (cost !== null) setActualCostUsd(cost)
 
         const eventType: StreamEvent['type'] = isTerminal
           ? data.status === 'completed'
@@ -133,6 +151,7 @@ export function useDelegationStream(
           type: eventType,
           status: data.status,
           message: `Status geändert: ${data.status}`,
+          actualCostUsd: cost ?? undefined,
           timestamp: new Date().toISOString(),
         }
         pushEvent(statusEvent)
@@ -156,5 +175,5 @@ export function useDelegationStream(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [delegationId, enabled])
 
-  return { events, isConnected, lastEvent }
+  return { events, isConnected, lastEvent, actualCostUsd }
 }

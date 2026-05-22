@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { StreamEvent } from './useDelegationStream'
+import { extractCostFromPayload } from './useDelegationStream'
 
 // ── Pure helper logic extracted for unit testing ─────────────────────────────
 
@@ -140,16 +141,48 @@ describe('parseStatusPayload', () => {
 
 describe('useDelegationStream — disabled state defaults', () => {
   it('safe defaults: empty events, not connected, null lastEvent when disabled', () => {
-    // We test the return shape contract without mounting React.
-    // The hook returns { events: [], isConnected: false, lastEvent: null }
-    // when enabled=false. We verify the types match the interface.
     const defaults = {
       events: [] as StreamEvent[],
       isConnected: false,
       lastEvent: null as StreamEvent | null,
+      actualCostUsd: null as number | null,
     }
     expect(defaults.events).toHaveLength(0)
     expect(defaults.isConnected).toBe(false)
     expect(defaults.lastEvent).toBeNull()
+    expect(defaults.actualCostUsd).toBeNull()
+  })
+})
+
+describe('extractCostFromPayload', () => {
+  it('returns null for null input', () => {
+    expect(extractCostFromPayload(null)).toBeNull()
+  })
+
+  it('returns null for non-object input', () => {
+    expect(extractCostFromPayload('string')).toBeNull()
+    expect(extractCostFromPayload(42)).toBeNull()
+  })
+
+  it('returns null when actualCostUsd is absent', () => {
+    expect(extractCostFromPayload({ status: 'running' })).toBeNull()
+  })
+
+  it('returns null when actualCostUsd is not a number', () => {
+    expect(extractCostFromPayload({ actualCostUsd: 'not-a-number' })).toBeNull()
+    expect(extractCostFromPayload({ actualCostUsd: null })).toBeNull()
+  })
+
+  it('returns the cost when actualCostUsd is a number', () => {
+    expect(extractCostFromPayload({ actualCostUsd: 0.0042 })).toBeCloseTo(0.0042)
+  })
+
+  it('returns 0 when actualCostUsd is 0', () => {
+    expect(extractCostFromPayload({ actualCostUsd: 0 })).toBe(0)
+  })
+
+  it('works with full status event shape', () => {
+    const payload = { status: 'running', actualCostUsd: 0.0123 }
+    expect(extractCostFromPayload(payload)).toBeCloseTo(0.0123)
   })
 })
