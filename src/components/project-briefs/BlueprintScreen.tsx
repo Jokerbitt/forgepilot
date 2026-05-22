@@ -113,6 +113,8 @@ export function BlueprintScreen({ initialBrief }: Props) {
   const [wpDelegationErrors, setWpDelegationErrors] = useState<Record<string, string>>({})
   const [reqDelegating, setReqDelegating] = useState<Record<string, boolean>>({})
   const [reqDelegationErrors, setReqDelegationErrors] = useState<Record<string, string>>({})
+  const [bulkDelegating, setBulkDelegating] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
   const [versions, setVersions] = useState<BriefVersionView[]>([])
   const [versionsLoading, setVersionsLoading] = useState(false)
   const [savingSnapshot, setSavingSnapshot] = useState(false)
@@ -382,6 +384,65 @@ export function BlueprintScreen({ initialBrief }: Props) {
     }
   }
 
+  async function handleBulkDelegateRequirements() {
+    const accepted = brief.requirements.filter(r => r.status === 'accepted')
+    if (accepted.length === 0) return
+    setBulkDelegating(true)
+    setBulkProgress({ done: 0, total: accepted.length })
+    const createdIds: string[] = []
+    for (const req of accepted) {
+      try {
+        const res = await fetch('/api/delegations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: req.title.slice(0, 80),
+            briefId: brief.id,
+            briefTitle: brief.title,
+            executionRoute: 'local-agent',
+            costEstimateUsd: 0.5,
+            status: 'pending',
+            contract: {
+              workItemId: `REQ-${req.id.slice(0, 8)}`,
+              goal: req.title,
+              context: [
+                `Brief: ${brief.title}`,
+                `Problem: ${brief.problemStatement}`,
+                req.description ? `Requirement: ${req.description}` : '',
+                `Priorität: ${req.priority}`,
+                `Typ: ${req.type}`,
+              ].filter(Boolean).join('\n'),
+              definitionOfDone: [
+                `"${req.title}" ist vollständig implementiert`,
+                'Implementation ist getestet',
+                'Code ist reviewbereit',
+              ],
+              riskClass: req.priority === 'must' ? 'B' : 'A',
+              maxBudgetUsd: 1,
+              allowedTools: ['read_file', 'write_file', 'search_code', 'run_tests'],
+              branchStrategy: 'feature',
+              requiresApproval: req.priority === 'must',
+              privacyMode: 'local',
+              taskType: 'feature',
+            },
+          }),
+        })
+        if (res.ok) {
+          const d = await res.json() as { id: string }
+          createdIds.push(d.id)
+        }
+      } catch {
+        // continue on individual failure
+      }
+      setBulkProgress(prev => prev ? { ...prev, done: prev.done + 1 } : null)
+    }
+    setBulkDelegating(false)
+    setBulkProgress(null)
+    if (createdIds.length > 0) {
+      router.push(`/delegations?briefId=${brief.id}`)
+    }
+  }
+
   function handleDelegate() {
     setDelegationError('')
     startDelegate(async () => {
@@ -471,6 +532,17 @@ export function BlueprintScreen({ initialBrief }: Props) {
                   <ActionButton onClick={handleDelegate} disabled={delegating} tone="primary">
                     {delegating ? 'Erstelle Delegation' : 'Delegation starten'}
                   </ActionButton>
+                  {vm.acceptedReqs.length > 1 && (
+                    <ActionButton
+                      onClick={handleBulkDelegateRequirements}
+                      disabled={bulkDelegating}
+                      tone="primary"
+                    >
+                      {bulkDelegating && bulkProgress
+                        ? `${bulkProgress.done}/${bulkProgress.total} delegiert…`
+                        : `Alle ${vm.acceptedReqs.length} Requirements delegieren`}
+                    </ActionButton>
+                  )}
                   <StartDelegationButton briefId={brief.id} briefTitle={brief.title} />
                 </>
               )}
