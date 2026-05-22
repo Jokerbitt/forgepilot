@@ -168,10 +168,21 @@ function BriefRow({ brief, milestoneCount }: { brief: WorkspaceBrief; milestoneC
 
       <div>
         <p className="text-xs font-medium uppercase tracking-wide text-slate-600">Requirements</p>
-        <p className="mt-2 text-sm font-semibold text-white">
-          {brief.totalRequirements > 0 ? `${brief.acceptedRequirements}/${brief.totalRequirements}` : 'Noch offen'}
-        </p>
-        <p className="mt-1 text-xs text-slate-500">akzeptiert</p>
+        {brief.totalRequirements === 0 ? (
+          <p className="mt-2 text-sm text-slate-500">Noch offen</p>
+        ) : brief.acceptedRequirements === brief.totalRequirements ? (
+          <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-xs font-semibold text-emerald-400">
+            ✓ {brief.acceptedRequirements}/{brief.totalRequirements} akzeptiert
+          </span>
+        ) : brief.pendingRequirements > 0 ? (
+          <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-xs font-semibold text-amber-400">
+            ⏳ {brief.pendingRequirements} offen
+          </span>
+        ) : (
+          <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-sky-500/15 border border-sky-500/30 px-2 py-0.5 text-xs font-semibold text-sky-400">
+            {brief.acceptedRequirements}/{brief.totalRequirements} akzeptiert
+          </span>
+        )}
       </div>
 
       <div className="lg:text-right">
