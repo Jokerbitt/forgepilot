@@ -57,13 +57,20 @@ export async function POST(request: Request) {
   const toTrigger = candidates.slice(0, slotsAvailable)
   const skipped = candidates.length - toTrigger.length
 
-  const baseUrl = new URL(request.url).origin
+  // Do not derive the internal execution target from the incoming request Host.
+  // CodeQL correctly treats request.url as user-controlled, so we only use the
+  // configured app origin for this server-side handoff.
+  const appBaseUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
   const triggered: string[] = []
 
   await Promise.all(
     toTrigger.map(async (delegation) => {
       try {
-        const res = await fetch(`${baseUrl}/api/delegations/${delegation.id}/execute`, {
+        const executeUrl = new URL(
+          `/api/delegations/${encodeURIComponent(delegation.id)}/execute`,
+          appBaseUrl,
+        )
+        const res = await fetch(executeUrl.toString(), {
           method: 'POST',
         })
         if (res.ok) {
