@@ -55,6 +55,9 @@ export interface DelegationReport {
   nextSuggestions?: string[]
   // Token tracking (M27)
   costSavings?: CostSavings
+  // PR lifecycle tracking (M264)
+  prState?: 'open' | 'merged' | 'closed'
+  prMergedAt?: string
 }
 
 export interface DelegationNote {
