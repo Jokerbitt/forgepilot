@@ -91,7 +91,7 @@ export function classifyFailedDelegation(delegation: Delegation): FailedDelegati
   if (!evidence) {
     category = 'missing-feedback'
     severity = 'high'
-  } else if (retryPlan.shouldRetry && RETRYABLE_CAUSES.has(retryPlan.failureCause)) {
+  } else if (retryPlan.shouldRetry && (RETRYABLE_CAUSES.has(retryPlan.failureCause) || retryPlan.failureCause === 'unknown')) {
     category = 'retryable'
     severity = 'medium'
   } else if (HUMAN_REVIEW_CAUSES.has(retryPlan.failureCause)) {
