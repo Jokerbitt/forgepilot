@@ -164,6 +164,8 @@ export interface Delegation {
   completedAt?: string
   /** M234: User-defined tags for categorization and filtering */
   tags?: string[]
+  /** M241: Number of times this delegation has been retried */
+  retryCount?: number
   createdAt: string
   updatedAt: string
 }

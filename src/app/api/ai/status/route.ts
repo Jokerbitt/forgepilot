@@ -21,7 +21,7 @@ export interface AIStatus {
   anthropicConfigured: boolean
   ollamaRunning: boolean
   ollamaModels: string[]
-  activeProvider: 'anthropic' | 'ollama' | 'none'
+  activeProvider: string
   activeModel: string | null
   recommendation: string
   /** Current value of LLM_MODE env var (defaults to "auto") */
@@ -51,16 +51,15 @@ export async function GET(): Promise<NextResponse<AIStatus>> {
   ])
 
   // Determine active provider and model (legacy fields kept for backward compat)
-  let activeProvider: AIStatus['activeProvider'] = 'none'
+  let activeProvider = resolvedProv.providerId === 'placeholder' ? 'none' : resolvedProv.providerId
   let activeModel: string | null = null
   let recommendation: string
 
-  if (anthropicConfigured) {
-    activeProvider = 'anthropic'
-    activeModel = null // model comes from provider config
-    recommendation = ollamaRunning
-      ? 'Anthropic API ist aktiv. Ollama läuft ebenfalls als Fallback.'
-      : 'Anthropic API ist aktiv. Ollama kann zusätzlich lokal gestartet werden.'
+  if (resolvedProv.providerId !== 'placeholder') {
+    activeModel = resolvedProv.model === 'none' ? null : resolvedProv.model
+    recommendation = resolvedProv.isLocal
+      ? `${resolvedProv.providerId} ist aktiv (${resolvedProv.model}). Lokale KI wird bevorzugt genutzt.`
+      : `${resolvedProv.providerId} ist aktiv (${resolvedProv.model}). Cloud wird nur nach Routing-Regel genutzt.`
   } else if (ollamaRunning && ollamaModels.length > 0) {
     activeProvider = 'ollama'
     // Pick best available model

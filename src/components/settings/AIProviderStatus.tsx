@@ -7,12 +7,17 @@ import { cx } from '@/components/ui/primitives'
 const panelClassName = 'rounded-lg border border-white/[0.07] bg-white/[0.035] p-4 shadow-sm shadow-black/10'
 
 interface ProviderRowProps {
+  id: string
   label: string
   status: 'ok' | 'warn' | 'off'
   detail: string
+  meta?: string
+  testState?: 'idle' | 'testing' | 'ok' | 'error'
+  testDetail?: string
+  onTest?: (id: string) => void
 }
 
-function ProviderRow({ label, status, detail }: ProviderRowProps) {
+function ProviderRow({ id, label, status, detail, meta, testState = 'idle', testDetail, onTest }: ProviderRowProps) {
   const icon =
     status === 'ok'
       ? <span className="text-emerald-400 text-sm font-bold">✓</span>
@@ -31,9 +36,33 @@ function ProviderRow({ label, status, detail }: ProviderRowProps) {
     <div className="flex items-center justify-between gap-3">
       <div className="flex items-center gap-2 min-w-0">
         <span className="w-5 text-center shrink-0">{icon}</span>
-        <span className={cx('text-sm font-medium', labelColor)}>{label}</span>
+        <div className="min-w-0">
+          <span className={cx('block truncate text-sm font-medium', labelColor)}>{label}</span>
+          {(testDetail || meta) && (
+            <span className="block truncate text-[10px] text-slate-500">{testDetail ?? meta}</span>
+          )}
+        </div>
       </div>
-      <span className="text-xs text-slate-400 text-right">{detail}</span>
+      <div className="flex shrink-0 items-center gap-2">
+        <span className="text-right text-xs text-slate-400">{detail}</span>
+        {onTest && (
+          <button
+            type="button"
+            onClick={() => onTest(id)}
+            disabled={testState === 'testing'}
+            className={cx(
+              'rounded-md border px-2 py-1 text-[10px] font-semibold transition-colors disabled:cursor-wait disabled:opacity-50',
+              testState === 'ok'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                : testState === 'error'
+                  ? 'border-red-500/30 bg-red-500/10 text-red-300'
+                  : 'border-white/[0.08] bg-white/[0.04] text-slate-300 hover:bg-white/[0.07]'
+            )}
+          >
+            {testState === 'testing' ? 'Teste...' : testState === 'ok' ? 'OK' : testState === 'error' ? 'Fehler' : 'Test'}
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -42,6 +71,7 @@ export function AIProviderStatus() {
   const [status, setStatus] = useState<AIStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [testResults, setTestResults] = useState<Record<string, { state: 'idle' | 'testing' | 'ok' | 'error'; detail?: string }>>({})
 
   useEffect(() => {
     fetch('/api/ai/status')
@@ -72,28 +102,13 @@ export function AIProviderStatus() {
     )
   }
 
-  const anthropicDetail = status.anthropicConfigured ? 'API Key konfiguriert' : 'Kein Key'
-  const anthropicStatus: ProviderRowProps['status'] = status.anthropicConfigured ? 'ok' : 'off'
+  const visibleProviders = status.providerAvailability
+    .filter(provider => provider.available || provider.isLocal || ['anthropic', 'xai', 'openai', 'groq', 'google-gemini', 'openrouter'].includes(provider.id))
+    .slice(0, 10)
 
-  let ollamaDetail: string
-  let ollamaStatus: ProviderRowProps['status']
-  if (!status.ollamaRunning) {
-    ollamaDetail = 'Nicht erreichbar'
-    ollamaStatus = 'off'
-  } else if (status.ollamaModels.length === 0) {
-    ollamaDetail = 'Läuft, aber keine Modelle'
-    ollamaStatus = 'warn'
-  } else {
-    ollamaDetail = `${status.ollamaModels.length} Modell${status.ollamaModels.length !== 1 ? 'e' : ''} installiert`
-    ollamaStatus = 'ok'
-  }
-
-  const activeLabel =
-    status.activeProvider === 'anthropic'
-      ? 'Anthropic API'
-      : status.activeProvider === 'ollama'
-      ? `Ollama${status.activeModel ? ` (${status.activeModel})` : ''}`
-      : '—'
+  const activeLabel = status.activeProvider === 'none'
+    ? '—'
+    : `${status.activeProvider}${status.activeModel ? ` (${status.activeModel})` : ''}`
 
   const activeTone =
     status.activeProvider === 'none'
@@ -102,21 +117,61 @@ export function AIProviderStatus() {
       ? 'text-emerald-300'
       : 'text-violet-300'
 
+  const handleTestProvider = async (providerId: string) => {
+    setTestResults(prev => ({
+      ...prev,
+      [providerId]: { state: 'testing', detail: 'Verbindung wird geprueft...' },
+    }))
+    try {
+      const res = await fetch(`/api/ai/providers/${encodeURIComponent(providerId)}/test`, { method: 'POST' })
+      const data = await res.json() as { ok?: boolean; latencyMs?: number; error?: string }
+      setTestResults(prev => ({
+        ...prev,
+        [providerId]: {
+          state: res.ok && data.ok ? 'ok' : 'error',
+          detail: res.ok && data.ok
+            ? `Erreichbar in ${data.latencyMs ?? 0} ms`
+            : data.error ?? 'Provider antwortet nicht',
+        },
+      }))
+    } catch {
+      setTestResults(prev => ({
+        ...prev,
+        [providerId]: { state: 'error', detail: 'Test fehlgeschlagen' },
+      }))
+    }
+  }
+
   return (
     <div className={cx(panelClassName, 'space-y-3')}>
-      <ProviderRow
-        label="Anthropic API"
-        status={anthropicStatus}
-        detail={anthropicDetail}
-      />
-      <ProviderRow
-        label="Ollama lokal"
-        status={ollamaStatus}
-        detail={ollamaDetail}
-      />
+      {visibleProviders.map(provider => {
+        const rowStatus: ProviderRowProps['status'] = provider.available
+          ? 'ok'
+          : provider.status === 'local-offline'
+            ? 'warn'
+            : 'off'
+        const detail = provider.available
+          ? 'verbunden'
+          : provider.isLocal
+            ? 'nicht aktiv'
+            : 'Key fehlt'
+        return (
+          <ProviderRow
+            key={provider.id}
+            id={provider.id}
+            label={provider.name}
+            status={rowStatus}
+            detail={detail}
+            meta={provider.available ? provider.model : provider.reason}
+            testState={testResults[provider.id]?.state ?? 'idle'}
+            testDetail={testResults[provider.id]?.detail}
+            onTest={handleTestProvider}
+          />
+        )
+      })}
 
       <div className="border-t border-white/[0.06] pt-3 flex items-center justify-between gap-2">
-        <span className="text-xs text-slate-500">Aktiv:</span>
+        <span className="text-xs text-slate-500">Auto-Router:</span>
         <span className={cx('text-xs font-semibold', activeTone)}>{activeLabel}</span>
       </div>
 
@@ -126,23 +181,9 @@ export function AIProviderStatus() {
         </div>
       )}
 
-      {!status.ollamaRunning && (
-        <a
-          href="https://ollama.ai"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 transition-colors"
-        >
-          Ollama installieren →
-        </a>
-      )}
-
-      {status.ollamaRunning && status.ollamaModels.length === 0 && (
-        <p className="text-xs text-slate-500">
-          Kein Modell installiert — Terminal:{' '}
-          <code className="bg-slate-800 px-1 rounded text-slate-300">ollama pull llama3.2</code>
-        </p>
-      )}
+      <p className="text-[11px] leading-relaxed text-slate-500">
+        Geheimwerte werden nie angezeigt. Auto bevorzugt den besten konfigurierten Provider und nutzt lokale Modelle, wenn sie verfuegbar sind.
+      </p>
     </div>
   )
 }

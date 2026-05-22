@@ -16,12 +16,16 @@ function buildCSV(delegations: Delegation[]): string {
   const header = [
     'id',
     'title',
+    'goal',
     'status',
     'riskClass',
     'route',
     'workItemId',
+    'briefTitle',
     'createdAt',
+    'startedAt',
     'completedAt',
+    'durationMin',
     'actualCostUsd',
     'tokenCount',
   ]
@@ -30,18 +34,25 @@ function buildCSV(delegations: Delegation[]): string {
 
   for (const d of delegations) {
     const tokenCount = d.summaryReport?.costSavings?.tokensUsed?.totalTokens ?? null
-    const completedAt =
-      d.status === 'completed' || d.status === 'failed' ? d.updatedAt : null
+    const completedAt = d.completedAt ??
+      (d.status === 'completed' || d.status === 'failed' ? d.updatedAt : null)
+    const durationMin = d.startedAt && completedAt
+      ? Math.round((new Date(completedAt).getTime() - new Date(d.startedAt).getTime()) / 60000)
+      : null
 
     const row = [
       escapeCSVField(d.id),
       escapeCSVField(d.title),
+      escapeCSVField(d.contract.goal),
       escapeCSVField(d.status),
       escapeCSVField(d.contract.riskClass),
       escapeCSVField(d.executionRoute),
       escapeCSVField(d.contract.workItemId),
+      escapeCSVField(d.briefTitle ?? null),
       escapeCSVField(d.createdAt),
+      escapeCSVField(d.startedAt ?? null),
       escapeCSVField(completedAt),
+      escapeCSVField(durationMin != null ? String(durationMin) : null),
       escapeCSVField(d.actualCostUsd != null ? String(d.actualCostUsd) : null),
       escapeCSVField(tokenCount != null ? String(tokenCount) : null),
     ]

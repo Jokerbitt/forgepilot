@@ -180,6 +180,7 @@ function DelegationsContent() {
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>((searchParams.get('approval') as ApprovalFilter) ?? 'Alle')
   const [searchQuery, setSearchQuery] = useState<string>(searchParams.get('q') ?? '')
   const [todayOnly, setTodayOnly] = useState(searchParams.get('today') === '1')
+  const [hideTerminal, setHideTerminal] = useState(searchParams.get('hideTerminal') === '1')
   const [tagFilter, setTagFilter] = useState<string>(searchParams.get('tag') ?? 'Alle')
   const [showAllRows, setShowAllRows] = useState(false)
   const currentSearch = searchParams.toString()
@@ -192,6 +193,7 @@ function DelegationsContent() {
     if (approvalFilter !== 'Alle') params.set('approval', approvalFilter)
     if (searchQuery)               params.set('q',        searchQuery)
     if (todayOnly)                 params.set('today',    '1')
+    if (hideTerminal)              params.set('hideTerminal', '1')
     if (tagFilter !== 'Alle')      params.set('tag',      tagFilter)
     const qs = params.toString()
     const nextUrl = qs ? `${pathname}?${qs}` : pathname
@@ -199,10 +201,10 @@ function DelegationsContent() {
       router.replace(nextUrl, { scroll: false })
     }
     setShowAllRows(false)
-  }, [statusFilter, projectFilter, approvalFilter, searchQuery, todayOnly, tagFilter, pathname, router, currentSearch])
+  }, [statusFilter, projectFilter, approvalFilter, searchQuery, todayOnly, hideTerminal, tagFilter, pathname, router, currentSearch])
 
   // Sort
-  type SortKey = 'goal' | 'status' | 'time' | 'cost'
+  type SortKey = 'goal' | 'status' | 'time' | 'cost' | 'priority'
   const [sortKey, setSortKey] = useState<SortKey | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
@@ -392,6 +394,18 @@ function DelegationsContent() {
         return next
       })
     }
+  }
+
+  const handleSetPriority = async (id: string, priority: number, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const delegation = delegations.find(d => d.id === id)
+    if (!delegation) return
+    applyUpdate({ ...delegation, priority, updatedAt: new Date().toISOString() })
+    await fetch(`/api/delegations/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ priority }),
+    })
   }
 
   const handleRowDelete = async (id: string, e?: React.MouseEvent) => {
@@ -620,11 +634,15 @@ function DelegationsContent() {
       goal.toLowerCase().includes(q) ||
       workItemId.toLowerCase().includes(q) ||
       (d.contract.context || '').toLowerCase().includes(q) ||
-      (d.briefTitle || '').toLowerCase().includes(q)
+      (d.briefTitle || '').toLowerCase().includes(q) ||
+      (d.note?.text || '').toLowerCase().includes(q) ||
+      (d.errorMessage || '').toLowerCase().includes(q) ||
+      (d.tags ?? []).some(tag => tag.toLowerCase().includes(q))
     const matchToday = !todayOnly || isCreatedToday(d.createdAt)
     const matchTag = tagFilter === 'Alle' || (d.tags ?? []).includes(tagFilter)
+    const matchTerminal = !hideTerminal || (d.status !== 'completed' && d.status !== 'cancelled')
 
-    return matchStatus && matchProject && matchApproval && matchSearch && matchToday && matchTag
+    return matchStatus && matchProject && matchApproval && matchSearch && matchToday && matchTag && matchTerminal
   })
 
   const STATUS_SORT_WEIGHT: Record<string, number> = {
@@ -644,6 +662,8 @@ function DelegationsContent() {
           const ca = a.actualCostUsd ?? a.costEstimateUsd ?? 0
           const cb = b.actualCostUsd ?? b.costEstimateUsd ?? 0
           cmp = ca - cb
+        } else if (sortKey === 'priority') {
+          cmp = (b.priority ?? 1) - (a.priority ?? 1)
         }
         return sortDir === 'asc' ? cmp : -cmp
       })
@@ -993,6 +1013,17 @@ function DelegationsContent() {
                 >
                   📅 Heute
                 </button>
+                <button
+                  onClick={() => setHideTerminal(v => !v)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    hideTerminal
+                      ? 'bg-emerald-700 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700'
+                  }`}
+                  title="Erledigte und Abgebrochene ausblenden"
+                >
+                  ⚡ Nur aktive
+                </button>
               </div>
 
               {/* Search input */}
@@ -1002,7 +1033,7 @@ function DelegationsContent() {
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Suchen… [/]"
+                  placeholder="Titel, Ziel, Tags, Notiz… [/]"
                   className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 w-full sm:w-44 transition-colors"
                 />
                 {searchQuery && (
@@ -1144,6 +1175,12 @@ function DelegationsContent() {
                       >
                         Zeit {sortKey === 'time' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="opacity-30">⇅</span>}
                       </th>
+                      <th
+                        className="p-3 font-medium hidden lg:table-cell cursor-pointer hover:text-gray-300 select-none"
+                        onClick={() => handleSort('priority')}
+                      >
+                        Prio {sortKey === 'priority' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="opacity-30">⇅</span>}
+                      </th>
                       <th className="p-3 font-medium text-right">Aktionen</th>
                     </tr>
                   </thead>
@@ -1238,6 +1275,18 @@ function DelegationsContent() {
                                 compact
                               />
                               <VersionBadge delegationId={del.id} compact />
+                              {(del.priority ?? 1) >= 4 && (
+                                <span
+                                  title={`Priorität ${del.priority ?? 1}`}
+                                  className={`px-1 py-0.5 text-[10px] rounded font-bold leading-none ${
+                                    del.priority === 5
+                                      ? 'bg-red-900/50 text-red-400 border border-red-700/50'
+                                      : 'bg-orange-900/40 text-orange-400 border border-orange-700/40'
+                                  }`}
+                                >
+                                  P{del.priority ?? 1}
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-baseline gap-1.5">
                               <span className={`text-xs flex-shrink-0 ${getTaskStatusStyle(del.status).iconClass}`}>
@@ -1298,6 +1347,11 @@ function DelegationsContent() {
                                   drift={del.criticScore.drift}
                                 />
                               )}
+                              {(del.retryCount ?? 0) > 0 && (
+                                <span className="px-1.5 py-0.5 text-xs rounded bg-amber-900/40 border border-amber-700/50 text-amber-400 font-mono whitespace-nowrap">
+                                  ↺ {del.retryCount}
+                                </span>
+                              )}
                             </div>
                           </td>
 
@@ -1355,6 +1409,24 @@ function DelegationsContent() {
                                 {new Date(del.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                               </div>
                             )}
+                          </td>
+
+                          {/* Priority */}
+                          <td className="p-3 hidden lg:table-cell" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center gap-0.5">
+                              {[1, 2, 3, 4, 5].map(p => (
+                                <button
+                                  key={p}
+                                  title={`Priorität ${p}`}
+                                  onClick={e => handleSetPriority(del.id, p, e)}
+                                  className={`w-3 h-3 rounded-sm transition-colors ${
+                                    (del.priority ?? 1) >= p
+                                      ? p >= 5 ? 'bg-red-500' : p >= 4 ? 'bg-orange-400' : p >= 3 ? 'bg-yellow-500' : 'bg-gray-500'
+                                      : 'bg-gray-800 hover:bg-gray-600'
+                                  }`}
+                                />
+                              ))}
+                            </div>
                           </td>
 
                           {/* Actions */}

@@ -34,6 +34,8 @@ export async function PATCH(
   if (result.status !== undefined) patch.status = result.status
   if (result.agentRunId !== undefined) patch.agentRunId = result.agentRunId
   if ('note' in result) patch.note = result.note ?? undefined
+  if (result.tags !== undefined) patch.tags = result.tags
+  if (result.priority !== undefined) patch.priority = result.priority
   const updated = await repo.update(id, patch)
   if (!updated) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })

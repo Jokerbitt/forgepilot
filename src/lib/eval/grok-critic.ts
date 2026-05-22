@@ -11,7 +11,8 @@
  */
 
 import { generateText, stripJsonCodeFence, type GenerateTextResult } from '@/lib/ai/text-generation'
-import { getModelSelection } from '@/lib/ai/providers/config-store'
+import { getAllProviderConfigs, getModelSelection } from '@/lib/ai/providers/config-store'
+import { readStoredApiKeys } from '@/lib/connectors/config'
 import { logger } from '@/lib/logger'
 
 const log = logger.child({ module: 'grok-critic' })
@@ -21,10 +22,13 @@ const CRITIC_MODE_ENV = 'FORGEPILOT_CRITIC_MODE'
 const CRITIC_PROVIDERS_ENV = 'FORGEPILOT_CRITIC_PROVIDERS'
 const LEGACY_CRITIC_PROVIDER_ENV = 'FORGEPILOT_CRITIC_PROVIDER'
 const LEGACY_CRITIC_MODEL_ENV = 'FORGEPILOT_CRITIC_MODEL'
+const LOCAL_PROVIDER_IDS = new Set(['ollama', 'lm-studio'])
 
 interface CriticProviderCandidate {
   providerId: string
   model?: string
+  configured?: boolean
+  reason?: string
 }
 
 function parseCriticProviderList(value: string | undefined): CriticProviderCandidate[] {
@@ -58,20 +62,60 @@ function parseCriticProviderList(value: string | undefined): CriticProviderCandi
 
 function addCandidate(candidates: CriticProviderCandidate[], candidate: CriticProviderCandidate): void {
   if (!candidate.providerId) return
-  candidates.push(candidate)
+  candidates.push({ ...candidate, providerId: normalizeCriticProviderId(candidate.providerId) })
+}
+
+function normalizeCriticProviderId(providerId: string): string {
+  const normalized = providerId.trim().toLowerCase()
+  if (normalized === 'gemini') return 'google-gemini'
+  if (normalized === 'lmstudio') return 'lm-studio'
+  if (normalized === 'grok') return 'xai'
+  return providerId.trim()
+}
+
+function resolveApiKey(apiKeyRef: string | undefined): string {
+  if (!apiKeyRef) return ''
+  const stored = readStoredApiKeys() as Record<string, string | undefined>
+  return process.env[apiKeyRef] ?? stored[apiKeyRef] ?? ''
+}
+
+function getCriticEnvValue(
+  key: typeof CRITIC_MODE_ENV | typeof CRITIC_PROVIDERS_ENV | typeof LEGACY_CRITIC_PROVIDER_ENV | typeof LEGACY_CRITIC_MODEL_ENV,
+  env: Record<string, string | undefined>,
+): string | undefined {
+  const stored = readStoredApiKeys() as Record<string, string | undefined>
+  return env[key] ?? stored[key]
+}
+
+function annotateCriticCandidate(candidate: CriticProviderCandidate): CriticProviderCandidate {
+  const config = getAllProviderConfigs().find(provider => provider.id === candidate.providerId)
+  if (!config) {
+    return { ...candidate, configured: true, reason: 'custom provider or legacy provider id' }
+  }
+
+  if (config.dataResidency === 'local' || !config.apiKeyRef) {
+    return { ...candidate, configured: true, reason: 'local provider, checked at runtime' }
+  }
+
+  const configured = resolveApiKey(config.apiKeyRef).trim().length > 0
+  return {
+    ...candidate,
+    configured,
+    reason: configured ? 'api key configured' : `${config.apiKeyRef} missing`,
+  }
 }
 
 function getCriticProviderCandidates(
   env: Record<string, string | undefined> = process.env as Record<string, string | undefined>
 ): CriticProviderCandidate[] {
-  const mode = String(env[CRITIC_MODE_ENV] ?? 'auto').trim().toLowerCase()
-  const configuredModel = env[LEGACY_CRITIC_MODEL_ENV]?.trim()
+  const mode = String(getCriticEnvValue(CRITIC_MODE_ENV, env) ?? 'auto').trim().toLowerCase()
+  const configuredModel = getCriticEnvValue(LEGACY_CRITIC_MODEL_ENV, env)?.trim()
   const candidates: CriticProviderCandidate[] = []
-  const explicitCandidates = parseCriticProviderList(env[CRITIC_PROVIDERS_ENV])
+  const explicitCandidates = parseCriticProviderList(getCriticEnvValue(CRITIC_PROVIDERS_ENV, env))
 
   for (const candidate of explicitCandidates) addCandidate(candidates, candidate)
 
-  const configuredProvider = env[LEGACY_CRITIC_PROVIDER_ENV]?.trim()
+  const configuredProvider = getCriticEnvValue(LEGACY_CRITIC_PROVIDER_ENV, env)?.trim()
   if (configuredProvider && !explicitCandidates.length) {
     addCandidate(candidates, { providerId: configuredProvider, model: configuredModel || undefined })
   }
@@ -100,17 +144,25 @@ function getCriticProviderCandidates(
     log.warn({ event: 'critic.model_selection_unavailable', reason: err instanceof Error ? err.message : String(err) })
   }
 
-  for (const candidate of [
+  const cloudDefaults = [
     { providerId: 'xai', model: 'grok-3-mini' },
     { providerId: 'anthropic', model: 'claude-sonnet-4-5' },
     { providerId: 'openai', model: 'o3-mini' },
+    { providerId: 'google-gemini', model: 'gemini-1.5-pro' },
+    { providerId: 'deepseek', model: 'deepseek-reasoner' },
     { providerId: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free' },
     { providerId: 'groq', model: 'llama-3.3-70b-versatile' },
-    { providerId: 'deepseek', model: 'deepseek-reasoner' },
-    { providerId: 'gemini', model: 'gemini-1.5-pro' },
+    { providerId: 'mistral', model: 'mistral-large-latest' },
+  ]
+  const localDefaults = [
     { providerId: 'ollama', model: DEFAULT_LOCAL_CRITIC_MODEL },
     { providerId: 'lm-studio', model: 'local-model' },
-  ]) {
+  ]
+  const orderedDefaults = mode === 'local-first'
+    ? [...localDefaults, ...cloudDefaults]
+    : [...cloudDefaults, ...localDefaults]
+
+  for (const candidate of orderedDefaults) {
     addCandidate(candidates, candidate)
   }
 
@@ -120,19 +172,37 @@ function getCriticProviderCandidates(
 function dedupeCriticCandidates(candidates: CriticProviderCandidate[]): CriticProviderCandidate[] {
   const seen = new Set<string>()
   return candidates.filter(candidate => {
-    const providerId = candidate.providerId.trim()
+    const providerId = normalizeCriticProviderId(candidate.providerId)
     const model = candidate.model?.trim()
     const key = `${providerId}:${model ?? ''}`
     if (!providerId || seen.has(key)) return false
     seen.add(key)
-    candidate.providerId = providerId
-    candidate.model = model || undefined
+    Object.assign(candidate, annotateCriticCandidate({
+      ...candidate,
+      providerId,
+      model: model || undefined,
+    }))
     return true
   })
 }
 
+function getRunnableCriticCandidates(): CriticProviderCandidate[] {
+  const source = process.env as Record<string, string | undefined>
+  const plan = getCriticProviderPlan(source)
+  if (
+    plan.mode === 'single'
+    || getCriticEnvValue(CRITIC_PROVIDERS_ENV, source)
+    || getCriticEnvValue(LEGACY_CRITIC_PROVIDER_ENV, source)
+  ) {
+    return plan.candidates
+  }
+  const configured = plan.candidates.filter(candidate => candidate.configured !== false)
+  if (plan.mode === 'cloud-first') return configured.filter(candidate => !LOCAL_PROVIDER_IDS.has(candidate.providerId))
+  return configured
+}
+
 function describeCriticConfig(env: Record<string, string | undefined> = process.env as Record<string, string | undefined>): string {
-  const mode = String(env[CRITIC_MODE_ENV] ?? 'auto').trim().toLowerCase()
+  const mode = String(getCriticEnvValue(CRITIC_MODE_ENV, env) ?? 'auto').trim().toLowerCase()
   const providers = getCriticProviderCandidates(env)
     .map(candidate => candidate.model ? `${candidate.providerId}:${candidate.model}` : candidate.providerId)
     .join(', ')
@@ -146,7 +216,7 @@ export function getCriticProviderPlan(env?: Record<string, string | undefined>):
   description: string
 } {
   const source = env ?? process.env as Record<string, string | undefined>
-  const mode = String(source[CRITIC_MODE_ENV] ?? 'auto').trim().toLowerCase() || 'auto'
+  const mode = String(getCriticEnvValue(CRITIC_MODE_ENV, source) ?? 'auto').trim().toLowerCase() || 'auto'
   const candidates = getCriticProviderCandidates(source)
   return {
     mode,
@@ -158,7 +228,7 @@ export function getCriticProviderPlan(env?: Record<string, string | undefined>):
 function buildCriticUnavailableMessage(): string {
   return (
     'No critic provider returned valid JSON. Configure ' +
-    `${CRITIC_PROVIDERS_ENV}="xai:grok-3-mini,anthropic:claude-sonnet-4-5,ollama:qwen2.5-coder:14b" ` +
+    `${CRITIC_PROVIDERS_ENV}="xai:grok-3-mini,anthropic:claude-sonnet-4-5,google-gemini:gemini-1.5-pro,ollama:qwen2.5-coder:14b" ` +
     `or leave ${CRITIC_MODE_ENV}=auto to try configured cloud providers and local Ollama/LM Studio.`
   )
 }
@@ -171,7 +241,7 @@ async function generateCriticJson(options: {
 }) {
   let lastError: unknown
 
-  for (const candidate of getCriticProviderCandidates()) {
+  for (const candidate of getRunnableCriticCandidates()) {
     try {
       return await generateText({
         system: options.system,

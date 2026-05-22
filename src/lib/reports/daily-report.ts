@@ -516,7 +516,7 @@ function buildNextActions(risks: DailyReportRisk[], loop: DailyReportFirstRealVa
 
 function buildAssistantRouting(): DailyReportAssistantRouting {
   const criticPlan = getCriticProviderPlan()
-  const bestCandidate = criticPlan.candidates[0]
+  const bestCandidate = criticPlan.candidates.find(candidate => candidate.configured !== false) ?? criticPlan.candidates[0]
 
   return {
     mode: 'auto',
@@ -524,7 +524,9 @@ function buildAssistantRouting(): DailyReportAssistantRouting {
       target: 'assistant-auto',
       providerId: bestCandidate?.providerId,
       model: bestCandidate?.model,
-      reason: 'Use the best configured critic/planning model first; fall back through the provider chain until a valid structured answer is produced.',
+      reason: bestCandidate?.configured === false
+        ? 'No configured critic provider is available yet; configure a cloud key or start Ollama/LM Studio.'
+        : 'Use the best configured critic/planning model first; fall back through the provider chain until a valid structured answer is produced.',
     },
     policy: {
       localFirst: [
@@ -621,6 +623,11 @@ export function renderDailyReportMarkdown(report: Omit<DailyReport, 'markdown'>)
     `- Mode: ${report.assistantRouting.mode}`,
     `- Recommended: ${report.assistantRouting.recommended.providerId ?? 'configured provider'}${report.assistantRouting.recommended.model ? ` / ${report.assistantRouting.recommended.model}` : ''}`,
     `- Reason: ${report.assistantRouting.recommended.reason}`,
+    `- Candidate chain: ${report.assistantRouting.criticPlan.candidates.slice(0, 8).map(candidate => {
+      const model = candidate.model ? `/${candidate.model}` : ''
+      const state = candidate.configured === false ? 'missing' : 'ready'
+      return `${candidate.providerId}${model} (${state})`
+    }).join(' -> ')}`,
     `- Config: ${report.assistantRouting.policy.configurableVia.join('; ')}`,
     ``,
     `## Top Risks`,
