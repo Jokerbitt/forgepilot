@@ -18,6 +18,7 @@ import { GrokCriticCard } from '@/components/delegation/GrokCriticCard'
 import { DelegationPipelineBreadcrumb } from '@/components/delegation/DelegationPipelineBreadcrumb'
 import { KnowledgeWritebackPanel } from '@/components/delegation/KnowledgeWritebackPanel'
 import { KnowledgeCardList } from '@/components/knowledge'
+import { DelegationLiveLog } from '@/components/delegation/DelegationLiveLog'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
   switch (status) {
@@ -548,7 +549,37 @@ export default function DelegationDetailPage() {
             <span>Erstellt: {new Date(d.createdAt).toLocaleString('de-DE')}</span>
             <span>Aktualisiert: {new Date(d.updatedAt).toLocaleString('de-DE')}</span>
           </div>
+
+          {/* ── M230: Chain links ────────────────────────────────────── */}
+          {(d.chainedDelegationId || d.chainedFromId) && (
+            <div className="mt-3 flex flex-wrap gap-3 text-xs">
+              {d.chainedFromId && (
+                <Link
+                  href={`/delegations/${d.chainedFromId}`}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gray-700 bg-gray-900 text-gray-400 hover:text-violet-300 hover:border-violet-800 transition-colors"
+                >
+                  <span className="text-gray-600">←</span>
+                  Fortgesetzt von: <span className="font-mono text-gray-500 truncate max-w-[160px]">{d.chainedFromId.slice(0, 8)}…</span>
+                </Link>
+              )}
+              {d.chainedDelegationId && (
+                <Link
+                  href={`/delegations/${d.chainedDelegationId}`}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-violet-900/60 bg-violet-950/30 text-violet-300 hover:text-violet-200 hover:border-violet-700 transition-colors"
+                >
+                  <span>→</span>
+                  Weiter mit: <span className="font-mono text-violet-400 truncate max-w-[160px]">{d.chainedDelegationId.slice(0, 8)}…</span>
+                </Link>
+              )}
+            </div>
+          )}
         </div>
+
+        {/* ── Live Execution Progress ──────────────────────────────────── */}
+        <DelegationLiveLog
+          delegationId={d.id}
+          isRunning={d.status === 'running'}
+        />
 
         {/* ── Timeline ─────────────────────────────────────────────────── */}
         <DelegationTimeline delegation={d} />

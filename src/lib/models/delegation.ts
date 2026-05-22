@@ -102,6 +102,18 @@ export interface CriticScore {
   runAt: string         // ISO timestamp
 }
 
+/** M230: Configuration for automatically chaining a follow-up delegation on completion */
+export interface ChainConfig {
+  /** Title for the next delegation */
+  nextTitle: string
+  /** What the next delegation should do */
+  nextPrompt: string
+  /** true = auto-execute immediately, false = create as pending */
+  autoStart: boolean
+  /** Whether to pass the last 500 chars of execution output as context */
+  passOutputAs?: 'context' | 'none'
+}
+
 export interface Delegation {
   id: string
   title: string
@@ -134,6 +146,12 @@ export interface Delegation {
   chainPosition?: number
   /** M206: Total number of steps in the chain */
   chainTotal?: number
+  /** M230: Configuration for chaining to a new delegation on completion */
+  chainConfig?: ChainConfig
+  /** M230: ID of the delegation that triggered this one (populated by chaining) */
+  chainedFromId?: string
+  /** M230: ID of the delegation this one created via chaining */
+  chainedDelegationId?: string
   /** M207: ID of parent delegation (for sub-delegations in parallel fan-out) */
   parentId?: string
   /** M207: IDs of spawned child sub-delegations */
