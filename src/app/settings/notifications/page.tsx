@@ -105,6 +105,8 @@ export default function NotificationSettingsPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [testingTelegram, setTestingTelegram] = useState(false)
+  const [telegramTestResult, setTelegramTestResult] = useState<'ok' | 'error' | null>(null)
 
   useEffect(() => {
     fetch('/api/settings/notifications')
@@ -132,6 +134,21 @@ export default function NotificationSettingsPage() {
       setError('Einstellungen konnten nicht gespeichert werden.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleTestTelegram() {
+    setTestingTelegram(true)
+    setTelegramTestResult(null)
+    try {
+      const res = await fetch('/api/telegram/test', { method: 'POST' })
+      const data = await res.json() as { ok: boolean; error?: string }
+      setTelegramTestResult(data.ok ? 'ok' : 'error')
+    } catch {
+      setTelegramTestResult('error')
+    } finally {
+      setTestingTelegram(false)
+      setTimeout(() => setTelegramTestResult(null), 4000)
     }
   }
 
@@ -327,6 +344,27 @@ export default function NotificationSettingsPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </section>
+
+            {/* Test section */}
+            <section className="border-t border-gray-800 px-6 py-4">
+              <h3 className="text-sm font-semibold text-gray-200 mb-1">Kanal-Test</h3>
+              <p className="text-xs text-gray-500 mb-3">Sendet eine Testnachricht um zu prüfen ob die Kanal-Konfiguration funktioniert.</p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => void handleTestTelegram()}
+                  disabled={testingTelegram}
+                  className="px-3 py-1.5 text-xs rounded-lg bg-blue-900/40 border border-blue-700/50 text-blue-300 hover:bg-blue-800/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {testingTelegram ? '⏳ Sende…' : '✉ Telegram testen'}
+                </button>
+                {telegramTestResult === 'ok' && (
+                  <span className="text-xs text-emerald-400">✓ Nachricht gesendet</span>
+                )}
+                {telegramTestResult === 'error' && (
+                  <span className="text-xs text-red-400">✗ Fehler — TELEGRAM_BOT_TOKEN / CHAT_ID prüfen</span>
+                )}
               </div>
             </section>
 
