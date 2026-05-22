@@ -68,7 +68,7 @@ export interface DailyReportExecuteLoopEvidenceRun {
   id: string
   title: string
   status: 'success' | 'partial' | 'blocked'
-  source: 'manual' | 'runtime-aggregate'
+  source: 'manual' | 'runtime-aggregate' | 'harness-dry-run'
   recordedAt: string
   delegationId?: string
   briefId?: string
@@ -374,7 +374,8 @@ function buildFirstRealValueLoop(status: DailyReport['status']): DailyReportFirs
 }
 
 function isEvidenceRunProven(run: DailyReportExecuteLoopEvidenceRun): boolean {
-  return run.status === 'success'
+  return run.source !== 'harness-dry-run'
+    && run.status === 'success'
     && run.steps.brief
     && run.steps.delegation
     && run.steps.execute
@@ -420,8 +421,9 @@ function buildExecuteLoopEvidence(
   const targetRuns = 5
   const runtimeRun = explicitRuns.length > 0 ? null : inferRuntimeEvidenceRun(status, generatedAt)
   const runs = runtimeRun ? [runtimeRun] : explicitRuns
+  const realRuns = runs.filter(run => run.source !== 'harness-dry-run')
   const provenRuns = runs.filter(isEvidenceRunProven).length
-  const blockedRuns = runs.filter(run => run.status === 'blocked').length
+  const blockedRuns = realRuns.filter(run => run.status === 'blocked').length
   const currentStatus: DailyReportExecuteLoopEvidence['currentStatus'] =
     provenRuns >= targetRuns ? 'proven'
     : blockedRuns > 0 && provenRuns === 0 ? 'blocked'
@@ -616,7 +618,8 @@ export function renderDailyReportMarkdown(report: Omit<DailyReport, 'markdown'>)
     ...report.executeLoopEvidence.runs.map(run => {
       const pr = run.prUrl ? `, PR: ${run.prUrl}` : ''
       const blocker = run.blocker ? `, blocker: ${run.blocker}` : ''
-      return `- [${run.status.toUpperCase()}] ${run.title} (${run.source}${pr}${blocker})`
+      const notes = run.notes ? ` — ${run.notes}` : ''
+      return `- [${run.status.toUpperCase()}] ${run.title} (${run.source}${pr}${blocker})${notes}`
     }),
     ``,
     `## Assistant Routing`,

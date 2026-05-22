@@ -255,6 +255,78 @@ describe('buildDailyReport', () => {
     expect(report.markdown).toContain('https://github.com/Jokerbitt/forgepilot/pull/400')
   })
 
+  it('shows harness dry-runs without counting them as proven real loops', () => {
+    const report = buildDailyReport({
+      now,
+      storageMode: 'postgres',
+      authDisabled: false,
+      projectBriefs: [],
+      knowledgeCards: [],
+      attentionItems: [],
+      delegations: [],
+      executeLoopEvidence: [
+        {
+          id: 'harness-1',
+          title: 'Settings provider connectivity check',
+          status: 'success',
+          source: 'harness-dry-run',
+          recordedAt: '2026-05-22T10:00:00.000Z',
+          notes: 'Dry-run only.',
+          steps: {
+            brief: true,
+            delegation: true,
+            execute: true,
+            tests: true,
+            pr: true,
+            critic: true,
+            writeback: true,
+          },
+        },
+      ],
+    })
+
+    expect(report.executeLoopEvidence.totalRuns).toBe(1)
+    expect(report.executeLoopEvidence.provenRuns).toBe(0)
+    expect(report.executeLoopEvidence.blockedRuns).toBe(0)
+    expect(report.executeLoopEvidence.progressPct).toBe(0)
+    expect(report.markdown).toContain('harness-dry-run')
+    expect(report.markdown).toContain('Dry-run only.')
+  })
+
+  it('does not let blocked dry-runs mark the real loop as blocked', () => {
+    const report = buildDailyReport({
+      now,
+      storageMode: 'postgres',
+      authDisabled: false,
+      projectBriefs: [],
+      knowledgeCards: [],
+      attentionItems: [],
+      delegations: [],
+      executeLoopEvidence: [
+        {
+          id: 'harness-blocked',
+          title: 'Blocked provider escalation path',
+          status: 'blocked',
+          source: 'harness-dry-run',
+          recordedAt: '2026-05-22T10:00:00.000Z',
+          blocker: 'Provider unavailable',
+          steps: {
+            brief: true,
+            delegation: true,
+            execute: false,
+            tests: false,
+            pr: false,
+            critic: false,
+            writeback: true,
+          },
+        },
+      ],
+    })
+
+    expect(report.executeLoopEvidence.blockedRuns).toBe(0)
+    expect(report.executeLoopEvidence.currentStatus).toBe('collecting')
+  })
+
   it('raises critical risk when auth is disabled', () => {
     const report = buildDailyReport({
       now,

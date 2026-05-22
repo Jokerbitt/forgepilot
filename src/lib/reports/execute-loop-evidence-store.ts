@@ -19,7 +19,7 @@ function isEvidenceRun(value: unknown): value is DailyReportExecuteLoopEvidenceR
   return typeof run.id === 'string'
     && typeof run.title === 'string'
     && (run.status === 'success' || run.status === 'partial' || run.status === 'blocked')
-    && (run.source === 'manual' || run.source === 'runtime-aggregate')
+    && (run.source === 'manual' || run.source === 'runtime-aggregate' || run.source === 'harness-dry-run')
     && typeof run.recordedAt === 'string'
     && Boolean(run.steps)
     && isBoolean(run.steps?.brief)
