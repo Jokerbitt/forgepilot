@@ -83,20 +83,34 @@ export default function DelegationDetailPage() {
 
   useEffect(() => { loadDelegation() }, [loadDelegation])
 
+  // M229: shared preflight fetch — used by eager-load and manual rerun
+  const runPreflight = useCallback(async (): Promise<PreflightResult | null> => {
+    setPreflightLoading(true)
+    setPreflightResult(null)
+    try {
+      const res = await fetch('/api/delegations/preflight', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delegationId: id }),
+      })
+      if (res.ok) {
+        const result = await res.json() as PreflightResult
+        setPreflightResult(result)
+        return result
+      }
+      return null
+    } catch {
+      return null
+    } finally {
+      setPreflightLoading(false)
+    }
+  }, [id])
+
   // M225: eager-load preflight checks when delegation becomes approved
   useEffect(() => {
     if (delegation?.status !== 'approved') return
     if (preflightResult || preflightLoading) return // already loaded or loading
-    setPreflightLoading(true)
-    fetch('/api/delegations/preflight', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ delegationId: id }),
-    })
-      .then(r => r.ok ? r.json() : null)
-      .then((result: PreflightResult | null) => { if (result) setPreflightResult(result) })
-      .catch(() => undefined)
-      .finally(() => setPreflightLoading(false))
+    void runPreflight()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [delegation?.status, id])
 
@@ -160,26 +174,8 @@ export default function DelegationDetailPage() {
     if (!delegation || delegation.status !== 'approved') return
 
     // Run preflight checks; block on blockers, allow warnings through
-    setPreflightLoading(true)
-    setPreflightResult(null)
-    try {
-      const res = await fetch('/api/delegations/preflight', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ delegationId: id }),
-      })
-      if (res.ok) {
-        const result = await res.json() as PreflightResult
-        setPreflightResult(result)
-        if (!result.canStart) {
-          setPreflightLoading(false)
-          return // blockers present — do not execute
-        }
-      }
-    } catch {
-      // preflight unavailable — proceed anyway
-    }
-    setPreflightLoading(false)
+    const preflightRes = await runPreflight()
+    if (preflightRes && !preflightRes.canStart) return // blockers present — do not execute
 
     setDelegation(prev => prev ? { ...prev, status: 'running', updatedAt: new Date().toISOString() } : prev)
     await fetch(`/api/delegations/${id}/execute`, { method: 'POST' })
@@ -655,7 +651,11 @@ export default function DelegationDetailPage() {
 
         {/* ── Preflight Results (M224) ─────────────────────────────────── */}
         {(preflightLoading || preflightResult) && (
-          <PreflightCheckList result={preflightResult} loading={preflightLoading} />
+          <PreflightCheckList
+            result={preflightResult}
+            loading={preflightLoading}
+            onRerun={d.status === 'approved' ? () => void runPreflight() : undefined}
+          />
         )}
 
         {/* ── Live Execution Progress ──────────────────────────────────── */}

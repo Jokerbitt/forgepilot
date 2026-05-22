@@ -1,14 +1,15 @@
 'use client'
 
-import { CheckCircle, XCircle, AlertTriangle, Loader2 } from 'lucide-react'
+import { CheckCircle, XCircle, AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
 import type { PreflightCheck, PreflightResult } from '@/lib/preflight'
 
 interface Props {
   result: PreflightResult | null
   loading: boolean
+  onRerun?: () => void
 }
 
-export function PreflightCheckList({ result, loading }: Props) {
+export function PreflightCheckList({ result, loading, onRerun }: Props) {
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-xs text-gray-400 px-3 py-2">
@@ -30,17 +31,28 @@ export function PreflightCheckList({ result, loading }: Props) {
           ? 'border-yellow-800 bg-yellow-950/20'
           : 'border-emerald-800 bg-emerald-950/20'
     }`}>
-      <div className={`px-3 py-2 font-semibold text-[11px] uppercase tracking-wider border-b ${
+      <div className={`px-3 py-2 font-semibold text-[11px] uppercase tracking-wider border-b flex items-center justify-between ${
         !result.canStart ? 'border-red-800/50 text-red-400' :
         result.warnings.length > 0 ? 'border-yellow-800/50 text-yellow-400' :
         'border-emerald-800/50 text-emerald-400'
       }`}>
-        {!result.canStart
-          ? `${result.blockers.length} Blocker gefunden`
-          : allPassed
-            ? 'Alle Checks bestanden'
-            : `${result.warnings.length} Warnung${result.warnings.length !== 1 ? 'en' : ''}`
-        }
+        <span>
+          {!result.canStart
+            ? `${result.blockers.length} Blocker gefunden`
+            : allPassed
+              ? 'Alle Checks bestanden'
+              : `${result.warnings.length} Warnung${result.warnings.length !== 1 ? 'en' : ''}`
+          }
+        </span>
+        {onRerun && (
+          <button
+            onClick={onRerun}
+            title="Preflight-Checks neu ausführen"
+            className="opacity-60 hover:opacity-100 transition-opacity"
+          >
+            <RefreshCw className="w-3 h-3" />
+          </button>
+        )}
       </div>
       <ul className="divide-y divide-gray-800/50">
         {result.checks.map(check => (
