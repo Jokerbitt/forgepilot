@@ -82,6 +82,23 @@ export default function DelegationDetailPage() {
 
   useEffect(() => { loadDelegation() }, [loadDelegation])
 
+  // M225: eager-load preflight checks when delegation becomes approved
+  useEffect(() => {
+    if (delegation?.status !== 'approved') return
+    if (preflightResult || preflightLoading) return // already loaded or loading
+    setPreflightLoading(true)
+    fetch('/api/delegations/preflight', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ delegationId: id }),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then((result: PreflightResult | null) => { if (result) setPreflightResult(result) })
+      .catch(() => undefined)
+      .finally(() => setPreflightLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [delegation?.status, id])
+
   // M134: Fetch GitHub CI status when PR URL is available
   useEffect(() => {
     const prUrl = delegation?.summaryReport?.prUrl
