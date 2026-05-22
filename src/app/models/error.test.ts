@@ -8,6 +8,7 @@ import {
   recordErrorInfo,
   listErrorInfo,
   getErrorInfo,
+  formatErrorInfo,
   _clearErrorStore,
 } from './error'
 
@@ -150,5 +151,85 @@ describe('_clearErrorStore', () => {
     recordErrorInfo({ message: 'will be gone' }, tmpFile)
     _clearErrorStore(tmpFile)
     expect(listErrorInfo({}, tmpFile)).toEqual([])
+  })
+})
+
+describe('formatErrorInfo', () => {
+  it('renders a header with severity, source, timestamp and id', () => {
+    const e = createErrorInfo({
+      message: 'agent crashed',
+      severity: 'high',
+      source: 'agent',
+    })
+    const out = formatErrorInfo(e)
+    const [header, message] = out.split('\n')
+    expect(header).toContain('[HIGH]')
+    expect(header).toContain('agent')
+    expect(header).toContain(e.occurredAt)
+    expect(header).toContain(`(${e.id})`)
+    expect(message).toBe('agent crashed')
+  })
+
+  it('includes context and the message when context is present', () => {
+    const e = createErrorInfo({
+      message: 'rate limited',
+      source: 'api',
+      context: { model: 'claude-opus-4-7', retries: 2 },
+    })
+    const out = formatErrorInfo(e)
+    expect(out).toContain('rate limited')
+    expect(out).toContain('Context:')
+    expect(out).toContain('"model":"claude-opus-4-7"')
+    expect(out).toContain('"retries":2')
+  })
+
+  it('omits the context line when context is missing or empty', () => {
+    const noCtx = formatErrorInfo(createErrorInfo({ message: 'no ctx' }))
+    expect(noCtx).not.toContain('Context:')
+
+    const emptyCtx = formatErrorInfo(createErrorInfo({ message: 'empty ctx', context: {} }))
+    expect(emptyCtx).not.toContain('Context:')
+  })
+
+  it('includes stack and relatedId when present', () => {
+    const e = createErrorInfo({
+      message: 'boom',
+      stack: 'Error: boom\n  at foo (file.ts:1:1)',
+      relatedId: 'delegation-7',
+    })
+    const out = formatErrorInfo(e)
+    expect(out).toContain('Related: delegation-7')
+    expect(out).toContain('Stack: Error: boom')
+  })
+
+  it('marks resolved errors', () => {
+    const e = { ...createErrorInfo({ message: 'fixed' }), resolved: true }
+    expect(formatErrorInfo(e)).toContain('Resolved: yes')
+  })
+
+  it('honors options to suppress optional blocks', () => {
+    const e = createErrorInfo({
+      message: 'opts',
+      stack: 'trace',
+      context: { k: 'v' },
+    })
+    const out = formatErrorInfo(e, {
+      includeStack: false,
+      includeContext: false,
+      includeId: false,
+    })
+    expect(out).not.toContain('Stack:')
+    expect(out).not.toContain('Context:')
+    expect(out).not.toContain(`(${e.id})`)
+    expect(out).toContain('opts')
+  })
+
+  it('falls back gracefully when context contains a cycle', () => {
+    const cyclic: Record<string, unknown> = { name: 'loop' }
+    cyclic.self = cyclic
+    const e = createErrorInfo({ message: 'cycle', context: cyclic })
+    const out = formatErrorInfo(e)
+    expect(out).toContain('Context:')
+    expect(out).toContain('unserialisable keys: name, self')
   })
 })

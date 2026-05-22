@@ -162,3 +162,65 @@ export function getErrorInfo(id: string, file?: string): ErrorInfo | null {
 export function _clearErrorStore(file?: string): void {
   writeStore({ errors: [], updatedAt: new Date().toISOString() }, file)
 }
+
+// ─── Formatting ─────────────────────────────────────────────────────────────
+
+export interface FormatErrorInfoOptions {
+  /** Include the stack trace block when present. Default: true. */
+  includeStack?: boolean
+  /** Include the context block when present. Default: true. */
+  includeContext?: boolean
+  /** Include the error id in the header. Default: true. */
+  includeId?: boolean
+}
+
+function formatContext(context: Record<string, unknown>): string {
+  try {
+    return JSON.stringify(context)
+  } catch {
+    // Cycles or non-serialisable values — fall back to a key list.
+    return `[unserialisable keys: ${Object.keys(context).join(', ')}]`
+  }
+}
+
+/**
+ * Render an ErrorInfo as a standardised, human-readable multi-line string.
+ *
+ * Layout:
+ *   [SEVERITY] source · occurredAt (id)
+ *   <message>
+ *   Related: <relatedId>          (optional)
+ *   Context: <json>               (optional)
+ *   Stack: <stack>                (optional)
+ *   Resolved: yes                 (optional)
+ *
+ * Guarantees:
+ *   - Always includes the message (first body line)
+ *   - Always includes the context line when `error.context` has entries
+ */
+export function formatErrorInfo(
+  error: ErrorInfo,
+  options: FormatErrorInfoOptions = {},
+): string {
+  const { includeStack = true, includeContext = true, includeId = true } = options
+
+  const header = [
+    `[${error.severity.toUpperCase()}]`,
+    error.source,
+    `· ${error.occurredAt}`,
+    ...(includeId ? [`(${error.id})`] : []),
+  ].join(' ')
+
+  const lines: string[] = [header, error.message]
+
+  if (error.relatedId) lines.push(`Related: ${error.relatedId}`)
+
+  if (includeContext && error.context && Object.keys(error.context).length > 0) {
+    lines.push(`Context: ${formatContext(error.context)}`)
+  }
+
+  if (includeStack && error.stack) lines.push(`Stack: ${error.stack}`)
+  if (error.resolved) lines.push('Resolved: yes')
+
+  return lines.join('\n')
+}
