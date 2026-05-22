@@ -50,6 +50,18 @@ export function getProcessPid(delegationId: string): number | null {
   return registry[delegationId]?.pid ?? null
 }
 
+export function isProcessAlive(delegationId: string): boolean {
+  const pid = getProcessPid(delegationId)
+  if (!pid) return false
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    unregisterProcess(delegationId)
+    return false
+  }
+}
+
 export function killProcess(delegationId: string): { killed: boolean; reason: string } {
   const pid = getProcessPid(delegationId)
   if (!pid) return { killed: false, reason: 'Kein Prozess registriert für diese Delegation' }

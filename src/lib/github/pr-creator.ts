@@ -38,21 +38,33 @@ interface GitHubErrorResponse {
   errors?: Array<{ message?: string }>
 }
 
+function splitOwnerRepo(value: string | undefined): { owner: string; repo: string } | null {
+  const trimmed = value?.trim()
+  if (!trimmed) return null
+  const parts = trimmed.split('/').filter(Boolean)
+  if (parts.length !== 2) return null
+  return { owner: parts[0], repo: parts[1] }
+}
+
 /**
  * Resolve GitHub owner and repo name.
- * Priority: GITHUB_REPOSITORY env → git remote → package.json repository field.
+ * Priority:
+ * 1. GITHUB_REPOSITORY or owner/repo-style GITHUB_REPO
+ * 2. GITHUB_OWNER + GITHUB_REPO / GITHUB_REPOSITORY_OWNER + GITHUB_REPOSITORIES
+ * 3. git remote
+ * 4. package.json repository field
  */
 function resolveOwnerAndRepo(): { owner: string; repo: string } | null {
-  // 1. GITHUB_REPOSITORY env (format: "owner/repo")
-  const ghRepo = process.env.GITHUB_REPOSITORY?.trim()
-  if (ghRepo) {
-    const parts = ghRepo.split('/')
-    if (parts.length === 2 && parts[0] && parts[1]) {
-      return { owner: parts[0], repo: parts[1] }
-    }
+  const explicit = splitOwnerRepo(process.env.GITHUB_REPOSITORY) ?? splitOwnerRepo(process.env.GITHUB_REPO)
+  if (explicit) return explicit
+
+  const owner = process.env.GITHUB_OWNER?.trim() || process.env.GITHUB_REPOSITORY_OWNER?.trim()
+  const repoList = process.env.GITHUB_REPOSITORIES?.trim() || process.env.GITHUB_REPO?.trim()
+  const repo = repoList?.split(',').map(part => part.trim()).find(Boolean)
+  if (owner && repo && !repo.includes('/')) {
+    return { owner, repo }
   }
 
-  // 2. git remote origin
   try {
     const remoteUrl = execSync('git remote get-url origin', {
       cwd: process.cwd(),
@@ -297,10 +309,17 @@ export async function createGitHubPRIfNeeded(
     || process.env.GITHUB_TOKEN?.trim()
     || process.env.GH_TOKEN?.trim()
 
-  const repo = process.env.GITHUB_REPO?.trim() || process.env.GITHUB_REPOSITORY?.trim()
+  if (!token) {
+    return { prUrl: null, skipped: true, reason: 'GITHUB_TOKEN not configured' }
+  }
 
-  if (!token || !repo) {
-    return { prUrl: null, skipped: true, reason: 'GITHUB_TOKEN or GITHUB_REPO not configured' }
+  const coords = resolveOwnerAndRepo()
+  if (!coords) {
+    return {
+      prUrl: null,
+      skipped: true,
+      reason: 'GitHub repository not configured. Set GITHUB_REPOSITORY=owner/repo or GITHUB_OWNER + GITHUB_REPO.',
+    }
   }
 
   const branchName = extractBranchName(agentOutput, delegation)
@@ -309,43 +328,29 @@ export async function createGitHubPRIfNeeded(
   }
 
   try {
-    const [owner, repoName] = repo.split('/')
     const title = delegation.title || delegation.contract.goal.slice(0, 60)
     const body = buildPRBody(delegation)
-
-    const response = await fetch(`https://api.github.com/repos/${owner}/${repoName}/pulls`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'ForgePilot/1.0',
-      },
-      body: JSON.stringify({
-        title,
-        body,
-        head: branchName,
-        base: 'main',
-        draft: true,
-      }),
+    const result = await createGitHubPR({
+      title,
+      body,
+      branch: branchName,
+      baseBranch: 'main',
+      labels: ['delegation', delegation.contract.taskType ?? 'feature'].filter(Boolean),
     })
 
-    if (!response.ok) {
-      const text = await response.text()
+    if (result.status === 'error') {
       apiLogger.warn(
-        { event: 'github.pr.failed', status: response.status, body: text.slice(0, 200) },
+        { event: 'github.pr.failed', reason: result.error },
         'GitHub PR creation failed',
       )
-      return { prUrl: null, skipped: true, reason: `GitHub API error: ${response.status}` }
+      return { prUrl: null, skipped: true, reason: result.error ?? 'GitHub PR creation failed' }
     }
 
-    const data = (await response.json()) as { html_url: string }
     apiLogger.info(
-      { event: 'github.pr.created', delegationId: delegation.id, prUrl: data.html_url },
-      'GitHub PR created',
+      { event: 'github.pr.created', delegationId: delegation.id, prUrl: result.url, status: result.status },
+      result.status === 'already_exists' ? 'GitHub PR already exists' : 'GitHub PR created',
     )
-    return { prUrl: data.html_url, skipped: false }
+    return { prUrl: result.url, skipped: result.status === 'already_exists', reason: result.status }
   } catch (error) {
     apiLogger.error(
       { event: 'github.pr.error', error: error instanceof Error ? error.message : String(error) },
@@ -362,10 +367,11 @@ export async function createGitHubPRIfNeeded(
 function extractBranchName(agentOutput: string | undefined, delegation: Delegation): string | null {
   if (agentOutput) {
     // Look for common branch patterns in agent output
-    const branchMatch = agentOutput.match(
-      /(?:branch[:\s]+|git checkout -b\s+|feature\/|fix\/)([a-zA-Z0-9/_-]+)/i,
-    )
+    const branchMatch = /(?:branch[:\s]+|git checkout -b\s+)([a-zA-Z0-9][a-zA-Z0-9/_-]*)/i.exec(agentOutput)
     if (branchMatch?.[1]) return branchMatch[1]
+
+    const prefixedBranchMatch = /\b((?:feature|fix|chore|docs|test|refactor|hotfix)\/[a-zA-Z0-9/_-]+)/i.exec(agentOutput)
+    if (prefixedBranchMatch?.[1]) return prefixedBranchMatch[1]
   }
   // Fall back to agentRunId if it looks like a branch name
   if (delegation.agentRunId?.includes('/')) {

@@ -79,7 +79,7 @@ const MOCK_TASKS = [
 
 const MOCK_RUN = {
   id: 'run-abc',
-  delegationId: 'del-idea-123',
+  delegationId: '00000000-0000-4000-8000-000000000001',
   delegationTitle: 'Test task',
   status: 'planning' as const,
   tasks: [],
@@ -211,7 +211,7 @@ describe('POST /api/pilot/idea-to-production', () => {
     expect(data.briefTitle).toBe('Test Brief')
     expect(data.workItemCount).toBe(2)
     expect(data.topItem).toMatchObject({ title: expect.any(String) })
-    expect(data.delegation.id).toMatch(/^del-idea-/)
+    expect(data.delegation.id).toMatch(/^[0-9a-f-]{36}$/)
     expect(data.run.id).toBe('run-abc')
     expect(data.taskCount).toBe(1) // MOCK_TASKS has 1 task
   })
@@ -274,7 +274,7 @@ describe('POST /api/pilot/idea-to-production', () => {
     const written = JSON.parse(String(writeCall![1])) as Array<{ id: string; status: string }>
     expect(written.length).toBeGreaterThan(0)
     expect(written[0].status).toBe('approved')
-    expect(written[0].id).toMatch(/^del-idea-/)
+    expect(written[0].id).toMatch(/^[0-9a-f-]{36}$/)
   })
 
   it('calls decomposeWithAI with goal and context', async () => {

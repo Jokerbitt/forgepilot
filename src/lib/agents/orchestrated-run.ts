@@ -10,6 +10,7 @@ import fs from 'fs'
 import path from 'path'
 import type { AtomicTask, AtomicTaskStatus } from './atomic-task'
 import type { AgentType } from './agent-skills'
+import { isProcessAlive } from '@/lib/process-registry'
 
 const STORE_PATH = path.join(process.cwd(), 'config', 'orchestrated-runs.json')
 
@@ -49,6 +50,21 @@ export interface OrchestratedRun {
   createdAt: string
   updatedAt: string
   completedAt?: string
+}
+
+export interface RunWatchdogOptions {
+  now?: Date
+  /** Running task without an alive process after this many minutes is failed. */
+  runningTaskGraceMinutes?: number
+  /** Whole running run older than this is failed as a hard stop. */
+  runTimeoutMinutes?: number
+  processAlive?: (delegationId: string) => boolean
+}
+
+export interface ReapedRun {
+  runId: string
+  taskIds: string[]
+  reason: string
 }
 
 interface RunStore {
@@ -127,9 +143,28 @@ export function getRun(id: string): OrchestratedRun | undefined {
 }
 
 export function listRuns(delegationId?: string): OrchestratedRun[] {
+  reapStaleRuns()
   const { runs } = read()
   if (delegationId) return runs.filter(r => r.delegationId === delegationId)
   return runs.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+export function setTaskAgentId(
+  runId: string,
+  taskId: string,
+  agentId: string,
+): OrchestratedRun | undefined {
+  const store = read()
+  const run = store.runs.find(r => r.id === runId)
+  if (!run) return undefined
+
+  const entry = run.tasks.find(t => t.task.id === taskId)
+  if (!entry) return undefined
+
+  entry.agentId = agentId
+  run.updatedAt = new Date().toISOString()
+  write(store)
+  return run
 }
 
 export function updateTaskStatus(
@@ -185,6 +220,60 @@ export function updateRunStatus(runId: string, status: RunStatus): void {
   run.status = status
   run.updatedAt = new Date().toISOString()
   write(store)
+}
+
+export function reapStaleRuns(options: RunWatchdogOptions = {}): ReapedRun[] {
+  const now = options.now ?? new Date()
+  const runningTaskGraceMinutes = options.runningTaskGraceMinutes ?? 2
+  const runTimeoutMinutes = options.runTimeoutMinutes ?? 30
+  const processAlive = options.processAlive ?? isProcessAlive
+  const store = read()
+  const reaped: ReapedRun[] = []
+
+  for (const run of store.runs) {
+    if (run.status !== 'running') continue
+
+    const startedMs = new Date(run.createdAt).getTime()
+    const runAgeMinutes = Math.max(0, Math.round((now.getTime() - startedMs) / 60_000))
+    const failedTaskIds: string[] = []
+
+    for (const entry of run.tasks) {
+      if (entry.status !== 'running') continue
+      const taskStartedMs = entry.startedAt ? new Date(entry.startedAt).getTime() : new Date(run.updatedAt).getTime()
+      const silentMinutes = Math.max(0, Math.round((now.getTime() - taskStartedMs) / 60_000))
+      const hasLiveProcess = entry.agentId ? processAlive(entry.agentId) : false
+      const exceededGrace = silentMinutes >= runningTaskGraceMinutes || runAgeMinutes >= runTimeoutMinutes
+
+      if (!hasLiveProcess && exceededGrace) {
+        entry.status = 'failed'
+        entry.result = {
+          qualityScore: 0,
+          grade: 'F',
+          issues: [`Watchdog marked task stale after ${silentMinutes}m without a live process.`],
+          testsPassed: false,
+          typeErrorCount: 0,
+          lintErrorCount: 0,
+          completedAt: now.toISOString(),
+        }
+        failedTaskIds.push(entry.task.id)
+      }
+    }
+
+    if (failedTaskIds.length > 0) {
+      run.status = 'failed'
+      run.currentTaskIndex = run.tasks.length
+      run.updatedAt = now.toISOString()
+      run.completedAt = now.toISOString()
+      reaped.push({
+        runId: run.id,
+        taskIds: failedTaskIds,
+        reason: 'running task had no live process beyond watchdog grace period',
+      })
+    }
+  }
+
+  if (reaped.length > 0) write(store)
+  return reaped
 }
 
 /** Returns true if the task can be retried (failed + retryCount < maxRetries) */

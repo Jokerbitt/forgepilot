@@ -399,6 +399,15 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       // M197: Auto-PR creation — fire-and-forget
       if (success) {
         void createGitHubPRIfNeeded(finishedDelegation, fullOutput).then(async (result) => {
+          const prLog: AgentLog = {
+            timestamp: new Date().toISOString(),
+            type: result.prUrl ? 'success' : 'info',
+            message: result.prUrl
+              ? `🔗 GitHub PR bereit: ${result.prUrl}${result.reason === 'already_exists' ? ' (bereits vorhanden)' : ''}`
+              : `⚠️ GitHub PR nicht erstellt: ${result.reason ?? 'unbekannter Grund'}`,
+          }
+          await appendLogs(finishedDelegation.id, [prLog])
+
           if (result.prUrl) {
             const prRepo = createDelegationRepository(SINGLE_TENANT_USER_ID)
             await prRepo.update(finishedDelegation.id, {

@@ -110,8 +110,9 @@ describe('createGitHubPRIfNeeded', () => {
     vi.stubEnv('GITHUB_REPO', 'owner/repo')
 
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      status: 201,
       ok: true,
-      json: async () => ({ html_url: 'https://github.com/owner/repo/pull/42' }),
+      json: async () => ({ html_url: 'https://github.com/owner/repo/pull/42', number: 42 }),
     }))
 
     const result = await createGitHubPRIfNeeded(
@@ -120,6 +121,54 @@ describe('createGitHubPRIfNeeded', () => {
     )
     expect(result.skipped).toBe(false)
     expect(result.prUrl).toBe('https://github.com/owner/repo/pull/42')
+
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+  })
+
+  it('supports GITHUB_OWNER plus repo-only GITHUB_REPO configuration', async () => {
+    vi.stubEnv('GITHUB_TOKEN', 'tok')
+    vi.stubEnv('GITHUB_OWNER', 'owner')
+    vi.stubEnv('GITHUB_REPO', 'repo')
+
+    const fetchSpy = vi.fn().mockResolvedValue({
+      status: 201,
+      ok: true,
+      json: async () => ({ html_url: 'https://github.com/owner/repo/pull/43', number: 43 }),
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const result = await createGitHubPRIfNeeded(
+      base,
+      'git checkout -b feature/fix-login created',
+    )
+
+    expect(result.skipped).toBe(false)
+    expect(result.prUrl).toBe('https://github.com/owner/repo/pull/43')
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://api.github.com/repos/owner/repo/pulls',
+      expect.objectContaining({ method: 'POST' }),
+    )
+
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+  })
+
+  it('preserves feature branch prefix when extracting branch names', async () => {
+    vi.stubEnv('GITHUB_TOKEN', 'tok')
+    vi.stubEnv('GITHUB_REPO', 'owner/repo')
+
+    const fetchSpy = vi.fn().mockResolvedValue({
+      status: 201,
+      ok: true,
+      json: async () => ({ html_url: 'https://github.com/owner/repo/pull/44', number: 44 }),
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+
+    await createGitHubPRIfNeeded(base, 'created branch feature/fix-login')
+
+    const request = JSON.parse(String(fetchSpy.mock.calls[0][1]?.body))
+    expect(request.head).toBe('feature/fix-login')
 
     vi.unstubAllEnvs()
     vi.unstubAllGlobals()
