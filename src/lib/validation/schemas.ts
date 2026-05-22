@@ -263,6 +263,7 @@ export const PatchDelegationSchema = z.object({
   agentRunId: z.string().optional(),
   note:       z.object({ text: z.string().max(2000), updatedAt: z.string() }).optional().nullable(),
   tags:       z.array(z.string().max(32)).max(10).optional(),
+  priority:   z.number().int().min(1).max(5).optional(),
 })
 
 export type PatchDelegationInput = z.infer<typeof PatchDelegationSchema>
