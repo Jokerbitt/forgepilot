@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildSubTaskPrompt, buildSkillBlock } from './delegation-execution'
+import { buildSubTaskPrompt, buildSkillBlock, buildRetryContext } from './delegation-execution'
 import type { Delegation } from '@/lib/models/delegation'
 
 function makeDelegation(overrides: Partial<Delegation['contract']> = {}): Delegation {
@@ -103,14 +103,13 @@ describe('buildSkillBlock', () => {
   })
 })
 
-import { buildRetryContext } from './delegation-execution'
-import type { Delegation } from '@/lib/models/delegation'
-
 function makeDelegationWithLogs(logs: Delegation['logs']): Delegation {
   return {
     id: 'd1',
     title: 'Test',
     status: 'failed',
+    executionRoute: 'local-agent',
+    costEstimateUsd: 0,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     logs,
