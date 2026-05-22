@@ -146,6 +146,7 @@ export function CommandCenterOverview() {
       <NextBestActionCard action={nextAction} />
       <ActiveDelegationsCard running={running} approved={approved} pending={pending} acceptedBriefs={acceptedBriefs} />
       <SystemHealthCard stats={stats} />
+      <DailyAssistantReadinessCard report={report} />
       <DailyCriticReportCard report={report} stats={stats} finished={finished} />
       <GrokHandoffCard />
       <QuickIdeaCard idea={idea} onIdeaChange={setIdea} href={quickIdeaHref} />
@@ -316,6 +317,70 @@ function HealthLine({
         {value}
       </span>
     </Link>
+  )
+}
+
+function DailyAssistantReadinessCard({ report }: { report: DailyReport | null }) {
+  const readiness = report?.dailyAssistant
+  const statusTone = readiness?.status === 'blocked'
+    ? 'border-rose-500/25 bg-rose-500/10 text-rose-200'
+    : readiness?.status === 'attention'
+      ? 'border-amber-500/25 bg-amber-500/10 text-amber-200'
+      : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
+  const scoreTone = readiness?.status === 'blocked'
+    ? 'text-rose-300'
+    : readiness?.status === 'attention'
+      ? 'text-amber-300'
+      : 'text-emerald-300'
+
+  return (
+    <section className="col-span-12 rounded-xl border border-white/[0.08] bg-white/[0.03] p-6 shadow-sm shadow-black/20 lg:col-span-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-white">Daily Assistant Readiness</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Betriebscheck fuer den Alltag: sicher, verbunden, beweisbar und handlungsfaehig.
+          </p>
+        </div>
+        <span className={cx('inline-flex w-fit items-center rounded-full border px-2.5 py-1 text-xs font-semibold uppercase tracking-wide', statusTone)}>
+          {readiness?.status ?? 'loading'}
+        </span>
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-[150px_1fr]">
+        <div className="rounded-lg border border-white/[0.06] bg-black/20 p-4">
+          <div className={cx('text-3xl font-semibold tabular-nums', scoreTone)}>
+            {readiness ? readiness.score : '--'}
+          </div>
+          <div className="mt-1 text-[10px] font-medium uppercase tracking-wide text-slate-500">Readiness</div>
+          <p className="mt-4 text-xs leading-5 text-slate-500">
+            {readiness?.nextFocus ?? 'Daily Report wird geladen...'}
+          </p>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          {(readiness?.checklist ?? []).slice(0, 6).map(item => (
+            <Link
+              key={item.id}
+              href={item.href}
+              className="rounded-lg border border-white/[0.06] bg-black/20 p-3 transition-colors hover:border-white/[0.14] hover:bg-white/[0.04]"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-medium text-white">{item.label}</span>
+                <StatusDot tone={item.status === 'ready' ? 'success' : item.status === 'warning' ? 'warning' : 'danger'} />
+              </div>
+              <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{item.detail}</p>
+              <p className="mt-2 text-xs font-semibold text-cyan-200">{item.action}</p>
+            </Link>
+          ))}
+          {!readiness && (
+            <div className="rounded-lg border border-dashed border-white/[0.08] p-4 text-sm text-slate-500 sm:col-span-2">
+              Lade Daily Assistant Readiness...
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   )
 }
 

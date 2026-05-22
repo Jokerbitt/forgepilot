@@ -149,6 +149,17 @@ describe('buildDailyReport', () => {
     expect(report.markdown).toContain('## Assistant Routing')
     expect(report.markdown).toContain('## First Real Value Loop')
     expect(report.markdown).toContain('## Execute Loop Evidence')
+    expect(report.markdown).toContain('## Daily Assistant Readiness')
+    expect(report.dailyAssistant.status).toBe('attention')
+    expect(report.dailyAssistant.score).toBeGreaterThanOrEqual(90)
+    expect(report.dailyAssistant.checklist.map(item => item.id)).toEqual([
+      'auth',
+      'storage',
+      'critic-router',
+      'execute-evidence',
+      'failed-delegations',
+      'attention-items',
+    ])
     expect(report.executeLoopEvidence.targetRuns).toBe(5)
     expect(report.executeLoopEvidence.provenRuns).toBe(1)
     expect(report.executeLoopEvidence.currentStatus).toBe('collecting')
@@ -340,6 +351,8 @@ describe('buildDailyReport', () => {
 
     expect(report.executiveVerdict.status).toBe('red')
     expect(report.risks.map(risk => risk.id)).toContain('auth-disabled')
+    expect(report.dailyAssistant.status).toBe('blocked')
+    expect(report.dailyAssistant.checklist.find(item => item.id === 'auth')?.status).toBe('blocker')
     expect(report.nextActions[0]?.id).toBe('secure-local-auth')
     expect(report.firstRealValueLoop.currentStep.id).toBe('brief')
   })
@@ -363,6 +376,9 @@ describe('buildDailyReport', () => {
       expect.arrayContaining(['json-primary-storage', 'failed-delegations', 'low-critic-coverage']),
     )
     expect(report.nextActions.map(action => action.id)).toContain('postgres-cutover-checklist')
+    expect(report.dailyAssistant.status).toBe('blocked')
+    expect(report.dailyAssistant.checklist.find(item => item.id === 'storage')?.status).toBe('warning')
+    expect(report.dailyAssistant.checklist.find(item => item.id === 'failed-delegations')?.status).toBe('blocker')
     expect(report.firstRealValueLoop.currentStep.id).toBe('pr')
     expect(report.firstRealValueLoop.currentStep.status).toBe('active')
   })
@@ -388,6 +404,7 @@ describe('buildDailyReport', () => {
     expect(report.risks.map(risk => risk.id)).toEqual(
       expect.arrayContaining(['stale-running-delegations', 'open-attention-items']),
     )
+    expect(report.dailyAssistant.checklist.find(item => item.id === 'attention-items')?.status).toBe('warning')
   })
 })
 
@@ -407,6 +424,7 @@ describe('renderDailyReportMarkdown', () => {
     expect(markdown).toContain('## Executive Verdict')
     expect(markdown).toContain('## First Real Value Loop')
     expect(markdown).toContain('## Assistant Routing')
+    expect(markdown).toContain('## Daily Assistant Readiness')
     expect(markdown).toContain('## Top Risks')
     expect(markdown).toContain('## Next Actions')
   })
