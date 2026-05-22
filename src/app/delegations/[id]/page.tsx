@@ -224,6 +224,25 @@ export default function DelegationDetailPage() {
   const [preflightResult, setPreflightResult] = useState<PreflightResult | null>(null)
   const [preflightLoading, setPreflightLoading] = useState(false)
 
+  // M230: clone delegation
+  const [cloningDelegation, setCloningDelegation] = useState(false)
+
+  const handleClone = async () => {
+    if (!delegation) return
+    setCloningDelegation(true)
+    try {
+      const res = await fetch(`/api/delegations/${id}/clone`, { method: 'POST' })
+      if (res.ok) {
+        const data = await res.json() as { delegationId: string }
+        router.push(`/delegations/${data.delegationId}`)
+      }
+    } catch {
+      // ignore
+    } finally {
+      setCloningDelegation(false)
+    }
+  }
+
   const handleCreatePR = async () => {
     if (!delegation) return
     setCreatingPR(true)
@@ -361,6 +380,7 @@ export default function DelegationDetailPage() {
   const canRetry    = d.status === 'failed' || d.status === 'cancelled'
   const isDone      = d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled'
   const canCreatePR = d.status === 'completed' && !d.summaryReport?.prUrl
+  const canClone    = isDone
 
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6 md:p-8">
@@ -476,6 +496,15 @@ export default function DelegationDetailPage() {
                   className="px-3 py-1.5 text-xs bg-emerald-900/40 text-emerald-300 hover:bg-emerald-900/70 border border-emerald-800/60 rounded-lg transition-colors disabled:opacity-40"
                   title="GitHub Pull Request für diese abgeschlossene Delegation erstellen">
                   {creatingPR ? '⏳ PR wird erstellt…' : '⎇ GitHub PR erstellen'}
+                </button>
+              )}
+              {canClone && (
+                <button
+                  onClick={handleClone}
+                  disabled={cloningDelegation}
+                  className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-700 rounded-lg transition-colors disabled:opacity-40"
+                  title="Delegation als neuen Entwurf duplizieren">
+                  {cloningDelegation ? '⏳ …' : '⧉ Klonen'}
                 </button>
               )}
               {d.summaryReport?.prUrl && (
