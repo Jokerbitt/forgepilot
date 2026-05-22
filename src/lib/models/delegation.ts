@@ -3,7 +3,7 @@ import type { RiskClass } from './work-item'
 export type ExecutionRoute = 'direct-chat' | 'local-agent' | 'runner' | 'ollama-agent' | 'n8n' | 'manual'
 export type PrivacyMode = 'local' | 'private-cloud' | 'public'
 export type OutputMode = 'text' | 'json' | 'stream'
-export type DelegationStatus = 'pending' | 'approved' | 'running' | 'completed' | 'failed' | 'cancelled'
+export type DelegationStatus = 'pending' | 'approved' | 'running' | 'completed' | 'failed' | 'cancelled' | 'rejected'
 
 export interface AgentLog {
   timestamp: string

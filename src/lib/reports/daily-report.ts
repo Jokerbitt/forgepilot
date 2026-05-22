@@ -194,6 +194,7 @@ function countDelegations(delegations: Delegation[]): DailyReport['status']['del
     completed: 0,
     failed: 0,
     cancelled: 0,
+    rejected: 0,
     total: delegations.length,
   }
 

@@ -34,6 +34,7 @@ const STATUS_STYLES: Record<DelegationStatus, string> = {
   completed: 'border-emerald-700/50 bg-emerald-950/20 text-emerald-300',
   failed:    'border-red-800/50 bg-red-950/20 text-red-300',
   cancelled: 'border-slate-700 bg-slate-900/40 text-slate-400',
+  rejected:  'border-red-900/50 bg-red-950/20 text-red-400',
 }
 
 const STATUS_LABELS: Record<DelegationStatus, string> = {
@@ -43,6 +44,7 @@ const STATUS_LABELS: Record<DelegationStatus, string> = {
   completed: 'Abgeschlossen',
   failed:    'Fehlgeschlagen',
   cancelled: 'Abgebrochen',
+  rejected:  'Abgelehnt',
 }
 
 function formatTime(ts: string): string {
