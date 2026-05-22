@@ -113,7 +113,7 @@ describe('GET /api/delegations/export', () => {
     const text = await res.text()
     const firstLine = text.split('\n')[0]
     expect(firstLine).toBe(
-      'id,title,goal,status,riskClass,route,workItemId,briefTitle,createdAt,startedAt,completedAt,durationMin,actualCostUsd,tokenCount'
+      'id,title,goal,status,riskClass,route,workItemId,briefTitle,createdAt,startedAt,completedAt,durationMin,actualCostUsd,tokenCount,prUrl,prState,prMergedAt'
     )
   })
 

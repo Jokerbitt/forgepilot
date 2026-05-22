@@ -16,6 +16,9 @@ describe('DelegationStats shape', () => {
       totalActualUsd: 2.34,
       todayCount: 4,
       todayActualUsd: 1.10,
+      prCreated: 3,
+      prMerged: 2,
+      prOpen: 1,
     }
 
     expect(stats.total).toBe(10)
@@ -30,6 +33,7 @@ describe('DelegationStats shape', () => {
       byStatus: { pending: 2, running: 1, failed: 1 },
       running: 1, pending: 2, approved: 0, completed: 0, failed: 1, cancelled: 0,
       totalEstimatedUsd: 0, totalActualUsd: 0, todayCount: 0, todayActualUsd: 0,
+      prCreated: 0, prMerged: 0, prOpen: 0,
     }
     const sum = Object.values(stats.byStatus).reduce((a, b) => a + b, 0)
     expect(sum).toBe(stats.total)
