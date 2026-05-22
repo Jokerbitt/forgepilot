@@ -261,6 +261,7 @@ export type DelegationVersionInput = z.infer<typeof DelegationVersionSchema>
 export const PatchDelegationSchema = z.object({
   status:     z.enum(['pending', 'approved', 'running', 'completed', 'failed', 'cancelled']).optional(),
   agentRunId: z.string().optional(),
+  note:       z.object({ text: z.string().max(2000), updatedAt: z.string() }).optional().nullable(),
 })
 
 export type PatchDelegationInput = z.infer<typeof PatchDelegationSchema>
