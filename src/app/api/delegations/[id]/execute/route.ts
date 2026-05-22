@@ -36,6 +36,7 @@ import { buildContextPackage } from '@/lib/knowledge/context-package'
 import type { MemoryCard } from '@/lib/knowledge/types'
 import { checkParallelCompletion } from '@/lib/delegation-parallel'
 import { triggerCriticRetry } from '@/lib/delegations/critic-retry'
+import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-runtime-evidence'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
@@ -339,6 +340,13 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       })
       if (!finishedDelegation) return
 
+      recordRuntimeExecuteLoopEvidence(finishedDelegation, {
+        blocker: success ? undefined : knownError ?? `Exit-Code: ${code}`,
+        notes: success
+          ? 'Execution evidence recorded after runner reached completed state.'
+          : 'Execution evidence recorded after runner failed.',
+      })
+
       // M209: Post-execution budget guard — mark failed if actual cost exceeded limit
       if (success && actualCost) {
         const budgetResult = await checkBudget(finishedDelegation)
@@ -414,7 +422,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
 
           if (result.prUrl) {
             const prRepo = createDelegationRepository(SINGLE_TENANT_USER_ID)
-            await prRepo.update(finishedDelegation.id, {
+            const updated = await prRepo.update(finishedDelegation.id, {
               summaryReport: {
                 keyPoints: finishedDelegation.summaryReport?.keyPoints ?? [],
                 changes: finishedDelegation.summaryReport?.changes ?? [],
@@ -424,6 +432,12 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
                 prState: 'open' as const,
               },
             })
+            if (updated) {
+              recordRuntimeExecuteLoopEvidence(updated, {
+                pr: true,
+                notes: 'PR evidence recorded after automatic PR creation.',
+              })
+            }
           }
         })
       }
@@ -437,14 +451,28 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
 
       // M220: Knowledge Writeback — fire-and-forget
       if (success) {
-        void writebackDelegationKnowledge(finishedDelegation, fullOutput).catch(() => {})
+        void writebackDelegationKnowledge(finishedDelegation, fullOutput)
+          .then(result => {
+            if (result.written) {
+              recordRuntimeExecuteLoopEvidence(finishedDelegation, {
+                writeback: true,
+                notes: 'Knowledge writeback evidence recorded after delegation writeback completed.',
+              })
+            }
+          })
+          .catch(() => {})
       }
 
       if (success && report) {
         persistGrokCriticForDelegation(finishedDelegation, report)
           .then(async criticScore => {
             if (criticScore) {
-              void writebackExecutionInsights({ ...finishedDelegation, criticScore })
+              const delegationWithCritic = { ...finishedDelegation, criticScore }
+              recordRuntimeExecuteLoopEvidence(delegationWithCritic, {
+                critic: true,
+                notes: 'Critic evidence recorded after automatic critic persistence.',
+              })
+              void writebackExecutionInsights(delegationWithCritic)
               // G2: Critic Auto-Retry — queue retry if score below threshold
               const retryId = await triggerCriticRetry(finishedDelegation, criticScore).catch(() => null)
               if (retryId) {
@@ -551,6 +579,13 @@ async function runWithOllamaAgent(
     const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
     const finished = await repo.findById(id)
     if (finished) {
+      recordRuntimeExecuteLoopEvidence(finished, {
+        blocker: result.success ? undefined : `Ollama run failed after ${result.turns} turns`,
+        notes: result.success
+          ? 'Ollama execution evidence recorded after runner completed.'
+          : 'Ollama execution evidence recorded after runner failed.',
+      })
+
       // M207: Fan-in — notify parent if this is a parallel sub-delegation
       void checkParallelCompletion(finished)
 
@@ -658,6 +693,11 @@ End with a one-line DONE: <summary> statement.`,
 
     const repoForLabel = createDelegationRepository(SINGLE_TENANT_USER_ID)
     const finished = await repoForLabel.findById(id)
+    if (finished) {
+      recordRuntimeExecuteLoopEvidence(finished, {
+        notes: 'Plan-only Claude API evidence recorded. This does not prove code was changed.',
+      })
+    }
     const label = finished?.title || goal.slice(0, 60)
     upsertAttentionItem({
       id: `completion:${id}`,
