@@ -22,6 +22,7 @@ import { DelegationLiveLog } from '@/components/delegation/DelegationLiveLog'
 import { DelegationNextActionPanel } from '@/components/delegation/DelegationNextActionPanel'
 import { PreflightCheckList } from '@/components/delegation/PreflightCheckList'
 import { CostMeter } from '@/components/delegation/CostMeter'
+import { downloadLogsAsText } from '@/lib/delegations/log-export'
 import type { PreflightResult } from '@/lib/preflight'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
@@ -534,6 +535,14 @@ export default function DelegationDetailPage() {
                 title="Permalink kopieren">
                 {copied ? '✓ Kopiert' : '🔗 Link'}
               </button>
+              {(d.logs ?? []).length > 0 && (
+                <button
+                  onClick={() => downloadLogsAsText(d)}
+                  className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-600 rounded-lg transition-colors"
+                  title="Logs als Textdatei herunterladen">
+                  ⬇ Logs
+                </button>
+              )}
             </div>
           </div>
 
