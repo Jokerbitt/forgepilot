@@ -13,6 +13,8 @@ import {
   ChevronUp,
   Download,
   FileText,
+  LayoutGrid,
+  LayoutList,
   ListChecks,
   Play,
   Plus,
@@ -38,6 +40,7 @@ import { VersionBadge } from '@/components/delegation/VersionBadge'
 import { Badge, EmptyState, Metric, Panel, buttonClassName, cx } from '@/components/ui/primitives'
 import { checkBudget, formatCostUsd } from '@/lib/delegations/cost-format'
 import { SlaBadge } from '@/components/shared/SlaBadge'
+import { DelegationLiveTimeline } from '@/components/delegation/DelegationLiveTimeline'
 
 type ApprovalFilter = 'Alle' | 'approval-required' | 'auto-approved' | 'risk-blocked'
 
@@ -183,6 +186,7 @@ function DelegationsContent() {
   const [hideTerminal, setHideTerminal] = useState(searchParams.get('hideTerminal') === '1')
   const [tagFilter, setTagFilter] = useState<string>(searchParams.get('tag') ?? 'Alle')
   const [groupByBrief, setGroupByBrief] = useState(searchParams.get('groupByBrief') === '1')
+  const [viewMode, setViewMode] = useState<'table' | 'timeline'>(searchParams.get('view') === 'timeline' ? 'timeline' : 'table')
   const [showAllRows, setShowAllRows] = useState(false)
   const currentSearch = searchParams.toString()
 
@@ -197,13 +201,14 @@ function DelegationsContent() {
     if (hideTerminal)              params.set('hideTerminal', '1')
     if (tagFilter !== 'Alle')      params.set('tag',      tagFilter)
     if (groupByBrief)              params.set('groupByBrief', '1')
+    if (viewMode === 'timeline')   params.set('view', 'timeline')
     const qs = params.toString()
     const nextUrl = qs ? `${pathname}?${qs}` : pathname
     if (currentSearch !== qs) {
       router.replace(nextUrl, { scroll: false })
     }
     setShowAllRows(false)
-  }, [statusFilter, projectFilter, approvalFilter, searchQuery, todayOnly, hideTerminal, tagFilter, groupByBrief, pathname, router, currentSearch])
+  }, [statusFilter, projectFilter, approvalFilter, searchQuery, todayOnly, hideTerminal, tagFilter, groupByBrief, viewMode, pathname, router, currentSearch])
 
   // Sort
   type SortKey = 'goal' | 'status' | 'time' | 'cost' | 'priority'
@@ -1062,6 +1067,31 @@ function DelegationsContent() {
                 >
                   ◇ Nach Brief
                 </button>
+                {/* View mode toggle */}
+                <div className="flex items-center rounded-lg border border-gray-700 overflow-hidden">
+                  <button
+                    onClick={() => setViewMode('table')}
+                    className={`flex items-center gap-1 px-2 py-1 text-xs font-medium transition-colors ${
+                      viewMode === 'table'
+                        ? 'bg-gray-700 text-white'
+                        : 'bg-gray-800 text-gray-500 hover:text-gray-300'
+                    }`}
+                    title="Tabellenansicht"
+                  >
+                    <LayoutList className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode('timeline')}
+                    className={`flex items-center gap-1 px-2 py-1 text-xs font-medium transition-colors ${
+                      viewMode === 'timeline'
+                        ? 'bg-amber-700 text-white'
+                        : 'bg-gray-800 text-gray-500 hover:text-gray-300'
+                    }`}
+                    title="Live-Timeline Ansicht"
+                  >
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
 
               {/* Search input */}
@@ -1167,8 +1197,13 @@ function DelegationsContent() {
               </div>
             )}
 
+            {/* ── Timeline View ───────────────────────────────────────── */}
+            {viewMode === 'timeline' && (
+              <DelegationLiveTimeline showModeToggle={false} className="pt-1" />
+            )}
+
             {/* ── Table ───────────────────────────────────────────────── */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+            {viewMode === 'table' && <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -1668,7 +1703,7 @@ function DelegationsContent() {
                   </button>
                 </div>
               )}
-            </div>
+            </div>}
           </div>
         )}
       </div>
