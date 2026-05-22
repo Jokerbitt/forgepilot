@@ -24,6 +24,7 @@ import { PreflightCheckList } from '@/components/delegation/PreflightCheckList'
 import { CostMeter } from '@/components/delegation/CostMeter'
 import { downloadLogsAsText } from '@/lib/delegations/log-export'
 import { InlineNoteEditor } from '@/components/delegation/InlineNoteEditor'
+import { DurationBar } from '@/components/delegation/DurationBar'
 import type { PreflightResult } from '@/lib/preflight'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
@@ -648,6 +649,14 @@ export default function DelegationDetailPage() {
               </span>
             </div>
           )}
+
+          {/* ── Duration Timeline Bar ─────────────────────────────────── */}
+          <DurationBar
+            createdAt={d.createdAt}
+            startedAt={d.startedAt}
+            completedAt={d.completedAt}
+            status={d.status}
+          />
 
           {/* ── Timing ───────────────────────────────────────────────── */}
           <div className="mt-3 flex flex-wrap gap-4 text-[10px] text-gray-700">
