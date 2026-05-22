@@ -45,6 +45,11 @@ vi.mock('@/lib/ai/providers/config-store', () => ({
   ]),
 }))
 
+vi.mock('@/lib/auth/config', () => ({
+  getAuthSecurityIssues: vi.fn(() => []),
+  isProductionRuntime:   vi.fn(() => false),
+}))
+
 import { GET } from './route'
 
 beforeEach(() => {
@@ -64,7 +69,7 @@ describe('GET /api/ready', () => {
     expect(res.status).toBe(200)
     const body = await res.json() as { status: string; checks: { name: string; status: string }[] }
     expect(body.status).toBe('ready')
-    expect(body.checks).toHaveLength(4)
+    expect(body.checks).toHaveLength(5)
   })
 
   it('includes all check names', async () => {
@@ -75,6 +80,7 @@ describe('GET /api/ready', () => {
     expect(names).toContain('ai_providers')
     expect(names).toContain('scope_lock')
     expect(names).toContain('notification_store')
+    expect(names).toContain('auth_security')
   })
 
   it('returns 503 with status=not_ready when delegation store is inaccessible', async () => {
