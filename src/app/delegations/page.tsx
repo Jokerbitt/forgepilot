@@ -202,7 +202,7 @@ function DelegationsContent() {
   }, [statusFilter, projectFilter, approvalFilter, searchQuery, todayOnly, tagFilter, pathname, router, currentSearch])
 
   // Sort
-  type SortKey = 'goal' | 'status' | 'time' | 'cost'
+  type SortKey = 'goal' | 'status' | 'time' | 'cost' | 'priority'
   const [sortKey, setSortKey] = useState<SortKey | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
@@ -392,6 +392,18 @@ function DelegationsContent() {
         return next
       })
     }
+  }
+
+  const handleSetPriority = async (id: string, priority: number, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const delegation = delegations.find(d => d.id === id)
+    if (!delegation) return
+    applyUpdate({ ...delegation, priority, updatedAt: new Date().toISOString() })
+    await fetch(`/api/delegations/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ priority }),
+    })
   }
 
   const handleRowDelete = async (id: string, e?: React.MouseEvent) => {
@@ -644,6 +656,8 @@ function DelegationsContent() {
           const ca = a.actualCostUsd ?? a.costEstimateUsd ?? 0
           const cb = b.actualCostUsd ?? b.costEstimateUsd ?? 0
           cmp = ca - cb
+        } else if (sortKey === 'priority') {
+          cmp = (b.priority ?? 1) - (a.priority ?? 1)
         }
         return sortDir === 'asc' ? cmp : -cmp
       })
@@ -1144,6 +1158,12 @@ function DelegationsContent() {
                       >
                         Zeit {sortKey === 'time' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="opacity-30">⇅</span>}
                       </th>
+                      <th
+                        className="p-3 font-medium hidden lg:table-cell cursor-pointer hover:text-gray-300 select-none"
+                        onClick={() => handleSort('priority')}
+                      >
+                        Prio {sortKey === 'priority' ? (sortDir === 'asc' ? '↑' : '↓') : <span className="opacity-30">⇅</span>}
+                      </th>
                       <th className="p-3 font-medium text-right">Aktionen</th>
                     </tr>
                   </thead>
@@ -1238,6 +1258,18 @@ function DelegationsContent() {
                                 compact
                               />
                               <VersionBadge delegationId={del.id} compact />
+                              {(del.priority ?? 1) >= 4 && (
+                                <span
+                                  title={`Priorität ${del.priority ?? 1}`}
+                                  className={`px-1 py-0.5 text-[10px] rounded font-bold leading-none ${
+                                    del.priority === 5
+                                      ? 'bg-red-900/50 text-red-400 border border-red-700/50'
+                                      : 'bg-orange-900/40 text-orange-400 border border-orange-700/40'
+                                  }`}
+                                >
+                                  P{del.priority ?? 1}
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-baseline gap-1.5">
                               <span className={`text-xs flex-shrink-0 ${getTaskStatusStyle(del.status).iconClass}`}>
@@ -1355,6 +1387,24 @@ function DelegationsContent() {
                                 {new Date(del.createdAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                               </div>
                             )}
+                          </td>
+
+                          {/* Priority */}
+                          <td className="p-3 hidden lg:table-cell" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center gap-0.5">
+                              {[1, 2, 3, 4, 5].map(p => (
+                                <button
+                                  key={p}
+                                  title={`Priorität ${p}`}
+                                  onClick={e => handleSetPriority(del.id, p, e)}
+                                  className={`w-3 h-3 rounded-sm transition-colors ${
+                                    (del.priority ?? 1) >= p
+                                      ? p >= 5 ? 'bg-red-500' : p >= 4 ? 'bg-orange-400' : p >= 3 ? 'bg-yellow-500' : 'bg-gray-500'
+                                      : 'bg-gray-800 hover:bg-gray-600'
+                                  }`}
+                                />
+                              ))}
+                            </div>
                           </td>
 
                           {/* Actions */}
