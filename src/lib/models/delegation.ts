@@ -162,6 +162,8 @@ export interface Delegation {
   startedAt?: string
   /** M233: ISO timestamp when execution reached a terminal state */
   completedAt?: string
+  /** M234: User-defined tags for categorization and filtering */
+  tags?: string[]
   createdAt: string
   updatedAt: string
 }
