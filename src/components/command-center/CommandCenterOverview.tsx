@@ -596,6 +596,8 @@ function DailyCriticReportCard({
       ? 'border-amber-500/25 bg-amber-500/10 text-amber-200'
       : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
   const loopStep = report?.firstRealValueLoop.currentStep
+  const evidence = report?.executeLoopEvidence
+  const evidenceRuns = evidence?.runs.slice(0, 2) ?? []
 
   async function copyMarkdown() {
     if (!report?.markdown) return
@@ -726,6 +728,48 @@ function DailyCriticReportCard({
               </Link>
             ))}
           </div>
+          {evidence && (
+            <div className="mt-3 rounded-lg border border-white/[0.06] bg-black/20 p-3">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <MetricPill label="Belegt" value={`${evidence.provenRuns}/${evidence.targetRuns}`} />
+                <MetricPill label="Runs" value={evidence.totalRuns} />
+                <MetricPill label="Blocker" value={evidence.blockedRuns} />
+              </div>
+              <p className="mt-3 text-xs leading-5 text-slate-400">
+                {evidence.nextAction}
+              </p>
+              {evidenceRuns.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {evidenceRuns.map(run => {
+                    const doneSteps = Object.values(run.steps).filter(Boolean).length
+                    const statusTone = run.status === 'success'
+                      ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200'
+                      : run.status === 'blocked'
+                        ? 'border-rose-500/25 bg-rose-500/10 text-rose-200'
+                        : 'border-amber-500/20 bg-amber-500/10 text-amber-100'
+                    return (
+                      <Link
+                        key={run.id}
+                        href={run.delegationId ? `/delegations/${run.delegationId}` : '/delegations'}
+                        className="block rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 transition-colors hover:border-white/[0.14] hover:bg-white/[0.04]"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="truncate text-xs font-medium text-slate-200">{run.title}</p>
+                          <span className={cx('shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide', statusTone)}>
+                            {run.status}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between gap-3 text-[11px] text-slate-500">
+                          <span>{run.source === 'runtime-aggregate' ? 'Runtime' : run.source === 'manual' ? 'Manuell' : 'Dry Run'}</span>
+                          <span>{doneSteps}/7 Schritte</span>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
           {loopStep && (
             <Link
               href={loopStep.href}
