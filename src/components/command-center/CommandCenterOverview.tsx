@@ -7,6 +7,7 @@ import { AlertTriangle, ArrowRight, Bot, CheckCircle, Clipboard, Clock, FileText
 import type { Delegation } from '@/lib/models/delegation'
 import type { DashboardStats } from '@/app/api/dashboard/stats/route'
 import type { DailyReport } from '@/lib/reports/daily-report'
+import type { DelegationQueuePlan } from '@/lib/delegations/queue'
 import type { ProjectBrief } from '@/lib/models/project-brief'
 import type { Gbot4HandoffPackage } from '@/app/api/reports/daily/gbot4-handoff/route'
 import type { Gbot4FeedbackBody, Gbot4Verdict } from '@/app/api/reports/daily/gbot4-feedback/route'
@@ -16,7 +17,13 @@ interface FocusedData {
   delegations: Delegation[]
   stats: DashboardStats | null
   report: DailyReport | null
+  queuePlan: DelegationQueuePlan | null
   acceptedBriefs: ProjectBrief[]
+}
+
+interface QueuePlanResponse {
+  generatedAt: string
+  plan: DelegationQueuePlan
 }
 
 interface NextAction {
@@ -44,17 +51,19 @@ function latestTime(delegation: Delegation): string {
 }
 
 export function CommandCenterOverview() {
-  const [data, setData] = useState<FocusedData>({ delegations: [], stats: null, report: null, acceptedBriefs: [] })
+  const [data, setData] = useState<FocusedData>({ delegations: [], stats: null, report: null, queuePlan: null, acceptedBriefs: [] })
   const [idea, setIdea] = useState('')
+  const [refreshToken, setRefreshToken] = useState(0)
 
   useEffect(() => {
     let cancelled = false
 
     async function load() {
-      const [delegationsRes, statsRes, reportRes, acceptedBriefsRes] = await Promise.allSettled([
+      const [delegationsRes, statsRes, reportRes, queuePlanRes, acceptedBriefsRes] = await Promise.allSettled([
         fetch('/api/delegations').then(res => res.json() as Promise<Delegation[]>),
         fetch('/api/dashboard/stats').then(res => res.json() as Promise<DashboardStats>),
         fetch('/api/reports/daily').then(res => res.json() as Promise<DailyReport>),
+        fetch('/api/delegations/queue-plan').then(res => res.json() as Promise<QueuePlanResponse>),
         fetch('/api/project-briefs?status=accepted').then(res => res.json() as Promise<ProjectBrief[]>),
       ])
 
@@ -69,6 +78,12 @@ export function CommandCenterOverview() {
         report: reportRes.status === 'fulfilled' && reportRes.value.version === 1
           ? reportRes.value
           : null,
+        queuePlan:
+          queuePlanRes.status === 'fulfilled' && queuePlanRes.value?.plan?.mode === 'safe-preview'
+            ? queuePlanRes.value.plan
+            : reportRes.status === 'fulfilled' && reportRes.value.version === 1
+              ? reportRes.value.delegationQueuePlan
+              : null,
         acceptedBriefs:
           acceptedBriefsRes.status === 'fulfilled' && Array.isArray(acceptedBriefsRes.value)
             ? acceptedBriefsRes.value
@@ -82,9 +97,9 @@ export function CommandCenterOverview() {
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [])
+  }, [refreshToken])
 
-  const { delegations, stats, report, acceptedBriefs } = data
+  const { delegations, stats, report, queuePlan, acceptedBriefs } = data
   const failed = delegations.filter(d => d.status === 'failed')
   const pending = delegations.filter(d => d.status === 'pending')
   const approved = delegations.filter(d => d.status === 'approved')
@@ -145,12 +160,170 @@ export function CommandCenterOverview() {
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
       <NextBestActionCard action={nextAction} />
       <ActiveDelegationsCard running={running} approved={approved} pending={pending} acceptedBriefs={acceptedBriefs} />
+      <QueuePlanCard plan={queuePlan} onRefresh={() => setRefreshToken(token => token + 1)} />
       <SystemHealthCard stats={stats} />
       <DailyAssistantReadinessCard report={report} />
       <DailyCriticReportCard report={report} stats={stats} finished={finished} />
       <GrokHandoffCard />
       <QuickIdeaCard idea={idea} onIdeaChange={setIdea} href={quickIdeaHref} />
     </div>
+  )
+}
+
+function QueuePlanCard({
+  plan,
+  onRefresh,
+}: {
+  plan: DelegationQueuePlan | null
+  onRefresh: () => void
+}) {
+  const [starting, setStarting] = useState(false)
+  const [result, setResult] = useState<'idle' | 'started' | 'failed'>('idle')
+  const recommended = plan?.recommendedBatch ?? []
+  const pendingApproval = plan?.pendingApproval ?? []
+  const canStart = recommended.length > 0 && !starting
+
+  async function startRecommendedBatch() {
+    if (!plan || recommended.length === 0) return
+    setStarting(true)
+    setResult('idle')
+    try {
+      for (const item of recommended) {
+        if (!item.actionHref) continue
+        const response = await fetch(item.actionHref, { method: 'POST' })
+        if (!response.ok) throw new Error(`Failed to start ${item.id}`)
+      }
+      setResult('started')
+      onRefresh()
+      window.setTimeout(() => setResult('idle'), 2500)
+    } catch {
+      setResult('failed')
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  return (
+    <section className="col-span-12 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.035] p-6 shadow-sm shadow-black/20 lg:col-span-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-cyan-300">Safe Execution Queue</p>
+          <h3 className="mt-1 text-lg font-semibold text-white">Was darf jetzt wirklich starten?</h3>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
+            ForgePilot begrenzt Parallelstarts, zeigt wartende Freigaben und empfiehlt nur den naechsten sicheren Batch.
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-center sm:min-w-56">
+          <MetricPill label="Freigegeben" value={plan?.stats.approved ?? '--'} />
+          <MetricPill label="Laeuft" value={plan?.stats.running ?? '--'} />
+          <MetricPill label="Limit" value={plan?.maxConcurrent ?? '--'} />
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-lg border border-white/[0.06] bg-black/20 p-4">
+        <p className="text-sm font-medium text-white">
+          {plan?.nextAction ?? 'Queue Plan wird geladen oder ist erst nach Login verfuegbar.'}
+        </p>
+        {plan && (
+          <p className="mt-2 text-xs leading-5 text-slate-500">
+            Empfohlener Batch: {plan.recommendedStartIds.length > 0 ? plan.recommendedStartIds.join(', ') : 'kein Start noetig'}.
+          </p>
+        )}
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div className="rounded-lg border border-white/[0.06] bg-black/20 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-white">Startbereit</p>
+            <span className="text-xs text-slate-500">{recommended.length} empfohlen</span>
+          </div>
+          <div className="mt-3 space-y-2">
+            {recommended.length > 0 ? recommended.map(item => (
+              <Link
+                key={item.id}
+                href={item.href}
+                className="block rounded-lg border border-emerald-500/15 bg-emerald-500/[0.04] px-3 py-2 transition-colors hover:border-emerald-400/25"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="truncate text-sm font-medium text-white">{item.title}</p>
+                  <span className="shrink-0 rounded-full border border-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-200">
+                    P{item.priority}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">Risk {item.riskClass} · Human-in-Control</p>
+              </Link>
+            )) : (
+              <p className="rounded-lg border border-dashed border-white/[0.08] p-3 text-sm text-slate-500">
+                Kein sicherer Start-Batch offen.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-white/[0.06] bg-black/20 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-white">Braucht Entscheidung</p>
+            <span className="text-xs text-slate-500">{pendingApproval.length} offen</span>
+          </div>
+          <div className="mt-3 space-y-2">
+            {pendingApproval.length > 0 ? pendingApproval.slice(0, 3).map(item => (
+              <Link
+                key={item.id}
+                href={item.href}
+                className="block rounded-lg border border-amber-500/15 bg-amber-500/[0.04] px-3 py-2 transition-colors hover:border-amber-400/25"
+              >
+                <p className="truncate text-sm font-medium text-white">{item.title}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Risk {item.riskClass} · {item.requiresApproval ? 'Freigabe erforderlich' : 'Risiko pruefen'}
+                </p>
+              </Link>
+            )) : (
+              <p className="rounded-lg border border-dashed border-white/[0.08] p-3 text-sm text-slate-500">
+                Keine wartenden Freigaben im Queue-Plan.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {plan?.warnings.length ? (
+        <div className="mt-4 space-y-2">
+          {plan.warnings.slice(0, 3).map(warning => (
+            <div key={warning} className="rounded-lg border border-amber-500/15 bg-amber-500/[0.04] px-3 py-2 text-xs leading-5 text-amber-100">
+              {warning}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+        <button
+          type="button"
+          onClick={() => { void startRecommendedBatch() }}
+          disabled={!canStart}
+          className={buttonClassName('primary', 'min-h-10 flex-1 disabled:pointer-events-none disabled:opacity-50')}
+        >
+          <Play className="h-4 w-4" />
+          {starting ? 'Starte Batch...' : result === 'started' ? 'Gestartet' : 'Empfohlenen Batch starten'}
+        </button>
+        <Link href="/delegations?filter=pending" className={buttonClassName('secondary', 'min-h-10 flex-1')}>
+          Freigaben pruefen
+        </Link>
+        <button
+          type="button"
+          onClick={onRefresh}
+          className={buttonClassName('secondary', 'min-h-10 flex-1')}
+        >
+          Queue aktualisieren
+        </button>
+      </div>
+
+      {result === 'failed' && (
+        <p className="mt-3 rounded-lg border border-rose-500/25 bg-rose-500/[0.06] px-3 py-2 text-xs text-rose-100">
+          Start fehlgeschlagen. Pruefe Provider, Auth und die betroffene Delegation, bevor du erneut startest.
+        </p>
+      )}
+    </section>
   )
 }
 
