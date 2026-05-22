@@ -152,6 +152,7 @@ describe('buildDailyReport', () => {
     expect(report.markdown).toContain('## Execute Loop Evidence')
     expect(report.markdown).toContain('## Daily Assistant Readiness')
     expect(report.markdown).toContain('## Failed Delegation Triage')
+    expect(report.markdown).toContain('## Delegation Queue Plan')
     expect(report.dailyAssistant.status).toBe('attention')
     expect(report.dailyAssistant.score).toBeGreaterThanOrEqual(90)
     expect(report.dailyAssistant.checklist.map(item => item.id)).toEqual([
@@ -160,6 +161,7 @@ describe('buildDailyReport', () => {
       'critic-router',
       'execute-evidence',
       'failed-delegations',
+      'delegation-queue',
       'attention-items',
     ])
     expect(report.executeLoopEvidence.targetRuns).toBe(5)
@@ -521,6 +523,28 @@ describe('buildDailyReport', () => {
     )
     expect(report.dailyAssistant.checklist.find(item => item.id === 'attention-items')?.status).toBe('warning')
   })
+
+  it('adds a safe queue plan for approved delegations', () => {
+    const report = buildDailyReport({
+      now,
+      storageMode: 'postgres',
+      authDisabled: false,
+      projectBriefs: [brief({ status: 'accepted' })],
+      knowledgeCards: [],
+      attentionItems: [],
+      delegations: [
+        delegation({ id: 'low', status: 'approved', priority: 1, title: 'Low priority' }),
+        delegation({ id: 'high', status: 'approved', priority: 10, title: 'High priority' }),
+        delegation({ id: 'mid', status: 'approved', priority: 5, title: 'Mid priority' }),
+      ],
+    })
+
+    expect(report.delegationQueuePlan.recommendedStartIds).toEqual(['high', 'mid'])
+    expect(report.dailyAssistant.checklist.find(item => item.id === 'delegation-queue')?.status).toBe('ready')
+    expect(report.delegationQueuePlan.nextAction).toContain('Start 2 approved delegations now')
+    expect(report.markdown).toContain('Safe start batch: high, mid')
+    expect(report.markdown).toContain('/api/delegations/high/start')
+  })
 })
 
 describe('renderDailyReportMarkdown', () => {
@@ -540,6 +564,7 @@ describe('renderDailyReportMarkdown', () => {
     expect(markdown).toContain('## First Real Value Loop')
     expect(markdown).toContain('## Assistant Routing')
     expect(markdown).toContain('## Daily Assistant Readiness')
+    expect(markdown).toContain('## Delegation Queue Plan')
     expect(markdown).toContain('## Top Risks')
     expect(markdown).toContain('## Next Actions')
   })

@@ -6,6 +6,7 @@ import type { DelegationStorageMode } from '@/lib/repositories/delegationReposit
 import { getCriticProviderPlan } from '@/lib/eval/grok-critic'
 import { buildFailedDelegationTriage, type FailedDelegationTriageSummary } from '@/lib/delegations/triage'
 import { buildFailedDelegationActionPlan, type FailedDelegationActionPlan } from '@/lib/delegations/triage-actions'
+import { buildDelegationQueuePlan, type DelegationQueuePlan } from '@/lib/delegations/queue'
 import { getAuthReadiness, type AuthReadiness } from '@/lib/auth/readiness'
 
 export type DailyReportVerdict = 'green' | 'yellow' | 'red'
@@ -53,7 +54,7 @@ export interface DailyReportAssistantRouting {
 }
 
 export interface DailyReportAssistantChecklistItem {
-  id: 'auth' | 'storage' | 'critic-router' | 'execute-evidence' | 'failed-delegations' | 'attention-items'
+  id: 'auth' | 'storage' | 'critic-router' | 'execute-evidence' | 'failed-delegations' | 'delegation-queue' | 'attention-items'
   label: string
   status: 'ready' | 'warning' | 'blocker'
   detail: string
@@ -158,6 +159,7 @@ export interface DailyReport {
   dailyAssistant: DailyReportAssistantReadiness
   failedDelegationTriage: FailedDelegationTriageSummary
   failedDelegationActionPlan: FailedDelegationActionPlan
+  delegationQueuePlan: DelegationQueuePlan
   prompts: DailyReportPrompt[]
   markdown: string
 }
@@ -669,6 +671,22 @@ function buildDailyAssistantReadiness(input: {
       href: input.status.delegations.failed > 0 ? '/delegations?filter=failed' : '/delegations',
     },
     {
+      id: 'delegation-queue',
+      label: 'Queue steuerbar',
+      status: input.status.delegations.running > 2
+        ? 'blocker'
+        : input.status.delegations.approved > 6 || input.status.delegations.pending > 10
+          ? 'warning'
+          : 'ready',
+      detail: input.status.delegations.running > 2
+        ? `${input.status.delegations.running} Delegationen laufen parallel. Erst abschliessen lassen.`
+        : input.status.delegations.approved > 6
+          ? `${input.status.delegations.approved} freigegebene Delegationen warten. Starte kleine Batches statt alles parallel.`
+          : `${input.status.delegations.pending} pending, ${input.status.delegations.approved} approved, ${input.status.delegations.running} running.`,
+      action: 'Queue planen',
+      href: '/api/delegations/queue-plan',
+    },
+    {
       id: 'attention-items',
       label: 'Offene Entscheidungen',
       status: input.status.operations.openAttentionItems > 0 ? 'warning' : 'ready',
@@ -799,6 +817,20 @@ export function renderDailyReportMarkdown(report: Omit<DailyReport, 'markdown'>)
         : ['- No failed delegations to triage.']
     ),
     ``,
+    `## Delegation Queue Plan`,
+    `- Pending: ${report.delegationQueuePlan.stats.pending}`,
+    `- Approved: ${report.delegationQueuePlan.stats.approved}`,
+    `- Running: ${report.delegationQueuePlan.stats.running}`,
+    `- Max concurrent: ${report.delegationQueuePlan.maxConcurrent}`,
+    `- Safe next action: ${report.delegationQueuePlan.nextAction}`,
+    `- Safe start batch: ${report.delegationQueuePlan.recommendedStartIds.length > 0 ? report.delegationQueuePlan.recommendedStartIds.join(', ') : 'none'}`,
+    ...report.delegationQueuePlan.warnings.map(warning => `- Warning: ${warning}`),
+    ...(
+      report.delegationQueuePlan.recommendedBatch.length > 0
+        ? report.delegationQueuePlan.recommendedBatch.map(item => `- [START] ${item.title}: ${item.actionHref}`)
+        : ['- No approved delegation is ready to start.']
+    ),
+    ``,
     `## Top Risks`,
   ]
 
@@ -892,6 +924,11 @@ export function buildDailyReport(input: BuildDailyReportInput): DailyReport {
   const assistantRouting = buildAssistantRouting()
   const failedDelegationTriage = buildFailedDelegationTriage(input.delegations)
   const failedDelegationActionPlan = buildFailedDelegationActionPlan(failedDelegationTriage)
+  const delegationQueuePlan = buildDelegationQueuePlan({
+    delegations: input.delegations,
+    max: 2,
+    maxConcurrent: 2,
+  })
   const dailyAssistant = buildDailyAssistantReadiness({ status, executeLoopEvidence, assistantRouting, failedDelegationTriage })
   const prompts = buildPrompts()
   const withoutMarkdown = {
@@ -908,6 +945,7 @@ export function buildDailyReport(input: BuildDailyReportInput): DailyReport {
     dailyAssistant,
     failedDelegationTriage,
     failedDelegationActionPlan,
+    delegationQueuePlan,
     prompts,
   }
 

@@ -1,0 +1,88 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { NextResponse } from 'next/server'
+import type { Delegation } from '@/lib/models/delegation'
+
+const { mockListByStatus, mockRequireAuth } = vi.hoisted(() => ({
+  mockListByStatus: vi.fn(),
+  mockRequireAuth: vi.fn(),
+}))
+
+vi.mock('@/lib/auth/require-auth', () => ({
+  requireAuth: mockRequireAuth,
+}))
+
+vi.mock('@/lib/repositories/delegationRepository', () => ({
+  SINGLE_TENANT_USER_ID: 'single-tenant',
+  createDelegationRepository: vi.fn(() => ({
+    listByStatus: mockListByStatus,
+  })),
+}))
+
+import { GET } from './route'
+
+function delegation(overrides: Partial<Delegation> = {}): Delegation {
+  return {
+    id: 'del-1',
+    title: 'Approved work',
+    status: 'approved',
+    executionRoute: 'runner',
+    costEstimateUsd: 1,
+    priority: 1,
+    createdAt: '2026-05-22T10:00:00.000Z',
+    updatedAt: '2026-05-22T10:05:00.000Z',
+    contract: {
+      id: 'contract-1',
+      workItemId: 'JOK-193',
+      goal: 'Execute one small task',
+      context: '',
+      definitionOfDone: ['Done'],
+      riskClass: 'A',
+      maxBudgetUsd: 1,
+      allowedTools: ['read', 'write'],
+      branchStrategy: 'feature',
+      requiresApproval: false,
+      privacyMode: 'local',
+      createdAt: '2026-05-22T10:00:00.000Z',
+    },
+    ...overrides,
+  }
+}
+
+describe('GET /api/delegations/queue-plan', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockRequireAuth.mockResolvedValue(null)
+    mockListByStatus.mockResolvedValue([])
+  })
+
+  it('requires auth before reading the queue', async () => {
+    mockRequireAuth.mockResolvedValue(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+
+    const response = await GET()
+    expect(response.status).toBe(401)
+    expect(mockListByStatus).not.toHaveBeenCalled()
+  })
+
+  it('returns a safe queue plan for pending, approved and running delegations', async () => {
+    mockListByStatus.mockResolvedValue([
+      delegation({ id: 'low', priority: 1 }),
+      delegation({ id: 'high', priority: 10 }),
+      delegation({ id: 'pending', status: 'pending' }),
+    ])
+
+    const response = await GET()
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(mockListByStatus).toHaveBeenCalledWith(['pending', 'approved', 'running'])
+    expect(body.plan).toMatchObject({
+      mode: 'safe-preview',
+      recommendedStartIds: ['high', 'low'],
+      recommendedBatchSize: 2,
+    })
+    expect(body.plan.recommendedBatch[0]).toMatchObject({
+      id: 'high',
+      actionHref: '/api/delegations/high/start',
+    })
+  })
+})

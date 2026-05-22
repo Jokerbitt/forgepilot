@@ -189,6 +189,68 @@ describe('selectNextBatch', () => {
   })
 })
 
+describe('buildDelegationQueuePlan', () => {
+  beforeEach(() => {
+    clearStore()
+    vi.resetModules()
+  })
+
+  it('returns a safe start plan for approved delegations', async () => {
+    const delegations = [
+      makeDelegation('low', { priority: 1 }),
+      makeDelegation('high', { priority: 10 }),
+      makeDelegation('mid', { priority: 5 }),
+    ] as Delegation[]
+    const { buildDelegationQueuePlan } = await import('./queue')
+
+    const plan = buildDelegationQueuePlan({ delegations, max: 2, maxConcurrent: 2 })
+
+    expect(plan.mode).toBe('safe-preview')
+    expect(plan.recommendedStartIds).toEqual(['high', 'mid'])
+    expect(plan.recommendedBatch[0]).toMatchObject({
+      id: 'high',
+      actionHref: '/api/delegations/high/start',
+    })
+    expect(plan.nextAction).toContain('Start 2 approved delegations now')
+    expect(plan.warnings.join('\n')).toContain('Start only 2')
+  })
+
+  it('waits when concurrency is already full', async () => {
+    const delegations = [
+      makeDelegation('r1', { status: 'running' }),
+      makeDelegation('r2', { status: 'running' }),
+      makeDelegation('a1', { status: 'approved' }),
+    ] as Delegation[]
+    const { buildDelegationQueuePlan } = await import('./queue')
+
+    const plan = buildDelegationQueuePlan({ delegations, max: 2, maxConcurrent: 2 })
+
+    expect(plan.recommendedStartIds).toEqual([])
+    expect(plan.nextAction).toContain('Wait for the running delegation slots')
+    expect(plan.warnings.join('\n')).toContain('Already running 2 delegations')
+  })
+
+  it('surfaces pending approvals when nothing is approved', async () => {
+    const delegations = [
+      makeDelegation('needs-approval', {
+        status: 'pending',
+        contract: {
+          ...makeDelegation('needs-approval').contract!,
+          riskClass: 'B',
+          requiresApproval: true,
+        },
+      }),
+    ] as Delegation[]
+    const { buildDelegationQueuePlan } = await import('./queue')
+
+    const plan = buildDelegationQueuePlan({ delegations })
+
+    expect(plan.recommendedStartIds).toEqual([])
+    expect(plan.pendingApprovalIds).toEqual(['needs-approval'])
+    expect(plan.nextAction).toContain('Review and approve')
+  })
+})
+
 describe('getQueueStats', () => {
   beforeEach(() => {
     clearStore()
