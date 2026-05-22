@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { type NextRequest, NextResponse } from 'next/server'
 import { getOpenAttentionItems } from '@/lib/attention/store'
 import { buildDailyReport } from '@/lib/reports/daily-report'
+import { readExecuteLoopEvidence } from '@/lib/reports/execute-loop-evidence-store'
 import { createDelegationRepository, getDelegationStorageMode, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import { createKnowledgeCardRepository } from '@/lib/repositories/knowledgeCardRepository'
 import { createProjectBriefRepository } from '@/lib/repositories/projectBriefRepository'
@@ -29,6 +30,7 @@ export async function GET(request: NextRequest) {
       attentionItems: getOpenAttentionItems(),
       storageMode: getDelegationStorageMode(process.env),
       authDisabled: process.env.FORGEPILOT_AUTH_DISABLED === 'true',
+      executeLoopEvidence: readExecuteLoopEvidence(),
     })
 
     if (format === 'markdown') {

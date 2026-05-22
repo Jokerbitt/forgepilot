@@ -35,7 +35,8 @@
     "test:flow": "tsx scripts/test-flow.ts",
     "test:flow:verbose": "tsx scripts/test-flow.ts --verbose",
     "test:flow:ollama": "tsx scripts/test-flow.ts --provider=ollama --verbose",
-    "test:flow:dry": "tsx scripts/test-flow.ts --dry-run"
+    "test:flow:dry": "tsx scripts/test-flow.ts --dry-run",
+    "evidence:record": "tsx scripts/record-execute-loop-evidence.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",

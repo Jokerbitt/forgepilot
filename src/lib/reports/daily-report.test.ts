@@ -148,6 +148,10 @@ describe('buildDailyReport', () => {
     expect(report.markdown).toContain('Coding validation pass')
     expect(report.markdown).toContain('## Assistant Routing')
     expect(report.markdown).toContain('## First Real Value Loop')
+    expect(report.markdown).toContain('## Execute Loop Evidence')
+    expect(report.executeLoopEvidence.targetRuns).toBe(5)
+    expect(report.executeLoopEvidence.provenRuns).toBe(1)
+    expect(report.executeLoopEvidence.currentStatus).toBe('collecting')
   })
 
   it('counts repository memory cards linked by sourceId as knowledge writebacks', () => {
@@ -191,6 +195,64 @@ describe('buildDailyReport', () => {
     expect(report.firstRealValueLoop.currentStep.status).toBe('done')
     expect(report.firstRealValueLoop.currentStep.href).toMatch(/^\/idea\?prompt=/)
     expect(decodeURIComponent(report.firstRealValueLoop.currentStep.href)).toContain('kleines reales ForgePilot-Entwicklungsticket')
+  })
+
+  it('uses explicit execute loop evidence when recorded runs exist', () => {
+    const report = buildDailyReport({
+      now,
+      storageMode: 'postgres',
+      authDisabled: false,
+      projectBriefs: [brief({ status: 'accepted' })],
+      knowledgeCards: [],
+      attentionItems: [],
+      delegations: [],
+      executeLoopEvidence: [
+        {
+          id: 'evidence-1',
+          title: 'Daily Report CTA handoff',
+          status: 'success',
+          source: 'manual',
+          recordedAt: '2026-05-21T12:00:00.000Z',
+          prUrl: 'https://github.com/Jokerbitt/forgepilot/pull/400',
+          timeSavedMinutes: 25,
+          manualInterventions: 0,
+          steps: {
+            brief: true,
+            delegation: true,
+            execute: true,
+            tests: true,
+            pr: true,
+            critic: true,
+            writeback: true,
+          },
+        },
+        {
+          id: 'evidence-2',
+          title: 'Blocked provider run',
+          status: 'blocked',
+          source: 'manual',
+          recordedAt: '2026-05-21T13:00:00.000Z',
+          blocker: 'Missing local model',
+          steps: {
+            brief: true,
+            delegation: true,
+            execute: false,
+            tests: false,
+            pr: false,
+            critic: false,
+            writeback: false,
+          },
+        },
+      ],
+    })
+
+    expect(report.executeLoopEvidence.totalRuns).toBe(2)
+    expect(report.executeLoopEvidence.provenRuns).toBe(1)
+    expect(report.executeLoopEvidence.blockedRuns).toBe(1)
+    expect(report.executeLoopEvidence.progressPct).toBe(20)
+    expect(report.executeLoopEvidence.nextAction).toContain('4 more real small ticket loops')
+    expect(report.markdown).toContain('Daily Report CTA handoff')
+    expect(report.markdown).toContain('https://github.com/Jokerbitt/forgepilot/pull/400')
   })
 
   it('raises critical risk when auth is disabled', () => {
