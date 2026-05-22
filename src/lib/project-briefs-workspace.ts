@@ -10,6 +10,7 @@ export type WorkspaceBrief = {
   riskLevel: 'low' | 'medium' | 'high' | 'critical'
   nextAction: string
   acceptedRequirements: number
+  pendingRequirements: number
   totalRequirements: number
   delegationCount: number
   updatedAtLabel: string
@@ -54,6 +55,7 @@ export function buildProjectBriefsWorkspaceViewModel(briefs: ProjectBrief[], now
 
 function toWorkspaceBrief(brief: ProjectBrief, now: Date): WorkspaceBrief {
   const acceptedRequirements = brief.requirements.filter(requirement => requirement.status === 'accepted').length
+  const pendingRequirements = brief.requirements.filter(requirement => requirement.status === 'proposed').length
   const totalRequirements = brief.requirements.length
   const readiness = calculateReadiness(brief)
 
@@ -67,6 +69,7 @@ function toWorkspaceBrief(brief: ProjectBrief, now: Date): WorkspaceBrief {
     riskLevel: calculateRiskLevel(brief),
     nextAction: nextActionForBrief(brief),
     acceptedRequirements,
+    pendingRequirements,
     totalRequirements,
     delegationCount: brief.delegationIds?.length ?? 0,
     updatedAtLabel: formatRelativeDate(brief.updatedAt, now),
