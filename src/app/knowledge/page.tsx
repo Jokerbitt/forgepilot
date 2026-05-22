@@ -3,7 +3,14 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import type { KnowledgeSource, MemoryCard, MemoryCardType, SourceType } from '@/lib/knowledge/types'
+import type { Delegation } from '@/lib/models/delegation'
 import { Badge, EmptyState, StatusDot, cx } from '@/components/ui/primitives'
+
+const STALE_THRESHOLD_DAYS = 30
+
+function isCardStale(updatedAt: string): boolean {
+  return Date.now() - new Date(updatedAt).getTime() > STALE_THRESHOLD_DAYS * 86_400_000
+}
 
 interface IndexResult {
   sourcesIndexed: number
@@ -110,6 +117,7 @@ export default function KnowledgeCenterPage() {
   const [tab, setTab] = useState<Tab>('cards')
   const [cards, setCards] = useState<MemoryCard[]>([])
   const [sources, setSources] = useState<KnowledgeSource[]>([])
+  const [delegations, setDelegations] = useState<Delegation[]>([])
   const [loading, setLoading] = useState(true)
   const [typeFilter, setTypeFilter] = useState<MemoryCardType | ''>('')
   const [activeTags, setActiveTags] = useState<string[]>([])
@@ -124,10 +132,12 @@ export default function KnowledgeCenterPage() {
     return Promise.all([
       fetch('/api/knowledge/cards').then(r => r.json()) as Promise<MemoryCard[]>,
       fetch('/api/knowledge/sources').then(r => r.json()) as Promise<KnowledgeSource[]>,
+      fetch('/api/delegations').then(r => r.json()).catch(() => []) as Promise<Delegation[]>,
     ])
-      .then(([c, s]) => {
+      .then(([c, s, d]) => {
         setCards(Array.isArray(c) ? c : [])
         setSources(Array.isArray(s) ? s : [])
+        setDelegations(Array.isArray(d) ? d : [])
       })
       .catch(() => { setCards([]); setSources([]) })
   }, [])
@@ -165,6 +175,16 @@ export default function KnowledgeCenterPage() {
     ))
 
   const staleCount = sources.filter(s => s.isStale).length
+  const staleCardCount = cards.filter(c => isCardStale(c.updatedAt ?? c.createdAt)).length
+
+  // Completed delegations that have no matching knowledge card (by workItemId or title)
+  const allCardText = cards.map(c => `${c.title} ${c.tags.join(' ')} ${c.body}`.toLowerCase())
+  const coverageGaps = delegations.filter(d => {
+    if (d.status !== 'completed') return false
+    const needle = (d.contract.workItemId || d.title || '').toLowerCase()
+    if (!needle) return false
+    return !allCardText.some(t => t.includes(needle))
+  }).slice(0, 6)
 
   const toggleTag = (tag: string) => {
     setActiveTags(prev =>
@@ -225,12 +245,39 @@ export default function KnowledgeCenterPage() {
           )}
         </header>
 
-        <section className="mb-6 grid gap-3 md:grid-cols-4">
+        <section className="mb-6 grid gap-3 md:grid-cols-5">
           <KnowledgeMetric label="Memory Cards" value={cards.length} detail="kuratierte Agenten-Erinnerungen" />
           <KnowledgeMetric label="Quellen" value={sources.length} detail="registrierte Wissensquellen" />
-          <KnowledgeMetric label="Veraltet" value={staleCount} detail="brauchen Refresh" tone={staleCount > 0 ? 'warn' : 'neutral'} />
+          <KnowledgeMetric label="Quellen veraltet" value={staleCount} detail="brauchen Refresh" tone={staleCount > 0 ? 'warn' : 'neutral'} />
+          <KnowledgeMetric label="Karten veraltet" value={staleCardCount} detail={`älter als ${STALE_THRESHOLD_DAYS} Tage`} tone={staleCardCount > 0 ? 'warn' : 'neutral'} />
           <KnowledgeMetric label="Privacy Guard" value={indexResult?.sensitiveSkipped ?? 0} detail="sensitive Dateien übersprungen" tone="good" />
         </section>
+
+        {/* Coverage gap panel */}
+        {coverageGaps.length > 0 && (
+          <section className="mb-6 rounded-xl border border-amber-800/30 bg-amber-950/10 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-400">
+                Knowledge-Lücken — {coverageGaps.length} Delegationen ohne Writeback
+              </p>
+              <Link href="/delegations?status=completed" className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors">
+                Alle fertigen →
+              </Link>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {coverageGaps.map(d => (
+                <Link
+                  key={d.id}
+                  href={`/delegations/${d.id}`}
+                  className="flex items-center gap-1.5 rounded-lg border border-amber-700/30 bg-amber-950/20 px-2.5 py-1.5 text-xs text-amber-300 transition-colors hover:bg-amber-950/40"
+                >
+                  <span className="font-mono text-amber-500">{d.contract.workItemId || d.id.slice(0, 8)}</span>
+                  <span className="truncate max-w-[160px] text-slate-400">{d.title || d.contract.goal.slice(0, 40)}</span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Tabs */}
         <div className="mb-6 flex gap-1 border-b border-slate-800">
@@ -450,6 +497,7 @@ function KnowledgeCard({
   onToggle: () => void
 }) {
   const bodyPreview = truncate(card.body, 120)
+  const stale = isCardStale(card.updatedAt ?? card.createdAt)
 
   return (
     <button
@@ -458,7 +506,9 @@ function KnowledgeCard({
         'group w-full rounded-xl border p-4 text-left transition-all duration-200',
         expanded
           ? 'border-sky-700/60 bg-sky-900/10 shadow-lg shadow-sky-900/10'
-          : 'border-slate-800 bg-slate-900 hover:border-slate-600 hover:bg-slate-800/60 hover:shadow-md hover:shadow-black/20',
+          : stale
+            ? 'border-amber-800/40 bg-amber-950/5 hover:border-amber-700/60 hover:bg-amber-950/10'
+            : 'border-slate-800 bg-slate-900 hover:border-slate-600 hover:bg-slate-800/60 hover:shadow-md hover:shadow-black/20',
         'cursor-pointer'
       )}
     >
@@ -471,6 +521,11 @@ function KnowledgeCard({
           <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-400">
             {sourceBadgeLabel(card)}
           </span>
+          {stale && (
+            <span className="rounded border border-amber-700/50 bg-amber-950/30 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400">
+              veraltet
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1.5">
           <span className={cx('text-[10px] font-medium', confidenceColor(card.confidence))}>
