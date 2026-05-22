@@ -4,6 +4,7 @@ import { createGitHubPR } from '@/lib/github/pr-creator'
 import { generateText } from '@/lib/ai/text-generation'
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import type { Delegation } from '@/lib/models/delegation'
+import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-runtime-evidence'
 
 /**
  * Generate a concise PR body using AI (purpose: 'fast', ~100 words).
@@ -114,7 +115,7 @@ export async function POST(
 
   // Persist PR URL in delegation regardless of 'created' vs 'already_exists'
   if (prResult.url) {
-    await repo.update(id, {
+    const updated = await repo.update(id, {
       summaryReport: {
         keyPoints: delegation.summaryReport?.keyPoints ?? [delegation.contract.goal],
         changes: delegation.summaryReport?.changes ?? [],
@@ -123,6 +124,12 @@ export async function POST(
         prUrl: prResult.url,
       },
     })
+    if (updated) {
+      recordRuntimeExecuteLoopEvidence(updated, {
+        pr: true,
+        notes: 'PR evidence recorded after create-pr endpoint completed.',
+      })
+    }
   }
 
   return NextResponse.json({

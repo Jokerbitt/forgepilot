@@ -4,6 +4,7 @@ import { getCriticProviderPlan, runGrokCritic, runGrokCodeReview } from '@/lib/e
 import type { GrokCriticResult, CodeReviewResult } from '@/lib/eval/grok-critic'
 import { mapGrokResultToCriticScore } from '@/lib/eval/auto-grok-critic'
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
+import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-runtime-evidence'
 
 type ReviewType = 'delegation' | 'code'
 
@@ -88,6 +89,12 @@ export async function POST(
     )
   }
 
-  await repo.update(id, { criticScore: mapGrokResultToCriticScore(result) })
+  const updated = await repo.update(id, { criticScore: mapGrokResultToCriticScore(result) })
+  if (updated) {
+    recordRuntimeExecuteLoopEvidence(updated, {
+      critic: true,
+      notes: 'Critic evidence recorded after critic-review endpoint completed.',
+    })
+  }
   return NextResponse.json(result)
 }
