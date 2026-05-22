@@ -512,14 +512,31 @@ export default function DelegationDetailPage() {
                 </button>
               )}
               {d.summaryReport?.prUrl && (
-                <a
-                  href={d.summaryReport.prUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-1.5 text-xs bg-emerald-950/40 text-emerald-400 hover:text-emerald-300 border border-emerald-900/60 rounded-lg transition-colors"
-                  title="Pull Request auf GitHub öffnen">
-                  ⎇ PR #{d.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? ''}
-                </a>
+                <div className="flex items-center gap-1.5">
+                  <a
+                    href={d.summaryReport.prUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 text-xs bg-emerald-950/40 text-emerald-400 hover:text-emerald-300 border border-emerald-900/60 rounded-lg transition-colors"
+                    title="Pull Request auf GitHub öffnen">
+                    ⎇ PR #{d.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? ''}
+                  </a>
+                  {d.summaryReport.prState === 'merged' && (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-950/50 text-violet-300 border border-violet-800/40" title={d.summaryReport.prMergedAt ? `Gemergt: ${new Date(d.summaryReport.prMergedAt).toLocaleString('de-DE')}` : 'Gemergt'}>
+                      Merged
+                    </span>
+                  )}
+                  {d.summaryReport.prState === 'closed' && (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-950/50 text-red-400 border border-red-800/40">
+                      Closed
+                    </span>
+                  )}
+                  {(d.summaryReport.prState === 'open' || !d.summaryReport.prState) && (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-950/50 text-emerald-400 border border-emerald-800/40">
+                      Open
+                    </span>
+                  )}
+                </div>
               )}
               {prError && (
                 <span className="text-xs text-red-400 border border-red-900/40 bg-red-950/20 rounded-lg px-2 py-1.5 max-w-xs truncate" title={prError}>

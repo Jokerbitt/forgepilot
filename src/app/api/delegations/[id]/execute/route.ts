@@ -316,7 +316,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     }
 
     const report: DelegationReport | undefined = success
-      ? { keyPoints: ['Ausführung via Claude CLI abgeschlossen'], changes: [], timeTakenMinutes: elapsed, ...(prUrl ? { prUrl } : {}) }
+      ? { keyPoints: ['Ausführung via Claude CLI abgeschlossen'], changes: [], timeTakenMinutes: elapsed, ...(prUrl ? { prUrl, prState: 'open' as const } : {}) }
       : undefined
 
     // Only update if still running (not already cancelled)
@@ -417,6 +417,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
                 timeTakenMinutes: finishedDelegation.summaryReport?.timeTakenMinutes ?? 0,
                 ...finishedDelegation.summaryReport,
                 prUrl: result.prUrl,
+                prState: 'open' as const,
               },
             })
           }
