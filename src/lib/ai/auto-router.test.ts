@@ -193,7 +193,9 @@ describe('getProviderAvailability', () => {
     expect(ids).toContain('anthropic')
     expect(ids).toContain('groq')
     expect(ids).toContain('ollama')
-    expect(ids).toContain('lmstudio')
+    expect(ids).toContain('lm-studio')
+    expect(ids).toContain('xai')
+    expect(ids).toContain('google-gemini')
   })
 
   it('marks anthropic as unavailable when no key', async () => {
@@ -226,6 +228,16 @@ describe('getProviderAvailability', () => {
     expect(ollama?.available).toBe(true)
     expect(ollama?.isFree).toBe(true)
     expect(ollama?.isLocal).toBe(true)
+  })
+
+  it('marks cloud providers with stored keys as connected without exposing secrets', async () => {
+    mockReadStoredApiKeys.mockReturnValue({ XAI_API_KEY: 'xai-secret' } as ReturnType<typeof readStoredApiKeys>)
+    const availability = await getProviderAvailability()
+    const xai = availability.find(p => p.id === 'xai')
+    expect(xai?.available).toBe(true)
+    expect(xai?.status).toBe('connected')
+    expect(xai?.reason).toBeUndefined()
+    expect(JSON.stringify(xai)).not.toContain('xai-secret')
   })
 
   it('each entry has required fields', async () => {

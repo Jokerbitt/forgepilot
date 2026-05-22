@@ -9,6 +9,8 @@
 
 import { readStoredApiKeys } from '@/lib/connectors/config'
 import { isOllamaRunning, getAvailableOllamaModels, getOllamaBaseUrl } from '@/lib/ai/ollama-client'
+import { getAllProviderConfigs } from '@/lib/ai/providers/config-store'
+import type { AIProviderConfig, ModelPurpose } from '@/lib/ai/providers/types'
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -27,10 +29,13 @@ export interface ProviderAvailability {
   id: string
   name: string
   available: boolean
+  status?: 'connected' | 'missing' | 'faulty' | 'local-offline'
   isFree: boolean
   isLocal: boolean
   model: string
   reason?: string
+  canTest?: boolean
+  apiKeyRef?: string
 }
 
 // ─── Model priority lists ─────────────────────────────────────────────────────
@@ -56,6 +61,8 @@ const OLLAMA_CODING_MODELS = [
 const LMSTUDIO_DEFAULT_MODEL = 'local-model'
 const ANTHROPIC_DEFAULT_MODEL = 'claude-haiku-4-5'
 const GROQ_DEFAULT_MODEL = 'llama-3.3-70b-versatile'
+const XAI_DEFAULT_MODEL = 'grok-3-mini'
+const OPENAI_DEFAULT_MODEL = 'gpt-4o-mini'
 
 // ─── Probe helpers ────────────────────────────────────────────────────────────
 
@@ -70,6 +77,14 @@ function hasAnthropicKey(): boolean {
 
 function hasGroqKey(): boolean {
   return resolveStoredKey('GROQ_API_KEY').length > 0
+}
+
+function hasOpenAIKey(): boolean {
+  return resolveStoredKey('OPENAI_API_KEY').length > 0
+}
+
+function hasXaiKey(): boolean {
+  return resolveStoredKey('XAI_API_KEY').length > 0
 }
 
 /** Probe LM Studio at localhost:1234. Timeout-safe, fail-open. */
@@ -147,7 +162,7 @@ function isValidMode(value: string): value is LLMMode {
 }
 
 async function resolveAuto(purpose: 'fast' | 'coding'): Promise<ResolvedProvider> {
-  // 1. Anthropic
+  // 1. Strong cloud coding provider
   if (hasAnthropicKey()) {
     return {
       mode: 'auto',
@@ -159,7 +174,31 @@ async function resolveAuto(purpose: 'fast' | 'coding'): Promise<ResolvedProvider
     }
   }
 
-  // 2. Groq
+  // 2. Strong critic provider
+  if (hasXaiKey()) {
+    return {
+      mode: 'auto',
+      providerId: 'xai',
+      model: XAI_DEFAULT_MODEL,
+      isFree: false,
+      isLocal: false,
+      reason: 'auto: XAI_API_KEY present',
+    }
+  }
+
+  // 3. General cloud fallback
+  if (hasOpenAIKey()) {
+    return {
+      mode: 'auto',
+      providerId: 'openai',
+      model: OPENAI_DEFAULT_MODEL,
+      isFree: false,
+      isLocal: false,
+      reason: 'auto: OPENAI_API_KEY present',
+    }
+  }
+
+  // 4. Cheap/fast cloud fallback
   if (hasGroqKey()) {
     return {
       mode: 'auto',
@@ -171,7 +210,7 @@ async function resolveAuto(purpose: 'fast' | 'coding'): Promise<ResolvedProvider
     }
   }
 
-  // 3. Ollama
+  // 5. Ollama
   const [ollamaUp, ollamaModels] = await Promise.all([
     isOllamaRunning(),
     isOllamaRunning().then(up => up ? getAvailableOllamaModels() : []),
@@ -189,7 +228,7 @@ async function resolveAuto(purpose: 'fast' | 'coding'): Promise<ResolvedProvider
     }
   }
 
-  // 4. LM Studio
+  // 6. LM Studio
   const lmStudioModel = await getLmStudioModel()
   if (lmStudioModel) {
     return {
@@ -202,7 +241,7 @@ async function resolveAuto(purpose: 'fast' | 'coding'): Promise<ResolvedProvider
     }
   }
 
-  // 5. Placeholder
+  // 7. Placeholder
   return placeholderProvider('auto', 'no provider available — configure an API key or start Ollama/LM Studio')
 }
 
@@ -313,55 +352,79 @@ export async function getProviderAvailability(): Promise<ProviderAvailability[]>
     getLmStudioModel(),
   ])
 
-  const anthropicAvailable = hasAnthropicKey()
-  const groqAvailable = hasGroqKey()
-
   const ollamaModel = ollamaUp && ollamaModels.length > 0
     ? (pickOllamaModel(ollamaModels, 'fast') ?? ollamaModels[0])
     : 'none'
 
-  return [
-    {
-      id: 'anthropic',
-      name: 'Anthropic',
-      available: anthropicAvailable,
-      isFree: false,
-      isLocal: false,
-      model: ANTHROPIC_DEFAULT_MODEL,
-      reason: anthropicAvailable ? undefined : 'ANTHROPIC_API_KEY not configured',
-    },
-    {
-      id: 'groq',
-      name: 'Groq',
-      available: groqAvailable,
-      isFree: false,
-      isLocal: false,
-      model: GROQ_DEFAULT_MODEL,
-      reason: groqAvailable ? undefined : 'GROQ_API_KEY not configured',
-    },
-    {
-      id: 'ollama',
-      name: 'Ollama (local)',
-      available: ollamaUp && ollamaModels.length > 0,
+  return getAllProviderConfigs().map(config => providerConfigToAvailability(config, {
+    ollamaUp,
+    ollamaModel,
+    ollamaModels,
+    lmStudioModel,
+  }))
+}
+
+function providerConfigToAvailability(
+  config: AIProviderConfig,
+  local: {
+    ollamaUp: boolean
+    ollamaModel: string
+    ollamaModels: string[]
+    lmStudioModel: string | null
+  },
+): ProviderAvailability {
+  if (config.id === 'ollama') {
+    const available = local.ollamaUp && local.ollamaModels.length > 0
+    return {
+      id: config.id,
+      name: config.name,
+      available,
+      status: available ? 'connected' : 'local-offline',
       isFree: true,
       isLocal: true,
-      model: ollamaModel,
-      reason: !ollamaUp
+      model: local.ollamaModel,
+      reason: !local.ollamaUp
         ? 'Ollama is not running'
-        : ollamaModels.length === 0
+        : local.ollamaModels.length === 0
           ? 'No models installed — run "ollama pull llama3.2"'
           : undefined,
-    },
-    {
-      id: 'lmstudio',
-      name: 'LM Studio (local)',
-      available: lmStudioModel !== null,
+      canTest: true,
+    }
+  }
+
+  if (config.id === 'lm-studio') {
+    return {
+      id: config.id,
+      name: config.name,
+      available: local.lmStudioModel !== null,
+      status: local.lmStudioModel !== null ? 'connected' : 'local-offline',
       isFree: true,
       isLocal: true,
-      model: lmStudioModel ?? LMSTUDIO_DEFAULT_MODEL,
-      reason: lmStudioModel === null ? 'LM Studio is not running on localhost:1234' : undefined,
-    },
-  ]
+      model: local.lmStudioModel ?? LMSTUDIO_DEFAULT_MODEL,
+      reason: local.lmStudioModel === null ? 'LM Studio is not running on localhost:1234' : undefined,
+      canTest: true,
+    }
+  }
+
+  const configured = Boolean(config.apiKeyRef && resolveStoredKey(config.apiKeyRef).length > 0)
+  const model = pickDefaultModel(config, 'fast') ?? pickDefaultModel(config, 'coding') ?? 'configured-model'
+
+  return {
+    id: config.id,
+    name: config.name,
+    available: configured,
+    status: configured ? 'connected' : 'missing',
+    isFree: Boolean(config.freeTier || config.models.some(modelDef => modelDef.isFree)),
+    isLocal: config.dataResidency === 'local',
+    model,
+    reason: configured ? undefined : `${config.apiKeyRef || 'API key'} not configured`,
+    apiKeyRef: config.apiKeyRef || undefined,
+    canTest: configured,
+  }
+}
+
+function pickDefaultModel(config: AIProviderConfig, purpose: Extract<ModelPurpose, 'fast' | 'coding'>): string | undefined {
+  return config.models.find(model => model.purpose === purpose || model.purpose === 'both')?.id
 }
 
 /** Returns the current LLM_MODE as typed value (defaults to 'auto'). */

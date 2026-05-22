@@ -84,6 +84,18 @@ vi.mock('@/lib/ai/providers/config-store', () => ({
     fastProvider: 'ollama',
     fastModel: 'llama3.2:3b',
   }),
+  getAllProviderConfigs: () => [
+    { id: 'xai', name: 'xAI', apiKeyRef: 'XAI_API_KEY', dataResidency: 'us' },
+    { id: 'anthropic', name: 'Anthropic', apiKeyRef: 'ANTHROPIC_API_KEY', dataResidency: 'us' },
+    { id: 'openrouter', name: 'OpenRouter', apiKeyRef: 'OPENROUTER_API_KEY', dataResidency: 'us' },
+    { id: 'google-gemini', name: 'Google Gemini', apiKeyRef: 'GOOGLE_API_KEY', dataResidency: 'us' },
+    { id: 'ollama', name: 'Ollama', apiKeyRef: '', dataResidency: 'local' },
+    { id: 'lm-studio', name: 'LM Studio', apiKeyRef: '', dataResidency: 'local' },
+  ],
+}))
+
+vi.mock('@/lib/connectors/config', () => ({
+  readStoredApiKeys: () => ({}),
 }))
 
 describe('runGrokCritic', async () => {
@@ -180,9 +192,9 @@ describe('runGrokCritic', async () => {
 
     expect(plan.mode).toBe('auto')
     expect(plan.candidates.slice(0, 3)).toEqual([
-      { providerId: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free' },
-      { providerId: 'lm-studio', model: 'local-model' },
-      { providerId: 'custom-critic', model: 'my-model' },
+      expect.objectContaining({ providerId: 'openrouter', model: 'qwen/qwen-2.5-72b-instruct:free' }),
+      expect.objectContaining({ providerId: 'lm-studio', model: 'local-model' }),
+      expect.objectContaining({ providerId: 'custom-critic', model: 'my-model' }),
     ])
   })
 
@@ -193,7 +205,9 @@ describe('runGrokCritic', async () => {
       FORGEPILOT_CRITIC_MODEL: 'claude-opus-4-5',
     })
 
-    expect(plan.candidates).toEqual([{ providerId: 'anthropic', model: 'claude-opus-4-5' }])
+    expect(plan.candidates).toEqual([
+      expect.objectContaining({ providerId: 'anthropic', model: 'claude-opus-4-5' }),
+    ])
   })
 
   it('retries once when local critic returns invalid JSON', async () => {
