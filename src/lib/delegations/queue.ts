@@ -17,6 +17,7 @@ export interface QueueStats {
   completed: number
   failed: number
   cancelled: number
+  rejected: number
   total: number
 }
 
@@ -61,6 +62,7 @@ export function getQueueStats(delegations = readDelegations()): QueueStats {
     completed: 0,
     failed: 0,
     cancelled: 0,
+    rejected: 0,
     total: delegations.length,
   }
 

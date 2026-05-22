@@ -262,6 +262,7 @@ function StatusBadge({ status }: { status: Delegation['status'] }) {
     completed: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300',
     failed: 'border-rose-500/25 bg-rose-500/10 text-rose-300',
     cancelled: 'border-slate-500/25 bg-slate-500/10 text-slate-300',
+    rejected:  'border-red-500/25 bg-red-500/10 text-red-300',
   } satisfies Record<Delegation['status'], string>
 
   const icons = {
@@ -271,6 +272,7 @@ function StatusBadge({ status }: { status: Delegation['status'] }) {
     completed: <CheckCircle className="h-3.5 w-3.5" />,
     failed: <AlertTriangle className="h-3.5 w-3.5" />,
     cancelled: <AlertTriangle className="h-3.5 w-3.5" />,
+    rejected:  <AlertTriangle className="h-3.5 w-3.5" />,
   } satisfies Record<Delegation['status'], ReactNode>
 
   return (
