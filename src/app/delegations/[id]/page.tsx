@@ -873,7 +873,7 @@ export default function DelegationDetailPage() {
 
         {/* ── Knowledge Writeback ───────────────────────────────────────── */}
         {(d.status === 'completed' || d.status === 'failed') && (
-          <KnowledgeWritebackPanel delegationId={id} />
+          <KnowledgeWritebackPanel delegationId={id} delegation={d} />
         )}
 
         {/* ── Gelerntes Wissen (full KnowledgeCardList with delegation link) ── */}
