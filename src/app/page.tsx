@@ -10,6 +10,7 @@ import { buttonClassName } from '@/components/ui/primitives'
 import { CriticalPathWidget } from '@/components/critical-path'
 import { MissionControlPanel } from '@/components/mission-control'
 import { AgentModeBanner } from '@/components/ui/AgentModeBanner'
+import { QuickDelegateWidget } from '@/components/command-center/QuickDelegateWidget'
 
 export default function Home() {
   return (
@@ -45,6 +46,10 @@ export default function Home() {
 
         <section className="mt-6">
           <CriticalPathWidget />
+        </section>
+
+        <section className="mt-6">
+          <QuickDelegateWidget />
         </section>
 
         <section className="mt-6 space-y-4" aria-label="Setup-Hinweise">

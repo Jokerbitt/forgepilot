@@ -18,4 +18,8 @@ export interface PilotRunResult {
   startedAt: string
   completedAt: string
   agentRunId?: string
+  /** ID of the delegation created and executed by the pilot */
+  delegationId?: string
+  /** Whether execution was triggered (may be false in simulation/error cases) */
+  executionStarted?: boolean
 }

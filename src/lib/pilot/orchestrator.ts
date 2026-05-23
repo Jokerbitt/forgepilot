@@ -150,10 +150,57 @@ export async function runPilot(input: PilotInput): Promise<PilotRunResult> {
   })
   steps.push(writebackStep)
 
+  // Step 6: Create delegation + auto-approve + fire execute (fire-and-forget)
+  const delegationStep = await runStep('delegation-create', async () => {
+    const { createDelegationRepository, SINGLE_TENANT_USER_ID } = await import('@/lib/repositories/delegationRepository')
+    const { randomUUID: uuid } = await import('crypto')
+    const routingOutput = routingStep.output as { model?: string; provider?: string } | undefined
+    const now = new Date().toISOString()
+
+    const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+    const delegation = await repo.create({
+      id: `del-pilot-${uuid()}`,
+      title: input.title.slice(0, 80),
+      status: 'approved',
+      executionRoute: 'local-agent',
+      costEstimateUsd: 0,
+      createdAt: now,
+      contract: {
+        id: `contract-${id}`,
+        workItemId: input.workItemId,
+        goal: input.goal,
+        context: '',
+        definitionOfDone: ['Tests pass', 'No type errors', 'PR created'],
+        riskClass,
+        maxBudgetUsd: input.maxBudgetUsd ?? 5,
+        allowedTools: ['Read', 'Write', 'Edit', 'Bash'],
+        branchStrategy: 'feature',
+        requiresApproval: false,
+        privacyMode: (riskClass === 'C' ? 'local' : 'private-cloud') as import('@/lib/models/delegation').PrivacyMode,
+        llmModel: routingOutput?.model,
+        createdAt: now,
+      },
+    })
+
+    // Fire execute as fire-and-forget — don't await; pilot just records the delegation ID
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
+    fetch(`${baseUrl}/api/delegations/${delegation.id}/execute`, { method: 'POST' }).catch(() => {
+      // Intentionally swallowed — execute runs async on server
+    })
+
+    return { delegationId: delegation.id, executionStarted: true }
+  })
+  steps.push(delegationStep)
+
   const anyError = steps.some(s => s.status === 'error')
   const runOutput = runTraceStep.output as { runId?: string } | undefined
+  const delOutput = delegationStep.output as { delegationId?: string; executionStarted?: boolean } | undefined
   const result = buildResult(id, input, anyError ? 'failed' : 'completed', steps, startedAt)
-  return runOutput?.runId ? { ...result, agentRunId: runOutput.runId } : result
+  return {
+    ...result,
+    ...(runOutput?.runId ? { agentRunId: runOutput.runId } : {}),
+    ...(delOutput?.delegationId ? { delegationId: delOutput.delegationId, executionStarted: delOutput.executionStarted } : {}),
+  }
 }
 
 function buildResult(
