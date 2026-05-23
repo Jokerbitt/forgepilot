@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { buildContextPackage } from './context-package'
 
 // Mock the knowledgeCardRepository
 vi.mock('@/lib/repositories/knowledgeCardRepository', () => ({
@@ -10,7 +9,13 @@ vi.mock('@/lib/repositories/base', () => ({
   SINGLE_TENANT_USER_ID: 'local-user',
 }))
 
+vi.mock('./knowledge-card', () => ({
+  readKnowledgeCards: vi.fn(() => []),
+}))
+
+import { buildContextPackage } from './context-package'
 import { createKnowledgeCardRepository } from '@/lib/repositories/knowledgeCardRepository'
+import { readKnowledgeCards } from './knowledge-card'
 import type { MemoryCard } from './types'
 
 const makeCard = (overrides: Partial<MemoryCard> = {}): MemoryCard => ({
@@ -30,6 +35,7 @@ const makeCard = (overrides: Partial<MemoryCard> = {}): MemoryCard => ({
 describe('buildContextPackage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(readKnowledgeCards).mockReturnValue([])
   })
 
   it('returns empty result when no cards exist', async () => {
@@ -155,6 +161,33 @@ describe('buildContextPackage', () => {
     // Sources should be deduplicated
     const uniqueSources = [...new Set(result.sources)]
     expect(result.sources).toEqual(uniqueSources)
+  })
+
+  it('includes delegation lesson knowledge cards as synthetic memory cards', async () => {
+    vi.mocked(createKnowledgeCardRepository).mockReturnValue({
+      listAll: vi.fn().mockResolvedValue([]),
+      create: vi.fn(),
+      findById: vi.fn(),
+      listByDelegation: vi.fn(),
+      listByType: vi.fn(),
+      upsert: vi.fn(),
+    })
+    vi.mocked(readKnowledgeCards).mockReturnValue([
+      {
+        id: 'lesson-1',
+        title: 'Authentication retry lesson',
+        content: 'Retry authentication requests only after validating the session token.',
+        source: 'delegation',
+        sourceId: 'delegation-1',
+        tags: ['auth', 'retry'],
+        createdAt: '2026-05-23T08:00:00.000Z',
+        updatedAt: '2026-05-23T08:00:00.000Z',
+      },
+    ])
+
+    const result = await buildContextPackage('authentication retry session')
+    expect(result.cards[0].id).toBe('kc:lesson-1')
+    expect(result.sources).toContain('delegation-1')
   })
 
   // ── M288: TF-IDF-like scoring improvements ────────────────────────────────────
