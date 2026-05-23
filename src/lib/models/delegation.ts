@@ -173,6 +173,12 @@ export interface Delegation {
   tags?: string[]
   /** M241: Number of times this delegation has been retried */
   retryCount?: number
+  /** M305: Snapshot of MemoryCards used when building the context package for execution */
+  contextSnapshot?: {
+    cards: Array<{ id: string; title: string; type: string; tags: string[] }>
+    tokenEstimate: number
+    builtAt: string
+  }
   createdAt: string
   updatedAt: string
 }

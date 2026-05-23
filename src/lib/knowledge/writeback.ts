@@ -5,6 +5,7 @@ import type { CreateKnowledgeCardInput } from '@/lib/repositories/knowledgeCardR
 import { aiLogger } from '@/lib/logger'
 import { generateText } from '@/lib/ai/text-generation'
 import { writeKnowledgeCard } from '@/lib/knowledge/knowledge-card'
+import { writeKnowledgeCardToNas } from '@/lib/knowledge/nas-writeback'
 
 // ─── M220: Delegation Knowledge Writeback ────────────────────────────────────
 
@@ -59,6 +60,9 @@ export async function writebackDelegationKnowledge(
       { event: 'knowledge.writeback.delegation', delegationId: delegation.id, cardId: card.id },
       'Delegation knowledge card written',
     )
+
+    // M306: mirror card to SecondBrain on NAS (non-blocking, fail-safe)
+    writeKnowledgeCardToNas(card)
 
     return { written: true, cardId: card.id }
   } catch (error) {
