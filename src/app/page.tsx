@@ -28,6 +28,9 @@ export default function Home() {
             <Link href="/idea" className={buttonClassName('secondary')}>
               Neue Idee
             </Link>
+            <Link href="/pilot" className={buttonClassName('secondary')}>
+              Pilot starten
+            </Link>
             <Link href="/delegations?new=1" className={buttonClassName('primary')}>
               Neue Delegation
             </Link>
