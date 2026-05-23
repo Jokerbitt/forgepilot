@@ -48,4 +48,15 @@ describe('M183 — Drizzle migrations', () => {
     expect(firstSql).toContain('project_brief_status')
     expect(firstSql).toContain('knowledge_card_type')
   })
+
+  it('migration SQL preserves current delegation fields', () => {
+    const sql = readdirSync(MIGRATIONS_DIR)
+      .filter((f) => f.endsWith('.sql'))
+      .sort()
+      .map((file) => require('fs').readFileSync(resolve(MIGRATIONS_DIR, file), 'utf-8'))
+      .join('\n')
+
+    expect(sql).toContain("ADD VALUE 'rejected'")
+    expect(sql).toContain('ADD COLUMN "context_snapshot" jsonb')
+  })
 })

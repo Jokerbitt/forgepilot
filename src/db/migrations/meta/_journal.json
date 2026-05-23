@@ -8,6 +8,13 @@
       "when": 1779384188738,
       "tag": "0000_clear_flatman",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779540882653,
+      "tag": "0001_delegation_context_snapshot",
+      "breakpoints": true
     }
   ]
 }
