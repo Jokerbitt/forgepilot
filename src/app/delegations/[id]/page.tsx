@@ -49,7 +49,7 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  pending:   'Pending',
+  pending:   'Ausstehend',
   approved:  'Genehmigt',
   running:   'Läuft',
   completed: 'Fertig',
@@ -58,6 +58,14 @@ const STATUS_LABELS: Record<string, string> = {
   rejected:  'Abgelehnt',
 }
 
+const ROUTE_LABELS: Record<string, string> = {
+  'local-agent':  'Lokaler Agent',
+  'runner':       'Agent Runner',
+  'ollama-agent': 'Ollama (lokal)',
+  'direct-chat':  'Direkt-Chat',
+  'n8n':          'n8n Workflow',
+  'manual':       'Manuell',
+}
 
 const RISK_COLORS: Record<string, string> = {
   A: 'bg-green-900/30 text-green-400 border-green-800',
@@ -614,7 +622,7 @@ export default function DelegationDetailPage() {
               <span className={`text-xs font-bold ${RISK_COLORS[d.contract.riskClass]?.split(' ')[1] ?? 'text-gray-400'}`}>
                 Risk {d.contract.riskClass}
               </span>
-              <span className="text-[10px] text-gray-600">{d.executionRoute}</span>
+              <span className="text-[10px] text-gray-600">{ROUTE_LABELS[d.executionRoute] ?? d.executionRoute}</span>
             </div>
 
             {/* Cost tile */}

@@ -53,12 +53,21 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  pending:   'Pending',
+  pending:   'Ausstehend',
   approved:  'Genehmigt',
   running:   'Läuft',
   completed: 'Fertig',
   failed:    'Fehler',
   cancelled: 'Abgebrochen',
+}
+
+const ROUTE_LABELS: Record<string, string> = {
+  'local-agent':  'Lokaler Agent',
+  'runner':       'Agent Runner',
+  'ollama-agent': 'Ollama (lokal)',
+  'direct-chat':  'Direkt-Chat',
+  'n8n':          'n8n Workflow',
+  'manual':       'Manuell',
 }
 
 const GOAL_STYLE: Record<string, string> = {
@@ -880,7 +889,7 @@ function DelegationsContent() {
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                     <span className="font-mono">{recoveryCandidate.id}</span>
-                    <span>{recoveryCandidate.executionRoute}</span>
+                    <span>{ROUTE_LABELS[recoveryCandidate.executionRoute] ?? recoveryCandidate.executionRoute}</span>
                     <span>
                       aktualisiert {new Date(recoveryCandidate.updatedAt).toLocaleString('de-DE', {
                         day: '2-digit',
@@ -1425,7 +1434,7 @@ function DelegationsContent() {
                           {/* Agent */}
                           <td className="p-3 hidden md:table-cell">
                             <div className="flex items-center gap-2">
-                              <div className="text-xs text-gray-400">{del.executionRoute}</div>
+                              <div className="text-xs text-gray-400">{ROUTE_LABELS[del.executionRoute] ?? del.executionRoute}</div>
                               <AutopilotReadinessPill contract={del.contract} />
                             </div>
                             {del.contract.llmModel && (
