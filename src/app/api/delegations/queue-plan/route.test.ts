@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextResponse } from 'next/server'
 import type { Delegation } from '@/lib/models/delegation'
 
-const { mockListByStatus, mockRequireAuth } = vi.hoisted(() => ({
+const { mockListByStatus, mockReapStaleDelegations, mockRequireAuth } = vi.hoisted(() => ({
   mockListByStatus: vi.fn(),
+  mockReapStaleDelegations: vi.fn(),
   mockRequireAuth: vi.fn(),
 }))
 
@@ -16,6 +17,10 @@ vi.mock('@/lib/repositories/delegationRepository', () => ({
   createDelegationRepository: vi.fn(() => ({
     listByStatus: mockListByStatus,
   })),
+}))
+
+vi.mock('@/lib/delegations/watchdog', () => ({
+  reapStaleDelegations: mockReapStaleDelegations,
 }))
 
 import { GET } from './route'
@@ -53,6 +58,7 @@ describe('GET /api/delegations/queue-plan', () => {
     vi.clearAllMocks()
     mockRequireAuth.mockResolvedValue(null)
     mockListByStatus.mockResolvedValue([])
+    mockReapStaleDelegations.mockResolvedValue({ reaped: 0, checked: 0 })
   })
 
   it('requires auth before reading the queue', async () => {
@@ -61,6 +67,7 @@ describe('GET /api/delegations/queue-plan', () => {
     const response = await GET()
     expect(response.status).toBe(401)
     expect(mockListByStatus).not.toHaveBeenCalled()
+    expect(mockReapStaleDelegations).not.toHaveBeenCalled()
   })
 
   it('returns a safe queue plan for pending, approved and running delegations', async () => {
@@ -74,6 +81,10 @@ describe('GET /api/delegations/queue-plan', () => {
     const body = await response.json()
 
     expect(response.status).toBe(200)
+    expect(mockReapStaleDelegations).toHaveBeenCalledTimes(1)
+    expect(mockReapStaleDelegations.mock.invocationCallOrder[0]).toBeLessThan(
+      mockListByStatus.mock.invocationCallOrder[0],
+    )
     expect(mockListByStatus).toHaveBeenCalledWith(['pending', 'approved', 'running'])
     expect(body.plan).toMatchObject({
       mode: 'safe-preview',
