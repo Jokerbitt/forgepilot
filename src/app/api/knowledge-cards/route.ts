@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth/require-auth'
 import {
   readKnowledgeCards,
   findKnowledgeCardsBySource,
+  searchKnowledgeCards,
   writeKnowledgeCard,
 } from '@/lib/knowledge/knowledge-card'
 import { parseBody, isValidationError } from '@/lib/validation/api'
@@ -26,6 +27,7 @@ const CreateKnowledgeCardSchema = z.object({
  *
  * Query params:
  *   ?sourceId=xxx — filter by delegation source id
+ *   ?q=xxx        — full-text search across title, content and tags
  */
 export async function GET(request: NextRequest) {
   const authError = await requireAuth()
@@ -33,17 +35,20 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = request.nextUrl
   const sourceId = searchParams.get('sourceId')
+  const q        = searchParams.get('q')?.trim() ?? ''
 
-  const cards = sourceId
+  let cards = sourceId
     ? findKnowledgeCardsBySource(sourceId)
-    : readKnowledgeCards()
+    : q
+      ? searchKnowledgeCards(q)           // returns already relevance-sorted
+      : readKnowledgeCards()
 
-  // Sort descending by createdAt
-  const sorted = [...cards].sort(
-    (a, b) => b.createdAt.localeCompare(a.createdAt),
-  )
+  // Sort descending by createdAt when no search-rank ordering
+  if (!q) {
+    cards = [...cards].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  }
 
-  return NextResponse.json({ cards: sorted, total: sorted.length })
+  return NextResponse.json({ cards, total: cards.length })
 }
 
 /**

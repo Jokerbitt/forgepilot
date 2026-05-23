@@ -3,6 +3,8 @@ import { SINGLE_TENANT_USER_ID } from '@/lib/repositories/base'
 import type { MemoryCard } from '@/lib/knowledge/types'
 import { withSpan } from '@/lib/tracing/tracer'
 import { getCardWithRelated } from './graph'
+import { readKnowledgeCards } from './knowledge-card'
+import type { KnowledgeCard } from './knowledge-card'
 
 export interface ContextPackageResult {
   cards: MemoryCard[]
@@ -26,14 +28,31 @@ export async function buildContextPackage(
       async (span) => {
         const repo = createKnowledgeCardRepository(SINGLE_TENANT_USER_ID)
         const allCards = await repo.listAll()
-        if (!allCards.length) return { cards: [], tokenEstimate: 0, sources: [] }
+
+        // M303: include KnowledgeCards (delegation lessons) as synthetic MemoryCards
+        // These have a 1.5× boost because they are verified lessons from real executions
+        const lessonCards: MemoryCard[] = readKnowledgeCards().map((kc: KnowledgeCard) => ({
+          id:         `kc:${kc.id}`,
+          title:      kc.title,
+          body:       kc.content,
+          type:       'learning' as const,
+          tags:       ['delegation-lesson', ...kc.tags],
+          sourceIds:  [kc.sourceId],
+          confidence: 'high' as const,
+          privacyClass: 'internal' as const,
+          createdAt:  kc.createdAt,
+          updatedAt:  kc.updatedAt,
+        }))
+
+        const combined = [...allCards, ...lessonCards]
+        if (!combined.length) return { cards: [], tokenEstimate: 0, sources: [] }
 
         // M288: TF-IDF-like scoring with title/tag boost and bigrams
         const tokens = goal.toLowerCase().split(/\s+/).filter(w => w.length > 3)
         const bigrams = tokens.slice(0, -1).map((w, i) => `${w} ${tokens[i + 1]}`)
         const allTerms = [...tokens, ...bigrams]
 
-        const scored = allCards.map(card => {
+        const scored = combined.map(card => {
           const titleLow = card.title.toLowerCase()
           const bodyLow  = card.body.toLowerCase()
           const tagsJoin = (card.tags ?? []).join(' ').toLowerCase()
@@ -61,19 +80,21 @@ export async function buildContextPackage(
           .map(s => s.card)
 
         // Expand top cards with their related cards (1 level deep)
+        // Only expand MemoryCards (not synthetic lesson cards) — lesson cards have no graph edges
         const topIds = new Set(top.map(c => c.id))
         const expandedCards: MemoryCard[] = [...top]
 
         try {
+          const expandable = top.filter(c => !c.id.startsWith('kc:'))
           const expansions = await Promise.allSettled(
-            top.map(c => getCardWithRelated(c.id))
+            expandable.map(c => getCardWithRelated(c.id))
           )
           for (const exp of expansions) {
             if (exp.status !== 'fulfilled') continue
             for (const related of exp.value) {
               if (!topIds.has(related.id)) {
                 // Find the full MemoryCard for the related card (already fetched by repo)
-                const relatedCard = allCards.find(c => c.id === related.id)
+                const relatedCard = combined.find(c => c.id === related.id)
                 if (relatedCard) {
                   topIds.add(relatedCard.id)
                   expandedCards.push(relatedCard)

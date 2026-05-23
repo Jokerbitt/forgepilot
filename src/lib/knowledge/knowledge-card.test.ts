@@ -14,7 +14,15 @@ vi.mock('fs', () => {
   return { existsSync, readFileSync, writeFileSync, mkdirSync }
 })
 
-import { readKnowledgeCards, writeKnowledgeCard, findKnowledgeCardsBySource, findKnowledgeCardById, deleteKnowledgeCard } from './knowledge-card'
+import {
+  readKnowledgeCards,
+  writeKnowledgeCard,
+  findKnowledgeCardsBySource,
+  findKnowledgeCardById,
+  deleteKnowledgeCard,
+  updateKnowledgeCard,
+  searchKnowledgeCards,
+} from './knowledge-card'
 
 beforeEach(() => {
   fakeStore.cards = []
@@ -120,7 +128,7 @@ describe('findKnowledgeCardById', () => {
   })
 
   it('returns undefined for unknown id', () => {
-    expect(findKnowledgeCardById('nonexistent-id')).toBeUndefined()
+    expect(findKnowledgeCardById('ghost-id')).toBeUndefined()
   })
 })
 
@@ -144,5 +152,77 @@ describe('deleteKnowledgeCard', () => {
     const remaining = readKnowledgeCards()
     expect(remaining).toHaveLength(1)
     expect(remaining[0].id).toBe(c1.id)
+  })
+})
+
+describe('updateKnowledgeCard', () => {
+  it('updates title and content, bumps updatedAt', async () => {
+    const card = writeKnowledgeCard({ title: 'Old', content: 'old body', source: 'delegation', sourceId: 'del-1', tags: [] })
+    const originalUpdatedAt = card.updatedAt
+
+    // ensure at least 1 ms passes
+    await new Promise(r => setTimeout(r, 2))
+
+    const updated = updateKnowledgeCard(card.id, { title: 'New', content: 'new body' })
+    expect(updated).toBeDefined()
+    expect(updated?.title).toBe('New')
+    expect(updated?.content).toBe('new body')
+    expect(updated?.updatedAt).not.toBe(originalUpdatedAt)
+  })
+
+  it('preserves unpatched fields', () => {
+    const card = writeKnowledgeCard({ title: 'T', content: 'C', source: 'delegation', sourceId: 'del-2', briefId: 'br-1', tags: ['x'] })
+    const updated = updateKnowledgeCard(card.id, { title: 'T2' })
+    expect(updated?.content).toBe('C')
+    expect(updated?.tags).toEqual(['x'])
+    expect(updated?.briefId).toBe('br-1')
+    expect(updated?.sourceId).toBe('del-2')
+  })
+
+  it('returns undefined for unknown id', () => {
+    expect(updateKnowledgeCard('ghost', { title: 'X' })).toBeUndefined()
+  })
+
+  it('updates the stored card (persisted read-back)', () => {
+    const card = writeKnowledgeCard({ title: 'A', content: 'B', source: 'delegation', sourceId: 'del-3', tags: [] })
+    updateKnowledgeCard(card.id, { tags: ['updated'] })
+    const stored = findKnowledgeCardById(card.id)
+    expect(stored?.tags).toEqual(['updated'])
+  })
+})
+
+describe('searchKnowledgeCards', () => {
+  it('returns all cards when query is empty', () => {
+    writeKnowledgeCard({ title: 'A', content: 'x', source: 'delegation', sourceId: 'd1', tags: [] })
+    writeKnowledgeCard({ title: 'B', content: 'y', source: 'delegation', sourceId: 'd2', tags: [] })
+    expect(searchKnowledgeCards('')).toHaveLength(2)
+  })
+
+  it('matches by title (case-insensitive)', () => {
+    writeKnowledgeCard({ title: 'TypeScript Patterns', content: 'x', source: 'delegation', sourceId: 'd1', tags: [] })
+    writeKnowledgeCard({ title: 'Unrelated', content: 'y', source: 'delegation', sourceId: 'd2', tags: [] })
+    const results = searchKnowledgeCards('typescript')
+    expect(results).toHaveLength(1)
+    expect(results[0].title).toBe('TypeScript Patterns')
+  })
+
+  it('matches by content', () => {
+    writeKnowledgeCard({ title: 'A', content: 'use zod for validation', source: 'delegation', sourceId: 'd1', tags: [] })
+    writeKnowledgeCard({ title: 'B', content: 'unrelated content', source: 'delegation', sourceId: 'd2', tags: [] })
+    const results = searchKnowledgeCards('zod')
+    expect(results).toHaveLength(1)
+  })
+
+  it('matches by tag', () => {
+    writeKnowledgeCard({ title: 'X', content: 'y', source: 'delegation', sourceId: 'd1', tags: ['api-route', 'typescript'] })
+    writeKnowledgeCard({ title: 'Z', content: 'w', source: 'delegation', sourceId: 'd2', tags: ['css'] })
+    expect(searchKnowledgeCards('api-route')).toHaveLength(1)
+  })
+
+  it('sorts title matches before content-only matches', () => {
+    writeKnowledgeCard({ title: 'auth fix', content: 'unrelated', source: 'delegation', sourceId: 'd1', tags: [] })
+    writeKnowledgeCard({ title: 'session work', content: 'implemented auth', source: 'delegation', sourceId: 'd2', tags: [] })
+    const results = searchKnowledgeCards('auth')
+    expect(results[0].title).toBe('auth fix')
   })
 })
