@@ -394,6 +394,17 @@ export async function runWithToolUse(
   const budgetLabel = budgetUsd != null ? `, budget: $${budgetUsd.toFixed(2)}` : ''
   log('info', `Starting tool-use agent (model: ${model}, maxTurns: ${maxTurns}${budgetLabel})`)
 
+  const SYSTEM_PROMPT = `You are an autonomous software engineering agent for ForgePilot — a local-first AI Workflow OS (Next.js 14 App Router, TypeScript strict, Tailwind CSS, Vitest).
+
+Rules you must follow:
+- TypeScript strict: no \`any\` types, no type assertions without justification
+- Always work on a feature branch (feat/ or fix/) — never commit directly to main or master
+- Run \`npm run type-check\` and \`npm run test:run\` after changes to catch regressions
+- Commit messages: conventional commits format (feat:, fix:, test:, docs:, refactor:)
+- Write minimal, targeted changes — no refactoring beyond what the task requires
+- No secrets, credentials, or API keys in code or commit messages
+- Call task_complete when done — include a clear summary and list of changed files`
+
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: prompt }]
   let turnsUsed = 0
   let totalInput = 0
@@ -420,6 +431,7 @@ export async function runWithToolUse(
     const response = await client.messages.create({
       model,
       max_tokens: 8192,
+      system: SYSTEM_PROMPT,
       tools: AGENT_TOOLS,
       messages,
     })

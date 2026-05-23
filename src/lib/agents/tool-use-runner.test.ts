@@ -420,4 +420,22 @@ describe('runWithToolUse', () => {
     await runWithToolUse('Task', { apiKey: 'k', projectRoot: makeTempDir() })
     expect(capturedModel).toBe('claude-sonnet-4-6')
   })
+
+  it('passes system prompt to every API call', async () => {
+    let capturedSystem = ''
+    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+      messages: {
+        create: vi.fn().mockImplementationOnce(async (req: { system?: string }) => {
+          capturedSystem = req.system ?? ''
+          return taskCompleteResponse()
+        }),
+      },
+    }) as unknown as InstanceType<typeof Anthropic>)
+
+    const { runWithToolUse } = await import('./tool-use-runner')
+    await runWithToolUse('Task', { apiKey: 'k', projectRoot: makeTempDir() })
+    expect(capturedSystem).toContain('TypeScript strict')
+    expect(capturedSystem).toContain('feature branch')
+    expect(capturedSystem).toContain('task_complete')
+  })
 })
