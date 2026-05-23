@@ -173,6 +173,48 @@ describe('Execute route start guards', () => {
 
     expect(getExecutionStartBlocker(d)).toBeUndefined()
   })
+
+  it('blocks automated code runs without a Definition of Done', () => {
+    const d = makeDelegation({
+      executionRoute: 'runner',
+      contract: {
+        ...makeDelegation().contract,
+        definitionOfDone: [],
+      },
+    })
+
+    expect(getExecutionStartBlocker(d)).toEqual({
+      status: 400,
+      error: 'Automatischer Code-Run blockiert: Es fehlt eine messbare Definition of Done. Ergänze mindestens ein konkretes Akzeptanzkriterium.',
+    })
+  })
+
+  it('blocks automated code runs without an execution budget', () => {
+    const d = makeDelegation({
+      executionRoute: 'runner',
+      contract: {
+        ...makeDelegation().contract,
+        maxBudgetUsd: 0,
+      },
+    })
+
+    expect(getExecutionStartBlocker(d)).toEqual({
+      status: 400,
+      error: 'Automatischer Code-Run blockiert: maxBudgetUsd muss größer als 0 sein. Setze ein realistisches Budget oder nutze einen manuellen/simulierten Lauf.',
+    })
+  })
+
+  it('allows manual runs without budget because they do not spawn a code agent', () => {
+    const d = makeDelegation({
+      executionRoute: 'manual',
+      contract: {
+        ...makeDelegation().contract,
+        maxBudgetUsd: 0,
+      },
+    })
+
+    expect(getExecutionStartBlocker(d)).toBeUndefined()
+  })
 })
 
 describe('Execute route budget logs', () => {
