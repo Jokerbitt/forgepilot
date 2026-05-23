@@ -17,6 +17,22 @@ const failedDelegation = {
   id: 'del-001',
   status: 'failed' as const,
   errorMessage: 'Prozess abgestürzt',
+  startedAt: '2026-01-01T00:10:00Z',
+  completedAt: '2026-01-01T00:20:00Z',
+  actualCostUsd: 0.42,
+  summaryReport: {
+    keyPoints: ['old failed run'],
+    changes: [],
+    timeTakenMinutes: 10,
+  },
+  criticScore: {
+    correctness: 50,
+    efficiency: 50,
+    drift: 50,
+    verdict: 'needs-revision' as const,
+    summary: 'old score',
+    runAt: '2026-01-01T00:20:00Z',
+  },
   contract: {
     goal: 'Feature X bauen',
     workItemId: 'JOK-1',
@@ -63,6 +79,14 @@ describe('POST /api/delegations/[id]/retry', () => {
       retryCount: 1,
       failureCause: 'unknown',
     })
+    const saved = JSON.parse(store.data)[0]
+    expect(saved.status).toBe('pending')
+    expect(saved.errorMessage).toBeUndefined()
+    expect(saved.startedAt).toBeUndefined()
+    expect(saved.completedAt).toBeUndefined()
+    expect(saved.summaryReport).toBeUndefined()
+    expect(saved.criticScore).toBeUndefined()
+    expect(saved.actualCostUsd).toBeUndefined()
   })
 
   it('blocks cancelled delegation from automatic retry', async () => {

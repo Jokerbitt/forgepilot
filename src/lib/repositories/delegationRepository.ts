@@ -102,6 +102,13 @@ function rowToDelegation(row: DbDelegation): Delegation {
 
 export const __test__ = { rowToDelegation }
 
+function hasOwnPatch<K extends keyof UpdateDelegationInput>(
+  patch: UpdateDelegationInput,
+  key: K,
+): boolean {
+  return Object.prototype.hasOwnProperty.call(patch, key)
+}
+
 // ─── Postgres implementation ─────────────────────────────────────────────────
 
 class PostgresDelegationRepository implements DelegationRepository {
@@ -188,7 +195,7 @@ class PostgresDelegationRepository implements DelegationRepository {
               riskClass: patch.contract.riskClass as 'A' | 'B' | 'C',
             }
           : {}),
-        ...(patch.summaryReport !== undefined
+        ...(hasOwnPatch(patch, 'summaryReport')
           ? {
               summaryReport:
                 patch.summaryReport != null
@@ -205,10 +212,10 @@ class PostgresDelegationRepository implements DelegationRepository {
             }
           : {}),
         ...(patch.costEstimateUsd != null ? { costEstimateUsd: patch.costEstimateUsd } : {}),
-        ...(patch.actualCostUsd !== undefined ? { actualCostUsd: patch.actualCostUsd ?? null } : {}),
+        ...(hasOwnPatch(patch, 'actualCostUsd') ? { actualCostUsd: patch.actualCostUsd ?? null } : {}),
         ...(patch.traceId !== undefined ? { traceId: patch.traceId ?? null } : {}),
         ...(patch.agentRunId !== undefined ? { agentRunId: patch.agentRunId ?? null } : {}),
-        ...(patch.errorMessage !== undefined ? { errorMessage: patch.errorMessage ?? null } : {}),
+        ...(hasOwnPatch(patch, 'errorMessage') ? { errorMessage: patch.errorMessage ?? null } : {}),
         ...(patch.failureFeedback !== undefined
           ? { failureFeedback: patch.failureFeedback ?? null }
           : {}),
@@ -216,7 +223,7 @@ class PostgresDelegationRepository implements DelegationRepository {
         ...(patch.autoOrchestrate != null ? { autoOrchestrate: patch.autoOrchestrate } : {}),
         ...(patch.priority !== undefined ? { priority: patch.priority ?? null } : {}),
         ...(patch.briefId !== undefined ? { briefId: patch.briefId ?? null } : {}),
-        ...(patch.criticScore !== undefined
+        ...(hasOwnPatch(patch, 'criticScore')
           ? {
               criticScore:
                 patch.criticScore != null
@@ -232,10 +239,10 @@ class PostgresDelegationRepository implements DelegationRepository {
                   : null,
             }
           : {}),
-        ...(patch.startedAt !== undefined
+        ...(hasOwnPatch(patch, 'startedAt')
           ? { startedAt: patch.startedAt ? new Date(patch.startedAt) : null }
           : {}),
-        ...(patch.completedAt !== undefined
+        ...(hasOwnPatch(patch, 'completedAt')
           ? { completedAt: patch.completedAt ? new Date(patch.completedAt) : null }
           : {}),
         updatedAt: now,
