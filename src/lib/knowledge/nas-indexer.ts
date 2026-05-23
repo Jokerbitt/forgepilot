@@ -20,6 +20,13 @@ const NAS_ROOT = process.env.FORGEPILOT_DOCS_DIR ?? '/Volumes/Sven/NAS/Codex/KI 
 
 const NAS_SUBDIRS = ['Standards', 'ADRs', 'Agent_Skills', 'Screen_Specs']
 
+// SecondBrain root — configurable via env var
+// Falls back to standard NAS SecondBrain location
+const SECONDBRAIN_ROOT = process.env.FORGEPILOT_SECONDBRAIN_DIR ?? '/Volumes/Sven/NAS/SecondBrain'
+
+// Subdirs within SecondBrain to index recursively
+const SECONDBRAIN_SUBDIRS = ['02_Knowledge', join('01_Projects', 'forgepilot')]
+
 const SENSITIVE_FILE_PATTERNS = [
   'credential',
   'credentials',
@@ -87,7 +94,7 @@ function extractSections(content: string): Array<{ heading: string; body: string
   return sections
 }
 
-function collectMarkdownFiles(dir: string): string[] {
+function collectMarkdownFiles(dir: string, recursive = false): string[] {
   if (!existsSync(dir)) return []
   const files: string[] = []
   try {
@@ -98,6 +105,8 @@ function collectMarkdownFiles(dir: string): string[] {
       const stat = statSync(fullPath)
       if (stat.isFile() && entry.endsWith('.md')) {
         files.push(fullPath)
+      } else if (recursive && stat.isDirectory()) {
+        files.push(...collectMarkdownFiles(fullPath, true))
       }
     }
   } catch {
@@ -109,15 +118,28 @@ function collectMarkdownFiles(dir: string): string[] {
 export async function indexNasFiles(): Promise<IndexResult> {
   const result: IndexResult = { sourcesIndexed: 0, itemsIndexed: 0, cardsCreated: 0, skipped: 0, sensitiveSkipped: 0, errors: [] }
 
-  if (!existsSync(NAS_ROOT)) {
-    result.errors.push(`NAS nicht erreichbar: ${NAS_ROOT}`)
+  const nasReachable = existsSync(NAS_ROOT)
+  const secondbrainReachable = existsSync(SECONDBRAIN_ROOT)
+
+  if (!nasReachable && !secondbrainReachable) {
+    result.errors.push(`Keine Wissensquelle erreichbar: ${NAS_ROOT}, ${SECONDBRAIN_ROOT}`)
     return result
   }
 
-  // Collect all .md files from root + subdirs
-  const files: string[] = collectMarkdownFiles(NAS_ROOT)
-  for (const sub of NAS_SUBDIRS) {
-    files.push(...collectMarkdownFiles(join(NAS_ROOT, sub)))
+  // Collect all .md files from NAS Codex root + subdirs
+  const files: string[] = []
+  if (nasReachable) {
+    files.push(...collectMarkdownFiles(NAS_ROOT))
+    for (const sub of NAS_SUBDIRS) {
+      files.push(...collectMarkdownFiles(join(NAS_ROOT, sub)))
+    }
+  }
+
+  // Collect SecondBrain files recursively from each configured subdir
+  if (secondbrainReachable) {
+    for (const sub of SECONDBRAIN_SUBDIRS) {
+      files.push(...collectMarkdownFiles(join(SECONDBRAIN_ROOT, sub), true))
+    }
   }
 
   const existingSources = getSources()
@@ -151,6 +173,7 @@ export async function indexNasFiles(): Promise<IndexResult> {
     const sourceId = existing?.id ?? randomUUID()
     const fileName = basename(filePath, '.md')
     const privacyClass = privacyFromPath(filePath)
+    const tagSource: 'nas' | 'secondbrain' = filePath.startsWith(SECONDBRAIN_ROOT) ? 'secondbrain' : 'nas'
 
     const source: KnowledgeSource = {
       id: sourceId,
@@ -162,7 +185,7 @@ export async function indexNasFiles(): Promise<IndexResult> {
       lastFetched: now,
       freshnessTtlHours: 168, // 1 week
       isStale: false,
-      metadata: { indexedFrom: 'nas-indexer' },
+      metadata: { indexedFrom: tagSource === 'secondbrain' ? 'secondbrain-indexer' : 'nas-indexer' },
     }
     upsertSource(source)
     result.sourcesIndexed++
@@ -170,6 +193,7 @@ export async function indexNasFiles(): Promise<IndexResult> {
     // Remove old items for this source before re-inserting
     const oldItems = getItems(sourceId)
     const oldItemIds = new Set(oldItems.map(i => i.id))
+    void oldItemIds // tracked for future incremental cleanup
 
     // Create one KnowledgeItem for the whole file
     const title = fileName.replace(/^\d+_/, '').replace(/-/g, ' ')
@@ -180,7 +204,7 @@ export async function indexNasFiles(): Promise<IndexResult> {
       title,
       content: content.slice(0, 2000), // store a preview
       summary: content.split('\n').find(l => l.trim().length > 20 && !l.startsWith('#')) ?? title,
-      tags: inferTags(fileName, content),
+      tags: inferTags(fileName, content, tagSource),
       privacyClass,
       confidence: 'high',
       tokenEstimate: estimateTokens(content),
@@ -201,7 +225,7 @@ export async function indexNasFiles(): Promise<IndexResult> {
         title: `${title}: ${section.heading}`,
         body: section.body.slice(0, 500),
         sourceIds: [itemId],
-        tags: inferTags(fileName, section.body),
+        tags: inferTags(fileName, section.body, tagSource),
         privacyClass,
         confidence: 'high',
         createdAt: now,
@@ -222,7 +246,7 @@ export async function indexNasFiles(): Promise<IndexResult> {
           title,
           body: intro,
           sourceIds: [itemId],
-          tags: inferTags(fileName, content),
+          tags: inferTags(fileName, content, tagSource),
           privacyClass,
           confidence: 'high',
           createdAt: now,
@@ -237,8 +261,40 @@ export async function indexNasFiles(): Promise<IndexResult> {
   return result
 }
 
-function inferTags(fileName: string, content: string): string[] {
-  const tags: string[] = ['nas']
+export interface IndexStatus {
+  sourcesTotal: number
+  staleSources: number
+  lastIndexedAt: string | null
+  nasReachable: boolean
+  secondbrainReachable: boolean
+}
+
+export function getIndexStatus(): IndexStatus {
+  const sources = getSources()
+  const now = Date.now()
+  let staleSources = 0
+  let lastIndexedAt: string | null = null
+
+  for (const source of sources) {
+    const fetchedMs = new Date(source.lastFetched).getTime()
+    const ttlMs = (source.freshnessTtlHours ?? 168) * 60 * 60 * 1000
+    if (now - fetchedMs > ttlMs) staleSources++
+    if (!lastIndexedAt || source.lastFetched > lastIndexedAt) {
+      lastIndexedAt = source.lastFetched
+    }
+  }
+
+  return {
+    sourcesTotal: sources.length,
+    staleSources,
+    lastIndexedAt,
+    nasReachable: existsSync(NAS_ROOT),
+    secondbrainReachable: existsSync(SECONDBRAIN_ROOT),
+  }
+}
+
+function inferTags(fileName: string, content: string, source: 'nas' | 'secondbrain' = 'nas'): string[] {
+  const tags: string[] = [source]
   const name = fileName.toLowerCase()
   if (name.includes('adr')) tags.push('adr', 'decision')
   if (name.includes('skill')) tags.push('skill', 'agent')
@@ -250,8 +306,13 @@ function inferTags(fileName: string, content: string): string[] {
   if (name.includes('escalation')) tags.push('escalation', 'agent')
   if (name.includes('model') || name.includes('routing')) tags.push('model-routing', 'ai')
   if (name.includes('standard')) tags.push('standard')
+  if (name.includes('fehler') || name.includes('problem') || name.includes('loesung')) tags.push('troubleshooting')
+  if (name.includes('setup') || name.includes('einrichten')) tags.push('setup')
+  if (name.includes('pattern')) tags.push('pattern')
+  if (name.includes('workflow')) tags.push('workflow')
   const c = content.toLowerCase()
   if (c.includes('ollama') || c.includes('local ai') || c.includes('lokal')) tags.push('local-ai')
   if (c.includes('privacy') || c.includes('datenschutz')) tags.push('privacy')
+  if (c.includes('docker') || c.includes('container')) tags.push('docker')
   return Array.from(new Set(tags))
 }
