@@ -32,7 +32,7 @@ jobs:
           fi
       - name: Create Linear incident ticket on failure
         if: failure()
-        uses: actions/github-script@v9
+        uses: actions/github-script@v7
         with:
           script: |
             const response = await fetch('https://api.linear.app/graphql', {
@@ -62,7 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - name: Run Lighthouse CI
         uses: treosh/lighthouse-ci-action@v12
         with:
@@ -76,7 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.schedule == '0 6 * * *'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
