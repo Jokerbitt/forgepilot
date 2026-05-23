@@ -436,6 +436,28 @@ describe('buildDailyReport', () => {
     expect(report.markdown).toContain('Auth readiness: blocked')
   })
 
+  it('treats a weak configured local password as test warning, not an assistant blocker', () => {
+    const report = buildDailyReport({
+      now,
+      storageMode: 'postgres',
+      authDisabled: false,
+      authReadiness: getAuthReadiness({
+        FORGEPILOT_ADMIN_PASSWORD: '1234',
+        NEXTAUTH_SECRET: 'x'.repeat(40),
+        NEXTAUTH_URL: 'http://localhost:3000',
+      } as unknown as NodeJS.ProcessEnv),
+      projectBriefs: [],
+      knowledgeCards: [],
+      attentionItems: [],
+      delegations: [],
+    })
+
+    expect(report.risks.map(risk => risk.id)).toContain('auth-local-test-password')
+    expect(report.risks.map(risk => risk.id)).not.toContain('auth-not-production-ready')
+    expect(report.dailyAssistant.checklist.find(item => item.id === 'auth')?.status).toBe('warning')
+    expect(report.dailyAssistant.checklist.find(item => item.id === 'auth')?.detail).toContain('Login funktioniert lokal')
+  })
+
   it('flags JSON primary storage and low critic coverage', () => {
     const report = buildDailyReport({
       now,
