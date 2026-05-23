@@ -388,10 +388,17 @@ async function executeTool(
       const msg = input.message ?? ''
       if (!msg) return { result: 'Error: commit message required' }
       try {
+        // Safety guard: refuse to commit directly to main/master
+        const currentBranch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+          cwd: projectRoot, encoding: 'utf-8', timeout: 5_000,
+        }).trim()
+        if (currentBranch === 'main' || currentBranch === 'master') {
+          return { result: `Error: cannot commit to '${currentBranch}'. Create a feature branch first with git_create_branch.` }
+        }
         execFileSync('git', ['add', '-A'], { cwd: projectRoot, timeout: 10_000 })
         execFileSync('git', ['commit', '-m', msg], { cwd: projectRoot, timeout: 10_000 })
-        log('command', `git commit: ${msg}`)
-        return { result: `Committed: ${msg}` }
+        log('command', `git commit (${currentBranch}): ${msg}`)
+        return { result: `Committed to ${currentBranch}: ${msg}` }
       } catch (e) { return { result: `Error: ${String(e)}` } }
     }
     case 'git_push_branch': {
@@ -502,7 +509,8 @@ export async function runWithToolUse(
 
 Rules you must follow:
 - TypeScript strict: no \`any\` types, no type assertions without justification
-- Always work on a feature branch (feat/ or fix/) — never commit directly to main or master
+- Always work on a feature branch (feat/ or fix/) — call git_create_branch BEFORE the first git_commit
+- git_commit is blocked on main/master — you will get an error if you forget to create a branch first
 - Run \`npm run type-check\` and \`npm run test:run\` after changes to catch regressions
 - Commit messages: conventional commits format (feat:, fix:, test:, docs:, refactor:)
 - Write minimal, targeted changes — no refactoring beyond what the task requires
@@ -512,7 +520,10 @@ Rules you must follow:
 Tool guidance:
 - Use edit_file for targeted changes to existing files (read the file first to get exact text)
 - Use write_file only for new files or complete rewrites
-- edit_file fails if old_string is not unique — make it longer to disambiguate`
+- edit_file fails if old_string is not unique — make it longer to disambiguate
+- Use fetch_url to read npm docs, GitHub READMEs, or API references (https:// only, localhost is blocked)
+- Use \`npm install <package>\` via run_command when a new dependency is needed
+- Use \`find . -name "*.ts" -not -path "*/node_modules/*"\` via run_command for recursive file search`
 
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: prompt }]
   let turnsUsed = 0

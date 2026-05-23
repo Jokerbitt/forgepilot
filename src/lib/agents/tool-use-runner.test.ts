@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import path from 'path'
 import os from 'os'
 import fs from 'fs'
+import { execFileSync } from 'child_process'
 
 vi.mock('@anthropic-ai/sdk', () => {
   const mockCreate = vi.fn()
@@ -554,6 +555,37 @@ describe('runWithToolUse', () => {
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Try private IP', { apiKey: 'k', projectRoot: makeTempDir() })
     expect(captured).toContain('blocked')
+  })
+
+  it('git_commit is blocked when current branch is main', async () => {
+    const dir = makeTempDir()
+    // Init a git repo on main branch
+    fs.writeFileSync(path.join(dir, 'file.ts'), 'const x = 1')
+    try {
+      execFileSync('git', ['init', '-b', 'main'], { cwd: dir })
+    } catch {
+      execFileSync('git', ['init'], { cwd: dir })
+      execFileSync('git', ['checkout', '-b', 'main'], { cwd: dir })
+    }
+    execFileSync('git', ['add', '.'], { cwd: dir })
+    execFileSync('git', ['commit', '--allow-empty', '-m', 'init'], { cwd: dir })
+
+    let captured = ''
+    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+      messages: {
+        create: vi.fn()
+          .mockResolvedValueOnce(toolUseResponse('git_commit', { message: 'feat: bad commit' }))
+          .mockImplementationOnce(async (req: { messages: Array<{ role: string; content: unknown }> }) => {
+            captured = (req.messages[req.messages.length - 1].content as Array<{ content?: string }>)[0]?.content ?? ''
+            return taskCompleteResponse()
+          }),
+      },
+    }) as unknown as InstanceType<typeof Anthropic>)
+
+    const { runWithToolUse } = await import('./tool-use-runner')
+    await runWithToolUse('Commit on main', { apiKey: 'k', projectRoot: dir })
+    expect(captured).toContain('cannot commit')
+    expect(captured).toContain('main')
   })
 
   it('npm install is allowed for a safe package name', async () => {
