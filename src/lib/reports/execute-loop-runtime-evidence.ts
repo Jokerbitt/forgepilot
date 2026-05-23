@@ -1,6 +1,10 @@
 import type { Delegation } from '@/lib/models/delegation'
 import type { DailyReportExecuteLoopEvidenceRun } from './daily-report'
-import { appendExecuteLoopEvidence, readExecuteLoopEvidence } from './execute-loop-evidence-store'
+import {
+  appendExecuteLoopEvidence,
+  normalizeEvidenceNotes,
+  readExecuteLoopEvidence,
+} from './execute-loop-evidence-store'
 
 export interface RuntimeEvidenceOptions {
   tests?: boolean
@@ -81,10 +85,10 @@ function mergeRuntimeEvidenceRun(
     recordedAt: next.recordedAt,
     prUrl: next.prUrl ?? previous.prUrl,
     blocker: next.blocker ?? previous.blocker,
-    notes: [previous.notes, next.notes]
+    notes: normalizeEvidenceNotes([previous.notes, next.notes]
       .filter(Boolean)
       .filter((note, index, all) => all.indexOf(note) === index)
-      .join(' | ') || undefined,
+      .join(' | ')),
     steps,
     status: complete ? 'success' : blocked ? 'blocked' : 'partial',
   }
