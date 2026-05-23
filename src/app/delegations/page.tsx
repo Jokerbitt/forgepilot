@@ -844,12 +844,14 @@ function DelegationsContent() {
                 )}
               </div>
             )}
+            {/* Direct create button — bypasses NBA recommendation flow (JOK-76) */}
             <button
-              onClick={() => setShowNewDialog(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors"
-              title="Neue Delegation erstellen [N]"
+              onClick={() => setShowQuickCreate(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors min-h-[44px]"
+              title="Neue Delegation direkt erstellen [N]"
             >
-              <span>+</span> Neue Delegation
+              <Plus size={16} />
+              <span>Neue Delegation</span>
               <kbd className="hidden sm:inline text-[10px] bg-blue-800/60 px-1 py-0.5 rounded font-mono leading-none">N</kbd>
             </button>
           </div>
@@ -966,10 +968,11 @@ function DelegationsContent() {
                 💡 Idee starten
               </Link>
               <button
-                onClick={() => setShowNewDialog(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors"
+                onClick={() => setShowQuickCreate(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors min-h-[44px]"
               >
-                + Delegation erstellen
+                <Plus size={16} />
+                Delegation erstellen
               </button>
             </div>
           </div>
