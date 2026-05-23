@@ -7,7 +7,7 @@ ForgePilot supports three storage modes, controlled by `STORAGE_MODE`:
 | Mode | Description | When to use |
 |---|---|---|
 | `json` | All reads/writes go to `config/*.json` files | Development, single-run bootstrap |
-| `dual` | Writes go to both JSON and Postgres; reads come from Postgres | Migration phase |
+| `dual` | Writes go to both JSON and Postgres; reads stay on JSON until cutover | Migration phase |
 | `postgres` | All reads/writes go to Postgres only | Production |
 
 The default is `json` when no `DATABASE_URL` is set, and `postgres` when `DATABASE_URL` is configured and `STORAGE_MODE` is not overridden.
@@ -49,7 +49,7 @@ DATABASE_URL=postgresql://forgepilot:forgepilot@localhost:5432/forgepilot
 STORAGE_MODE=dual
 ```
 
-Restart the app. New writes now go to both JSON and Postgres. Existing reads still come from Postgres (via the dual-write path).
+Restart the app. New writes now go to both JSON and Postgres. Reads stay on the JSON primary path during the dual-write phase so rollback remains simple while Postgres alignment is verified.
 
 ### Step 4 — Backfill JSON data into Postgres
 
@@ -87,8 +87,9 @@ Restart the app. JSON files become read-only backups.
 The app switches reads to Postgres when any of the following is true:
 
 1. `STORAGE_MODE=postgres` (explicit)
-2. `STORAGE_MODE=dual` (writes to both, reads from Postgres)
-3. `DATABASE_URL` is set and `STORAGE_MODE` is not explicitly `json`
+2. `DATABASE_URL` is set and `STORAGE_MODE` is not explicitly `json` or `dual`
+
+In `dual` mode, ForgePilot writes to both stores but keeps JSON as the primary read path until `npm run db:verify-cutover` passes and `STORAGE_MODE=postgres` is enabled.
 
 Check current mode at runtime: `GET /api/ready` includes `storage_mode` in the response.
 
