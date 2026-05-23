@@ -115,6 +115,140 @@ function collectMarkdownFiles(dir: string, recursive = false): string[] {
   return files
 }
 
+// ─── single-file indexing (M310) ─────────────────────────────────────────────
+
+function indexOneFile(
+  filePath: string,
+  sourceByPath: Map<string, KnowledgeSource>,
+  now: string,
+  result: IndexResult,
+): void {
+  if (shouldSkipSensitiveFile(filePath)) {
+    result.sensitiveSkipped++
+    return
+  }
+
+  let content: string
+  try {
+    content = readFileSync(filePath, 'utf-8')
+  } catch {
+    result.errors.push(`Lesen fehlgeschlagen: ${filePath}`)
+    return
+  }
+
+  const hash = contentHash(content)
+  const existing = sourceByPath.get(filePath)
+
+  if (existing && existing.hash === hash) {
+    result.skipped++
+    return
+  }
+
+  const sourceId = existing?.id ?? randomUUID()
+  const fileName = basename(filePath, '.md')
+  const privacyClass = privacyFromPath(filePath)
+  const tagSource: 'nas' | 'secondbrain' = filePath.startsWith(SECONDBRAIN_ROOT) ? 'secondbrain' : 'nas'
+
+  const source: KnowledgeSource = {
+    id: sourceId,
+    type: 'nas',
+    name: fileName,
+    path: filePath,
+    hash,
+    privacyClass,
+    lastFetched: now,
+    freshnessTtlHours: 168,
+    isStale: false,
+    metadata: { indexedFrom: tagSource === 'secondbrain' ? 'secondbrain-indexer' : 'nas-indexer' },
+  }
+  upsertSource(source)
+  result.sourcesIndexed++
+
+  const oldItems = getItems(sourceId)
+  const oldItemIds = new Set(oldItems.map(i => i.id))
+  void oldItemIds
+
+  const title = fileName.replace(/^\d+_/, '').replace(/-/g, ' ')
+  const itemId = `item-${sourceId}`
+  const item: KnowledgeItem = {
+    id: itemId,
+    sourceId,
+    title,
+    content: content.slice(0, 2000),
+    summary: content.split('\n').find(l => l.trim().length > 20 && !l.startsWith('#')) ?? title,
+    tags: inferTags(fileName, content, tagSource),
+    privacyClass,
+    confidence: 'high',
+    tokenEstimate: estimateTokens(content),
+    createdAt: now,
+    updatedAt: now,
+  }
+  upsertItem(item)
+  result.itemsIndexed++
+
+  const sections = extractSections(content).slice(0, 5)
+  for (const section of sections) {
+    if (section.body.length < 30) continue
+    const cardId = `card-${sourceId}-${contentHash(section.heading)}`
+    const card: MemoryCard = {
+      id: cardId,
+      type: inferCardType(section.heading, section.body),
+      title: `${title}: ${section.heading}`,
+      body: section.body.slice(0, 500),
+      sourceIds: [itemId],
+      tags: inferTags(fileName, section.body, tagSource),
+      privacyClass,
+      confidence: 'high',
+      createdAt: now,
+      updatedAt: now,
+    }
+    upsertCard(card)
+    result.cardsCreated++
+  }
+
+  if (sections.length === 0) {
+    const intro = content.replace(/^#[^\n]*\n/, '').trim().slice(0, 400)
+    if (intro.length > 30) {
+      const cardId = `card-${sourceId}-intro`
+      const card: MemoryCard = {
+        id: cardId,
+        type: 'context',
+        title,
+        body: intro,
+        sourceIds: [itemId],
+        tags: inferTags(fileName, content, tagSource),
+        privacyClass,
+        confidence: 'high',
+        createdAt: now,
+        updatedAt: now,
+      }
+      upsertCard(card)
+      result.cardsCreated++
+    }
+  }
+}
+
+/**
+ * M310: Index a single Markdown file immediately, without scanning the whole NAS.
+ * Used by nas-writeback after a successful knowledge card write.
+ * Fail-safe: returns IndexResult with errors[] instead of throwing.
+ */
+export function indexSingleFile(filePath: string): IndexResult {
+  const result: IndexResult = { sourcesIndexed: 0, itemsIndexed: 0, cardsCreated: 0, skipped: 0, sensitiveSkipped: 0, errors: [] }
+
+  if (!existsSync(filePath)) {
+    result.errors.push(`Datei nicht gefunden: ${filePath}`)
+    return result
+  }
+
+  const existingSources = getSources()
+  const sourceByPath = new Map(existingSources.map(s => [s.path, s]))
+  const now = new Date().toISOString()
+
+  indexOneFile(filePath, sourceByPath, now, result)
+  return result
+}
+
 export async function indexNasFiles(): Promise<IndexResult> {
   const result: IndexResult = { sourcesIndexed: 0, itemsIndexed: 0, cardsCreated: 0, skipped: 0, sensitiveSkipped: 0, errors: [] }
 
@@ -126,7 +260,6 @@ export async function indexNasFiles(): Promise<IndexResult> {
     return result
   }
 
-  // Collect all .md files from NAS Codex root + subdirs
   const files: string[] = []
   if (nasReachable) {
     files.push(...collectMarkdownFiles(NAS_ROOT))
@@ -135,7 +268,6 @@ export async function indexNasFiles(): Promise<IndexResult> {
     }
   }
 
-  // Collect SecondBrain files recursively from each configured subdir
   if (secondbrainReachable) {
     for (const sub of SECONDBRAIN_SUBDIRS) {
       files.push(...collectMarkdownFiles(join(SECONDBRAIN_ROOT, sub), true))
@@ -144,118 +276,10 @@ export async function indexNasFiles(): Promise<IndexResult> {
 
   const existingSources = getSources()
   const sourceByPath = new Map(existingSources.map(s => [s.path, s]))
-
   const now = new Date().toISOString()
 
   for (const filePath of files) {
-    if (shouldSkipSensitiveFile(filePath)) {
-      result.sensitiveSkipped++
-      continue
-    }
-
-    let content: string
-    try {
-      content = readFileSync(filePath, 'utf-8')
-    } catch (e) {
-      result.errors.push(`Lesen fehlgeschlagen: ${filePath}`)
-      continue
-    }
-
-    const hash = contentHash(content)
-    const existing = sourceByPath.get(filePath)
-
-    // Skip if unchanged
-    if (existing && existing.hash === hash) {
-      result.skipped++
-      continue
-    }
-
-    const sourceId = existing?.id ?? randomUUID()
-    const fileName = basename(filePath, '.md')
-    const privacyClass = privacyFromPath(filePath)
-    const tagSource: 'nas' | 'secondbrain' = filePath.startsWith(SECONDBRAIN_ROOT) ? 'secondbrain' : 'nas'
-
-    const source: KnowledgeSource = {
-      id: sourceId,
-      type: 'nas',
-      name: fileName,
-      path: filePath,
-      hash,
-      privacyClass,
-      lastFetched: now,
-      freshnessTtlHours: 168, // 1 week
-      isStale: false,
-      metadata: { indexedFrom: tagSource === 'secondbrain' ? 'secondbrain-indexer' : 'nas-indexer' },
-    }
-    upsertSource(source)
-    result.sourcesIndexed++
-
-    // Remove old items for this source before re-inserting
-    const oldItems = getItems(sourceId)
-    const oldItemIds = new Set(oldItems.map(i => i.id))
-    void oldItemIds // tracked for future incremental cleanup
-
-    // Create one KnowledgeItem for the whole file
-    const title = fileName.replace(/^\d+_/, '').replace(/-/g, ' ')
-    const itemId = `item-${sourceId}`
-    const item: KnowledgeItem = {
-      id: itemId,
-      sourceId,
-      title,
-      content: content.slice(0, 2000), // store a preview
-      summary: content.split('\n').find(l => l.trim().length > 20 && !l.startsWith('#')) ?? title,
-      tags: inferTags(fileName, content, tagSource),
-      privacyClass,
-      confidence: 'high',
-      tokenEstimate: estimateTokens(content),
-      createdAt: now,
-      updatedAt: now,
-    }
-    upsertItem(item)
-    result.itemsIndexed++
-
-    // Create MemoryCards for H2 sections (max 5 per file to keep store lean)
-    const sections = extractSections(content).slice(0, 5)
-    for (const section of sections) {
-      if (section.body.length < 30) continue
-      const cardId = `card-${sourceId}-${contentHash(section.heading)}`
-      const card: MemoryCard = {
-        id: cardId,
-        type: inferCardType(section.heading, section.body),
-        title: `${title}: ${section.heading}`,
-        body: section.body.slice(0, 500),
-        sourceIds: [itemId],
-        tags: inferTags(fileName, section.body, tagSource),
-        privacyClass,
-        confidence: 'high',
-        createdAt: now,
-        updatedAt: now,
-      }
-      upsertCard(card)
-      result.cardsCreated++
-    }
-
-    // If file has no H2 sections, create one card from the file intro
-    if (sections.length === 0) {
-      const intro = content.replace(/^#[^\n]*\n/, '').trim().slice(0, 400)
-      if (intro.length > 30) {
-        const cardId = `card-${sourceId}-intro`
-        const card: MemoryCard = {
-          id: cardId,
-          type: 'context',
-          title,
-          body: intro,
-          sourceIds: [itemId],
-          tags: inferTags(fileName, content, tagSource),
-          privacyClass,
-          confidence: 'high',
-          createdAt: now,
-          updatedAt: now,
-        }
-        upsertCard(card)
-        result.cardsCreated++
-      }
-    }
+    indexOneFile(filePath, sourceByPath, now, result)
   }
 
   return result

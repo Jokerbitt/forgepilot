@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import type { KnowledgeCard } from './knowledge-card'
 import { aiLogger } from '@/lib/logger'
+import { indexSingleFile } from './nas-indexer'
 
 const SECONDBRAIN_ROOT =
   process.env.FORGEPILOT_SECONDBRAIN_DIR ?? '/Volumes/Sven/NAS/SecondBrain'
@@ -61,6 +62,15 @@ export function writeKnowledgeCardToNas(card: KnowledgeCard): NasWritebackResult
       { event: 'nas.writeback', cardId: card.id, path: filePath },
       'KnowledgeCard written to SecondBrain',
     )
+
+    // M310: immediately index the new file so it's searchable without waiting for cron
+    const indexResult = indexSingleFile(filePath)
+    if (indexResult.errors.length > 0) {
+      aiLogger.warn(
+        { event: 'nas.writeback.index', cardId: card.id, errors: indexResult.errors },
+        'Post-writeback index had errors — non-critical',
+      )
+    }
 
     return { written: true, path: filePath }
   } catch (error) {

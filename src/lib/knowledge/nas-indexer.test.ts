@@ -20,7 +20,7 @@ vi.mock('./store', () => ({
 }))
 
 import * as fs from 'fs'
-import { indexNasFiles } from './nas-indexer'
+import { indexNasFiles, indexSingleFile } from './nas-indexer'
 
 const NAS_ROOT = '/Volumes/Sven/NAS/Codex/KI Betriebssystem'
 
@@ -197,6 +197,61 @@ describe('indexNasFiles', () => {
     const tags = vi.mocked(upsertCard).mock.calls[0]?.[0]?.tags ?? []
     expect(tags).toContain('secondbrain')
     expect(tags).not.toContain('nas')
+  })
+})
+
+describe('indexSingleFile', () => {
+  const FILE_PATH = `${NAS_ROOT}/single-test.md`
+
+  it('returns error when file does not exist', () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false)
+    const result = indexSingleFile(FILE_PATH)
+    expect(result.errors.length).toBeGreaterThan(0)
+    expect(result.errors[0]).toContain('nicht gefunden')
+  })
+
+  it('indexes a single file and creates source + item + card', async () => {
+    const content = `# Single File\n\nIntro text that is long enough.\n\n## Section\n\nThis section has content about the topic.`
+    vi.mocked(fs.existsSync).mockReturnValue(true)
+    vi.mocked(fs.readFileSync).mockImplementation((p) => {
+      if (String(p) === FILE_PATH) return content
+      return '{}'
+    })
+
+    const { upsertSource, upsertItem, upsertCard } = await import('./store')
+    const result = indexSingleFile(FILE_PATH)
+
+    expect(result.sourcesIndexed).toBe(1)
+    expect(result.itemsIndexed).toBe(1)
+    expect(result.cardsCreated).toBeGreaterThanOrEqual(1)
+    expect(upsertSource).toHaveBeenCalled()
+    expect(upsertItem).toHaveBeenCalled()
+    expect(upsertCard).toHaveBeenCalled()
+  })
+
+  it('skips unchanged file (same hash)', async () => {
+    const content = `# Unchanged\n\nSame content.`
+    const hash = require('crypto').createHash('sha256').update(content).digest('hex').slice(0, 16)
+    vi.mocked(fs.existsSync).mockReturnValue(true)
+    vi.mocked(fs.readFileSync).mockImplementation(() => content)
+
+    const { getSources } = await import('./store')
+    vi.mocked(getSources).mockReturnValue([{
+      id: 'existing-single',
+      type: 'nas',
+      name: 'single-test',
+      path: FILE_PATH,
+      hash,
+      privacyClass: 'internal',
+      lastFetched: '2026-01-01T00:00:00Z',
+      freshnessTtlHours: 168,
+      isStale: false,
+      metadata: {},
+    }])
+
+    const result = indexSingleFile(FILE_PATH)
+    expect(result.skipped).toBe(1)
+    expect(result.sourcesIndexed).toBe(0)
   })
 })
 
