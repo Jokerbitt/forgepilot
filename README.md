@@ -61,6 +61,8 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) — you will be guided through setup on first visit.
 
+For a full step-by-step walkthrough of the Idea → Brief → Delegation → PR workflow, see **[docs/quickstart.md](docs/quickstart.md)**.
+
 ---
 
 ## AI Providers
