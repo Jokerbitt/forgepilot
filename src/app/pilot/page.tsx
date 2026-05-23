@@ -261,6 +261,20 @@ export default function PilotPage() {
                 </div>
               ))}
             </div>
+
+            {/* Reset — start another run */}
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => {
+                  setResult(null)
+                  setCountdown(null)
+                  setGoal('')
+                }}
+                className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+              >
+                Neuen Run starten
+              </button>
+            </div>
           </div>
         )}
       </div>
