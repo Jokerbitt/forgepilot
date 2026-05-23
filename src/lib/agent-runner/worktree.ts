@@ -10,6 +10,16 @@ export interface RunnerWorkspace {
   cleanup: () => void
 }
 
+export function shouldKeepRunnerWorktree(options: {
+  success: boolean
+  env?: Record<string, string | undefined>
+}): boolean {
+  const env = options.env ?? process.env
+  if (env.FORGEPILOT_KEEP_RUNNER_WORKTREES === 'true') return true
+  if (!options.success && env.FORGEPILOT_KEEP_FAILED_RUNNER_WORKTREES !== 'false') return true
+  return false
+}
+
 export function sanitizeWorktreeName(value: string): string {
   return value
     .trim()

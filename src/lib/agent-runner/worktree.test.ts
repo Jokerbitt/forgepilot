@@ -7,6 +7,7 @@ import {
   getRunnerWorktreeRoot,
   prepareRunnerWorkspace,
   sanitizeWorktreeName,
+  shouldKeepRunnerWorktree,
 } from './worktree'
 
 vi.mock('child_process', () => ({
@@ -77,5 +78,14 @@ describe('runner worktree helpers', () => {
       fs.rmSync(root, { recursive: true, force: true })
       fs.rmSync(source, { recursive: true, force: true })
     }
+  })
+
+  it('keeps failed runner worktrees by default so partial work can be recovered', () => {
+    expect(shouldKeepRunnerWorktree({ success: false, env: {} })).toBe(true)
+    expect(shouldKeepRunnerWorktree({
+      success: false,
+      env: { FORGEPILOT_KEEP_FAILED_RUNNER_WORKTREES: 'false' },
+    })).toBe(false)
+    expect(shouldKeepRunnerWorktree({ success: true, env: {} })).toBe(false)
   })
 })
