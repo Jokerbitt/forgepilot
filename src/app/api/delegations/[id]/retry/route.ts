@@ -46,7 +46,12 @@ export async function POST(
 
   await repo.update(id, {
     status: 'pending',
+    startedAt: undefined,
+    completedAt: undefined,
     errorMessage: undefined,
+    summaryReport: undefined,
+    criticScore: undefined,
+    actualCostUsd: undefined,
     contract: {
       ...delegation.contract,
       context: plan.additionalContext,
