@@ -37,7 +37,7 @@ import type { MemoryCard } from '@/lib/knowledge/types'
 import { checkParallelCompletion } from '@/lib/delegation-parallel'
 import { triggerCriticRetry } from '@/lib/delegations/critic-retry'
 import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-runtime-evidence'
-import { prepareRunnerWorkspace, type RunnerWorkspace } from '@/lib/agent-runner/worktree'
+import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, type RunnerWorkspace } from '@/lib/agent-runner/worktree'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
@@ -360,7 +360,27 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       ? { keyPoints: ['Ausführung via Claude CLI abgeschlossen'], changes: [], timeTakenMinutes: elapsed, ...(prUrl ? { prUrl, prState: 'open' as const } : {}) }
       : undefined
 
-    const cleanupRunnerWorkspace = () => {
+    const cleanupRunnerWorkspace = async () => {
+      if (shouldKeepRunnerWorktree({ success, env: process.env })) {
+        await appendLogs(id, [{
+          timestamp: new Date().toISOString(),
+          type: success ? 'info' : 'error',
+          message: success
+            ? `Runner-Workspace behalten: ${runnerWorkspace.path}`
+            : `Runner-Workspace nach Fehler behalten: ${runnerWorkspace.path}`,
+        }])
+        delegationLogger.info(
+          {
+            event: 'delegation.runner_workspace_kept',
+            delegationId: id,
+            success,
+            workspacePath: runnerWorkspace.path,
+          },
+          'Runner workspace retained',
+        )
+        return
+      }
+
       try {
         runnerWorkspace.cleanup()
       } catch (cleanupError) {
@@ -575,7 +595,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       }
       }
       } finally {
-        cleanupRunnerWorkspace()
+        await cleanupRunnerWorkspace()
       }
     })()
   })
