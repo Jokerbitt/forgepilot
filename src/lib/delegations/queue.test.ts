@@ -43,7 +43,7 @@ function makeDelegation(id: string, overrides: Partial<Delegation> = {}): Partia
       workItemId: 'wi-1',
       goal: `Goal for ${id}`,
       context: '',
-      definitionOfDone: [],
+      definitionOfDone: ['Done'],
       riskClass: 'A',
       maxBudgetUsd: 1,
       allowedTools: [],
@@ -187,6 +187,30 @@ describe('selectNextBatch', () => {
     const batch = selectNextBatch()
     expect(batch.length).toBeLessThanOrEqual(3)
   })
+
+  it('skips approved delegations that cannot be started by the runner', async () => {
+    setDelegations([
+      makeDelegation('blocked-budget', {
+        priority: 10,
+        contract: {
+          ...makeDelegation('blocked-budget').contract!,
+          maxBudgetUsd: 0,
+        },
+      }),
+      makeDelegation('blocked-dod', {
+        priority: 9,
+        contract: {
+          ...makeDelegation('blocked-dod').contract!,
+          definitionOfDone: [],
+        },
+      }),
+      makeDelegation('ready', { priority: 1 }),
+    ])
+    vi.resetModules()
+    const { selectNextBatch } = await import('./queue')
+    const batch = selectNextBatch({ max: 3, maxConcurrent: 3 })
+    expect(batch.map(d => d.id)).toEqual(['ready'])
+  })
 })
 
 describe('buildDelegationQueuePlan', () => {
@@ -248,6 +272,38 @@ describe('buildDelegationQueuePlan', () => {
     expect(plan.recommendedStartIds).toEqual([])
     expect(plan.pendingApprovalIds).toEqual(['needs-approval'])
     expect(plan.nextAction).toContain('Review and approve')
+  })
+
+  it('surfaces approved execution blockers instead of recommending doomed starts', async () => {
+    const delegations = [
+      makeDelegation('missing-budget', {
+        priority: 10,
+        contract: {
+          ...makeDelegation('missing-budget').contract!,
+          maxBudgetUsd: 0,
+        },
+      }),
+      makeDelegation('missing-dod', {
+        priority: 9,
+        contract: {
+          ...makeDelegation('missing-dod').contract!,
+          definitionOfDone: [],
+        },
+      }),
+    ] as Delegation[]
+    const { buildDelegationQueuePlan } = await import('./queue')
+
+    const plan = buildDelegationQueuePlan({ delegations, max: 2, maxConcurrent: 2 })
+
+    expect(plan.recommendedStartIds).toEqual([])
+    expect(plan.blockedStartIds).toEqual(['missing-budget', 'missing-dod'])
+    expect(plan.blockedStart[0]).toMatchObject({
+      id: 'missing-budget',
+      actionHref: undefined,
+      blocker: 'Set maxBudgetUsd greater than 0 before automatic execution.',
+    })
+    expect(plan.nextAction).toContain('Fix the execution blockers')
+    expect(plan.warnings.join('\n')).toContain('2 approved delegations cannot start')
   })
 })
 

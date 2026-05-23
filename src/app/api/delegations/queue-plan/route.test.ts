@@ -85,4 +85,32 @@ describe('GET /api/delegations/queue-plan', () => {
       actionHref: '/api/delegations/high/start',
     })
   })
+
+  it('does not recommend approved delegations that the runner would block', async () => {
+    mockListByStatus.mockResolvedValue([
+      delegation({
+        id: 'no-budget',
+        priority: 10,
+        contract: {
+          ...delegation().contract,
+          maxBudgetUsd: 0,
+        },
+      }),
+    ])
+
+    const response = await GET()
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.plan).toMatchObject({
+      recommendedStartIds: [],
+      blockedStartIds: ['no-budget'],
+      recommendedBatchSize: 0,
+    })
+    expect(body.plan.blockedStart[0]).toMatchObject({
+      id: 'no-budget',
+      blocker: 'Set maxBudgetUsd greater than 0 before automatic execution.',
+    })
+    expect(body.plan.blockedStart[0]).not.toHaveProperty('actionHref')
+  })
 })
