@@ -70,6 +70,8 @@ export interface ExecutionStartBlocker {
   error: string
 }
 
+const AUTOMATED_CODE_ROUTES = new Set(['local-agent', 'runner', 'ollama-agent'])
+
 export function getExecutionStartBlocker(delegation: Delegation): ExecutionStartBlocker | undefined {
   if (delegation.status !== 'approved') {
     return {
@@ -82,6 +84,23 @@ export function getExecutionStartBlocker(delegation: Delegation): ExecutionStart
     return {
       status: 403,
       error: 'RiskClass C: Manuelle Freigabe erforderlich. Setze requiresApproval=false nach bewusstem Review.',
+    }
+  }
+
+  if (AUTOMATED_CODE_ROUTES.has(delegation.executionRoute)) {
+    const dod = (delegation.contract.definitionOfDone ?? []).filter(item => item.trim().length > 0)
+    if (dod.length === 0) {
+      return {
+        status: 400,
+        error: 'Automatischer Code-Run blockiert: Es fehlt eine messbare Definition of Done. Ergänze mindestens ein konkretes Akzeptanzkriterium.',
+      }
+    }
+
+    if (delegation.contract.maxBudgetUsd <= 0) {
+      return {
+        status: 400,
+        error: 'Automatischer Code-Run blockiert: maxBudgetUsd muss größer als 0 sein. Setze ein realistisches Budget oder nutze einen manuellen/simulierten Lauf.',
+      }
     }
   }
 
