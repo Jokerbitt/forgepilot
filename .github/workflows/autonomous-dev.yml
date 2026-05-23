@@ -300,19 +300,23 @@ jobs:
         run: |
           git checkout main && git pull origin main --ff-only 2>/dev/null || true
           TASK="${{ steps.pick-task.outputs.task }}"
-          python3 -c "
-import sys, pathlib
-pattern = '$TASK'[:40].lower()
-p = pathlib.Path('BACKLOG.md')
-lines = p.read_text().splitlines(keepends=True)
-changed = 0
-for i, line in enumerate(lines):
-    if line.startswith('- [ ]') and pattern[:28] in line.lower():
-        lines[i] = line.replace('- [ ]', '- [x]', 1)
-        changed += 1
-p.write_text(''.join(lines))
-print(f'Marked {changed} item(s) done')
-"
+          python3 <<'PY'
+          import os
+          import pathlib
+
+          pattern = os.environ["TASK"][:40].lower()
+          p = pathlib.Path("BACKLOG.md")
+          lines = p.read_text().splitlines(keepends=True)
+          changed = 0
+
+          for i, line in enumerate(lines):
+              if line.startswith("- [ ]") and pattern[:28] in line.lower():
+                  lines[i] = line.replace("- [ ]", "- [x]", 1)
+                  changed += 1
+
+          p.write_text("".join(lines))
+          print(f"Marked {changed} item(s) done")
+          PY
           git add BACKLOG.md
           git diff --cached --quiet || \
             git commit -m "chore(backlog): ✅ ${{ steps.pick-task.outputs.task }}" && \
