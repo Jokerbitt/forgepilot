@@ -13,12 +13,14 @@ export type AuditAction =
   | 'brief.accepted'
   | 'brief.updated'
   | 'brief.deleted'
+  | 'knowledge_card.created'
+  | 'knowledge_card.deleted'
 
 export interface AuditEntry {
   id: string
   action: AuditAction
   entityId: string
-  entityType: 'delegation' | 'brief'
+  entityType: 'delegation' | 'brief' | 'knowledge_card'
   entityTitle?: string
   actor: string // 'system' | 'user' | source name
   metadata?: Record<string, unknown>
