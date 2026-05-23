@@ -493,6 +493,88 @@ describe('runWithToolUse', () => {
     expect(fs.readFileSync(path.join(dir, 'mod.ts'), 'utf-8')).toBe('bar\nbar\nbar\n')
   })
 
+  it('fetch_url returns content for a public https URL', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: { get: () => 'text/plain' },
+      text: async () => 'hello from the internet',
+    }))
+
+    let captured = ''
+    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+      messages: {
+        create: vi.fn()
+          .mockResolvedValueOnce(toolUseResponse('fetch_url', { url: 'https://example.com/doc.txt' }))
+          .mockImplementationOnce(async (req: { messages: Array<{ role: string; content: unknown }> }) => {
+            captured = (req.messages[req.messages.length - 1].content as Array<{ content?: string }>)[0]?.content ?? ''
+            return taskCompleteResponse()
+          }),
+      },
+    }) as unknown as InstanceType<typeof Anthropic>)
+
+    const { runWithToolUse } = await import('./tool-use-runner')
+    await runWithToolUse('Read doc', { apiKey: 'k', projectRoot: makeTempDir() })
+    expect(captured).toContain('hello from the internet')
+    vi.unstubAllGlobals()
+  })
+
+  it('fetch_url blocks localhost URLs', async () => {
+    let captured = ''
+    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+      messages: {
+        create: vi.fn()
+          .mockResolvedValueOnce(toolUseResponse('fetch_url', { url: 'http://localhost:3000/secret' }))
+          .mockImplementationOnce(async (req: { messages: Array<{ role: string; content: unknown }> }) => {
+            captured = (req.messages[req.messages.length - 1].content as Array<{ content?: string }>)[0]?.content ?? ''
+            return taskCompleteResponse()
+          }),
+      },
+    }) as unknown as InstanceType<typeof Anthropic>)
+
+    const { runWithToolUse } = await import('./tool-use-runner')
+    await runWithToolUse('Try localhost', { apiKey: 'k', projectRoot: makeTempDir() })
+    expect(captured).toContain('blocked')
+  })
+
+  it('fetch_url blocks private IP ranges', async () => {
+    let captured = ''
+    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+      messages: {
+        create: vi.fn()
+          .mockResolvedValueOnce(toolUseResponse('fetch_url', { url: 'http://192.168.1.1/admin' }))
+          .mockImplementationOnce(async (req: { messages: Array<{ role: string; content: unknown }> }) => {
+            captured = (req.messages[req.messages.length - 1].content as Array<{ content?: string }>)[0]?.content ?? ''
+            return taskCompleteResponse()
+          }),
+      },
+    }) as unknown as InstanceType<typeof Anthropic>)
+
+    const { runWithToolUse } = await import('./tool-use-runner')
+    await runWithToolUse('Try private IP', { apiKey: 'k', projectRoot: makeTempDir() })
+    expect(captured).toContain('blocked')
+  })
+
+  it('npm install is allowed for a safe package name', async () => {
+    let capturedCmd = ''
+    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+      messages: {
+        create: vi.fn()
+          .mockResolvedValueOnce(toolUseResponse('run_command', { command: 'npm install zod' }))
+          .mockImplementationOnce(async (req: { messages: Array<{ role: string; content: unknown }> }) => {
+            capturedCmd = (req.messages[req.messages.length - 1].content as Array<{ content?: string }>)[0]?.content ?? ''
+            return taskCompleteResponse()
+          }),
+      },
+    }) as unknown as InstanceType<typeof Anthropic>)
+
+    const { runWithToolUse } = await import('./tool-use-runner')
+    // We only verify the command isn't blocked (result won't contain "Blocked")
+    await runWithToolUse('Install package', { apiKey: 'k', projectRoot: makeTempDir() })
+    expect(capturedCmd).not.toContain('Blocked')
+  })
+
   it('passes system prompt to every API call', async () => {
     let capturedSystem = ''
     vi.mocked(Anthropic).mockImplementationOnce(() => ({
