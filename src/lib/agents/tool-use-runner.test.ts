@@ -191,6 +191,44 @@ describe('runWithToolUse', () => {
     expect(captured).toContain('not in the allowed list')
   })
 
+  it('blocks shell injection after an allowed command prefix', async () => {
+    const dir = makeTempDir()
+    let captured = ''
+    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+      messages: {
+        create: vi.fn()
+          .mockResolvedValueOnce(toolUseResponse('run_command', { command: 'grep TODO README.md; rm -rf /tmp' }))
+          .mockImplementationOnce(async (req: { messages: Array<{ role: string; content: unknown }> }) => {
+            captured = (req.messages[req.messages.length - 1].content as Array<{ content?: string }>)[0]?.content ?? ''
+            return taskCompleteResponse()
+          }),
+      },
+    }) as unknown as InstanceType<typeof Anthropic>)
+
+    const { runWithToolUse } = await import('./tool-use-runner')
+    await runWithToolUse('Inject', { apiKey: 'k', projectRoot: dir })
+    expect(captured).toContain('not in the allowed list')
+  })
+
+  it('blocks file commands with absolute paths', async () => {
+    const dir = makeTempDir()
+    let captured = ''
+    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+      messages: {
+        create: vi.fn()
+          .mockResolvedValueOnce(toolUseResponse('run_command', { command: 'cat /etc/passwd' }))
+          .mockImplementationOnce(async (req: { messages: Array<{ role: string; content: unknown }> }) => {
+            captured = (req.messages[req.messages.length - 1].content as Array<{ content?: string }>)[0]?.content ?? ''
+            return taskCompleteResponse()
+          }),
+      },
+    }) as unknown as InstanceType<typeof Anthropic>)
+
+    const { runWithToolUse } = await import('./tool-use-runner')
+    await runWithToolUse('Absolute path', { apiKey: 'k', projectRoot: dir })
+    expect(captured).toContain('not in the allowed list')
+  })
+
   it('blocks git push --force', async () => {
     const dir = makeTempDir()
     let captured = ''

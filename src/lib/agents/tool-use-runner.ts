@@ -14,7 +14,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import fs from 'fs'
 import path from 'path'
-import { execSync } from 'child_process'
+import { execFileSync, execSync } from 'child_process'
 import { aiLogger } from '@/lib/logger'
 
 export interface ToolRunnerOptions {
@@ -126,16 +126,51 @@ const AGENT_TOOLS: Anthropic.Tool[] = [
 
 // ─── Security: command allowlist ──────────────────────────────────────────────
 
-const ALLOWED_PREFIXES = [
-  'npm run test', 'npm test', 'npm run lint', 'npm run type-check', 'npm run build',
-  'npx tsc', 'npx vitest',
-  'grep ', 'grep -', 'find ', 'cat ', 'ls ', 'wc ', 'head ', 'tail ', 'echo ',
-  'git status', 'git diff', 'git log', 'git show', 'git branch',
-]
+const SAFE_ARG_PATTERN = /^[a-zA-Z0-9_./:=@,+-]+$/
+const SAFE_NPM_SCRIPTS = new Set(['test', 'test:run', 'lint', 'type-check', 'build'])
+const SAFE_NPX_COMMANDS = new Set(['tsc', 'vitest'])
+const SAFE_GIT_COMMANDS = new Set(['status', 'diff', 'log', 'show', 'branch'])
+const SAFE_FILE_COMMANDS = new Set(['grep', 'find', 'cat', 'ls', 'wc', 'head', 'tail'])
 
-function isCommandAllowed(cmd: string): boolean {
-  const t = cmd.trim().toLowerCase()
-  return ALLOWED_PREFIXES.some(p => t.startsWith(p.toLowerCase()))
+function splitSafeCommand(cmd: string): string[] | undefined {
+  const trimmed = cmd.trim()
+  if (!trimmed || /[;&|`$<>\n\r\\]/.test(trimmed)) return undefined
+  const parts = trimmed.split(/\s+/)
+  if (parts.some(part => !SAFE_ARG_PATTERN.test(part))) return undefined
+  return parts
+}
+
+function containsUnsafePathArg(args: string[]): boolean {
+  return args.some(arg => {
+    if (arg === '.' || arg === '--' || arg.startsWith('-')) return false
+    if (arg.startsWith('/') || arg.includes('..')) return true
+    return false
+  })
+}
+
+function parseAllowedCommand(cmd: string): { bin: string; args: string[] } | undefined {
+  const parts = splitSafeCommand(cmd)
+  if (!parts) return undefined
+  const [bin, first, second, ...rest] = parts
+
+  if (bin === 'npm' && first === 'run' && second && SAFE_NPM_SCRIPTS.has(second)) {
+    return { bin, args: ['run', second, ...rest] }
+  }
+  if (bin === 'npm' && first === 'test') {
+    return { bin, args: ['test', second, ...rest].filter(Boolean) }
+  }
+  if (bin === 'npx' && first && SAFE_NPX_COMMANDS.has(first)) {
+    return { bin, args: [first, second, ...rest].filter(Boolean) }
+  }
+  if (bin === 'git' && first && SAFE_GIT_COMMANDS.has(first)) {
+    return { bin, args: [first, second, ...rest].filter(Boolean) }
+  }
+  if (SAFE_FILE_COMMANDS.has(bin)) {
+    const args = [first, second, ...rest].filter(Boolean)
+    if (containsUnsafePathArg(args)) return undefined
+    return { bin, args }
+  }
+  return undefined
 }
 
 // ─── Security: path guard ─────────────────────────────────────────────────────
@@ -208,13 +243,19 @@ function executeTool(
     }
     case 'run_command': {
       const cmd = input.command ?? ''
-      if (!isCommandAllowed(cmd)) {
+      const parsed = parseAllowedCommand(cmd)
+      if (!parsed) {
         log('error', `Blocked: ${cmd}`)
         return { result: `Error: '${cmd}' is not in the allowed list.` }
       }
       try {
         log('command', `$ ${cmd}`)
-        const out = execSync(cmd, { cwd: projectRoot, timeout: 60_000, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] })
+        const out = execFileSync(parsed.bin, parsed.args, {
+          cwd: projectRoot,
+          timeout: 60_000,
+          encoding: 'utf-8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        })
         return { result: out.slice(0, 8_000) || '(no output)' }
       } catch (e: unknown) {
         return { result: `Command failed: ${e instanceof Error ? e.message.slice(0, 2_000) : String(e)}` }
