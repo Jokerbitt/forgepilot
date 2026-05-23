@@ -224,6 +224,16 @@ function isKnowledgeWriteback(card: MemoryCard, delegationIds: Set<string>): boo
     || card.sourceIds.some(id => id.startsWith('extraction:'))
 }
 
+function isLocalTestPasswordOnly(authReadiness: AuthReadiness): boolean {
+  const blockedChecks = authReadiness.checks.filter(check => check.status === 'blocked')
+  return authReadiness.enabled
+    && authReadiness.configured
+    && !authReadiness.productionRuntime
+    && !authReadiness.readyForProduction
+    && blockedChecks.length === 1
+    && blockedChecks[0]?.id === 'admin-password'
+}
+
 function buildRisks(input: {
   authDisabled: boolean
   authReadiness: AuthReadiness
@@ -243,6 +253,14 @@ function buildRisks(input: {
       title: 'Auth is disabled',
       why: 'Prompts, outputs, logs and connector settings may be exposed if the app is reachable beyond localhost.',
       mitigation: 'Set a strong FORGEPILOT_ADMIN_PASSWORD, NEXTAUTH_SECRET and NEXTAUTH_URL; use auth bypass only for local automated tests.',
+    })
+  } else if (input.authReadiness.status === 'blocked' && isLocalTestPasswordOnly(input.authReadiness)) {
+    risks.push({
+      id: 'auth-local-test-password',
+      severity: 'medium',
+      title: 'Auth uses a local test password',
+      why: 'Login is enforced, but the configured admin password is intentionally too weak for production use.',
+      mitigation: 'Keep this only for localhost testing; set a strong FORGEPILOT_ADMIN_PASSWORD before NAS, network or production use.',
     })
   } else if (input.authReadiness.status === 'blocked') {
     risks.push({
@@ -612,21 +630,28 @@ function buildDailyAssistantReadiness(input: {
   failedDelegationTriage: FailedDelegationTriageSummary
 }): DailyReportAssistantReadiness {
   const hasCriticProvider = input.assistantRouting.criticPlan.candidates.some(candidate => candidate.configured !== false)
+  const localTestPasswordOnly = isLocalTestPasswordOnly(input.status.operations.authReadiness)
   const checklist: DailyReportAssistantChecklistItem[] = [
     {
       id: 'auth',
       label: 'Auth aktiv',
       status: input.status.operations.authReadiness.status === 'ready'
         ? 'ready'
-        : input.status.operations.authReadiness.status === 'warning'
+        : input.status.operations.authReadiness.status === 'warning' || localTestPasswordOnly
           ? 'warning'
           : 'blocker',
       detail: input.status.operations.authDisabled
         ? 'Testmodus ist aktiv. Produktiv nur mit Login und starken Secrets nutzen.'
+        : localTestPasswordOnly
+          ? 'Login funktioniert lokal. Das aktuelle Passwort ist nur fuer Tests geeignet und nicht produktionsreif.'
         : input.status.operations.authReadiness.readyForProduction
           ? 'Login-Guard und Auth-Secrets sind produktionsbereit.'
           : input.status.operations.authReadiness.nextAction,
-      action: input.status.operations.authReadiness.readyForProduction ? 'Auth pruefen' : 'Auth konfigurieren',
+      action: input.status.operations.authReadiness.readyForProduction
+        ? 'Auth pruefen'
+        : localTestPasswordOnly
+          ? 'Nach Test staerken'
+          : 'Auth konfigurieren',
       href: '/settings',
     },
     {
