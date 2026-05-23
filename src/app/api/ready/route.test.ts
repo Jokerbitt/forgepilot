@@ -38,11 +38,14 @@ vi.mock('fs', () => ({
   },
 }))
 
-vi.mock('@/lib/ai/providers/config-store', () => ({
-  getAllProviderConfigs: vi.fn(() => [
-    { id: 'anthropic', name: 'Anthropic', apiKeyRef: 'ANTHROPIC_API_KEY', enabled: true },
-    { id: 'ollama',    name: 'Ollama',    apiKeyRef: '',                   enabled: true },
-  ]),
+const { mockGetProviderAvailability, mockResolveProvider } = vi.hoisted(() => ({
+  mockGetProviderAvailability: vi.fn(),
+  mockResolveProvider: vi.fn(),
+}))
+
+vi.mock('@/lib/ai/auto-router', () => ({
+  getProviderAvailability: mockGetProviderAvailability,
+  resolveProvider: mockResolveProvider,
 }))
 
 vi.mock('@/lib/auth/config', () => ({
@@ -61,6 +64,34 @@ beforeEach(() => {
   mockUnlinkSync.mockImplementation(() => {})
   mockReadFileSync.mockReturnValue('[]')
   process.env.ANTHROPIC_API_KEY = 'sk-ant-test'
+  mockGetProviderAvailability.mockResolvedValue([
+    {
+      id: 'anthropic',
+      name: 'Anthropic',
+      available: true,
+      status: 'connected',
+      isFree: false,
+      isLocal: false,
+      model: 'claude-haiku-4-5',
+    },
+    {
+      id: 'ollama',
+      name: 'Ollama',
+      available: false,
+      status: 'local-offline',
+      isFree: true,
+      isLocal: true,
+      model: 'none',
+    },
+  ])
+  mockResolveProvider.mockResolvedValue({
+    mode: 'auto',
+    providerId: 'anthropic',
+    model: 'claude-haiku-4-5',
+    isFree: false,
+    isLocal: false,
+    reason: 'auto: ANTHROPIC_API_KEY present',
+  })
 })
 
 describe('GET /api/ready', () => {
@@ -101,15 +132,85 @@ describe('GET /api/ready', () => {
     expect(body.status).toBe('not_ready')
   })
 
-  it('returns 200 degraded when no API keys configured (ollama available)', async () => {
+  it('returns ready when no API keys are configured but Ollama is running', async () => {
     delete process.env.ANTHROPIC_API_KEY
+    mockGetProviderAvailability.mockResolvedValue([
+      {
+        id: 'anthropic',
+        name: 'Anthropic',
+        available: false,
+        status: 'missing',
+        isFree: false,
+        isLocal: false,
+        model: 'claude-haiku-4-5',
+        reason: 'ANTHROPIC_API_KEY not configured',
+      },
+      {
+        id: 'ollama',
+        name: 'Ollama',
+        available: true,
+        status: 'connected',
+        isFree: true,
+        isLocal: true,
+        model: 'qwen2.5-coder:14b',
+      },
+    ])
+    mockResolveProvider.mockResolvedValue({
+      mode: 'auto',
+      providerId: 'ollama',
+      model: 'qwen2.5-coder:14b',
+      isFree: true,
+      isLocal: true,
+      reason: 'auto: Ollama running with model "qwen2.5-coder:14b"',
+    })
+
     const res = await GET()
     expect(res.status).toBe(200)
     const body = await res.json() as { status: string; checks: { name: string; status: string }[] }
-    // Ollama is local (no apiKeyRef) → configured even without env var
     expect(body.status).toBe('ready')
     const check = body.checks.find(c => c.name === 'ai_providers')!
     expect(check.status).toBe('pass')
+  })
+
+  it('returns degraded when no provider is actually available', async () => {
+    mockGetProviderAvailability.mockResolvedValue([
+      {
+        id: 'anthropic',
+        name: 'Anthropic',
+        available: false,
+        status: 'missing',
+        isFree: false,
+        isLocal: false,
+        model: 'claude-haiku-4-5',
+        reason: 'ANTHROPIC_API_KEY not configured',
+      },
+      {
+        id: 'ollama',
+        name: 'Ollama',
+        available: false,
+        status: 'local-offline',
+        isFree: true,
+        isLocal: true,
+        model: 'none',
+        reason: 'Ollama is not running',
+      },
+    ])
+    mockResolveProvider.mockResolvedValue({
+      mode: 'auto',
+      providerId: 'placeholder',
+      model: 'none',
+      isFree: true,
+      isLocal: true,
+      reason: 'no provider available',
+    })
+
+    const res = await GET()
+    expect(res.status).toBe(200)
+    const body = await res.json() as { status: string; checks: { name: string; status: string; message: string }[] }
+    expect(body.status).toBe('degraded')
+    const check = body.checks.find(c => c.name === 'ai_providers')!
+    expect(check.status).toBe('warn')
+    expect(check.message).toContain('0/2 providers available')
   })
 
   it('returns 200 degraded when notification store is missing (fresh install)', async () => {
