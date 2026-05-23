@@ -213,7 +213,7 @@ Check the API directly:
 
 ```bash
 curl http://localhost:3000/api/health   # {"ok":true}
-curl http://localhost:3000/api/ready    # {"ready":true}
+curl http://localhost:3000/api/ready    # {"status":"ready", ...}
 ```
 
 ---

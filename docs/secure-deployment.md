@@ -112,7 +112,7 @@ The middleware stack enforces these checks on every request:
 | Request-ID | Attaches `x-request-id` to every request for log correlation |
 | Body size guard | Returns 413 if request body exceeds 10 MB |
 | Rate limiting | 100 requests / 60s per IP on API routes; 429 on excess |
-| API key auth | `X-ForgePilot-Key` header required when `FORGEPILOT_API_KEY` is set |
+| API key auth | `Authorization: Bearer <FORGEPILOT_API_KEY>` required when `FORGEPILOT_API_KEY` is set |
 | Session auth | All non-public routes require a valid NextAuth session |
 
 Public routes that bypass auth (webhooks and health checks):
@@ -146,7 +146,7 @@ FORGEPILOT_API_KEY=<random-token>
 
 Pass the key in requests:
 ```bash
-curl -H "X-ForgePilot-Key: $FORGEPILOT_API_KEY" http://localhost:3000/api/delegations
+curl -H "Authorization: Bearer $FORGEPILOT_API_KEY" http://localhost:3000/api/delegations
 ```
 
 Webhooks from Linear and GitHub do not require this header — they use HMAC signature verification instead.
