@@ -4,6 +4,7 @@ import os from 'os'
 import path from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  getRunnerBaseRef,
   getRunnerWorktreeRoot,
   prepareRunnerWorkspace,
   sanitizeWorktreeName,
@@ -30,6 +31,11 @@ describe('runner worktree helpers', () => {
   it('uses a configurable root outside the app worktree', () => {
     expect(getRunnerWorktreeRoot({ FORGEPILOT_RUNNER_ROOT: '/tmp/custom-runs' })).toBe('/tmp/custom-runs')
     expect(getRunnerWorktreeRoot({})).toBe(path.join(os.tmpdir(), 'forgepilot-runner-worktrees'))
+  })
+
+  it('uses HEAD by default and allows a configured runner base ref', () => {
+    expect(getRunnerBaseRef({})).toBe('HEAD')
+    expect(getRunnerBaseRef({ FORGEPILOT_RUNNER_BASE_REF: 'origin/main' })).toBe('origin/main')
   })
 
   it('creates a detached git worktree and links node_modules when available', () => {
@@ -74,6 +80,32 @@ describe('runner worktree helpers', () => {
       execFileSyncMock.mockClear()
       workspace.cleanup()
       expect(execFileSyncMock).not.toHaveBeenCalled()
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+      fs.rmSync(source, { recursive: true, force: true })
+    }
+  })
+
+  it('creates the runner worktree from the configured base ref', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-runner-root-'))
+    const source = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-source-'))
+    fs.mkdirSync(path.join(source, 'node_modules'))
+
+    try {
+      const workspace = prepareRunnerWorkspace({
+        delegationId: 'base-ref-run',
+        sourceCwd: source,
+        env: {
+          FORGEPILOT_RUNNER_ROOT: root,
+          FORGEPILOT_RUNNER_BASE_REF: 'origin/main',
+        },
+      })
+
+      expect(execFileSyncMock).toHaveBeenCalledWith(
+        'git',
+        ['worktree', 'add', '--detach', workspace.path, 'origin/main'],
+        expect.objectContaining({ cwd: source, stdio: 'ignore' }),
+      )
     } finally {
       fs.rmSync(root, { recursive: true, force: true })
       fs.rmSync(source, { recursive: true, force: true })
