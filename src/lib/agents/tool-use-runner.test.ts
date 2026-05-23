@@ -421,6 +421,78 @@ describe('runWithToolUse', () => {
     expect(capturedModel).toBe('claude-sonnet-4-6')
   })
 
+  it('edit_file replaces exact string in a file', async () => {
+    const dir = makeTempDir()
+    fs.writeFileSync(path.join(dir, 'mod.ts'), 'const x = 1\nconst y = 2\n')
+    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+      messages: {
+        create: vi.fn()
+          .mockResolvedValueOnce(toolUseResponse('edit_file', { path: 'mod.ts', old_string: 'const x = 1', new_string: 'const x = 99' }))
+          .mockResolvedValueOnce(taskCompleteResponse()),
+      },
+    }) as unknown as InstanceType<typeof Anthropic>)
+
+    const { runWithToolUse } = await import('./tool-use-runner')
+    await runWithToolUse('Edit', { apiKey: 'k', projectRoot: dir })
+    expect(fs.readFileSync(path.join(dir, 'mod.ts'), 'utf-8')).toBe('const x = 99\nconst y = 2\n')
+  })
+
+  it('edit_file errors when old_string not found', async () => {
+    const dir = makeTempDir()
+    fs.writeFileSync(path.join(dir, 'mod.ts'), 'const x = 1\n')
+    let captured = ''
+    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+      messages: {
+        create: vi.fn()
+          .mockResolvedValueOnce(toolUseResponse('edit_file', { path: 'mod.ts', old_string: 'const z = 999', new_string: 'const z = 0' }))
+          .mockImplementationOnce(async (req: { messages: Array<{ role: string; content: unknown }> }) => {
+            captured = (req.messages[req.messages.length - 1].content as Array<{ content?: string }>)[0]?.content ?? ''
+            return taskCompleteResponse()
+          }),
+      },
+    }) as unknown as InstanceType<typeof Anthropic>)
+
+    const { runWithToolUse } = await import('./tool-use-runner')
+    await runWithToolUse('Edit not found', { apiKey: 'k', projectRoot: dir })
+    expect(captured).toContain('not found')
+  })
+
+  it('edit_file errors when old_string is ambiguous (multiple occurrences)', async () => {
+    const dir = makeTempDir()
+    fs.writeFileSync(path.join(dir, 'mod.ts'), 'const x = 1\nconst x = 1\n')
+    let captured = ''
+    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+      messages: {
+        create: vi.fn()
+          .mockResolvedValueOnce(toolUseResponse('edit_file', { path: 'mod.ts', old_string: 'const x = 1', new_string: 'const x = 99' }))
+          .mockImplementationOnce(async (req: { messages: Array<{ role: string; content: unknown }> }) => {
+            captured = (req.messages[req.messages.length - 1].content as Array<{ content?: string }>)[0]?.content ?? ''
+            return taskCompleteResponse()
+          }),
+      },
+    }) as unknown as InstanceType<typeof Anthropic>)
+
+    const { runWithToolUse } = await import('./tool-use-runner')
+    await runWithToolUse('Edit ambiguous', { apiKey: 'k', projectRoot: dir })
+    expect(captured).toContain('occurs 2 times')
+  })
+
+  it('edit_file with replace_all replaces all occurrences', async () => {
+    const dir = makeTempDir()
+    fs.writeFileSync(path.join(dir, 'mod.ts'), 'foo\nfoo\nfoo\n')
+    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+      messages: {
+        create: vi.fn()
+          .mockResolvedValueOnce(toolUseResponse('edit_file', { path: 'mod.ts', old_string: 'foo', new_string: 'bar', replace_all: true }))
+          .mockResolvedValueOnce(taskCompleteResponse()),
+      },
+    }) as unknown as InstanceType<typeof Anthropic>)
+
+    const { runWithToolUse } = await import('./tool-use-runner')
+    await runWithToolUse('Edit all', { apiKey: 'k', projectRoot: dir })
+    expect(fs.readFileSync(path.join(dir, 'mod.ts'), 'utf-8')).toBe('bar\nbar\nbar\n')
+  })
+
   it('passes system prompt to every API call', async () => {
     let capturedSystem = ''
     vi.mocked(Anthropic).mockImplementationOnce(() => ({
