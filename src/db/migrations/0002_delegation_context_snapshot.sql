@@ -1,0 +1,1 @@
+ALTER TABLE "delegations" ADD COLUMN "context_snapshot" jsonb;

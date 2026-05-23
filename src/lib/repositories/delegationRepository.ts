@@ -80,6 +80,10 @@ function rowToDelegation(row: DbDelegation): Delegation {
       row.criticScore != null
         ? (row.criticScore as unknown as Delegation['criticScore'])
         : undefined,
+    contextSnapshot:
+      row.contextSnapshot != null
+        ? (row.contextSnapshot as unknown as Delegation['contextSnapshot'])
+        : undefined,
     contract: row.contract as unknown as Delegation['contract'],
     summaryReport:
       row.summaryReport != null
@@ -93,6 +97,8 @@ function rowToDelegation(row: DbDelegation): Delegation {
     updatedAt: row.updatedAt.toISOString(),
   }
 }
+
+export const __test__ = { rowToDelegation }
 
 // ─── Postgres implementation ─────────────────────────────────────────────────
 
@@ -134,6 +140,10 @@ class PostgresDelegationRepository implements DelegationRepository {
         criticScore:
           input.criticScore != null
             ? (input.criticScore as unknown as Record<string, unknown>)
+            : null,
+        contextSnapshot:
+          input.contextSnapshot != null
+            ? (input.contextSnapshot as unknown as Record<string, unknown>)
             : null,
         createdAt,
         updatedAt,
@@ -207,6 +217,14 @@ class PostgresDelegationRepository implements DelegationRepository {
               criticScore:
                 patch.criticScore != null
                   ? (patch.criticScore as unknown as Record<string, unknown>)
+                  : null,
+            }
+          : {}),
+        ...(patch.contextSnapshot !== undefined
+          ? {
+              contextSnapshot:
+                patch.contextSnapshot != null
+                  ? (patch.contextSnapshot as unknown as Record<string, unknown>)
                   : null,
             }
           : {}),
