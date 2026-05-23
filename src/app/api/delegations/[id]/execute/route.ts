@@ -747,7 +747,7 @@ async function runWithClaudeAPI(id: string, delegation: Delegation, startTime: D
         claudeEquivalentUsd: result.estimatedCostUsd,
         actualCostUsd: result.estimatedCostUsd,
         savedUsd: 0,
-        localModel: delegation.contract.llmModel || 'claude-sonnet-4-5',
+        localModel: delegation.contract.llmModel || 'claude-sonnet-4-6',
       },
     }
 
@@ -769,6 +769,73 @@ async function runWithClaudeAPI(id: string, delegation: Delegation, startTime: D
       actionUrl: `/delegations/${id}`,
       createdAt: new Date().toISOString(),
     })
+
+    if (result.success && finished) {
+      const skillCategory = finished.contract.skillCategory ?? 'full-stack'
+
+      // Work quality scoring
+      try {
+        const filesChanged = result.filesChanged.length
+        const durationMinutes = Math.round((Date.now() - startTime.getTime()) / 60000)
+        const safeSkillCategory = (skillCategory as string) in {
+          'api-route': 1, 'ui-component': 1, 'data-model': 1,
+          'test': 1, 'refactor': 1, 'infrastructure': 1, 'documentation': 1,
+        } ? skillCategory as import('@/lib/agents/agent-skills').SkillCategory : 'refactor' as const
+        const workScore = scoreWork({
+          task: {
+            id: finished.id,
+            title: finished.title ?? finished.contract.goal.slice(0, 60),
+            description: finished.contract.goal,
+            acceptanceCriteria: finished.contract.definitionOfDone ?? [],
+            skillCategory: safeSkillCategory,
+            assignedAgentType: 'general',
+            filePatterns: finished.contract.allowedFilePatterns ?? [],
+            effort: 'M',
+            dependsOn: [],
+            order: 0,
+          },
+          testsPassed: true,
+          typeErrorCount: 0,
+          lintErrorCount: 0,
+          filesChanged,
+          retryCount: 0,
+          durationMinutes,
+        })
+        recordOutcome('general', safeSkillCategory, workScore)
+      } catch {
+        // Non-critical
+      }
+
+      // Linear writeback — fire-and-forget
+      postLinearCompletionComment(finished).catch(() => {})
+
+      // Knowledge extraction + writeback — fire-and-forget
+      extractKnowledge(finished).catch(() => {})
+      void writebackDelegationKnowledge(finished, result.summary)
+        .then(wb => {
+          if (wb.written) {
+            recordRuntimeExecuteLoopEvidence(finished, {
+              writeback: true,
+              notes: 'Knowledge writeback after tool-use agent completed.',
+            })
+          }
+        })
+        .catch(() => {})
+
+      // Grok critic + execution insights — fire-and-forget
+      persistGrokCriticForDelegation(finished, report)
+        .then(async criticScore => {
+          if (criticScore) {
+            const delegationWithCritic = { ...finished, criticScore }
+            recordRuntimeExecuteLoopEvidence(delegationWithCritic, {
+              critic: true,
+              notes: 'Critic evidence after tool-use agent completion.',
+            })
+            void writebackExecutionInsights(delegationWithCritic)
+          }
+        })
+        .catch(() => {})
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     const errLog: AgentLog = {
