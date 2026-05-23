@@ -33,6 +33,7 @@ import {
   Radio,
   GraduationCap,
   ClipboardList,
+  MapPin,
 } from 'lucide-react'
 import type { DelegationStats } from '@/app/api/delegations/stats/route'
 import type { AttentionItem } from '@/lib/models/attention'
@@ -72,6 +73,7 @@ const navItems: NavItem[] = [
   { href: '/pm-agent', label: 'PM Agent', shortLabel: 'PM Agent', icon: Brain, section: 'More' },
   { href: '/knowledge/research', label: 'Research Platform', shortLabel: 'Research', icon: Search, section: 'More' },
   { href: '/context-packages', label: 'Context Packages', shortLabel: 'Context', icon: Package, section: 'More' },
+  { href: '/planning', label: 'Planning Audit', shortLabel: 'Planning', icon: MapPin, section: 'More' },
   { href: '/governance', label: 'Governance Hub', shortLabel: 'Gov', icon: Shield, section: 'More' },
   { href: '/analytics', label: 'Cost Analytics', shortLabel: 'Analytics', icon: BarChart3, section: 'More' },
   { href: '/idea', label: 'Idea → Production', shortLabel: 'Idea', icon: Lightbulb, section: 'More' },
