@@ -35,6 +35,12 @@ export function getRunnerWorktreeRoot(
   return configured || DEFAULT_WORKTREE_ROOT
 }
 
+export function getRunnerBaseRef(
+  env: Record<string, string | undefined> = process.env,
+): string {
+  return env.FORGEPILOT_RUNNER_BASE_REF?.trim() || 'HEAD'
+}
+
 function removeExistingWorktree(workspacePath: string, sourceCwd: string): void {
   if (!fs.existsSync(workspacePath)) return
 
@@ -64,12 +70,13 @@ export function prepareRunnerWorkspace(options: {
   const sourceCwd = options.sourceCwd ?? process.cwd()
   const env = options.env ?? process.env
   const root = getRunnerWorktreeRoot(env)
+  const baseRef = getRunnerBaseRef(env)
   const workspacePath = path.join(root, sanitizeWorktreeName(options.delegationId))
 
   fs.mkdirSync(root, { recursive: true })
   removeExistingWorktree(workspacePath, sourceCwd)
 
-  execFileSync('git', ['worktree', 'add', '--detach', workspacePath, 'HEAD'], {
+  execFileSync('git', ['worktree', 'add', '--detach', workspacePath, baseRef], {
     cwd: sourceCwd,
     stdio: 'ignore',
   })
