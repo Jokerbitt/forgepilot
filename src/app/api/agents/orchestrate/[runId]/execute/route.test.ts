@@ -56,6 +56,14 @@ function makeRequest(body?: unknown): Request {
   })
 }
 
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name]
+    return
+  }
+  process.env[name] = value
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
 })
@@ -152,7 +160,7 @@ describe('POST /api/agents/orchestrate/[runId]/execute', () => {
       const res = await POST(makeRequest(), { params: Promise.resolve({ runId: 'run-1' }) })
 
       expect(res.status).toBe(200)
-      process.env.FORGEPILOT_API_KEY = original
+      restoreEnv('FORGEPILOT_API_KEY', original)
     })
 
     it('falls back to cookie forwarding when no API key', async () => {
@@ -171,7 +179,7 @@ describe('POST /api/agents/orchestrate/[runId]/execute', () => {
       const res = await POST(req, { params: Promise.resolve({ runId: 'run-1' }) })
 
       expect(res.status).toBe(200)
-      process.env.FORGEPILOT_API_KEY = original
+      restoreEnv('FORGEPILOT_API_KEY', original)
     })
   })
 })
