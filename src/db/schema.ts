@@ -56,6 +56,8 @@ export const delegations = pgTable(
     briefId: text('brief_id'),
     criticScore: jsonb('critic_score').$type<Record<string, unknown>>(),
     contextSnapshot: jsonb('context_snapshot').$type<Record<string, unknown>>(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

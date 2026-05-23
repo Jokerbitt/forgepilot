@@ -13,9 +13,11 @@ const repoFindById     = vi.fn<[string], Promise<Delegation | null>>()
 const repoCreate       = vi.fn<[unknown], Promise<Delegation>>()
 const repoUpdate       = vi.fn<[string, Partial<Delegation>], Promise<Delegation | null>>()
 const repoDelete       = vi.fn<[string], Promise<boolean>>()
+const getDelegationStorageMode = vi.fn(() => 'json')
 
 vi.mock('@/lib/repositories/delegationRepository', () => ({
   SINGLE_TENANT_USER_ID: 'user-1',
+  getDelegationStorageMode,
   createDelegationRepository: vi.fn(() => ({
     listByStatus: repoListByStatus,
     findById:     repoFindById,
@@ -63,7 +65,10 @@ function makeDelegation(overrides: Partial<Delegation> = {}): Delegation {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('GET /api/delegations', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getDelegationStorageMode.mockReturnValue('json')
+  })
 
   function makeGetRequest(url: string) {
     const { NextRequest } = require('next/server') as typeof import('next/server')
@@ -121,7 +126,10 @@ describe('GET /api/delegations', () => {
 })
 
 describe('POST /api/delegations', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getDelegationStorageMode.mockReturnValue('json')
+  })
 
   function makePostRequest(body: unknown) {
     const { NextRequest } = require('next/server') as typeof import('next/server')
@@ -159,6 +167,21 @@ describe('POST /api/delegations', () => {
     const res = await POST(makePostRequest({ id: 'del-001', status: 'running', contract: { goal: 'Valid goal here', riskClass: 'A' } }))
     expect(res.status).toBe(200)
     expect(repoUpdate).toHaveBeenCalledOnce()
+    expect(repoCreate).not.toHaveBeenCalled()
+  })
+
+  it('returns 400 for non-UUID ids when PostgreSQL storage is active', async () => {
+    getDelegationStorageMode.mockReturnValue('postgres')
+    repoFindById.mockResolvedValueOnce(null)
+
+    const { POST } = await import('./route')
+    const res = await POST(makePostRequest({
+      id: 'human-readable-id',
+      status: 'pending',
+      contract: { goal: 'Valid goal here', riskClass: 'A' },
+    }))
+
+    expect(res.status).toBe(400)
     expect(repoCreate).not.toHaveBeenCalled()
   })
 })

@@ -75,10 +75,14 @@ describe('Postgres delegation mapping', () => {
       briefId: null,
       criticScore: null,
       contextSnapshot: snapshot,
+      startedAt: new Date('2026-05-23T10:02:00.000Z'),
+      completedAt: new Date('2026-05-23T10:05:00.000Z'),
       createdAt,
       updatedAt: createdAt,
     })
 
     expect(delegation.contextSnapshot).toEqual(snapshot)
+    expect(delegation.startedAt).toBe('2026-05-23T10:02:00.000Z')
+    expect(delegation.completedAt).toBe('2026-05-23T10:05:00.000Z')
   })
 })

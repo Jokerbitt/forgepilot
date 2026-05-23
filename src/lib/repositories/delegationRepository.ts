@@ -93,6 +93,8 @@ function rowToDelegation(row: DbDelegation): Delegation {
       row.logs != null
         ? (row.logs as unknown as Delegation['logs'])
         : undefined,
+    startedAt: row.startedAt?.toISOString(),
+    completedAt: row.completedAt?.toISOString(),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }
@@ -145,6 +147,8 @@ class PostgresDelegationRepository implements DelegationRepository {
           input.contextSnapshot != null
             ? (input.contextSnapshot as unknown as Record<string, unknown>)
             : null,
+        startedAt: input.startedAt ? new Date(input.startedAt) : null,
+        completedAt: input.completedAt ? new Date(input.completedAt) : null,
         createdAt,
         updatedAt,
       })
@@ -227,6 +231,12 @@ class PostgresDelegationRepository implements DelegationRepository {
                   ? (patch.contextSnapshot as unknown as Record<string, unknown>)
                   : null,
             }
+          : {}),
+        ...(patch.startedAt !== undefined
+          ? { startedAt: patch.startedAt ? new Date(patch.startedAt) : null }
+          : {}),
+        ...(patch.completedAt !== undefined
+          ? { completedAt: patch.completedAt ? new Date(patch.completedAt) : null }
           : {}),
         updatedAt: now,
       })
