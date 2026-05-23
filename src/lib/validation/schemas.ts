@@ -19,6 +19,33 @@ export const LegalBasisSchema = z.enum(['legitimate-interest', 'contract', 'lega
 export const DataResidencySchema = z.enum(['eu', 'us', 'local', 'unknown'])
 export const ProviderTypeSchema = z.enum(['anthropic', 'openai-compatible', 'ollama', 'custom'])
 
+// ─── Expert Mode Policy Primitives (#19) ─────────────────────────────────────
+
+export const ToolPolicySchema = z.enum([
+  'all',           // agent may use all available tools
+  'code-read',     // read-only file access only
+  'code-write',    // file read + write, no shell/web
+  'web-search',    // web search allowed in addition to code-read
+  'restricted',    // minimal: no file writes, no shell, no web
+  'custom',        // fine-grained via toolAllowList / toolDenyList
+])
+export type ToolPolicy = z.infer<typeof ToolPolicySchema>
+
+export const OutputPolicySchema = z.enum([
+  'pr',                // create GitHub PR only
+  'writeback',         // write knowledge card only
+  'pr-and-writeback',  // both PR and knowledge card
+  'none',              // no automatic output — manual review
+])
+export type OutputPolicy = z.infer<typeof OutputPolicySchema>
+
+export const ApprovalModeSchema = z.enum([
+  'auto',     // approved automatically when confidence ≥ threshold
+  'manual',   // always requires human sign-off
+  'skip',     // no approval gate (risk class A only)
+])
+export type ApprovalMode = z.infer<typeof ApprovalModeSchema>
+
 // ─── Delegation ───────────────────────────────────────────────────────────────
 
 export const DelegationContractSchema = z.object({
@@ -31,6 +58,17 @@ export const DelegationContractSchema = z.object({
   skillCategory:    z.string().optional(),
   acceptanceCriteria: z.array(z.string()).optional(),
   context:          z.string().optional(),
+  // ── Expert Mode Policy Fields (#19) — all optional, safe defaults apply when absent ──
+  llmProvider:      z.string().optional(),
+  llmModel:         z.string().optional(),
+  executionRoute:   z.string().optional(),
+  toolPolicy:       ToolPolicySchema.optional(),
+  toolAllowList:    z.array(z.string()).optional(),
+  toolDenyList:     z.array(z.string()).optional(),
+  outputPolicy:     OutputPolicySchema.optional(),
+  approvalMode:     ApprovalModeSchema.optional(),
+  approvalThreshold: z.number().min(0).max(100).optional(),
+  writeScope:       z.array(z.string()).optional(),
 })
 
 export type DelegationContract = z.infer<typeof DelegationContractSchema>
@@ -238,11 +276,21 @@ export const TaskContractSchema = z.object({
   requiresApproval:      z.boolean(),
   privacyMode:           PrivacyModeSchema,
   llmModel:              z.string().optional(),
+  llmProvider:           z.string().optional(),
   outputMode:            z.enum(['text', 'json', 'stream']).optional(),
   skillCategory:         z.enum(['api-route', 'ui-component', 'data-model', 'test', 'refactor', 'infrastructure', 'documentation']).optional(),
   allowedFilePatterns:   z.array(z.string()).optional(),
   orchestratedRunId:     z.string().optional(),
   createdAt:             z.string(),
+  // Expert Mode Policy Fields (#19)
+  toolPolicy:            ToolPolicySchema.optional(),
+  toolAllowList:         z.array(z.string()).optional(),
+  toolDenyList:          z.array(z.string()).optional(),
+  outputPolicy:          OutputPolicySchema.optional(),
+  approvalMode:          ApprovalModeSchema.optional(),
+  approvalThreshold:     z.number().min(0).max(100).optional(),
+  writeScope:            z.array(z.string()).optional(),
+  executionRoute:        z.string().optional(),
 })
 
 export type TaskContractInput = z.infer<typeof TaskContractSchema>

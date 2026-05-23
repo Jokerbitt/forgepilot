@@ -10,7 +10,7 @@
 import { NextRequest } from 'next/server'
 import { describe, it, expect } from 'vitest'
 import { parseBody, parseParams, isValidationError } from './api'
-import { WorkItemImportSchema, DelegationContractSchema, ProviderConfigSchema, ExecuteLoopEvidenceRunSchema } from './schemas'
+import { WorkItemImportSchema, DelegationContractSchema, ProviderConfigSchema, ExecuteLoopEvidenceRunSchema, ToolPolicySchema, OutputPolicySchema, ApprovalModeSchema } from './schemas'
 import { z } from 'zod'
 
 // Helper: Create a NextRequest with JSON body
@@ -159,5 +159,92 @@ describe('human-friendly schema messages', () => {
 
     expect(result.success).toBe(false)
     expect(result.error?.issues[0]?.message).toContain('/pull/123')
+  })
+})
+
+// ─── Expert Mode Policy Schemas (#19) ─────────────────────────────────────────
+
+describe('Expert Mode policy schemas', () => {
+  describe('ToolPolicySchema', () => {
+    it('accepts all valid tool policy values', () => {
+      for (const v of ['all', 'code-read', 'code-write', 'web-search', 'restricted', 'custom'] as const) {
+        expect(ToolPolicySchema.safeParse(v).success).toBe(true)
+      }
+    })
+
+    it('rejects unknown tool policies', () => {
+      expect(ToolPolicySchema.safeParse('everything').success).toBe(false)
+    })
+  })
+
+  describe('OutputPolicySchema', () => {
+    it('accepts all valid output policy values', () => {
+      for (const v of ['pr', 'writeback', 'pr-and-writeback', 'none'] as const) {
+        expect(OutputPolicySchema.safeParse(v).success).toBe(true)
+      }
+    })
+
+    it('rejects unknown output policies', () => {
+      expect(OutputPolicySchema.safeParse('auto-deploy').success).toBe(false)
+    })
+  })
+
+  describe('ApprovalModeSchema', () => {
+    it('accepts all valid approval modes', () => {
+      for (const v of ['auto', 'manual', 'skip'] as const) {
+        expect(ApprovalModeSchema.safeParse(v).success).toBe(true)
+      }
+    })
+
+    it('rejects unknown approval modes', () => {
+      expect(ApprovalModeSchema.safeParse('bypass').success).toBe(false)
+    })
+  })
+
+  describe('DelegationContractSchema with expert mode fields', () => {
+    const base = { goal: 'Build the feature end-to-end with tests' }
+
+    it('accepts contract without expert mode fields (backward compatible)', () => {
+      expect(DelegationContractSchema.safeParse(base).success).toBe(true)
+    })
+
+    it('accepts contract with toolPolicy', () => {
+      const result = DelegationContractSchema.safeParse({ ...base, toolPolicy: 'code-write' })
+      expect(result.success).toBe(true)
+    })
+
+    it('accepts contract with outputPolicy', () => {
+      const result = DelegationContractSchema.safeParse({ ...base, outputPolicy: 'pr-and-writeback' })
+      expect(result.success).toBe(true)
+    })
+
+    it('accepts contract with llmProvider and llmModel', () => {
+      const result = DelegationContractSchema.safeParse({ ...base, llmProvider: 'groq', llmModel: 'llama3.1:70b' })
+      expect(result.success).toBe(true)
+    })
+
+    it('accepts contract with approvalMode and approvalThreshold', () => {
+      const result = DelegationContractSchema.safeParse({
+        ...base, approvalMode: 'auto', approvalThreshold: 85,
+      })
+      expect(result.success).toBe(true)
+    })
+
+    it('rejects approvalThreshold above 100', () => {
+      const result = DelegationContractSchema.safeParse({ ...base, approvalThreshold: 101 })
+      expect(result.success).toBe(false)
+    })
+
+    it('rejects invalid toolPolicy', () => {
+      const result = DelegationContractSchema.safeParse({ ...base, toolPolicy: 'everything' })
+      expect(result.success).toBe(false)
+    })
+
+    it('accepts writeScope as string array', () => {
+      const result = DelegationContractSchema.safeParse({
+        ...base, writeScope: ['src/components/**', 'src/lib/utils.ts'],
+      })
+      expect(result.success).toBe(true)
+    })
   })
 })
