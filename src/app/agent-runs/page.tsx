@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { AgentRun } from '@/lib/models/agent-run'
 import { Badge, EmptyState, StatusDot, cx } from '@/components/ui/primitives'
+import { AgentModeBanner } from '@/components/ui/AgentModeBanner'
 
 function statusTone(status: AgentRun['status']): 'success' | 'warning' | 'danger' | 'neutral' {
   if (status === 'completed') return 'success'
@@ -64,6 +65,10 @@ export default function AgentRunsPage() {
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">Agent Runs</h1>
           <p className="mt-2 text-sm text-slate-400">Alle Agenten-Ausführungen, Trace-Events und Kosten.</p>
         </header>
+
+        <div className="mb-6">
+          <AgentModeBanner />
+        </div>
 
         {loading ? (
           <p className="text-sm text-slate-500">Lade Agent Runs…</p>

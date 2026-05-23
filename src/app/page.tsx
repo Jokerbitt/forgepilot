@@ -9,6 +9,7 @@ import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist
 import { buttonClassName } from '@/components/ui/primitives'
 import { CriticalPathWidget } from '@/components/critical-path'
 import { MissionControlPanel } from '@/components/mission-control'
+import { AgentModeBanner } from '@/components/ui/AgentModeBanner'
 
 export default function Home() {
   return (
@@ -47,6 +48,7 @@ export default function Home() {
         </section>
 
         <section className="mt-6 space-y-4" aria-label="Setup-Hinweise">
+          <AgentModeBanner />
           <NoAIProviderBanner />
           <ApiKeysBanner />
           <OnboardingWizardBanner />

@@ -364,15 +364,24 @@ function executeTool(
 
 // ─── Main runner ───────────────────────────────────────────────────────────────
 
+// Pricing per million tokens (Sonnet 4.6 as of 2026-05)
+const COST_PER_M_INPUT = 3
+const COST_PER_M_OUTPUT = 15
+
+function estimateCost(inputTokens: number, outputTokens: number): number {
+  return (inputTokens / 1_000_000) * COST_PER_M_INPUT + (outputTokens / 1_000_000) * COST_PER_M_OUTPUT
+}
+
 export async function runWithToolUse(
   prompt: string,
   options: ToolRunnerOptions,
 ): Promise<ToolRunnerResult> {
   const {
     apiKey,
-    model = 'claude-sonnet-4-5',
+    model = 'claude-sonnet-4-6',
     projectRoot = process.cwd(),
     maxTurns = 30,
+    budgetUsd,
     onLog = () => undefined,
   } = options
 
@@ -382,7 +391,8 @@ export async function runWithToolUse(
     onLog(type, message)
   }
 
-  log('info', `Starting tool-use agent (model: ${model}, maxTurns: ${maxTurns})`)
+  const budgetLabel = budgetUsd != null ? `, budget: $${budgetUsd.toFixed(2)}` : ''
+  log('info', `Starting tool-use agent (model: ${model}, maxTurns: ${maxTurns}${budgetLabel})`)
 
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: prompt }]
   let turnsUsed = 0
@@ -392,7 +402,20 @@ export async function runWithToolUse(
 
   while (turnsUsed < maxTurns) {
     turnsUsed++
-    log('thought', `Turn ${turnsUsed}/${maxTurns}`)
+    const currentCost = estimateCost(totalInput, totalOutput)
+    log('thought', `Turn ${turnsUsed}/${maxTurns} (~$${currentCost.toFixed(4)})`)
+
+    // Stop before making another API call if budget would be exceeded
+    if (budgetUsd != null && currentCost >= budgetUsd) {
+      log('error', `Budget cap reached: $${currentCost.toFixed(4)} >= $${budgetUsd.toFixed(2)} — stopping`)
+      return {
+        success: false,
+        summary: `Agent stopped: estimated cost $${currentCost.toFixed(4)} reached budget cap of $${budgetUsd.toFixed(2)}`,
+        filesChanged: [],
+        turnsUsed,
+        estimatedCostUsd: currentCost,
+      }
+    }
 
     const response = await client.messages.create({
       model,
@@ -426,7 +449,7 @@ export async function runWithToolUse(
     messages.push({ role: 'user', content: toolResults })
   }
 
-  const estimatedCostUsd = (totalInput / 1_000_000) * 3 + (totalOutput / 1_000_000) * 15
+  const estimatedCostUsd = estimateCost(totalInput, totalOutput)
 
   if (finalResult) return { ...finalResult, turnsUsed, estimatedCostUsd }
 

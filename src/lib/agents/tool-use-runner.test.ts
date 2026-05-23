@@ -370,4 +370,54 @@ describe('runWithToolUse', () => {
     // 1M * $3 input + 1M * $15 output = $18
     expect(result.estimatedCostUsd).toBeCloseTo(18, 0)
   })
+
+  it('stops immediately when budget is already exceeded before first turn', async () => {
+    // 1M input + 1M output from a single prior turn would cost $18 — well over $0.01
+    const mockCreate = vi.fn().mockResolvedValue(taskCompleteResponse())
+    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+      messages: { create: mockCreate },
+    }) as unknown as InstanceType<typeof Anthropic>)
+
+    const { runWithToolUse } = await import('./tool-use-runner')
+    // Set a $0 budget — agent should stop without making any API calls
+    const result = await runWithToolUse('Task', { apiKey: 'k', projectRoot: makeTempDir(), budgetUsd: 0 })
+    expect(result.success).toBe(false)
+    expect(result.summary).toContain('budget cap')
+    expect(mockCreate).not.toHaveBeenCalled()
+  })
+
+  it('stops mid-run when accumulated cost exceeds budget', async () => {
+    // Each fake turn returns 1M input + 1M output = $18. Budget is $0.01.
+    // After turn 1, cost = $18 > $0.01, so turn 2 should be blocked.
+    const mockCreate = vi.fn()
+      .mockResolvedValueOnce({ ...toolUseResponse('list_files', { dir: '.' }), usage: { input_tokens: 1_000_000, output_tokens: 1_000_000 } })
+      .mockResolvedValueOnce(taskCompleteResponse())
+
+    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+      messages: { create: mockCreate },
+    }) as unknown as InstanceType<typeof Anthropic>)
+
+    const { runWithToolUse } = await import('./tool-use-runner')
+    const result = await runWithToolUse('Task', { apiKey: 'k', projectRoot: makeTempDir(), budgetUsd: 0.01 })
+    expect(result.success).toBe(false)
+    expect(result.summary).toContain('budget cap')
+    // Only 1 API call was made (turn 1), turn 2 was blocked
+    expect(mockCreate).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses claude-sonnet-4-6 as default model', async () => {
+    let capturedModel = ''
+    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+      messages: {
+        create: vi.fn().mockImplementationOnce(async (req: { model: string }) => {
+          capturedModel = req.model
+          return taskCompleteResponse()
+        }),
+      },
+    }) as unknown as InstanceType<typeof Anthropic>)
+
+    const { runWithToolUse } = await import('./tool-use-runner')
+    await runWithToolUse('Task', { apiKey: 'k', projectRoot: makeTempDir() })
+    expect(capturedModel).toBe('claude-sonnet-4-6')
+  })
 })
