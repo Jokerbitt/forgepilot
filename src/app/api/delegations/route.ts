@@ -130,16 +130,17 @@ export async function POST(request: NextRequest) {
 
 async function trimStore(repo: ReturnType<typeof createDelegationRepository>): Promise<void> {
   const MAX_DELEGATIONS = 200
+  const MIN_RECENT_TERMINAL_TO_KEEP = 20
   const all = await repo.listByStatus()
   if (all.length <= MAX_DELEGATIONS) return
 
   const terminalStatuses: Array<'completed' | 'failed' | 'cancelled'> = ['completed', 'failed', 'cancelled']
   const terminal = all.filter(d => (terminalStatuses as string[]).includes(d.status))
-  const active = all.filter(d => !(terminalStatuses as string[]).includes(d.status))
-  const keep = MAX_DELEGATIONS - active.length
-  const toDelete = terminal
+  const overflow = all.length - MAX_DELEGATIONS
+  const deletableTerminal = terminal
     .sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime())
-    .slice(0, Math.max(terminal.length - Math.max(keep, 0), 0))
+    .slice(0, Math.max(terminal.length - MIN_RECENT_TERMINAL_TO_KEEP, 0))
+  const toDelete = deletableTerminal.slice(0, overflow)
 
   for (const d of toDelete) {
     await repo.delete(d.id)

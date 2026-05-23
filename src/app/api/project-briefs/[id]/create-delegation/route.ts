@@ -1,9 +1,9 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
-import { findProjectBriefById, updateProjectBrief } from '@/lib/project-briefs'
 import type { PrivacyMode } from '@/lib/models/delegation'
 import type { ResearchPrivacyMode } from '@/lib/models/project-brief'
+import { createProjectBriefRepository } from '@/lib/repositories/projectBriefRepository'
 import {
   createDelegationRepository,
   SINGLE_TENANT_USER_ID,
@@ -19,7 +19,8 @@ type RouteParams = { params: Promise<{ id: string }> }
 
 export async function POST(_request: Request, { params }: RouteParams) {
   const { id } = await params
-  const brief = findProjectBriefById(id)
+  const briefRepo = createProjectBriefRepository()
+  const brief = await briefRepo.findById(id)
   if (!brief) {
     return NextResponse.json({ error: 'Brief nicht gefunden' }, { status: 404 })
   }
@@ -85,7 +86,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
   })
 
   // Link delegation back to brief
-  updateProjectBrief(brief.id, {
+  await briefRepo.update(brief.id, {
     delegationIds: [...(brief.delegationIds ?? []), delegationId],
   })
 

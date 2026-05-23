@@ -30,20 +30,6 @@ jobs:
           NEXTAUTH_SECRET: ci-test-secret-32-chars-minimum
           FORGEPILOT_AUTH_DISABLED: 'true'
 
-      - name: Start app in background
-        run: |
-          NEXTAUTH_SECRET=ci-test-secret-32-chars-minimum \
-          FORGEPILOT_AUTH_DISABLED=true \
-          npm start &
-          # Wait until the server is ready (max 30s)
-          for i in $(seq 1 30); do
-            curl -sf http://localhost:3000/api/health && break
-            echo "Waiting for server... ($i/30)"
-            sleep 1
-          done
-        env:
-          PORT: 3000
-
       - name: Run E2E tests
         run: npm run e2e
         env:

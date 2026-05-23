@@ -37,13 +37,17 @@ const mockAcceptedBrief = {
 
 const mockDraftBrief = { ...mockAcceptedBrief, id: 'brief-002', status: 'draft' as const }
 
-vi.mock('@/lib/project-briefs', () => ({
-  findProjectBriefById: vi.fn((id: string) => {
-    if (id === 'brief-001') return mockAcceptedBrief
-    if (id === 'brief-002') return mockDraftBrief
-    return undefined
-  }),
-  updateProjectBrief: vi.fn(),
+const mockUpdateBrief = vi.fn()
+
+vi.mock('@/lib/repositories/projectBriefRepository', () => ({
+  createProjectBriefRepository: vi.fn(() => ({
+    findById: vi.fn(async (id: string) => {
+      if (id === 'brief-001') return mockAcceptedBrief
+      if (id === 'brief-002') return mockDraftBrief
+      return null
+    }),
+    update: mockUpdateBrief,
+  })),
 }))
 
 vi.mock('fs', () => ({
@@ -84,9 +88,8 @@ describe('POST /api/project-briefs/[id]/create-delegation', () => {
   })
 
   it('updates brief delegationIds after delegation creation', async () => {
-    const { updateProjectBrief } = await import('@/lib/project-briefs')
     await POST(new Request('http://localhost', { method: 'POST' }), makeParams('brief-001'))
-    expect(vi.mocked(updateProjectBrief)).toHaveBeenCalledWith(
+    expect(mockUpdateBrief).toHaveBeenCalledWith(
       'brief-001',
       expect.objectContaining({ delegationIds: expect.arrayContaining([expect.any(String)]) }),
     )
