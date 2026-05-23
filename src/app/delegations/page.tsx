@@ -74,6 +74,7 @@ function getTaskStatusStyle(status: string): { textClass: string; icon: string; 
   switch (status) {
     case 'completed':  return { textClass: 'line-through text-gray-500', icon: '✓', iconClass: 'text-green-500' }
     case 'cancelled':  return { textClass: 'line-through text-gray-500', icon: '✕', iconClass: 'text-gray-400' }
+    case 'rejected':   return { textClass: 'line-through text-red-300',   icon: '✗', iconClass: 'text-red-400' }
     case 'failed':     return { textClass: 'line-through text-red-400',   icon: '✕', iconClass: 'text-red-500' }
     case 'in_progress': return { textClass: '', icon: '●', iconClass: 'text-yellow-400' }
     default:           return { textClass: 'text-gray-300', icon: '○', iconClass: 'text-gray-500' }
@@ -371,6 +372,18 @@ function DelegationsContent() {
     await fetch(`/api/delegations/${id}/cancel`, { method: 'POST' })
   }
 
+  const handleRejectDelegation = async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    const delegation = delegations.find(d => d.id === id)
+    if (!delegation || delegation.status !== 'pending') return
+    applyUpdate({ ...delegation, status: 'rejected', updatedAt: new Date().toISOString() })
+    await fetch(`/api/delegations/${id}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actor: 'user' }),
+    })
+  }
+
   const handleRetryDelegation = async (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
     const delegation = delegations.find(d => d.id === id)
@@ -644,7 +657,7 @@ function DelegationsContent() {
       (d.tags ?? []).some(tag => tag.toLowerCase().includes(q))
     const matchToday = !todayOnly || isCreatedToday(d.createdAt)
     const matchTag = tagFilter === 'Alle' || (d.tags ?? []).includes(tagFilter)
-    const matchTerminal = !hideTerminal || (d.status !== 'completed' && d.status !== 'cancelled')
+    const matchTerminal = !hideTerminal || (d.status !== 'completed' && d.status !== 'cancelled' && d.status !== 'rejected')
 
     return matchStatus && matchProject && matchApproval && matchSearch && matchToday && matchTag && matchTerminal
   })
@@ -989,7 +1002,7 @@ function DelegationsContent() {
             <div className="flex flex-wrap gap-4 items-center bg-gray-900 p-3 rounded-xl border border-gray-800">
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-xs text-gray-500 mr-1 uppercase tracking-wide">Status</span>
-                {['Alle', 'running', 'pending', 'approved', 'completed', 'failed', 'cancelled'].map(s => (
+                {['Alle', 'running', 'pending', 'approved', 'completed', 'failed', 'cancelled', 'rejected'].map(s => (
                   <button
                     key={s}
                     onClick={() => setStatusFilter(s)}
@@ -1245,7 +1258,7 @@ function DelegationsContent() {
                       const groupCount = groupByBrief
                         ? briefGroups.find(g => g.briefId === (del.briefId ?? null))?.items.length ?? 0
                         : 0
-                      const isDone = del.status === 'completed' || del.status === 'failed' || del.status === 'cancelled'
+                      const isDone = del.status === 'completed' || del.status === 'failed' || del.status === 'cancelled' || del.status === 'rejected'
                       const canCancel = del.status === 'pending' || del.status === 'approved'
                       const canDelete = isDone
                       const canApprove = del.status === 'pending' && del.contract.requiresApproval && del.contract.riskClass !== 'C'
@@ -1574,6 +1587,18 @@ function DelegationsContent() {
                                     >
                                       <Check size={12} />
                                       Genehmigen
+                                    </button>
+                                  )}
+
+                                  {/* Reject — pending only: secondary destructive */}
+                                  {del.status === 'pending' && (
+                                    <button
+                                      onClick={e => handleRejectDelegation(del.id, e)}
+                                      className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-950/40 px-2 py-1.5 rounded-lg border border-red-900/40 transition-colors"
+                                      title="Delegation ablehnen"
+                                    >
+                                      <X size={12} />
+                                      Ablehnen
                                     </button>
                                   )}
 
