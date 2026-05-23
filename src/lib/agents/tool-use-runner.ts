@@ -14,7 +14,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import fs from 'fs'
 import path from 'path'
-import { execFileSync, execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import { aiLogger } from '@/lib/logger'
 
 export interface ToolRunnerOptions {
@@ -155,6 +155,7 @@ const SAFE_NPM_SCRIPTS = new Set(['test', 'test:run', 'lint', 'type-check', 'bui
 const SAFE_NPX_COMMANDS = new Set(['tsc', 'vitest'])
 const SAFE_GIT_COMMANDS = new Set(['status', 'diff', 'log', 'show', 'branch'])
 const SAFE_FILE_COMMANDS = new Set(['grep', 'find', 'cat', 'ls', 'wc', 'head', 'tail'])
+const SAFE_BRANCH_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9/_.-]*$/
 
 function splitSafeCommand(cmd: string): string[] | undefined {
   const trimmed = cmd.trim()
@@ -195,6 +196,10 @@ function parseAllowedCommand(cmd: string): { bin: string; args: string[] } | und
     return { bin, args }
   }
   return undefined
+}
+
+function isSafeBranchName(name: string): boolean {
+  return SAFE_BRANCH_PATTERN.test(name) && !name.includes('..') && !name.endsWith('/') && !name.endsWith('.')
 }
 
 // ─── Security: path guard ─────────────────────────────────────────────────────
@@ -291,10 +296,10 @@ function executeTool(
     }
     case 'git_create_branch': {
       const name = input.name ?? ''
-      if (!name || /[^a-zA-Z0-9/_.-]/.test(name)) return { result: 'Error: invalid branch name' }
+      if (!name || !isSafeBranchName(name)) return { result: 'Error: invalid branch name' }
       if (name === 'main' || name === 'master') return { result: 'Error: cannot create branch named main or master' }
       try {
-        execSync(`git checkout -b ${name}`, { cwd: projectRoot, timeout: 10_000 })
+        execFileSync('git', ['checkout', '-b', name], { cwd: projectRoot, timeout: 10_000 })
         log('command', `git checkout -b ${name}`)
         return { result: `Created branch: ${name}` }
       } catch (e) { return { result: `Error: ${String(e)}` } }
@@ -303,8 +308,8 @@ function executeTool(
       const msg = input.message ?? ''
       if (!msg) return { result: 'Error: commit message required' }
       try {
-        execSync('git add -A', { cwd: projectRoot, timeout: 10_000 })
-        execSync(`git commit -m ${JSON.stringify(msg)}`, { cwd: projectRoot, timeout: 10_000 })
+        execFileSync('git', ['add', '-A'], { cwd: projectRoot, timeout: 10_000 })
+        execFileSync('git', ['commit', '-m', msg], { cwd: projectRoot, timeout: 10_000 })
         log('command', `git commit: ${msg}`)
         return { result: `Committed: ${msg}` }
       } catch (e) { return { result: `Error: ${String(e)}` } }
@@ -313,9 +318,9 @@ function executeTool(
       const branch = input.branch ?? ''
       if (!branch) return { result: 'Error: branch name required' }
       if (branch === 'main' || branch === 'master') return { result: 'Error: cannot push directly to main or master' }
-      if (/[^a-zA-Z0-9/_.-]/.test(branch)) return { result: 'Error: invalid branch name' }
+      if (!isSafeBranchName(branch)) return { result: 'Error: invalid branch name' }
       try {
-        execSync(`git push -u origin ${branch}`, { cwd: projectRoot, timeout: 30_000 })
+        execFileSync('git', ['push', '-u', 'origin', branch], { cwd: projectRoot, timeout: 30_000 })
         log('command', `git push origin ${branch}`)
         return { result: `Pushed branch: ${branch}` }
       } catch (e) { return { result: `Error: ${String(e)}` } }
@@ -325,12 +330,13 @@ function executeTool(
       const body = input.body ?? ''
       const base = input.base ?? 'main'
       if (!title) return { result: 'Error: PR title required' }
-      if (!/^[a-zA-Z0-9_. /-]+$/.test(base)) return { result: 'Error: invalid base branch name' }
+      if (!isSafeBranchName(base)) return { result: 'Error: invalid base branch name' }
       try {
-        const out = execSync(
-          `gh pr create --title ${JSON.stringify(title)} --body ${JSON.stringify(body)} --base ${base}`,
-          { cwd: projectRoot, timeout: 30_000, encoding: 'utf-8' },
-        )
+        const out = execFileSync('gh', ['pr', 'create', '--title', title, '--body', body, '--base', base], {
+          cwd: projectRoot,
+          timeout: 30_000,
+          encoding: 'utf-8',
+        })
         const prUrl = out.trim().split('\n').pop() ?? ''
         log('success', `PR created: ${prUrl}`)
         return { result: prUrl }

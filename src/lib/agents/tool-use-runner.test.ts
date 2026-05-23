@@ -335,6 +335,25 @@ describe('runWithToolUse', () => {
     expect(captured).toContain('PR title required')
   })
 
+  it('blocks git_create_pr with unsafe base branch', async () => {
+    const dir = makeTempDir()
+    let captured = ''
+    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+      messages: {
+        create: vi.fn()
+          .mockResolvedValueOnce(toolUseResponse('git_create_pr', { title: 'PR', body: 'Body', base: 'main;rm-rf' }))
+          .mockImplementationOnce(async (req: { messages: Array<{ role: string; content: unknown }> }) => {
+            captured = (req.messages[req.messages.length - 1].content as Array<{ content?: string }>)[0]?.content ?? ''
+            return taskCompleteResponse()
+          }),
+      },
+    }) as unknown as InstanceType<typeof Anthropic>)
+
+    const { runWithToolUse } = await import('./tool-use-runner')
+    await runWithToolUse('PR bad base', { apiKey: 'k', projectRoot: dir })
+    expect(captured).toContain('invalid base branch name')
+  })
+
   it('estimates cost from token usage', async () => {
     vi.mocked(Anthropic).mockImplementationOnce(() => ({
       messages: {
