@@ -8,6 +8,7 @@ import {
   readExecuteLoopEvidence,
 } from '@/lib/reports/execute-loop-evidence-store'
 import type { DailyReportExecuteLoopEvidenceRun } from '@/lib/reports/daily-report'
+import { buildExecuteLoopEvidenceSummary } from '@/lib/reports/execute-loop-evidence-summary'
 import { isValidationError, parseBody } from '@/lib/validation/api'
 import { ExecuteLoopEvidenceRunSchema } from '@/lib/validation/schemas'
 
@@ -16,11 +17,13 @@ export async function GET() {
   if (authError) return authError
 
   const runs = readExecuteLoopEvidence()
+  const summary = buildExecuteLoopEvidenceSummary(runs)
   return NextResponse.json({
     runs,
     count: runs.length,
-    provenRuns: runs.filter(run => run.source !== 'harness-dry-run' && run.status === 'success').length,
-    dryRuns: runs.filter(run => run.source === 'harness-dry-run').length,
+    provenRuns: summary.provenRuns,
+    dryRuns: summary.dryRuns,
+    summary,
   }, {
     headers: { 'cache-control': 'no-store' },
   })
@@ -50,9 +53,11 @@ export async function POST(request: Request) {
   }
 
   const runs = appendExecuteLoopEvidence(run)
+  const summary = buildExecuteLoopEvidenceSummary(runs)
   return NextResponse.json({
     recorded: run,
     count: runs.length,
+    summary,
     warning: run.source === 'harness-dry-run'
       ? 'Dry-run evidence validates the harness but does not count as a proven real value loop.'
       : undefined,
