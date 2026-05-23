@@ -10,7 +10,7 @@
 import { NextRequest } from 'next/server'
 import { describe, it, expect } from 'vitest'
 import { parseBody, parseParams, isValidationError } from './api'
-import { WorkItemImportSchema, DelegationContractSchema } from './schemas'
+import { WorkItemImportSchema, DelegationContractSchema, ProviderConfigSchema, ExecuteLoopEvidenceRunSchema } from './schemas'
 import { z } from 'zod'
 
 // Helper: Create a NextRequest with JSON body
@@ -135,5 +135,29 @@ describe('isValidationError', () => {
     const req = makeReq({ csv: 'data' })
     const result = await parseBody(req, WorkItemImportSchema)
     expect(isValidationError(result)).toBe(false)
+  })
+})
+
+describe('human-friendly schema messages', () => {
+  it('explains provider base URLs with local and cloud examples', () => {
+    const result = ProviderConfigSchema.safeParse({
+      id: 'ollama',
+      name: 'Ollama',
+      type: 'ollama',
+      baseUrl: 'not-a-url',
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error?.issues[0]?.message).toContain('http://localhost:11434')
+  })
+
+  it('explains PR URLs with a GitHub pull request example', () => {
+    const result = ExecuteLoopEvidenceRunSchema.safeParse({
+      title: 'Real value loop evidence',
+      prUrl: 'not-a-url',
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error?.issues[0]?.message).toContain('/pull/123')
   })
 })

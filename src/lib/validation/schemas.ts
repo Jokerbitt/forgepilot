@@ -26,7 +26,7 @@ export const DelegationContractSchema = z.object({
   riskClass:        RiskClassSchema.default('A'),
   privacyMode:      PrivacyModeSchema.default('local'),
   requiresApproval: z.boolean().default(false),
-  maxBudgetUsd:     z.number().min(0).max(1000).optional(),
+  maxBudgetUsd:     z.number().min(0, 'Budget must be 0 or higher').max(1000, 'Budget must be at most $1000').optional(),
   filePatterns:     z.array(z.string()).optional(),
   skillCategory:    z.string().optional(),
   acceptanceCriteria: z.array(z.string()).optional(),
@@ -36,7 +36,7 @@ export const DelegationContractSchema = z.object({
 export type DelegationContract = z.infer<typeof DelegationContractSchema>
 
 export const CreateDelegationSchema = z.object({
-  title:            z.string().min(3, 'Title required').max(200),
+  title:            z.string().min(3, 'Title required').max(200, 'Title must be at most 200 characters'),
   contract:         DelegationContractSchema,
   dataSubjectId:    z.string().optional(),
   privacyClass:     z.string().optional(),
@@ -48,10 +48,10 @@ export type CreateDelegationInput = z.infer<typeof CreateDelegationSchema>
 // ─── Idea Intake ──────────────────────────────────────────────────────────────
 
 export const IdeaIntakeSchema = z.object({
-  idea:             z.string().min(10, 'Idea must be at least 10 characters').max(2000),
-  context:          z.string().max(5000).optional(),
-  targetUsers:      z.string().max(500).optional(),
-  successMetric:    z.string().max(500).optional(),
+  idea:             z.string().min(10, 'Idea must be at least 10 characters').max(2000, 'Idea must be at most 2000 characters'),
+  context:          z.string().max(5000, 'Context must be at most 5000 characters').optional(),
+  targetUsers:      z.string().max(500, 'Target users must be at most 500 characters').optional(),
+  successMetric:    z.string().max(500, 'Success metric must be at most 500 characters').optional(),
   riskTolerance:    RiskClassSchema.optional(),
   autoRun:          z.boolean().optional(),
 })
@@ -62,14 +62,14 @@ export type IdeaIntakeInput = z.infer<typeof IdeaIntakeSchema>
 
 export const WorkItemSchema = z.object({
   id:               z.string().optional(),
-  title:            z.string().min(3).max(500),
-  url:              z.string().url().optional().or(z.literal('')),
+  title:            z.string().min(3, 'Title must be at least 3 characters').max(500, 'Title must be at most 500 characters'),
+  url:              z.string().url('Must be a valid URL, e.g. https://example.com').optional().or(z.literal('')),
   projectId:        z.string().optional(),
   status:           z.enum(['todo', 'in_progress', 'done', 'blocked']).default('todo'),
-  priority:         z.number().int().min(0).max(10).default(1),
+  priority:         z.number().int('Priority must be a whole number').min(0, 'Priority must be 0 or higher').max(10, 'Priority must be 10 or lower').default(1),
   riskClass:        RiskClassSchema.default('A'),
   aiDelegable:      z.boolean().default(false),
-  estimatedMinutes: z.number().int().min(0).optional(),
+  estimatedMinutes: z.number().int('Estimated minutes must be a whole number').min(0, 'Estimated minutes must be 0 or higher').optional(),
   metadata:         z.record(z.string(), z.unknown()).optional(),
 })
 
@@ -78,11 +78,11 @@ export type WorkItemInput = z.infer<typeof WorkItemSchema>
 // ─── AI Provider ─────────────────────────────────────────────────────────────
 
 export const ProviderConfigSchema = z.object({
-  id:           z.string().min(1).max(50).regex(/^[a-z0-9-]+$/, 'ID must be lowercase alphanumeric with hyphens'),
-  name:         z.string().min(1).max(100),
+  id:           z.string().min(1, 'ID required').max(50, 'ID must be at most 50 characters').regex(/^[a-z0-9-]+$/, 'ID must be lowercase alphanumeric with hyphens'),
+  name:         z.string().min(1, 'Name required').max(100, 'Name must be at most 100 characters'),
   type:         ProviderTypeSchema,
   apiKey:       z.string().optional(),
-  baseUrl:      z.string().url().optional(),
+  baseUrl:      z.string().url('Must be a valid URL, e.g. http://localhost:11434 or https://api.example.com').optional(),
   enabled:      z.boolean().default(true),
   models:       z.array(z.object({
     id:           z.string(),
@@ -109,8 +109,8 @@ export type ModelSelectionInput = z.infer<typeof ModelSelectionSchema>
 
 export const EvalCaseSchema = z.object({
   id:                 z.string().optional(),
-  title:              z.string().min(3).max(200),
-  prompt:             z.string().min(10),
+  title:              z.string().min(3, 'Title must be at least 3 characters').max(200, 'Title must be at most 200 characters'),
+  prompt:             z.string().min(10, 'Prompt must be at least 10 characters'),
   skillCategory:      z.string().optional(),
   acceptanceCriteria: z.array(z.string()).min(1, 'At least one criterion required'),
   goldenOutput:       z.string().optional(),
@@ -139,7 +139,7 @@ export type ScoreRequestInput = z.infer<typeof ScoreRequestSchema>
 // ─── DSGVO / Erasure ─────────────────────────────────────────────────────────
 
 export const ErasureRequestSchema = z.object({
-  externalId: z.string().min(1, 'externalId required').max(255),
+  externalId: z.string().min(1, 'externalId required').max(255, 'externalId must be at most 255 characters'),
   execute:    z.boolean().optional(),
 })
 
@@ -291,13 +291,13 @@ export const ExecuteLoopEvidenceStepsSchema = z.object({
 })
 
 export const ExecuteLoopEvidenceRunSchema = z.object({
-  id:                  z.string().min(3).max(120).optional(),
-  title:               z.string().min(3).max(200),
+  id:                  z.string().min(3, 'ID must be at least 3 characters').max(120, 'ID must be at most 120 characters').optional(),
+  title:               z.string().min(3, 'Title must be at least 3 characters').max(200, 'Title must be at most 200 characters'),
   status:              z.enum(['success', 'partial', 'blocked']).default('partial'),
   source:              z.enum(['manual', 'harness-dry-run']).default('manual'),
   delegationId:        z.string().max(120).optional(),
   briefId:             z.string().max(120).optional(),
-  prUrl:               z.string().url().optional(),
+  prUrl:               z.string().url('Must be a valid PR URL, e.g. https://github.com/org/repo/pull/123').optional(),
   timeSavedMinutes:    z.number().int().min(0).max(24 * 60).optional(),
   manualInterventions: z.number().int().min(0).max(100).optional(),
   blocker:             z.string().max(500).optional(),
@@ -557,7 +557,7 @@ export type WorkItemDependenciesInput = z.infer<typeof WorkItemDependenciesSchem
 // ─── Project Brief Patch ──────────────────────────────────────────────────────
 
 export const ProjectBriefPatchSchema = z.object({
-  title:            z.string().min(3).max(200).optional(),
+  title:            z.string().min(3, 'Title must be at least 3 characters').max(200, 'Title must be at most 200 characters').optional(),
   status:           z.enum(['draft', 'in_review', 'accepted', 'archived']).optional(),
   rawIdea:          z.string().optional(),
   problemStatement: z.string().optional(),
