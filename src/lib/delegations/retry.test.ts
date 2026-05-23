@@ -131,6 +131,11 @@ describe('detectFailureCause', () => {
     expect(detectFailureCause(d)).toBe('budget-exceeded')
   })
 
+  it('detects turn-limit failures from Claude CLI output', () => {
+    const d = makeDelegation({ errorMessage: 'Error: Reached max turns (20)' })
+    expect(detectFailureCause(d)).toBe('turn-limit')
+  })
+
   it('returns unknown when no pattern matches', () => {
     const d = makeDelegation({ errorMessage: 'Something unexpected happened' })
     expect(detectFailureCause(d)).toBe('unknown')
@@ -222,6 +227,11 @@ describe('buildImprovedContext', () => {
   it('includes budget-exceeded guidance', () => {
     const ctx = buildImprovedContext('budget-exceeded', makeDelegation())
     expect(ctx).toContain('acceptance criteria')
+  })
+
+  it('includes turn-limit guidance', () => {
+    const ctx = buildImprovedContext('turn-limit', makeDelegation())
+    expect(ctx).toContain('higher maxBudgetUsd')
   })
 
   it('appends previous error when errorMessage is set', () => {

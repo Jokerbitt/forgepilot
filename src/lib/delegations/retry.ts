@@ -11,6 +11,7 @@ export type FailureCause =
   | 'missing-dependency'
   | 'unclear-requirements'
   | 'budget-exceeded'
+  | 'turn-limit'
   | 'auth'
   | 'rate-limit'
   | 'unknown'
@@ -59,6 +60,7 @@ export function detectFailureCause(delegation: Delegation): FailureCause {
   if (text.includes('enoent') || text.includes('cannot find module') || text.includes('module not found')) return 'missing-dependency'
   if (text.includes('ambiguous') || text.includes('unclear') || text.includes('what exactly')) return 'unclear-requirements'
   if (text.includes('budget exceeded') || (text.includes('budget') && text.includes('cost'))) return 'budget-exceeded'
+  if (text.includes('reached max turns') || text.includes('turn-limit') || text.includes('max turns')) return 'turn-limit'
   if (text.includes('authentication') || text.includes('invalid x-api-key') || text.includes('api key')) return 'auth'
   if (text.includes('rate limit') || text.includes('rate_limit')) return 'rate-limit'
   return 'unknown'
@@ -88,6 +90,8 @@ function guidanceFor(cause: FailureCause): string {
       return 'Requirements are unclear. Restate the Definition of Done and ask for clarification if ambiguity remains.'
     case 'budget-exceeded':
       return 'Budget exceeded. Reduce acceptance criteria or request explicit budget approval before retrying.'
+    case 'turn-limit':
+      return 'Turn limit reached. Retry once with a slightly higher maxBudgetUsd or split the delegation into a smaller task.'
     case 'auth':
       return 'Authentication failed. Check API keys/session auth before retrying.'
     case 'rate-limit':
