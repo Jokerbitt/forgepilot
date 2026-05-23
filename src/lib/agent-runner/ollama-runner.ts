@@ -80,6 +80,45 @@ Rules:
 - If you cannot proceed (missing context, blocked by a safety rule, unclear scope), respond with TASK_BLOCKED and explain why.
 - Never commit secrets. Never run destructive commands.`
 
+function parseTextToolCall(content: string): OllamaToolCall[] {
+  const trimmed = content.trim()
+  if (!trimmed) return []
+
+  const fencedJson = /```(?:json)?\s*([\s\S]*?)\s*```/i.exec(trimmed)?.[1]?.trim()
+  const firstObject = /\{[\s\S]*\}/.exec(trimmed)?.[0]?.trim()
+  const candidates = [
+    trimmed,
+    trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim(),
+    fencedJson,
+    firstObject,
+  ].filter((candidate): candidate is string => Boolean(candidate))
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate) as unknown
+      const calls = Array.isArray(parsed) ? parsed : [parsed]
+      const toolCalls = calls
+        .map((call): OllamaToolCall | null => {
+          if (!call || typeof call !== 'object') return null
+          const record = call as Record<string, unknown>
+          const name = record.name
+          const args = record.arguments
+          if (typeof name !== 'string' || !args || typeof args !== 'object' || Array.isArray(args)) {
+            return null
+          }
+          return { function: { name, arguments: args as Record<string, unknown> } }
+        })
+        .filter((call): call is OllamaToolCall => call !== null)
+
+      if (toolCalls.length > 0) return toolCalls
+    } catch {
+      // Try the next candidate. Plain assistant prose is handled by the caller.
+    }
+  }
+
+  return []
+}
+
 export class OllamaAgentRunner {
   readonly id: string
   readonly model: string
@@ -179,10 +218,17 @@ export class OllamaAgentRunner {
         ))
       }
 
+      const parsedTextToolCalls = assistant.tool_calls?.length
+        ? []
+        : parseTextToolCall(lastAssistantText)
+      const toolCalls = assistant.tool_calls?.length
+        ? assistant.tool_calls
+        : parsedTextToolCalls
+
       messages.push({
         role: 'assistant',
         content: lastAssistantText,
-        ...(assistant.tool_calls ? { tool_calls: assistant.tool_calls } : {}),
+        ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
       })
 
       const completeMatch = /\bTASK_COMPLETE\b/.test(lastAssistantText)
@@ -196,7 +242,6 @@ export class OllamaAgentRunner {
         return makeResult(false, lastAssistantText.trim())
       }
 
-      const toolCalls = assistant.tool_calls ?? []
       if (toolCalls.length === 0) {
         this.emit(this.nowLog('success', `✅ Run beendet nach ${turns} Turns`))
         return makeResult(true, lastAssistantText.trim() || 'Run beendet ohne Tool-Calls')
