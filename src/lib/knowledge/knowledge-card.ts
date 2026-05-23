@@ -107,3 +107,47 @@ export function deleteKnowledgeCard(id: string): KnowledgeCard | undefined {
   persistStore({ cards })
   return deleted
 }
+
+export type KnowledgeCardPatch = Partial<Pick<KnowledgeCard, 'title' | 'content' | 'tags' | 'prUrl'>>
+
+/**
+ * Patch an existing KnowledgeCard. Only `title`, `content`, `tags`, and `prUrl` are writable.
+ * Updates `updatedAt` automatically. Returns the updated card, or undefined if not found.
+ */
+export function updateKnowledgeCard(id: string, patch: KnowledgeCardPatch): KnowledgeCard | undefined {
+  const cards = readKnowledgeCards()
+  const index = cards.findIndex(c => c.id === id)
+  if (index === -1) return undefined
+
+  const updated: KnowledgeCard = {
+    ...cards[index],
+    ...(patch.title   !== undefined && { title:   patch.title }),
+    ...(patch.content !== undefined && { content: patch.content }),
+    ...(patch.tags    !== undefined && { tags:    patch.tags }),
+    ...(patch.prUrl   !== undefined && { prUrl:   patch.prUrl }),
+    updatedAt: new Date().toISOString(),
+  }
+  cards[index] = updated
+  persistStore({ cards })
+  return updated
+}
+
+/**
+ * Search knowledge cards by full-text query.
+ * Matches against title, content, and tags (case-insensitive).
+ * Returns cards sorted by relevance (title match first).
+ */
+export function searchKnowledgeCards(query: string): KnowledgeCard[] {
+  if (!query.trim()) return readKnowledgeCards()
+  const q = query.toLowerCase()
+  return readKnowledgeCards()
+    .map(card => {
+      const titleMatch = card.title.toLowerCase().includes(q) ? 2 : 0
+      const contentMatch = card.content.toLowerCase().includes(q) ? 1 : 0
+      const tagMatch = card.tags.some(t => t.toLowerCase().includes(q)) ? 1 : 0
+      return { card, score: titleMatch + contentMatch + tagMatch }
+    })
+    .filter(s => s.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map(s => s.card)
+}

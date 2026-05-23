@@ -14,6 +14,7 @@ export type AuditAction =
   | 'brief.updated'
   | 'brief.deleted'
   | 'knowledge_card.created'
+  | 'knowledge_card.updated'
   | 'knowledge_card.deleted'
 
 export interface AuditEntry {

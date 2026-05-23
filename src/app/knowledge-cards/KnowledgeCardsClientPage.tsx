@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import type { KnowledgeCard } from '@/lib/knowledge/knowledge-card'
 import { Badge, EmptyState, Metric, Panel, buttonClassName } from '@/components/ui/primitives'
@@ -52,19 +52,77 @@ function collectTags(cards: KnowledgeCard[]): string[] {
   return Array.from(set).sort()
 }
 
-export function KnowledgeCardsClientPage({ cards }: Props) {
+/** Client-side full-text filter matching title, content, and tags. */
+function clientSearch(cards: KnowledgeCard[], q: string): KnowledgeCard[] {
+  if (!q.trim()) return cards
+  const ql = q.toLowerCase()
+  return cards.filter(c =>
+    c.title.toLowerCase().includes(ql) ||
+    c.content.toLowerCase().includes(ql) ||
+    c.tags.some(t => t.toLowerCase().includes(ql)),
+  )
+}
+
+export function KnowledgeCardsClientPage({ cards: initialCards }: Props) {
+  const [cards, setCards]       = useState<KnowledgeCard[]>(initialCards)
   const [filterTag, setFilterTag] = useState<string>('')
+  const [searchQuery, setSearchQuery] = useState<string>('')
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  const filteredCards = useMemo(() => {
-    if (!filterTag) return cards
-    return cards.filter(c => c.tags.includes(filterTag))
-  }, [cards, filterTag])
+  // ── Delete handler ──────────────────────────────────────────────────────────
+  const handleDelete = useCallback(async (id: string): Promise<boolean> => {
+    setErrorMessage(null)
+    try {
+      const res = await fetch(`/api/knowledge-cards/${encodeURIComponent(id)}`, { method: 'DELETE' })
+      if (!res.ok) {
+        setErrorMessage(`Lektion konnte nicht gelöscht werden (HTTP ${res.status}).`)
+        return false
+      }
+      setCards(prev => prev.filter(c => c.id !== id))
+      return true
+    } catch {
+      setErrorMessage('Lektion konnte nicht gelöscht werden.')
+      return false
+    }
+  }, [])
 
-  const grouped = useMemo(() => groupBySource(filteredCards), [filteredCards])
-  const allTags = useMemo(() => collectTags(cards), [cards])
+  // ── Patch handler ────────────────────────────────────────────────────────────
+  const handlePatch = useCallback(async (
+    id: string,
+    patch: Partial<Pick<KnowledgeCard, 'title' | 'content' | 'tags'>>,
+  ): Promise<boolean> => {
+    setErrorMessage(null)
+    try {
+      const res = await fetch(`/api/knowledge-cards/${encodeURIComponent(id)}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(patch),
+      })
+      if (!res.ok) {
+        setErrorMessage(`Lektion konnte nicht gespeichert werden (HTTP ${res.status}).`)
+        return false
+      }
+      const updated = await res.json() as KnowledgeCard
+      setCards(prev => prev.map(c => c.id === id ? updated : c))
+      return true
+    } catch {
+      setErrorMessage('Lektion konnte nicht gespeichert werden.')
+      return false
+    }
+  }, [])
 
-  const oldest = cards.length > 0 ? cards[cards.length - 1] : null
-  const newest = cards.length > 0 ? cards[0] : null
+  // ── Filtering + search ───────────────────────────────────────────────────────
+  const filtered = useMemo(() => {
+    let result = cards
+    if (filterTag) result = result.filter(c => c.tags.includes(filterTag))
+    if (searchQuery) result = clientSearch(result, searchQuery)
+    return result
+  }, [cards, filterTag, searchQuery])
+
+  const grouped  = useMemo(() => groupBySource(filtered), [filtered])
+  const allTags  = useMemo(() => collectTags(cards),       [cards])
+  const oldest   = cards.length > 0 ? cards[cards.length - 1] : null
+  const newest   = cards.length > 0 ? cards[0] : null
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -112,6 +170,23 @@ export function KnowledgeCardsClientPage({ cards }: Props) {
           />
         </section>
 
+        {/* Search input */}
+        <div className="mb-4">
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Lektionen durchsuchen…"
+            className="w-full rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500/40"
+          />
+        </div>
+
+        {errorMessage && (
+          <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            {errorMessage}
+          </div>
+        )}
+
         {/* Tag filter */}
         {allTags.length > 0 && (
           <div className="mb-6 flex flex-wrap items-center gap-2">
@@ -143,18 +218,18 @@ export function KnowledgeCardsClientPage({ cards }: Props) {
         )}
 
         {/* Cards grouped by delegation or empty state */}
-        {filteredCards.length === 0 ? (
+        {filtered.length === 0 ? (
           <EmptyState
-            title="Noch keine Wissenskarten"
+            title="Keine Wissenskarten gefunden"
             description={
-              filterTag
-                ? `Keine Karten mit Tag "${filterTag}". Filter zurücksetzen oder Delegationen ausführen um Wissen zu generieren.`
+              searchQuery || filterTag
+                ? 'Keine Karten für diese Suche. Suchbegriff oder Filter anpassen.'
                 : 'Noch keine Wissenskarten. Delegationen ausführen um Wissen zu generieren.'
             }
             action={
-              filterTag ? (
+              (searchQuery || filterTag) ? (
                 <button
-                  onClick={() => setFilterTag('')}
+                  onClick={() => { setFilterTag(''); setSearchQuery('') }}
                   className={buttonClassName('secondary')}
                 >
                   Filter zurücksetzen
@@ -174,6 +249,8 @@ export function KnowledgeCardsClientPage({ cards }: Props) {
                 sourceId={sourceId}
                 cards={groupCards}
                 formatDate={formatDate}
+                onDelete={handleDelete}
+                onPatch={handlePatch}
               />
             ))}
           </div>
@@ -194,10 +271,14 @@ function DelegationGroup({
   sourceId,
   cards,
   formatDate,
+  onDelete,
+  onPatch,
 }: {
   sourceId: string
   cards: KnowledgeCard[]
   formatDate: (iso: string) => string
+  onDelete: (id: string) => Promise<boolean>
+  onPatch: (id: string, patch: Partial<Pick<KnowledgeCard, 'title' | 'content' | 'tags'>>) => Promise<boolean>
 }) {
   const newest = cards[0]
 
@@ -230,7 +311,13 @@ function DelegationGroup({
       <Panel>
         <div className="divide-y divide-slate-800">
           {cards.map(card => (
-            <KnowledgeCardRow key={card.id} card={card} formatDate={formatDate} />
+            <KnowledgeCardRow
+              key={card.id}
+              card={card}
+              formatDate={formatDate}
+              onDelete={onDelete}
+              onPatch={onPatch}
+            />
           ))}
         </div>
       </Panel>
@@ -241,24 +328,125 @@ function DelegationGroup({
 function KnowledgeCardRow({
   card,
   formatDate,
+  onDelete,
+  onPatch,
 }: {
   card: KnowledgeCard
   formatDate: (iso: string) => string
+  onDelete: (id: string) => Promise<boolean>
+  onPatch: (id: string, patch: Partial<Pick<KnowledgeCard, 'title' | 'content' | 'tags'>>) => Promise<boolean>
 }) {
+  const [editing, setEditing]     = useState(false)
+  const [editTitle, setEditTitle] = useState(card.title)
+  const [editBody, setEditBody]   = useState(card.content)
+  const [editTags, setEditTags]   = useState(card.tags.join(', '))
+  const [saving, setSaving]       = useState(false)
+  const [deleting, setDeleting]   = useState(false)
+
+  const handleSave = async () => {
+    setSaving(true)
+    const tags = editTags.split(',').map(t => t.trim()).filter(Boolean)
+    const ok = await onPatch(card.id, { title: editTitle.trim(), content: editBody.trim(), tags })
+    setSaving(false)
+    if (ok) setEditing(false)
+  }
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    const ok = await onDelete(card.id)
+    if (!ok) setDeleting(false)
+  }
+
+  if (editing) {
+    return (
+      <article className="px-5 py-5 space-y-3">
+        <div>
+          <label className="text-[10px] uppercase tracking-wider text-slate-500">Titel</label>
+          <input
+            type="text"
+            value={editTitle}
+            onChange={e => setEditTitle(e.target.value)}
+            maxLength={200}
+            className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-white focus:border-violet-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="text-[10px] uppercase tracking-wider text-slate-500">Inhalt (Markdown)</label>
+          <textarea
+            value={editBody}
+            onChange={e => setEditBody(e.target.value)}
+            rows={6}
+            maxLength={10_000}
+            className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs font-mono text-slate-200 focus:border-violet-500 focus:outline-none resize-y"
+          />
+        </div>
+        <div>
+          <label className="text-[10px] uppercase tracking-wider text-slate-500">Tags (kommagetrennt)</label>
+          <input
+            type="text"
+            value={editTags}
+            onChange={e => setEditTags(e.target.value)}
+            className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-xs text-white focus:border-violet-500 focus:outline-none"
+          />
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={() => void handleSave()}
+            disabled={saving || !editTitle.trim() || !editBody.trim()}
+            className="rounded bg-violet-600 px-3 py-1 text-xs text-white hover:bg-violet-500 disabled:opacity-40 transition-colors"
+          >
+            {saving ? 'Speichern…' : 'Speichern'}
+          </button>
+          <button
+            onClick={() => {
+              setEditing(false)
+              setEditTitle(card.title)
+              setEditBody(card.content)
+              setEditTags(card.tags.join(', '))
+            }}
+            className="rounded border border-slate-700 px-3 py-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+          >
+            Abbrechen
+          </button>
+        </div>
+      </article>
+    )
+  }
+
   return (
-    <article className="px-5 py-5">
-      {/* Title + date row */}
+    <article className="group px-5 py-5">
+      {/* Title + date + actions row */}
       <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
         <h2 className="text-sm font-semibold leading-snug text-white">
           {card.title}
         </h2>
-        <time
-          dateTime={card.createdAt}
-          className="shrink-0 text-xs text-slate-500"
-          title={formatDate(card.createdAt)}
-        >
-          {formatDate(card.createdAt)}
-        </time>
+        <div className="flex shrink-0 items-center gap-3">
+          <time
+            dateTime={card.createdAt}
+            className="text-xs text-slate-500"
+            title={formatDate(card.createdAt)}
+          >
+            {formatDate(card.createdAt)}
+          </time>
+          {/* Action buttons — visible on hover */}
+          <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+            <button
+              onClick={() => setEditing(true)}
+              aria-label="Lektion bearbeiten"
+              className="rounded px-1.5 py-0.5 text-[10px] text-slate-500 hover:bg-slate-800 hover:text-violet-400 transition-colors"
+            >
+              Bearbeiten
+            </button>
+            <button
+              onClick={() => void handleDelete()}
+              disabled={deleting}
+              aria-label="Lektion löschen"
+              className="rounded px-1.5 py-0.5 text-[10px] text-slate-500 hover:bg-slate-800 hover:text-red-400 disabled:opacity-40 transition-colors"
+            >
+              {deleting ? '…' : 'Löschen'}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Tag chips */}
