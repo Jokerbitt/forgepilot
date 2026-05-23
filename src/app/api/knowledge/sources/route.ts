@@ -7,7 +7,12 @@ import { parseBody, isValidationError } from '@/lib/validation/api'
 import { KnowledgeSourceSchema } from '@/lib/validation/schemas'
 
 export async function GET() {
-  return NextResponse.json(getSources())
+  const now = Date.now()
+  const sources = getSources().map(s => ({
+    ...s,
+    isStale: now - new Date(s.lastFetched).getTime() > (s.freshnessTtlHours ?? 168) * 3_600_000,
+  }))
+  return NextResponse.json(sources)
 }
 
 export async function POST(req: NextRequest) {
