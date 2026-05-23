@@ -567,6 +567,33 @@ describe('buildDailyReport', () => {
     expect(report.markdown).toContain('Safe start batch: high, mid')
     expect(report.markdown).toContain('/api/delegations/high/start')
   })
+
+  it('shows blocked approved delegations with concrete fix reasons', () => {
+    const report = buildDailyReport({
+      now,
+      storageMode: 'postgres',
+      authDisabled: false,
+      projectBriefs: [brief({ status: 'accepted' })],
+      knowledgeCards: [],
+      attentionItems: [],
+      delegations: [
+        delegation({
+          id: 'blocked-budget',
+          status: 'approved',
+          title: 'Blocked budget',
+          contract: {
+            ...delegation({}).contract,
+            maxBudgetUsd: 0,
+          },
+        }),
+      ],
+    })
+
+    expect(report.delegationQueuePlan.recommendedStartIds).toEqual([])
+    expect(report.delegationQueuePlan.blockedStartIds).toEqual(['blocked-budget'])
+    expect(report.markdown).toContain('[BLOCKED] Blocked budget')
+    expect(report.markdown).toContain('Set maxBudgetUsd greater than 0 before automatic execution.')
+  })
 })
 
 describe('renderDailyReportMarkdown', () => {

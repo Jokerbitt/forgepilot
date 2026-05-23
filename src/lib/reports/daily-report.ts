@@ -860,6 +860,11 @@ export function renderDailyReportMarkdown(report: Omit<DailyReport, 'markdown'>)
         ? report.delegationQueuePlan.recommendedBatch.map(item => `- [START] ${item.title}: ${item.actionHref}`)
         : ['- No approved delegation is ready to start.']
     ),
+    ...(
+      report.delegationQueuePlan.blockedStart.length > 0
+        ? report.delegationQueuePlan.blockedStart.map(item => `- [BLOCKED] ${item.title}: ${item.blocker} (${item.href})`)
+        : []
+    ),
     ``,
     `## Top Risks`,
   ]
