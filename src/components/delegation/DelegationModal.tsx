@@ -61,7 +61,7 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
 
   // Expert mode states — model & provider (#13)
   const [llmProvider, setLlmProvider] = useState<string>('anthropic')
-  const [llmModel, setLlmModel] = useState<string>('claude-sonnet-4-5')
+  const [llmModel, setLlmModel] = useState<string>('claude-sonnet-4-6')
   const [customLlmModels, setCustomLlmModels] = useState<string[]>([])
 
   // Execution (#14)
@@ -173,7 +173,7 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
         requiresApproval,
         privacyMode: isExpertMode ? privacyMode : 'local',
         llmProvider: isExpertMode ? llmProvider : 'anthropic',
-        llmModel: isExpertMode ? llmModel : 'claude-sonnet-4-5',
+        llmModel: isExpertMode ? llmModel : 'claude-sonnet-4-6',
         toolPolicy: isExpertMode ? toolPolicy : 'all',
         outputPolicy: isExpertMode ? outputPolicy : 'pr-and-writeback',
         createdAt: new Date().toISOString()
@@ -329,8 +329,10 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
                       className="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2 text-white"
                     >
                       <optgroup label="Anthropic">
-                        <option value="claude-sonnet-4-5">Claude Sonnet 4.5 (Empfohlen)</option>
-                        <option value="claude-opus-4-5">Claude Opus 4.5 (Stärkste Reasoning)</option>
+                        <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (Empfohlen)</option>
+                        <option value="claude-sonnet-4-5">Claude Sonnet 4.5</option>
+                        <option value="claude-opus-4-7">Claude Opus 4.7 (Stärkste Reasoning)</option>
+                        <option value="claude-opus-4-5">Claude Opus 4.5</option>
                         <option value="claude-haiku-4-5">Claude Haiku 4.5 (Schnell)</option>
                       </optgroup>
                       <optgroup label="Google">

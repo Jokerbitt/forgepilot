@@ -65,6 +65,20 @@ const AGENT_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'edit_file',
+    description: 'Replace an exact string in a file. Safer than write_file for targeted changes — read the file first to get the exact text. Fails if old_string is not found or occurs more than once (unless replace_all is true).',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        path: { type: 'string', description: 'File path relative to project root' },
+        old_string: { type: 'string', description: 'The exact text to replace (must be unique in the file)' },
+        new_string: { type: 'string', description: 'The replacement text' },
+        replace_all: { type: 'boolean', description: 'Replace all occurrences (default: false)' },
+      },
+      required: ['path', 'old_string', 'new_string'],
+    },
+  },
+  {
     name: 'list_files',
     description: 'List files and directories at a path.',
     input_schema: {
@@ -218,6 +232,9 @@ function isSafePath(filePath: string, projectRoot: string): boolean {
 interface ToolInput {
   path?: string
   content?: string
+  old_string?: string
+  new_string?: string
+  replace_all?: boolean
   dir?: string
   pattern?: string
   command?: string
@@ -258,6 +275,26 @@ function executeTool(
         fs.writeFileSync(full, input.content ?? '', 'utf-8')
         log('command', `write_file: ${fp}`)
         return { result: `Wrote ${fp}` }
+      } catch (e) { return { result: `Error: ${String(e)}` } }
+    }
+    case 'edit_file': {
+      const fp = input.path ?? ''
+      if (!isSafePath(fp, projectRoot)) return { result: `Error: '${fp}' is blocked` }
+      const oldStr = input.old_string ?? ''
+      const newStr = input.new_string ?? ''
+      if (!oldStr) return { result: 'Error: old_string is required' }
+      try {
+        const full = path.resolve(projectRoot, fp)
+        const original = fs.readFileSync(full, 'utf-8')
+        const occurrences = original.split(oldStr).length - 1
+        if (occurrences === 0) return { result: `Error: old_string not found in '${fp}' — read the file first to get the exact text` }
+        if (occurrences > 1 && !input.replace_all) return { result: `Error: old_string occurs ${occurrences} times in '${fp}' — use replace_all: true or make old_string more specific` }
+        const updated = input.replace_all
+          ? original.split(oldStr).join(newStr)
+          : original.replace(oldStr, newStr)
+        fs.writeFileSync(full, updated, 'utf-8')
+        log('command', `edit_file: ${fp} (${occurrences} replacement${occurrences > 1 ? 's' : ''})`)
+        return { result: `Edited ${fp}` }
       } catch (e) { return { result: `Error: ${String(e)}` } }
     }
     case 'list_files': {
@@ -394,6 +431,22 @@ export async function runWithToolUse(
   const budgetLabel = budgetUsd != null ? `, budget: $${budgetUsd.toFixed(2)}` : ''
   log('info', `Starting tool-use agent (model: ${model}, maxTurns: ${maxTurns}${budgetLabel})`)
 
+  const SYSTEM_PROMPT = `You are an autonomous software engineering agent for ForgePilot — a local-first AI Workflow OS (Next.js 14 App Router, TypeScript strict, Tailwind CSS, Vitest).
+
+Rules you must follow:
+- TypeScript strict: no \`any\` types, no type assertions without justification
+- Always work on a feature branch (feat/ or fix/) — never commit directly to main or master
+- Run \`npm run type-check\` and \`npm run test:run\` after changes to catch regressions
+- Commit messages: conventional commits format (feat:, fix:, test:, docs:, refactor:)
+- Write minimal, targeted changes — no refactoring beyond what the task requires
+- No secrets, credentials, or API keys in code or commit messages
+- Call task_complete when done — include a clear summary and list of changed files
+
+Tool guidance:
+- Use edit_file for targeted changes to existing files (read the file first to get exact text)
+- Use write_file only for new files or complete rewrites
+- edit_file fails if old_string is not unique — make it longer to disambiguate`
+
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: prompt }]
   let turnsUsed = 0
   let totalInput = 0
@@ -420,6 +473,7 @@ export async function runWithToolUse(
     const response = await client.messages.create({
       model,
       max_tokens: 8192,
+      system: SYSTEM_PROMPT,
       tools: AGENT_TOOLS,
       messages,
     })
