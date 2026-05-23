@@ -45,7 +45,7 @@ const STATUS_COLOR: Record<string, string> = {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  pending:   'Pending',
+  pending:   'Ausstehend',
   approved:  'Genehmigt',
   running:   'Läuft',
   completed: 'Fertig',
