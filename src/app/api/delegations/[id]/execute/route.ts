@@ -37,6 +37,7 @@ import type { MemoryCard } from '@/lib/knowledge/types'
 import { checkParallelCompletion } from '@/lib/delegation-parallel'
 import { triggerCriticRetry } from '@/lib/delegations/critic-retry'
 import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-runtime-evidence'
+import { prepareRunnerWorkspace, type RunnerWorkspace } from '@/lib/agent-runner/worktree'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
@@ -217,14 +218,46 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     ...(ghToken ? { GH_TOKEN: ghToken, GITHUB_TOKEN: ghToken } : {}),
   }
 
+  let runnerWorkspace: RunnerWorkspace
+  try {
+    runnerWorkspace = prepareRunnerWorkspace({ delegationId: id })
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    void appendLogs(id, [{
+      timestamp: new Date().toISOString(),
+      type: 'error',
+      message: `❌ Runner-Workspace konnte nicht vorbereitet werden: ${msg}`,
+    }], 'failed')
+    upsertAttentionItem({
+      id: `completion:${id}`,
+      type: 'delegation_failed',
+      severity: 'critical',
+      title: '❌ Runner-Workspace fehlgeschlagen',
+      body: msg.slice(0, 200),
+      delegationId: id,
+      actionUrl: `/delegations/${id}`,
+      createdAt: new Date().toISOString(),
+    })
+    return
+  }
+
+  void appendLogs(id, [{
+    timestamp: new Date().toISOString(),
+    type: 'info',
+    message: `Runner-Workspace vorbereitet: ${runnerWorkspace.path}`,
+  }])
+
   const proc = spawn(
     'claude',
     ['-p', prompt, '--dangerously-skip-permissions', '--max-turns', String(maxTurns)],
     {
-      cwd: process.cwd(),
+      cwd: runnerWorkspace.path,
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: childEnv,
+      env: {
+        ...childEnv,
+        FORGEPILOT_RUNNER_WORKTREE: runnerWorkspace.path,
+      },
     },
   )
   proc.unref()
@@ -324,8 +357,25 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       ? { keyPoints: ['Ausführung via Claude CLI abgeschlossen'], changes: [], timeTakenMinutes: elapsed, ...(prUrl ? { prUrl, prState: 'open' as const } : {}) }
       : undefined
 
+    const cleanupRunnerWorkspace = () => {
+      try {
+        runnerWorkspace.cleanup()
+      } catch (cleanupError) {
+        delegationLogger.warn(
+          {
+            event: 'delegation.runner_workspace_cleanup_failed',
+            delegationId: id,
+            error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+            workspacePath: runnerWorkspace.path,
+          },
+          'Runner workspace cleanup failed',
+        )
+      }
+    }
+
     // Only update if still running (not already cancelled)
     void (async () => {
+      try {
       const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
       const current = await repo.findById(id)
       if (!current || current.status !== 'running') return
@@ -517,6 +567,9 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
           })
         }
       }
+      }
+      } finally {
+        cleanupRunnerWorkspace()
       }
     })()
   })

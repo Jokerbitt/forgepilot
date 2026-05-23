@@ -15,6 +15,13 @@
       "when": 1779540882653,
       "tag": "0001_delegation_context_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779542100000,
+      "tag": "0002_delegation_lifecycle_timestamps",
+      "breakpoints": true
     }
   ]
 }

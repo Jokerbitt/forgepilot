@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { parseBody, isValidationError } from '@/lib/validation/api'
 import {
   createDelegationRepository,
+  getDelegationStorageMode,
   SINGLE_TENANT_USER_ID,
 } from '@/lib/repositories/delegationRepository'
 import { reapStaleDelegations } from '@/lib/delegations/watchdog'
@@ -28,6 +29,8 @@ const DelegationInputSchema = z.object({
   autoOrchestrate: z.boolean().optional(),
   dataSubjectId:   z.string().optional(),
 }).passthrough()  // allow extra fields from existing clients
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function backfillTitle(d: Delegation): Delegation {
   if (d.title) return d
@@ -85,6 +88,18 @@ export async function POST(request: NextRequest) {
         : withTitle
 
     const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+    const storageMode = getDelegationStorageMode()
+
+    if (
+      autoApproved.id
+      && (storageMode === 'postgres' || storageMode === 'dual')
+      && !UUID_PATTERN.test(autoApproved.id)
+    ) {
+      return NextResponse.json(
+        { error: 'Delegation id must be a UUID when PostgreSQL storage is active.' },
+        { status: 400 },
+      )
+    }
 
     // If delegation already exists (has an id matching an existing one), update it
     if (autoApproved.id) {
