@@ -38,7 +38,9 @@ const mockShouldProtect = vi.mocked(shouldProtectPath)
 const mockIsPublicOperational = vi.mocked(isPublicOperationalPath)
 const mockRateLimitCheck = vi.mocked(rateLimiterStore.check)
 
-function makeRequest(url: string, options?: RequestInit): NextRequest {
+type NextRequestInit = ConstructorParameters<typeof NextRequest>[1]
+
+function makeRequest(url: string, options?: NextRequestInit): NextRequest {
   return new NextRequest(url, options)
 }
 
