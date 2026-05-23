@@ -125,6 +125,8 @@ export default function KnowledgeCenterPage() {
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null)
   const [indexing, setIndexing] = useState(false)
   const [indexResult, setIndexResult] = useState<IndexResult | null>(null)
+  const [delegationLessons, setDelegationLessons] = useState(0)
+  const [snapshotCoverage, setSnapshotCoverage] = useState<{ total: number; withSnapshot: number }>({ total: 0, withSnapshot: 0 })
 
   const debouncedSearch = useDebounced(search, 300)
 
@@ -133,11 +135,16 @@ export default function KnowledgeCenterPage() {
       fetch('/api/knowledge/cards').then(r => r.json()) as Promise<MemoryCard[]>,
       fetch('/api/knowledge/sources').then(r => r.json()) as Promise<KnowledgeSource[]>,
       fetch('/api/delegations').then(r => r.json()).catch(() => []) as Promise<Delegation[]>,
+      fetch('/api/knowledge/stats').then(r => r.json()).catch(() => null) as Promise<{ delegationLessons?: number; delegationsTotal?: number; delegationsWithSnapshot?: number } | null>,
     ])
-      .then(([c, s, d]) => {
+      .then(([c, s, d, stats]) => {
         setCards(Array.isArray(c) ? c : [])
         setSources(Array.isArray(s) ? s : [])
         setDelegations(Array.isArray(d) ? d : [])
+        if (stats) {
+          setDelegationLessons(stats.delegationLessons ?? 0)
+          setSnapshotCoverage({ total: stats.delegationsTotal ?? 0, withSnapshot: stats.delegationsWithSnapshot ?? 0 })
+        }
       })
       .catch(() => { setCards([]); setSources([]) })
   }, [])
@@ -245,9 +252,16 @@ export default function KnowledgeCenterPage() {
           )}
         </header>
 
-        <section className="mb-6 grid gap-3 md:grid-cols-5">
+        <section className="mb-6 grid gap-3 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
           <KnowledgeMetric label="Memory Cards" value={cards.length} detail="kuratierte Agenten-Erinnerungen" />
           <KnowledgeMetric label="Quellen" value={sources.length} detail="registrierte Wissensquellen" />
+          <KnowledgeMetric label="Lektionen" value={delegationLessons} detail="Delegation-Wissensskarten" tone={delegationLessons > 0 ? 'good' : 'neutral'} />
+          <KnowledgeMetric
+            label="Kontext-Snapshots"
+            value={snapshotCoverage.withSnapshot}
+            detail={snapshotCoverage.total > 0 ? `von ${snapshotCoverage.total} Delegationen` : 'keine Delegationen'}
+            tone={snapshotCoverage.total > 0 && snapshotCoverage.withSnapshot / snapshotCoverage.total > 0.5 ? 'good' : 'neutral'}
+          />
           <KnowledgeMetric label="Quellen veraltet" value={staleCount} detail="brauchen Refresh" tone={staleCount > 0 ? 'warn' : 'neutral'} />
           <KnowledgeMetric label="Karten veraltet" value={staleCardCount} detail={`älter als ${STALE_THRESHOLD_DAYS} Tage`} tone={staleCardCount > 0 ? 'warn' : 'neutral'} />
           <KnowledgeMetric label="Privacy Guard" value={indexResult?.sensitiveSkipped ?? 0} detail="sensitive Dateien übersprungen" tone="good" />
