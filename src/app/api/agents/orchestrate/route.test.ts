@@ -53,7 +53,7 @@ describe('POST /api/agents/orchestrate', () => {
       id: 'orch-run-1',
       delegationId: 'del-1',
       status: 'pending',
-    } as ReturnType<typeof createRun>)
+    } as unknown as ReturnType<typeof createRun>)
 
     const { POST } = await import('./route')
     const req = new NextRequest('http://localhost/api/agents/orchestrate', {

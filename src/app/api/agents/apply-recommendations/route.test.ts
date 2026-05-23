@@ -14,7 +14,7 @@ describe('GET /api/agents/apply-recommendations', () => {
     const { getConfidenceOverrides } = await import('@/lib/agents/skill-evolver')
     vi.mocked(getConfidenceOverrides).mockReturnValue([
       { agentType: 'claude-code', category: 'coding', factor: 1.1 },
-    ] as ReturnType<typeof getConfidenceOverrides>)
+    ] as unknown as ReturnType<typeof getConfidenceOverrides>)
 
     const { GET } = await import('./route')
     const res = await GET()

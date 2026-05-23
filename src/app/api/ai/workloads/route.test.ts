@@ -15,7 +15,7 @@ beforeEach(() => {
 describe('POST /api/ai/workloads', () => {
   it('returns embedding result for embed workload', async () => {
     const { embed } = await import('@/lib/ai/ollama-workloads')
-    vi.mocked(embed).mockResolvedValue({ embedding: [0.1, 0.2, 0.3], model: 'nomic-embed-text' })
+    vi.mocked(embed).mockResolvedValue({ vector: [0.1, 0.2, 0.3], model: 'nomic-embed-text', dimensions: 3 })
 
     const { POST } = await import('./route')
     const req = new NextRequest('http://localhost/api/ai/workloads', {
@@ -24,15 +24,15 @@ describe('POST /api/ai/workloads', () => {
       headers: { 'Content-Type': 'application/json' },
     })
     const res = await POST(req)
-    const body = await res.json() as { embedding: number[] }
+    const body = await res.json() as { vector: number[] }
 
     expect(res.status).toBe(200)
-    expect(body.embedding).toHaveLength(3)
+    expect(body.vector).toHaveLength(3)
   })
 
   it('returns summary for summarize workload', async () => {
     const { summarize } = await import('@/lib/ai/ollama-workloads')
-    vi.mocked(summarize).mockResolvedValue({ summary: 'Short summary.', sentences: 1 })
+    vi.mocked(summarize).mockResolvedValue({ summary: 'Short summary.', model: 'llama3.2' })
 
     const { POST } = await import('./route')
     const req = new NextRequest('http://localhost/api/ai/workloads', {

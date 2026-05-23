@@ -31,7 +31,7 @@ describe('POST /api/eval/score', () => {
     } as unknown as ReturnType<typeof scoreOutput>)
 
     vi.mocked(detectRegression).mockReturnValue(null)
-    vi.mocked(saveEvalResult).mockReturnValue(undefined)
+    vi.mocked(saveEvalResult).mockResolvedValue(undefined)
 
     const { POST } = await import('./route')
     const req = new NextRequest('http://localhost/api/eval/score', {

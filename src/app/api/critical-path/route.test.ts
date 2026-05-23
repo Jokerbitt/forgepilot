@@ -12,7 +12,7 @@ describe('GET /api/critical-path', () => {
   it('returns critical path result', async () => {
     const { computeCriticalPath } = await import('@/lib/criticalPath')
     vi.mocked(computeCriticalPath).mockResolvedValue({
-      issues: [{ id: 'JOK-1', title: 'Auth module', estimate: 3 }],
+      issues: [{ id: 'JOK-1', title: 'Auth module', priority: 1, status: 'Todo', estimate: 3 }],
       totalEstimate: 3,
       longestChain: 1,
     })
