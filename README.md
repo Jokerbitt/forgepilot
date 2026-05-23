@@ -4,7 +4,7 @@
 > The local AI workflow tool that coordinates agents and keeps you in control.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-violet.svg)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-1606%20passing-brightgreen)](./src)
+[![Tests](https://img.shields.io/badge/tests-2819%20passing-brightgreen)](./src)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](./tsconfig.json)
 [![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org)
 
@@ -129,6 +129,8 @@ For Grok 4 Heavy as a coding and validation partner, use [`docs/GROK_HEAVY_VALID
 npm run dev
 ```
 
+See [docs/secure-deployment.md](docs/secure-deployment.md) for a full guide including NAS/Docker setup, reverse proxy, rate limiting, and secret generation.
+
 **Docker with Postgres**
 ```bash
 docker-compose up -d
@@ -175,7 +177,7 @@ npm run db:verify-cutover
 - **Next.js 15** App Router, TypeScript strict
 - **Tailwind CSS** dark theme
 - **Drizzle ORM** + postgres-js — schema-first, no magic
-- **Vitest** — 1606 tests
+- **Vitest** — 2819 tests
 - **NextAuth v4** credentials provider
 
 ---
