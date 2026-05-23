@@ -97,6 +97,16 @@ export interface TaskContract {
   /** G2: If true, automatically queue a retry delegation when critic score < 70 */
   autoRetryOnCriticFail?: boolean
   createdAt: string
+  // Expert Mode Policy Fields (#19)
+  llmProvider?: string
+  toolPolicy?: 'all' | 'code-read' | 'code-write' | 'web-search' | 'restricted' | 'custom'
+  toolAllowList?: string[]
+  toolDenyList?: string[]
+  outputPolicy?: 'pr' | 'writeback' | 'pr-and-writeback' | 'none'
+  approvalMode?: 'auto' | 'manual' | 'skip'
+  approvalThreshold?: number
+  writeScope?: string[]
+  executionRoute?: string
 }
 
 /** M181: Grok Critic result stored after successful execution */
