@@ -9,6 +9,7 @@ import { PreFlightModal } from '@/components/delegation/PreFlightModal'
 import { PolicyVerdictPanel } from '@/components/delegation/PolicyVerdictPanel'
 import { ContextPackageBuilder } from '@/components/delegation/ContextPackageBuilder'
 import { PipelineRunner } from '@/components/delegation/PipelineRunner'
+import { captureError } from '@/lib/logger/browser'
 
 type Tab = 'details' | 'logs' | 'report' | 'notes'
 
@@ -255,7 +256,7 @@ export function DelegationDrawer({ delegation, onClose, onUpdate, onDelete }: Pr
       const updated: Delegation = { ...delegation, status: 'running', updatedAt: new Date().toISOString() }
       onUpdate(updated)
     } else {
-      console.error('Execute failed:', data.error)
+      captureError(new Error(String(data.error)), 'DelegationDrawer:execute')
     }
   }
 

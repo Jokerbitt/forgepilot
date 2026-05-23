@@ -1,6 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import type { PilotRunResult, PilotStep } from '@/lib/pilot/types'
 import { cx } from '@/components/ui/primitives'
 
@@ -28,7 +30,10 @@ function stepColor(s: PilotStep['status']): string {
 type PrivacyMode = 'local-only' | 'hybrid' | 'cloud-approved'
 type RiskClass = 'A' | 'B' | 'C'
 
+const AUTO_NAVIGATE_DELAY_MS = 4_000
+
 export default function PilotPage() {
+  const router = useRouter()
   const [workItemId, setWorkItemId] = useState('LOCAL-DEMO-001')
   const [title, setTitle] = useState('')
   const [goal, setGoal] = useState('')
@@ -38,6 +43,25 @@ export default function PilotPage() {
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<PilotRunResult | null>(null)
   const [error, setError] = useState('')
+  const [countdown, setCountdown] = useState<number | null>(null)
+
+  // Auto-navigate to delegation when pilot creates one
+  useEffect(() => {
+    if (!result?.delegationId) return
+    const total = Math.round(AUTO_NAVIGATE_DELAY_MS / 1000)
+    setCountdown(total)
+    const interval = setInterval(() => {
+      setCountdown(prev => {
+        if (prev === null || prev <= 1) {
+          clearInterval(interval)
+          router.push(`/delegations/${result.delegationId}`)
+          return null
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [result?.delegationId, router])
 
   const handleRun = async () => {
     if (!workItemId.trim() || !title.trim() || !goal.trim()) {
@@ -184,6 +208,29 @@ export default function PilotPage() {
                 {result.totalDurationMs}ms
               </span>
             </div>
+
+            {/* Delegation bridge — shown when pilot creates a real delegation */}
+            {result.delegationId && (
+              <div className="mb-4 rounded-lg border border-sky-700/50 bg-sky-900/20 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-sky-400">Delegation erstellt</p>
+                    <p className="mt-1 font-mono text-xs text-slate-400 break-all">{result.delegationId}</p>
+                    {countdown !== null && (
+                      <p className="mt-1.5 text-xs text-slate-500">
+                        Weiterleitung in {countdown}s…
+                      </p>
+                    )}
+                  </div>
+                  <Link
+                    href={`/delegations/${result.delegationId}`}
+                    className="shrink-0 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500 transition-colors"
+                  >
+                    Jetzt öffnen →
+                  </Link>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               {result.steps.map((step, i) => (

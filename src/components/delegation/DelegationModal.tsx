@@ -6,6 +6,7 @@ import type { NBARecommendation } from '@/lib/models/nba'
 import type { Delegation, ExecutionRoute, PrivacyMode } from '@/lib/models/delegation'
 import type { NBAConfig } from '@/lib/nba-engine/nba-config'
 import { shouldRequireApproval } from '@/lib/nba-engine/approval-policy'
+import { captureError } from '@/lib/logger/browser'
 
 type BranchStrategy = 'feature' | 'fix' | 'chore'
 type ToolPolicy = 'all' | 'code-read' | 'code-write' | 'web-search' | 'restricted' | 'custom'
@@ -100,7 +101,7 @@ export function DelegationModal({ rec, isOpen, onClose }: DelegationModalProps) 
         setAutopilotMinScore(data.autopilotMinScore ?? 85)
         setAutopilotMaxRiskClass(data.autopilotMaxRiskClass ?? 'A')
       }
-    }).catch(console.error)
+    }).catch(err => captureError(err, 'DelegationModal:loadSettings'))
   }, [])
 
   // Seed workItemId from the recommendation when opening the modal so a user

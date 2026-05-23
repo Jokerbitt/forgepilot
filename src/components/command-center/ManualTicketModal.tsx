@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { RiskClass } from '@/lib/models/work-item'
+import { captureError } from '@/lib/logger/browser'
 
 interface ManualTicketModalProps {
   isOpen: boolean
@@ -49,7 +50,7 @@ export function ManualTicketModal({ isOpen, onClose, availableProjects, availabl
       })
       return newValue
     } catch (e) {
-      console.error(e)
+      captureError(e, 'ManualTicketModal:submit')
       return newValue
     }
   }
@@ -87,7 +88,7 @@ export function ManualTicketModal({ isOpen, onClose, availableProjects, availabl
       onClose()
       router.refresh()
     } catch (err) {
-      console.error(err)
+      captureError(err, 'ManualTicketModal:delegate')
       setSaving(false)
     }
   }

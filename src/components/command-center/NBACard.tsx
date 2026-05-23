@@ -6,6 +6,7 @@ import { TaskDetailModal } from '@/components/delegation/TaskDetailModal'
 import type { NBAConfig } from '@/lib/nba-engine/nba-config'
 import { shouldRequireApproval } from '@/lib/nba-engine/approval-policy'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
+import { captureError } from '@/lib/logger/browser'
 
 const actionTranslations: Record<string, string> = {
   'do-now': 'JETZT MACHEN',
@@ -64,13 +65,13 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
         setAutopilotMinScore(data.autopilotMinScore ?? 85)
         setAutopilotMaxRiskClass(data.autopilotMaxRiskClass ?? 'A')
       }
-    }).catch(console.error)
+    }).catch(err => captureError(err, 'NBACard:fetch'))
 
     fetch('/api/delegations').then(res => res.json()).then((data: Delegation[]) => {
       if (data && Array.isArray(data)) {
         setTicketTasks(data.filter(d => d.contract?.workItemId === workItem.id))
       }
-    }).catch(console.error)
+    }).catch(err => captureError(err, 'NBACard:fetch'))
   }, [workItem.id])
 
   const handlePin = async () => {
@@ -124,7 +125,7 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
         })
         router.refresh()
       } catch (err) {
-        console.error(err)
+        captureError(err, 'NBACard:createQuickTask')
         setCreatingQuickTask(false)
       }
     }
@@ -215,7 +216,7 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
       })
       router.refresh()
     } catch (err) {
-      console.error(err)
+      captureError(err, 'NBACard:delegate')
       setDelegating(false)
     }
   }
@@ -260,7 +261,7 @@ export function NBACard({ rec }: { rec: NBARecommendation }) {
         body: JSON.stringify(updatedTasks)
       })
     } catch (err) {
-      console.error('Failed to update order', err)
+      captureError(err, 'NBACard:updateOrder')
     }
   }
 

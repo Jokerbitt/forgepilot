@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import type { WorkItem } from '@/lib/models/work-item'
+import { captureError } from '@/lib/logger/browser'
 
 interface MagicConfirmModalProps {
   isOpen: boolean
@@ -40,7 +41,7 @@ export function MagicConfirmModal({
             setExistingTickets((data.items as WorkItem[]).filter((item) => item.source === 'local'))
           }
         })
-        .catch(console.error)
+        .catch(err => captureError(err, 'MagicConfirmModal:fetch'))
         .finally(() => setLoadingTickets(false))
     } else {
       setSelectedTicketId('') // Reset when closed

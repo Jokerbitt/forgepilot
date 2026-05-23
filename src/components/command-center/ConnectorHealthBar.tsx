@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { captureError } from '@/lib/logger/browser'
 
 interface HealthResponse {
   connectors: Array<{
@@ -16,7 +17,7 @@ export function ConnectorHealthBar() {
     fetch('/api/connectors/health')
       .then(res => res.json())
       .then(data => setHealth(data))
-      .catch(console.error)
+      .catch(err => captureError(err, 'ConnectorHealthBar:fetch'))
   }, [])
 
   if (!health || !health.connectors) return <div className="h-1 w-full bg-gray-900 animate-pulse" />
