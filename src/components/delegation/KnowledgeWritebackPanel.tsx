@@ -79,7 +79,7 @@ export function KnowledgeWritebackPanel({ delegationId, delegation }: KnowledgeW
           title:    title.trim(),
           content:  content.trim(),
           sourceId: delegationId,
-          briefId:  delegation?.contract.workItemId,
+          briefId:  delegation?.briefId,
           prUrl:    delegation?.summaryReport?.prUrl,
           tags,
         }),
