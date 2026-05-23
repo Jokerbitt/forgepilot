@@ -871,6 +871,29 @@ export default function DelegationDetailPage() {
           </div>
         )}
 
+        {/* ── Context Snapshot (M305) ──────────────────────────────────── */}
+        {d.contextSnapshot && d.contextSnapshot.cards.length > 0 && (
+          <details className="bg-gray-900 border border-gray-800 rounded-xl p-5 group">
+            <summary className="flex items-center justify-between cursor-pointer list-none">
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                Kontext bei Ausführung ({d.contextSnapshot.cards.length} Karten · ~{d.contextSnapshot.tokenEstimate} Tokens)
+              </h2>
+              <span className="text-gray-600 text-xs group-open:rotate-180 transition-transform">▼</span>
+            </summary>
+            <ul className="mt-3 space-y-1">
+              {d.contextSnapshot.cards.map(card => (
+                <li key={card.id} className="flex items-start gap-2 text-xs text-gray-400">
+                  <span className="mt-0.5 px-1.5 py-0.5 rounded bg-gray-800 text-gray-500 font-mono shrink-0">{card.type}</span>
+                  <span>{card.title}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-gray-600">
+              Erstellt: {new Date(d.contextSnapshot.builtAt).toLocaleString('de-DE')}
+            </p>
+          </details>
+        )}
+
         {/* ── Knowledge Writeback ───────────────────────────────────────── */}
         {(d.status === 'completed' || d.status === 'failed') && (
           <KnowledgeWritebackPanel delegationId={id} delegation={d} />

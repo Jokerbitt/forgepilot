@@ -865,6 +865,15 @@ export async function POST(
     if (pkg.cards.length > 0) {
       contextCards = pkg.cards
       delegationLogger.info({ event: 'context.package', cardCount: pkg.cards.length, tokenEstimate: pkg.tokenEstimate })
+      // M305: persist which cards influenced this execution
+      const snapshotRepo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+      await snapshotRepo.update(id, {
+        contextSnapshot: {
+          cards: pkg.cards.map(c => ({ id: c.id, title: c.title, type: c.type, tags: c.tags })),
+          tokenEstimate: pkg.tokenEstimate,
+          builtAt: new Date().toISOString(),
+        },
+      })
     }
   } catch {
     // Non-critical — never block execution
