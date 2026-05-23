@@ -109,6 +109,30 @@ const AGENT_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'git_push_branch',
+    description: 'Push the current branch to origin (required before creating a PR).',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        branch: { type: 'string', description: 'Branch name to push' },
+      },
+      required: ['branch'],
+    },
+  },
+  {
+    name: 'git_create_pr',
+    description: 'Create a GitHub pull request for the current branch using the gh CLI.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        title: { type: 'string', description: 'PR title' },
+        body: { type: 'string', description: 'PR description (markdown)' },
+        base: { type: 'string', description: 'Base branch (default: main)' },
+      },
+      required: ['title', 'body'],
+    },
+  },
+  {
     name: 'task_complete',
     description: 'Signal task completion. Call when done.',
     input_schema: {
@@ -198,6 +222,10 @@ interface ToolInput {
   files_changed?: string[]
   branch_name?: string
   pr_url?: string
+  title?: string
+  body?: string
+  base?: string
+  branch?: string
 }
 
 function executeTool(
@@ -279,6 +307,33 @@ function executeTool(
         execSync(`git commit -m ${JSON.stringify(msg)}`, { cwd: projectRoot, timeout: 10_000 })
         log('command', `git commit: ${msg}`)
         return { result: `Committed: ${msg}` }
+      } catch (e) { return { result: `Error: ${String(e)}` } }
+    }
+    case 'git_push_branch': {
+      const branch = input.branch ?? ''
+      if (!branch) return { result: 'Error: branch name required' }
+      if (branch === 'main' || branch === 'master') return { result: 'Error: cannot push directly to main or master' }
+      if (/[^a-zA-Z0-9/_.-]/.test(branch)) return { result: 'Error: invalid branch name' }
+      try {
+        execSync(`git push -u origin ${branch}`, { cwd: projectRoot, timeout: 30_000 })
+        log('command', `git push origin ${branch}`)
+        return { result: `Pushed branch: ${branch}` }
+      } catch (e) { return { result: `Error: ${String(e)}` } }
+    }
+    case 'git_create_pr': {
+      const title = input.title ?? ''
+      const body = input.body ?? ''
+      const base = input.base ?? 'main'
+      if (!title) return { result: 'Error: PR title required' }
+      if (!/^[a-zA-Z0-9_. /-]+$/.test(base)) return { result: 'Error: invalid base branch name' }
+      try {
+        const out = execSync(
+          `gh pr create --title ${JSON.stringify(title)} --body ${JSON.stringify(body)} --base ${base}`,
+          { cwd: projectRoot, timeout: 30_000, encoding: 'utf-8' },
+        )
+        const prUrl = out.trim().split('\n').pop() ?? ''
+        log('success', `PR created: ${prUrl}`)
+        return { result: prUrl }
       } catch (e) { return { result: `Error: ${String(e)}` } }
     }
     case 'task_complete': {
