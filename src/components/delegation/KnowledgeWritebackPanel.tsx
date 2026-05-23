@@ -57,11 +57,16 @@ export function KnowledgeWritebackPanel({ delegationId, delegation }: KnowledgeW
 
   async function handleDelete(id: string) {
     setDeletingId(id)
+    setSaveError(null)
     try {
-      await fetch(`/api/knowledge-cards/${encodeURIComponent(id)}`, { method: 'DELETE' })
+      const res = await fetch(`/api/knowledge-cards/${encodeURIComponent(id)}`, { method: 'DELETE' })
+      if (!res.ok) {
+        setSaveError(`Lektion konnte nicht gelöscht werden (HTTP ${res.status})`)
+        return
+      }
       setCards(prev => prev.filter(c => c.id !== id))
     } catch {
-      // non-critical — card stays in list
+      setSaveError('Lektion konnte nicht gelöscht werden.')
     } finally {
       setDeletingId(null)
     }
