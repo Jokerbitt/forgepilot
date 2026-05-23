@@ -557,6 +557,33 @@ describe('runWithToolUse', () => {
     expect(captured).toContain('blocked')
   })
 
+  it('run_command output shows tail when output is long', async () => {
+    // Produces output longer than 8000 chars via a simple echo loop
+    const dir = makeTempDir()
+    // Use a file read instead — write a long file and cat it
+    const longContent = 'start-marker\n' + 'x'.repeat(9000) + '\nend-marker'
+    fs.writeFileSync(path.join(dir, 'big.txt'), longContent)
+
+    let captured = ''
+    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+      messages: {
+        create: vi.fn()
+          .mockResolvedValueOnce(toolUseResponse('run_command', { command: 'cat big.txt' }))
+          .mockImplementationOnce(async (req: { messages: Array<{ role: string; content: unknown }> }) => {
+            captured = (req.messages[req.messages.length - 1].content as Array<{ content?: string }>)[0]?.content ?? ''
+            return taskCompleteResponse()
+          }),
+      },
+    }) as unknown as InstanceType<typeof Anthropic>)
+
+    const { runWithToolUse } = await import('./tool-use-runner')
+    await runWithToolUse('Read big file', { apiKey: 'k', projectRoot: dir })
+    // Should contain both start and end markers (smart truncation keeps head + tail)
+    expect(captured).toContain('start-marker')
+    expect(captured).toContain('end-marker')
+    expect(captured).toContain('omitted')
+  })
+
   it('git_commit is blocked when current branch is main', async () => {
     const dir = makeTempDir()
     // Init a git repo on main branch

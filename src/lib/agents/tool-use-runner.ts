@@ -273,6 +273,23 @@ interface ToolInput {
   url?: string
 }
 
+// ─── Output truncation ────────────────────────────────────────────────────────
+
+/**
+ * Truncate long command output smartly: keep first 2 KB + last 4 KB.
+ * This ensures the agent sees both the beginning (compilation header) and
+ * the end (where test failures and error messages appear).
+ */
+function smartTruncate(text: string, maxChars = 8_000): string {
+  if (text.length <= maxChars) return text
+  const headChars = Math.floor(maxChars * 0.25)
+  const tailChars = maxChars - headChars
+  const head = text.slice(0, headChars)
+  const tail = text.slice(-tailChars)
+  const omitted = text.length - headChars - tailChars
+  return `${head}\n\n... [${omitted} chars omitted] ...\n\n${tail}`
+}
+
 // ─── Security: URL guard for fetch_url ────────────────────────────────────────
 
 const BLOCKED_URL_PATTERNS = [
@@ -365,12 +382,19 @@ async function executeTool(
         log('command', `$ ${cmd}`)
         const out = execFileSync(parsed.bin, parsed.args, {
           cwd: projectRoot,
-          timeout: 60_000,
+          timeout: 120_000,
           encoding: 'utf-8',
           stdio: ['ignore', 'pipe', 'pipe'],
         })
-        return { result: out.slice(0, 8_000) || '(no output)' }
+        return { result: smartTruncate(out, 8_000) || '(no output)' }
       } catch (e: unknown) {
+        // execFileSync throws on non-zero exit — include stdout+stderr from the error
+        if (e instanceof Error && 'stdout' in e && 'stderr' in e) {
+          const stdout = String((e as NodeJS.ErrnoException & { stdout: unknown }).stdout ?? '')
+          const stderr = String((e as NodeJS.ErrnoException & { stderr: unknown }).stderr ?? '')
+          const combined = [stdout, stderr].filter(Boolean).join('\n')
+          return { result: `Command failed (exit non-zero):\n${smartTruncate(combined || e.message, 4_000)}` }
+        }
         return { result: `Command failed: ${e instanceof Error ? e.message.slice(0, 2_000) : String(e)}` }
       }
     }
