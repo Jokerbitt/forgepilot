@@ -8,6 +8,7 @@ const { mockAppendExecuteLoopEvidence, mockReadExecuteLoopEvidence } = vi.hoiste
 
 vi.mock('./execute-loop-evidence-store', () => ({
   appendExecuteLoopEvidence: mockAppendExecuteLoopEvidence,
+  normalizeEvidenceNotes: (notes?: string) => notes,
   readExecuteLoopEvidence: mockReadExecuteLoopEvidence,
 }))
 

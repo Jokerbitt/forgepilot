@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   appendExecuteLoopEvidence,
+  normalizeEvidenceNotes,
   readExecuteLoopEvidence,
 } from './execute-loop-evidence-store'
 
@@ -86,5 +87,21 @@ describe('execute-loop-evidence-store', () => {
     const runs = readExecuteLoopEvidence(filePath)
     expect(runs).toHaveLength(1)
     expect(runs[0].source).toBe('harness-dry-run')
+  })
+
+  it('normalizes repeated and oversized evidence notes', () => {
+    const compact = normalizeEvidenceNotes([
+      'PR evidence recorded after create-pr endpoint completed.',
+      'Critic evidence recorded after critic-review endpoint completed.',
+      'PR evidence recorded after create-pr endpoint completed.',
+      'Knowledge writeback evidence recorded after delegation writeback completed.',
+    ].join(' | '))
+
+    expect(compact).toBe([
+      'PR evidence recorded after create-pr endpoint completed.',
+      'Critic evidence recorded after critic-review endpoint completed.',
+      'Knowledge writeback evidence recorded after delegation writeback completed.',
+    ].join(' | '))
+    expect(compact?.length).toBeLessThanOrEqual(800)
   })
 })
