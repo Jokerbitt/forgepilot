@@ -50,7 +50,7 @@ describe('POST /api/agent-runs', () => {
       delegationId: 'del-1',
       contractId: 'contract-1',
       status: 'pending',
-    } as ReturnType<typeof createRun>)
+    } as unknown as ReturnType<typeof createRun>)
 
     const { POST } = await import('./route')
     const req = new NextRequest('http://localhost/api/agent-runs', {

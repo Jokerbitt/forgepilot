@@ -27,7 +27,13 @@ describe('GET /api/delegations/drift', () => {
       findById: vi.fn(),
     } as unknown as ReturnType<typeof createDelegationRepository>)
 
-    vi.mocked(analyzeDrift).mockReturnValue({ hasDrift: false, driftScore: 0, signals: [] })
+    vi.mocked(analyzeDrift).mockReturnValue({
+      hasDrift: false,
+      driftScore: 0,
+      signals: [],
+      estimatedTurns: 0,
+      recommendation: 'Agent arbeitet fokussiert',
+    })
 
     const { GET } = await import('./route')
     const req = new Request('http://localhost/api/delegations/drift')
@@ -56,7 +62,13 @@ describe('GET /api/delegations/drift', () => {
       listByStatus: vi.fn(),
     } as unknown as ReturnType<typeof createDelegationRepository>)
 
-    vi.mocked(analyzeDrift).mockReturnValue({ hasDrift: false, driftScore: 0, signals: [] })
+    vi.mocked(analyzeDrift).mockReturnValue({
+      hasDrift: false,
+      driftScore: 0,
+      signals: [],
+      estimatedTurns: 0,
+      recommendation: 'Agent arbeitet fokussiert',
+    })
 
     const { GET } = await import('./route')
     const req = new Request('http://localhost/api/delegations/drift?id=del-1')

@@ -16,7 +16,7 @@ describe('GET /api/delegations/templates', () => {
     vi.mocked(getTemplates).mockReturnValue([
       { id: 'tpl-1', name: 'Code Review', category: 'engineering' },
       { id: 'tpl-2', name: 'Bug Fix', category: 'engineering' },
-    ] as ReturnType<typeof getTemplates>)
+    ] as unknown as ReturnType<typeof getTemplates>)
 
     const { GET } = await import('./route')
     const res = GET(new Request('http://localhost/api/delegations/templates'))
@@ -28,7 +28,7 @@ describe('GET /api/delegations/templates', () => {
 
   it('returns single template with contract when id provided', async () => {
     const { getTemplate, templateToContract } = await import('@/lib/delegations/templates')
-    vi.mocked(getTemplate).mockReturnValue({ id: 'tpl-1', name: 'Code Review', category: 'engineering' } as ReturnType<typeof getTemplate>)
+    vi.mocked(getTemplate).mockReturnValue({ id: 'tpl-1', name: 'Code Review', category: 'engineering' } as unknown as ReturnType<typeof getTemplate>)
     vi.mocked(templateToContract).mockReturnValue({ goal: 'Review the code', maxBudgetUsd: 2 } as ReturnType<typeof templateToContract>)
 
     const { GET } = await import('./route')
