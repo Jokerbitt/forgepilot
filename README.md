@@ -4,7 +4,7 @@
 > The local AI workflow tool that coordinates agents and keeps you in control.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-violet.svg)](./LICENSE)
-[![Tests](https://img.shields.io/badge/tests-2842%20passing-brightgreen)](./src)
+[![Tests](https://img.shields.io/badge/tests-2874%20passing-brightgreen)](./src)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue)](./tsconfig.json)
 [![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org)
 
@@ -179,7 +179,7 @@ npm run db:verify-cutover
 - **Next.js 15** App Router, TypeScript strict
 - **Tailwind CSS** dark theme
 - **Drizzle ORM** + postgres-js — schema-first, no magic
-- **Vitest** — 2842 tests
+- **Vitest** — 2874 tests
 - **NextAuth v4** credentials provider
 
 ---
