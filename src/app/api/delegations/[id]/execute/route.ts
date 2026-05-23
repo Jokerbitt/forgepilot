@@ -140,6 +140,9 @@ function detectKnownError(output: string): string | undefined {
   if (lower.includes('rate limit') || lower.includes('rate_limit')) {
     return 'Anthropic Rate Limit erreicht. Warte kurz und versuche es erneut.'
   }
+  if (lower.includes('reached max turns') || lower.includes('max turns')) {
+    return 'Claude CLI hat das Turn-Limit erreicht. Erhöhe das Budget oder schneide die Delegation kleiner zu.'
+  }
   return undefined
 }
 
@@ -384,6 +387,9 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       const finishedDelegation = await repo.update(id, {
         status: finalStatus,
         completedAt: new Date().toISOString(),
+        ...(!success
+          ? { errorMessage: knownError ?? `Claude CLI failed with exit code ${code ?? 'unknown'}` }
+          : {}),
         ...(actualCost ? { actualCostUsd: actualCost } : {}),
         ...(report ? { summaryReport: report } : {}),
         logs: [...(current.logs ?? []), ...logBuffer, finalLog],

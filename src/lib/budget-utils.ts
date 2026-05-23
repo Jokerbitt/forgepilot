@@ -5,9 +5,9 @@ export function budgetToMaxTurns(budgetUsd: number): number {
 
 /**
  * Claude Code needs enough turns to explore, edit, verify, commit, and create a PR.
- * Very small budgets are still enforced by the budget guard, but the CLI should not
- * fail predictably before a small real task can finish.
+ * Very small budgets are still enforced by the budget guard, but the CLI needs enough
+ * room to explore, edit, verify, commit and create a PR for one narrow real task.
  */
 export function budgetToClaudeCliMaxTurns(budgetUsd: number): number {
-  return Math.max(20, budgetToMaxTurns(budgetUsd))
+  return Math.max(35, budgetToMaxTurns(budgetUsd))
 }

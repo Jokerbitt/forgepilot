@@ -30,7 +30,7 @@ export interface FailedDelegationTriageSummary {
   topItems: FailedDelegationTriageItem[]
 }
 
-const RETRYABLE_CAUSES = new Set<FailureCause>(['timeout', 'rate-limit', 'missing-dependency'])
+const RETRYABLE_CAUSES = new Set<FailureCause>(['timeout', 'rate-limit', 'missing-dependency', 'turn-limit'])
 const HUMAN_REVIEW_CAUSES = new Set<FailureCause>(['auth', 'budget-exceeded', 'max-retries', 'unclear-requirements'])
 
 export function getDelegationFailureEvidence(delegation: Delegation): string {
@@ -66,6 +66,10 @@ function recommendationFor(input: {
 
   if (input.failureCause === 'budget-exceeded') {
     return 'Reduce scope or explicitly approve a higher budget before retrying.'
+  }
+
+  if (input.failureCause === 'turn-limit') {
+    return 'Retry once with a slightly higher turn budget, or split the task if it still needs broad exploration.'
   }
 
   if (input.failureCause === 'unclear-requirements') {
