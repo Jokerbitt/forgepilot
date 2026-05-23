@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Delegation } from '@/lib/models/delegation'
 
-const { mockAppendExecuteLoopEvidence } = vi.hoisted(() => ({
+const { mockAppendExecuteLoopEvidence, mockReadExecuteLoopEvidence } = vi.hoisted(() => ({
   mockAppendExecuteLoopEvidence: vi.fn(),
+  mockReadExecuteLoopEvidence: vi.fn(() => [] as unknown[]),
 }))
 
 vi.mock('./execute-loop-evidence-store', () => ({
   appendExecuteLoopEvidence: mockAppendExecuteLoopEvidence,
+  readExecuteLoopEvidence: mockReadExecuteLoopEvidence,
 }))
 
 import {
@@ -61,6 +63,7 @@ function makeDelegation(overrides: Partial<Delegation> = {}): Delegation {
 describe('execute-loop runtime evidence', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockReadExecuteLoopEvidence.mockReturnValue([])
   })
 
   it('marks a fully proven delegation as success when writeback is confirmed', () => {
@@ -110,5 +113,43 @@ describe('execute-loop runtime evidence', () => {
       status: 'success',
     }))
     expect(run.id).toBe('runtime-del-1')
+  })
+
+  it('merges late writeback evidence with previously recorded PR and critic evidence', () => {
+    mockReadExecuteLoopEvidence.mockReturnValue([
+      __test__.buildRuntimeEvidenceRun(makeDelegation(), {
+        pr: true,
+        critic: true,
+        notes: 'PR and critic already recorded.',
+      }),
+    ])
+
+    const staleDelegation = makeDelegation({
+      summaryReport: { keyPoints: ['Done'], changes: [], timeTakenMinutes: 12, testsPassed: 12 },
+      criticScore: undefined,
+    })
+    const run = recordRuntimeExecuteLoopEvidence(staleDelegation, {
+      writeback: true,
+      notes: 'Writeback arrived later.',
+    })
+
+    expect(run.status).toBe('success')
+    expect(run.steps).toEqual({
+      brief: true,
+      delegation: true,
+      execute: true,
+      tests: true,
+      pr: true,
+      critic: true,
+      writeback: true,
+    })
+    expect(run.prUrl).toBe('https://github.com/Jokerbitt/forgepilot/pull/999')
+    expect(run.notes).toContain('PR and critic already recorded.')
+    expect(run.notes).toContain('Writeback arrived later.')
+    expect(mockAppendExecuteLoopEvidence).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'runtime-del-1',
+      status: 'success',
+      steps: expect.objectContaining({ pr: true, critic: true, writeback: true }),
+    }))
   })
 })

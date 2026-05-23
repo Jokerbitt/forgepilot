@@ -1,6 +1,6 @@
 import type { Delegation } from '@/lib/models/delegation'
 import type { DailyReportExecuteLoopEvidenceRun } from './daily-report'
-import { appendExecuteLoopEvidence } from './execute-loop-evidence-store'
+import { appendExecuteLoopEvidence, readExecuteLoopEvidence } from './execute-loop-evidence-store'
 
 export interface RuntimeEvidenceOptions {
   tests?: boolean
@@ -56,15 +56,52 @@ function buildRuntimeEvidenceRun(
   }
 }
 
+function mergeRuntimeEvidenceRun(
+  next: DailyReportExecuteLoopEvidenceRun,
+  previous?: DailyReportExecuteLoopEvidenceRun,
+): DailyReportExecuteLoopEvidenceRun {
+  if (!previous || previous.id !== next.id) return next
+
+  const steps = {
+    brief: previous.steps.brief || next.steps.brief,
+    delegation: previous.steps.delegation || next.steps.delegation,
+    execute: previous.steps.execute || next.steps.execute,
+    tests: previous.steps.tests || next.steps.tests,
+    pr: previous.steps.pr || next.steps.pr,
+    critic: previous.steps.critic || next.steps.critic,
+    writeback: previous.steps.writeback || next.steps.writeback,
+  }
+
+  const complete = Object.values(steps).every(Boolean)
+  const blocked = next.status === 'blocked' || previous.status === 'blocked'
+
+  return {
+    ...previous,
+    ...next,
+    recordedAt: next.recordedAt,
+    prUrl: next.prUrl ?? previous.prUrl,
+    blocker: next.blocker ?? previous.blocker,
+    notes: [previous.notes, next.notes]
+      .filter(Boolean)
+      .filter((note, index, all) => all.indexOf(note) === index)
+      .join(' | ') || undefined,
+    steps,
+    status: complete ? 'success' : blocked ? 'blocked' : 'partial',
+  }
+}
+
 export function recordRuntimeExecuteLoopEvidence(
   delegation: Delegation,
   options: RuntimeEvidenceOptions = {},
 ): DailyReportExecuteLoopEvidenceRun {
-  const run = buildRuntimeEvidenceRun(delegation, options)
+  const next = buildRuntimeEvidenceRun(delegation, options)
+  const previous = readExecuteLoopEvidence().find(run => run.id === next.id)
+  const run = mergeRuntimeEvidenceRun(next, previous)
   appendExecuteLoopEvidence(run)
   return run
 }
 
 export const __test__ = {
   buildRuntimeEvidenceRun,
+  mergeRuntimeEvidenceRun,
 }
