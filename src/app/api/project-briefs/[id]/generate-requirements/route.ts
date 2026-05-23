@@ -28,7 +28,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: 'Project brief not found' }, { status: 404 })
     }
 
-    const model = brief.scope === 'full' ? 'claude-sonnet-4-5' : 'claude-haiku-4-5'
+    const model = brief.scope === 'full' ? 'claude-sonnet-4-6' : 'claude-haiku-4-5'
     const reqCount = brief.scope === 'minimal' ? 4 : brief.scope === 'full' ? 12 : 7
     const ucCount  = brief.scope === 'minimal' ? 0 : brief.scope === 'full' ? 4 : 2
     const riskCount = brief.scope === 'full' ? 4 : 2

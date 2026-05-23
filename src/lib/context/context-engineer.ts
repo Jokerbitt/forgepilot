@@ -40,7 +40,9 @@ export interface BuiltContext {
 const TOKEN_BUDGETS: Record<string, number> = {
   'claude-haiku-4-5':        4_000,
   'claude-sonnet-4-5':       8_000,
+  'claude-sonnet-4-6':       8_000,
   'claude-opus-4-5':        12_000,
+  'claude-opus-4-7':        12_000,
   'gpt-4o-mini':             6_000,
   'gpt-4o':                 10_000,
   'llama-3.1-8b-instant':    3_000,
