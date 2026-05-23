@@ -12,7 +12,7 @@ beforeEach(() => {
 describe('POST /api/agents/orchestrate/[runId]/abort', () => {
   it('aborts a running run and returns aborted=true', async () => {
     const { getRun, updateRunStatus } = await import('@/lib/agents/orchestrated-run')
-    vi.mocked(getRun).mockReturnValue({ id: 'run-1', status: 'running', tasks: [] } as ReturnType<typeof getRun>)
+    vi.mocked(getRun).mockReturnValue({ id: 'run-1', status: 'running', tasks: [] } as unknown as ReturnType<typeof getRun>)
     vi.mocked(updateRunStatus).mockReturnValue(undefined)
 
     const { POST } = await import('./route')
@@ -36,7 +36,7 @@ describe('POST /api/agents/orchestrate/[runId]/abort', () => {
 
   it('returns 409 when run is already done', async () => {
     const { getRun } = await import('@/lib/agents/orchestrated-run')
-    vi.mocked(getRun).mockReturnValue({ id: 'run-2', status: 'done', tasks: [] } as ReturnType<typeof getRun>)
+    vi.mocked(getRun).mockReturnValue({ id: 'run-2', status: 'done', tasks: [] } as unknown as ReturnType<typeof getRun>)
 
     const { POST } = await import('./route')
     const res = await POST(new Request('http://localhost'), { params: Promise.resolve({ runId: 'run-2' }) })

@@ -16,7 +16,7 @@ describe('GET /api/monitor', () => {
       runningDelegations: 2,
       pendingApprovals: 1,
       failedRuns: 0,
-    } as ReturnType<typeof buildMonitorSnapshot>)
+    } as unknown as ReturnType<typeof buildMonitorSnapshot>)
 
     const { GET } = await import('./route')
     const res = await GET()

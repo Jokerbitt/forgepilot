@@ -14,7 +14,7 @@ beforeEach(() => {
 describe('GET /api/backup', () => {
   it('returns list of available backups', async () => {
     const { listBackups } = await import('@/lib/config/backup')
-    vi.mocked(listBackups).mockReturnValue({ backups: ['2024-01-01', '2024-01-02'] } as ReturnType<typeof listBackups>)
+    vi.mocked(listBackups).mockReturnValue({ backups: ['2024-01-01', '2024-01-02'] } as unknown as ReturnType<typeof listBackups>)
 
     const { GET } = await import('./route')
     const res = await GET()
@@ -28,7 +28,7 @@ describe('GET /api/backup', () => {
 describe('POST /api/backup', () => {
   it('creates a new backup and returns 201', async () => {
     const { runBackup } = await import('@/lib/config/backup')
-    vi.mocked(runBackup).mockReturnValue({ date: '2024-01-01', files: ['delegations.json'], alreadyExisted: false } as ReturnType<typeof runBackup>)
+    vi.mocked(runBackup).mockReturnValue({ date: '2024-01-01', files: ['delegations.json'], alreadyExisted: false } as unknown as ReturnType<typeof runBackup>)
 
     const { POST } = await import('./route')
     const req = new NextRequest('http://localhost/api/backup', { method: 'POST', body: null })
@@ -39,7 +39,7 @@ describe('POST /api/backup', () => {
 
   it('returns 200 when backup already exists', async () => {
     const { runBackup } = await import('@/lib/config/backup')
-    vi.mocked(runBackup).mockReturnValue({ date: '2024-01-01', files: [], alreadyExisted: true } as ReturnType<typeof runBackup>)
+    vi.mocked(runBackup).mockReturnValue({ date: '2024-01-01', files: [], alreadyExisted: true } as unknown as ReturnType<typeof runBackup>)
 
     const { POST } = await import('./route')
     const req = new NextRequest('http://localhost/api/backup', { method: 'POST', body: null })

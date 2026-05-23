@@ -12,7 +12,7 @@ beforeEach(() => {
 describe('POST /api/knowledge-cards/[id]/link', () => {
   it('links two cards and returns ok=true', async () => {
     const { linkCards } = await import('@/lib/knowledge/graph')
-    vi.mocked(linkCards).mockResolvedValue({ success: true } as ReturnType<typeof linkCards>)
+    vi.mocked(linkCards).mockResolvedValue({ success: true } as Awaited<ReturnType<typeof linkCards>>)
 
     const { POST } = await import('./route')
     const req = new NextRequest('http://localhost/api/knowledge-cards/card-1/link', {
@@ -30,7 +30,7 @@ describe('POST /api/knowledge-cards/[id]/link', () => {
 
   it('returns 400 when linkCards fails', async () => {
     const { linkCards } = await import('@/lib/knowledge/graph')
-    vi.mocked(linkCards).mockResolvedValue({ success: false, reason: 'Card not found' } as ReturnType<typeof linkCards>)
+    vi.mocked(linkCards).mockResolvedValue({ success: false, reason: 'Card not found' } as Awaited<ReturnType<typeof linkCards>>)
 
     const { POST } = await import('./route')
     const req = new NextRequest('http://localhost/api/knowledge-cards/card-x/link', {

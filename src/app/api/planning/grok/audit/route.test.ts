@@ -14,8 +14,8 @@ describe('GET /api/planning/grok/audit', () => {
     const { getPlanningAuditStats, listPlanningAuditRecords } = await import('@/lib/planning/planning-audit-store')
     vi.mocked(listPlanningAuditRecords).mockReturnValue([
       { id: 'a-1', createdAt: '2024-01-01', type: 'planning' },
-    ] as ReturnType<typeof listPlanningAuditRecords>)
-    vi.mocked(getPlanningAuditStats).mockReturnValue({ total: 1, lastRunAt: '2024-01-01' } as ReturnType<typeof getPlanningAuditStats>)
+    ] as unknown as ReturnType<typeof listPlanningAuditRecords>)
+    vi.mocked(getPlanningAuditStats).mockReturnValue({ total: 1, lastRunAt: '2024-01-01' } as unknown as ReturnType<typeof getPlanningAuditStats>)
 
     const { GET } = await import('./route')
     const res = await GET(new Request('http://localhost/api/planning/grok/audit'))
@@ -29,7 +29,7 @@ describe('GET /api/planning/grok/audit', () => {
   it('respects limit query parameter', async () => {
     const { getPlanningAuditStats, listPlanningAuditRecords } = await import('@/lib/planning/planning-audit-store')
     vi.mocked(listPlanningAuditRecords).mockReturnValue([] as ReturnType<typeof listPlanningAuditRecords>)
-    vi.mocked(getPlanningAuditStats).mockReturnValue({ total: 0 } as ReturnType<typeof getPlanningAuditStats>)
+    vi.mocked(getPlanningAuditStats).mockReturnValue({ total: 0 } as unknown as ReturnType<typeof getPlanningAuditStats>)
 
     const { GET } = await import('./route')
     await GET(new Request('http://localhost/api/planning/grok/audit?limit=10'))

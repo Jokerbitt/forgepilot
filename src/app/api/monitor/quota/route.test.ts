@@ -15,7 +15,7 @@ describe('GET /api/monitor/quota', () => {
       requestsToday: 42,
       limitPerDay: 1000,
       resetsAt: '2024-01-02T00:00:00.000Z',
-    } as ReturnType<typeof getGeminiQuota>)
+    } as unknown as ReturnType<typeof getGeminiQuota>)
 
     const { GET } = await import('./route')
     const res = await GET()

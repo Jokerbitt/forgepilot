@@ -24,7 +24,7 @@ describe('GET /api/webhooks/events/[id]', () => {
 
   it('returns 404 when event not found', async () => {
     const { getWebhookEvent } = await import('@/lib/webhooks/event-log')
-    vi.mocked(getWebhookEvent).mockReturnValue(undefined as ReturnType<typeof getWebhookEvent>)
+    vi.mocked(getWebhookEvent).mockReturnValue(undefined as unknown as ReturnType<typeof getWebhookEvent>)
 
     const { GET } = await import('./route')
     const res = await GET(new Request('http://localhost'), { params: Promise.resolve({ id: 'missing' }) })

@@ -14,8 +14,8 @@ beforeEach(() => {
 describe('GET /api/api-keys/rotation-status', () => {
   it('returns rotation status for all keys', async () => {
     const { readApiKeysMeta, getRotationStatuses, hasStaleKeys } = await import('@/lib/api-keys/rotation-tracker')
-    vi.mocked(readApiKeysMeta).mockReturnValue({ ANTHROPIC_API_KEY: { rotatedAt: '2024-01-01', daysUntilExpiry: 60 } } as ReturnType<typeof readApiKeysMeta>)
-    vi.mocked(getRotationStatuses).mockReturnValue([{ key: 'ANTHROPIC_API_KEY', stale: false, daysUntilExpiry: 60 }] as ReturnType<typeof getRotationStatuses>)
+    vi.mocked(readApiKeysMeta).mockReturnValue({ ANTHROPIC_API_KEY: { rotatedAt: '2024-01-01', daysUntilExpiry: 60 } } as unknown as ReturnType<typeof readApiKeysMeta>)
+    vi.mocked(getRotationStatuses).mockReturnValue([{ key: 'ANTHROPIC_API_KEY', stale: false, daysUntilExpiry: 60 }] as unknown as ReturnType<typeof getRotationStatuses>)
     vi.mocked(hasStaleKeys).mockReturnValue(false)
 
     const { GET } = await import('./route')

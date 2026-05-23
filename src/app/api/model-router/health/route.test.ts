@@ -18,8 +18,8 @@ beforeEach(() => {
 describe('GET /api/model-router/health', () => {
   it('returns health of both providers', async () => {
     const { checkOllamaHealth, checkAnthropicHealth } = await import('@/lib/model-router/health')
-    vi.mocked(checkOllamaHealth).mockResolvedValue({ ok: false, detail: 'not running' } as ReturnType<typeof checkOllamaHealth>)
-    vi.mocked(checkAnthropicHealth).mockResolvedValue({ ok: true, detail: 'API key set' } as ReturnType<typeof checkAnthropicHealth>)
+    vi.mocked(checkOllamaHealth).mockResolvedValue({ ok: false, detail: 'not running' } as unknown as Awaited<ReturnType<typeof checkOllamaHealth>>)
+    vi.mocked(checkAnthropicHealth).mockResolvedValue({ ok: true, detail: 'API key set' } as unknown as Awaited<ReturnType<typeof checkAnthropicHealth>>)
 
     const { GET } = await import('./route')
     const res = await GET()
