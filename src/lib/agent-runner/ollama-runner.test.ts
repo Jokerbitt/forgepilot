@@ -103,6 +103,74 @@ describe('OllamaAgentRunner', () => {
     expect(logs.some(l => l.includes('world'))).toBe(true)
   })
 
+  it('executes a JSON tool call emitted as plain text by local models', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'hello.txt'), 'world', 'utf-8')
+
+    const responses: OllamaChatResponse[] = [
+      {
+        model: 'qwen2.5-coder:14b',
+        message: {
+          role: 'assistant',
+          content: '{"name":"read_file","arguments":{"path":"hello.txt"}}',
+        },
+        done: true,
+      },
+      {
+        model: 'qwen2.5-coder:14b',
+        message: { role: 'assistant', content: 'Saw world. TASK_COMPLETE' },
+        done: true,
+      },
+    ]
+    const fetcher = vi.fn().mockImplementation(() => Promise.resolve(makeResponse(responses.shift()!)))
+
+    const logs: string[] = []
+    const runner = new OllamaAgentRunner('del-json-tool', 'qwen2.5-coder:14b', tmpDir, {
+      fetcher: fetcher as unknown as typeof fetch,
+      onLog: entries => entries.forEach(e => logs.push(e.message)),
+    })
+
+    const result = await runner.run('read it', 5)
+
+    expect(result.success).toBe(true)
+    expect(result.turns).toBe(2)
+    expect(fetcher).toHaveBeenCalledTimes(2)
+    expect(logs.some(l => l.includes('read_file'))).toBe(true)
+    expect(logs.some(l => l.includes('world'))).toBe(true)
+  })
+
+  it('executes a fenced JSON tool call emitted as markdown', async () => {
+    const responses: OllamaChatResponse[] = [
+      {
+        model: 'qwen2.5-coder:14b',
+        message: {
+          role: 'assistant',
+          content: '```json\n{"name":"bash_exec","arguments":{"command":"printf ok"}}\n```',
+        },
+        done: true,
+      },
+      {
+        model: 'qwen2.5-coder:14b',
+        message: { role: 'assistant', content: 'Command passed. TASK_COMPLETE' },
+        done: true,
+      },
+    ]
+    const fetcher = vi.fn().mockImplementation(() => Promise.resolve(makeResponse(responses.shift()!)))
+
+    const logs: string[] = []
+    const runner = new OllamaAgentRunner('del-fenced-json-tool', 'qwen2.5-coder:14b', tmpDir, {
+      fetcher: fetcher as unknown as typeof fetch,
+      onLog: entries => entries.forEach(e => logs.push(e.message)),
+    })
+
+    const result = await runner.run('run command', 5)
+
+    expect(result.success).toBe(true)
+    expect(result.turns).toBe(2)
+    expect(fetcher).toHaveBeenCalledTimes(2)
+    expect(logs.some(l => l.includes('bash_exec'))).toBe(true)
+    expect(logs.some(l => l.includes('ok'))).toBe(true)
+  })
+
   it('respects maxTurns and reports failure when the model never finishes', async () => {
     const fetcher = vi.fn().mockImplementation(() =>
       Promise.resolve(
