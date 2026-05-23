@@ -35,6 +35,7 @@ export function KnowledgeWritebackPanel({ delegationId, delegation }: KnowledgeW
   const [creating, setCreating]   = useState(false)
   const [saving, setSaving]       = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const defaultTitle   = delegation?.title ?? delegation?.contract.goal.slice(0, 80) ?? ''
   const defaultContent = delegation ? buildDefaultContent(delegation) : ''
@@ -53,6 +54,18 @@ export function KnowledgeWritebackPanel({ delegationId, delegation }: KnowledgeW
   }
 
   useEffect(() => { reload() }, [delegationId])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleDelete(id: string) {
+    setDeletingId(id)
+    try {
+      await fetch(`/api/knowledge-cards/${encodeURIComponent(id)}`, { method: 'DELETE' })
+      setCards(prev => prev.filter(c => c.id !== id))
+    } catch {
+      // non-critical — card stays in list
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   async function handleSave() {
     setSaving(true)
@@ -181,8 +194,20 @@ export function KnowledgeWritebackPanel({ delegationId, delegation }: KnowledgeW
       ) : (
         <ul className="space-y-2">
           {cards.map(card => (
-            <li key={card.id} className="flex flex-col gap-0.5">
-              <span className="text-xs font-medium text-emerald-400">{card.title}</span>
+            <li key={card.id} className="flex flex-col gap-0.5 group">
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-xs font-medium text-emerald-400 flex-1">{card.title}</span>
+                {delegation && (
+                  <button
+                    onClick={() => void handleDelete(card.id)}
+                    disabled={deletingId === card.id}
+                    aria-label="Lektion löschen"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-[10px] text-gray-600 hover:text-red-400 disabled:opacity-40"
+                  >
+                    {deletingId === card.id ? '…' : '✕'}
+                  </button>
+                )}
+              </div>
               <p className="text-xs text-gray-400 leading-relaxed line-clamp-3">{card.content}</p>
               {card.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-0.5">

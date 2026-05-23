@@ -86,3 +86,24 @@ export function writeKnowledgeCard(
 export function findKnowledgeCardsBySource(sourceId: string): KnowledgeCard[] {
   return readKnowledgeCards().filter(c => c.sourceId === sourceId)
 }
+
+/**
+ * Return a single card by id, or undefined if not found.
+ */
+export function findKnowledgeCardById(id: string): KnowledgeCard | undefined {
+  return readKnowledgeCards().find(c => c.id === id)
+}
+
+/**
+ * Delete a knowledge card by id.
+ * Returns the deleted card, or undefined if no card with that id existed.
+ */
+export function deleteKnowledgeCard(id: string): KnowledgeCard | undefined {
+  const cards = readKnowledgeCards()
+  const index = cards.findIndex(c => c.id === id)
+  if (index === -1) return undefined
+
+  const [deleted] = cards.splice(index, 1)
+  persistStore({ cards })
+  return deleted
+}
