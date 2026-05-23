@@ -1,6 +1,5 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
-import { findProjectBriefById } from '@/lib/project-briefs'
 import { saveSnapshot } from '@/lib/project-briefs/brief-versions'
 import { createProjectBriefRepository } from '@/lib/repositories/projectBriefRepository'
 import { parseBody, isValidationError } from '@/lib/validation/api'
@@ -30,12 +29,12 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     const patch = await parseBody(request, ProjectBriefPatchSchema)
     if (isValidationError(patch)) return patch
 
-    const current = findProjectBriefById(id)
+    const repo = createProjectBriefRepository()
+    const current = await repo.findById(id)
     if (!current) {
       return NextResponse.json({ error: 'Project brief not found' }, { status: 404 })
     }
     saveSnapshot(current, 'Automatisch vor Update')
-    const repo = createProjectBriefRepository()
     const updated = await repo.update(id, patch)
 
     // M217: Fire-and-forget — create Linear ticket when brief is accepted

@@ -23,7 +23,7 @@ import { OllamaAgentRunner, isOllamaReachable } from '@/lib/agent-runner/ollama-
 import { budgetToClaudeCliMaxTurns, budgetToMaxTurns } from '@/lib/budget-utils'
 import { scoreWork } from '@/lib/agents/work-quality'
 import { recordOutcome } from '@/lib/agents/skill-evolver'
-import { generateText } from '@/lib/ai/text-generation'
+import { runWithToolUse } from '@/lib/agents/tool-use-runner'
 import { extractKnowledge } from '@/lib/knowledge/extraction'
 import { persistGrokCriticForDelegation } from '@/lib/eval/auto-grok-critic'
 import { writebackExecutionInsights, writebackDelegationKnowledge } from '@/lib/knowledge/writeback'
@@ -688,82 +688,97 @@ async function runWithOllamaAgent(
 }
 
 /**
- * Run via Claude API (generateText) when the claude CLI binary is unavailable.
- * Calls the real API to produce an execution plan + summary.
- * Not fully agentic (no tool-use loop), but produces genuine AI output
- * instead of a canned simulation.
+ * Autonomous tool-use agent via Claude API.
+ * Reads/writes files, runs safe commands, and commits code — no claude CLI required.
  */
 async function runWithClaudeAPI(id: string, delegation: Delegation, startTime: Date) {
   const goal = delegation.contract.goal
   const dod = (delegation.contract.definitionOfDone ?? []).map(d => `- ${d}`).join('\n') || '- Task erfolgreich abgeschlossen'
+  const storedKeys = readStoredApiKeys()
+  const apiKey = storedKeys.ANTHROPIC_API_KEY?.trim() || ''
 
-  const startLogEntry: AgentLog = {
+  const startLog: AgentLog = {
     timestamp: new Date().toISOString(),
     type: 'info',
-    message: '🤖 Claude API-Runner gestartet (kein CLI verfügbar — API-Modus)',
+    message: '🤖 Autonomer Tool-Use-Agent gestartet (Claude API, kein CLI erforderlich)',
   }
-  const planOnlyWarning: AgentLog = {
-    timestamp: new Date().toISOString(),
-    type: 'error',
-    message: '⚠️ PLAN-ONLY MODUS: Kein Code wird geschrieben. Installiere die Claude CLI für echte Ausführung: npm install -g @anthropic-ai/claude-code',
-  }
-  await appendLogs(id, [startLogEntry, planOnlyWarning])
+  await appendLogs(id, [startLog])
+
+  const prompt = [
+    '## Aufgabe',
+    goal,
+    '',
+    '## Definition of Done',
+    dod,
+    '',
+    delegation.contract.context ? `## Kontext\n${delegation.contract.context}` : '',
+    '',
+    '## Anweisungen',
+    '- Lies zuerst die relevanten Dateien um den aktuellen Zustand zu verstehen',
+    '- Erstelle einen Feature-Branch (feat/ oder fix/) bevor du Dateien änderst',
+    '- Implementiere die Änderungen Schritt für Schritt',
+    '- Führe nach Änderungen `npm run type-check` und `npm test` aus',
+    '- Committe die Änderungen mit einer aussagekräftigen Commit-Message',
+    '- Rufe task_complete auf wenn alles fertig ist',
+  ].filter(Boolean).join('\n')
 
   try {
-    const result = await generateText({
-      system: `You are an expert software engineering agent working on ForgePilot — a Next.js 14, TypeScript strict, Tailwind CSS project.
-Analyse the task, produce a concrete implementation plan with specific file changes, commands, and validation steps.
-Be specific: name exact files, functions, and TypeScript types. Identify any risks or blockers.
-End with a one-line DONE: <summary> statement.`,
-      prompt: `## Task\n${goal}\n\n## Definition of Done\n${dod}\n\n## Context\n${delegation.contract.context ?? '(none)'}`,
-      maxTokens: 1200,
-      purpose: 'coding',
+    const result = await runWithToolUse(prompt, {
+      apiKey,
+      model: delegation.contract.llmModel?.trim() || 'claude-sonnet-4-5',
+      projectRoot: process.cwd(),
+      maxTurns: budgetToMaxTurns(delegation.contract.maxBudgetUsd),
+      budgetUsd: delegation.contract.maxBudgetUsd,
+      onLog: (type, message) => {
+        const logEntry: AgentLog = {
+          timestamp: new Date().toISOString(),
+          type: type as AgentLog['type'],
+          message: message.slice(0, 1000),
+        }
+        appendLogs(id, [logEntry]).catch(() => undefined)
+      },
     })
 
     const elapsed = Math.round((Date.now() - startTime.getTime()) / 60000)
-    const planLines = result.text.split('\n')
-
-    // Log plan line-by-line for live visibility in the UI
-    const planLogs: AgentLog[] = planLines
-      .filter(l => l.trim())
-      .map(line => ({
-        timestamp: new Date().toISOString(),
-        type: (line.startsWith('#') ? 'thought' : line.startsWith('$') ? 'command' : 'info') as AgentLog['type'],
-        message: line.substring(0, 500),
-      }))
-
-    const doneLine = planLines.find(l => l.startsWith('DONE:'))
-    const summaryText = doneLine ? doneLine.replace('DONE:', '').trim() : result.text.slice(0, 200)
 
     const finalLog: AgentLog = {
       timestamp: new Date().toISOString(),
-      type: 'success',
-      message: `✅ Claude API-Analyse abgeschlossen (${result.provider}/${result.model}${result.outputTokens ? `, ${result.outputTokens} Tokens` : ''})`,
+      type: result.success ? 'success' : 'error',
+      message: result.success
+        ? `✅ Tool-Use-Agent abgeschlossen — ${result.turnsUsed} Turns, ~$${result.estimatedCostUsd.toFixed(4)}`
+        : `⚠️ Agent beendet nach ${result.turnsUsed} Turns ohne task_complete`,
     }
 
     const report: DelegationReport = {
-      keyPoints: [summaryText, `Analysiert via ${result.provider}/${result.model}`],
-      changes: [],
+      keyPoints: [result.summary],
+      changes: result.filesChanged,
       timeTakenMinutes: elapsed,
-      planOnly: true,
+      filesModified: result.filesChanged,
+      branchName: result.branchName,
+      prUrl: result.prUrl,
+      costSavings: {
+        tokensUsed: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        claudeEquivalentUsd: result.estimatedCostUsd,
+        actualCostUsd: result.estimatedCostUsd,
+        savedUsd: 0,
+        localModel: delegation.contract.llmModel || 'claude-sonnet-4-5',
+      },
     }
 
-    await appendLogs(id, [...planLogs, finalLog], 'completed', report)
+    await appendLogs(id, [finalLog], result.success ? 'completed' : 'failed', report)
 
     const repoForLabel = createDelegationRepository(SINGLE_TENANT_USER_ID)
     const finished = await repoForLabel.findById(id)
     if (finished) {
-      recordRuntimeExecuteLoopEvidence(finished, {
-        notes: 'Plan-only Claude API evidence recorded. This does not prove code was changed.',
-      })
+      recordRuntimeExecuteLoopEvidence(finished, { notes: result.summary })
     }
     const label = finished?.title || goal.slice(0, 60)
     upsertAttentionItem({
       id: `completion:${id}`,
-      type: 'delegation_completed',
-      severity: 'info',
-      title: `✅ Analysiert: ${label}`,
-      body: `Claude API Plan erstellt (${result.provider}) — kein CLI verfügbar, Implementierung manuell starten`,
+      type: result.success ? 'delegation_completed' : 'delegation_failed',
+      severity: result.success ? 'info' : 'warning',
+      title: result.success ? `✅ Fertig: ${label}` : `⚠️ Unvollständig: ${label}`,
+      body: result.summary.slice(0, 200),
       delegationId: id,
       actionUrl: `/delegations/${id}`,
       createdAt: new Date().toISOString(),
@@ -773,14 +788,14 @@ End with a one-line DONE: <summary> statement.`,
     const errLog: AgentLog = {
       timestamp: new Date().toISOString(),
       type: 'error',
-      message: `❌ Claude API-Runner-Fehler: ${msg}`,
+      message: `❌ Tool-Use-Runner-Fehler: ${msg}`,
     }
     await appendLogs(id, [errLog], 'failed')
     upsertAttentionItem({
       id: `completion:${id}`,
       type: 'delegation_failed',
       severity: 'critical',
-      title: `❌ API-Runner fehlgeschlagen`,
+      title: `❌ Tool-Use-Agent fehlgeschlagen`,
       body: msg.slice(0, 200),
       delegationId: id,
       actionUrl: `/delegations/${id}`,
@@ -972,7 +987,7 @@ export async function POST(
     return NextResponse.json({ started: true, mode: 'claude-cli', delegationId: id })
   }
 
-  // Fallback 1: Claude API (generateText) — real AI output, no tool-use loop
+  // Fallback 1: Claude API tool-use loop — real code execution, no CLI required
   if (mode === 'claude-api') {
     void runWithClaudeAPI(id, delegation, startTime)
     return NextResponse.json({ started: true, mode: 'claude-api', delegationId: id })
