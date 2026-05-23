@@ -319,16 +319,6 @@ function DelegationsContent() {
     if (!delegation) return
 
     const updateData: Delegation = { ...delegation, status: newStatus as Delegation['status'] }
-
-    // Attach a demo report when completing manually
-    if (newStatus === 'completed' && !delegation.summaryReport) {
-      updateData.summaryReport = {
-        keyPoints: ['Code refactored', 'Unit tests pass 100%', 'No linting errors found'],
-        changes: ['[MOD] src/app/page.tsx'],
-        timeTakenMinutes: Math.max(1, Math.round((Date.now() - new Date(delegation.createdAt).getTime()) / 60000)),
-      }
-    }
-
     applyUpdate(updateData)
     await fetch('/api/delegations', {
       method: 'POST',
