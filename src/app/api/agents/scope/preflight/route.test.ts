@@ -12,7 +12,7 @@ beforeEach(() => {
 describe('POST /api/agents/scope/preflight', () => {
   it('returns preflight result when scope is free', async () => {
     const { preflight } = await import('@/lib/agents/scope-lock')
-    vi.mocked(preflight).mockReturnValue({ safe: true, conflicts: [] })
+    vi.mocked(preflight).mockReturnValue({ safe: true, conflicts: [] } as unknown as ReturnType<typeof preflight>)
 
     const { POST } = await import('./route')
     const req = new NextRequest('http://localhost/api/agents/scope/preflight', {
@@ -33,7 +33,7 @@ describe('POST /api/agents/scope/preflight', () => {
     vi.mocked(preflight).mockReturnValue({
       safe: false,
       conflicts: [{ agentId: 'other-agent', milestone: 'M100', branch: 'feat/test' }],
-    })
+    } as unknown as ReturnType<typeof preflight>)
 
     const { POST } = await import('./route')
     const req = new NextRequest('http://localhost/api/agents/scope/preflight', {

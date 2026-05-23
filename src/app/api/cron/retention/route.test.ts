@@ -30,7 +30,7 @@ describe('GET /api/cron/retention', () => {
     const { isCronAuthorized } = await import('@/lib/cron/auth')
     const { runRetentionCleanup } = await import('@/lib/dsgvo/processing-ledger')
     vi.mocked(isCronAuthorized).mockReturnValue(true)
-    vi.mocked(runRetentionCleanup).mockResolvedValue({ deleted: 12, retained: 200 })
+    vi.mocked(runRetentionCleanup).mockResolvedValue({ deleted: 12 })
 
     const { GET } = await import('./route')
     const req = new NextRequest('http://localhost/api/cron/retention', {

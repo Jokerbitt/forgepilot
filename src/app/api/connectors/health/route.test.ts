@@ -16,11 +16,11 @@ describe('GET /api/connectors/health', () => {
     const { readConnectorConfigs } = await import('@/lib/connectors/config')
     const { getAllConnectorHealth } = await import('@/lib/connectors/registry')
 
-    vi.mocked(readConnectorConfigs).mockReturnValue([])
+    vi.mocked(readConnectorConfigs).mockReturnValue({})
     vi.mocked(getAllConnectorHealth).mockResolvedValue([
       { id: 'linear', name: 'Linear', status: 'healthy', latencyMs: 42 },
       { id: 'github', name: 'GitHub', status: 'healthy', latencyMs: 88 },
-    ])
+    ] as unknown as Awaited<ReturnType<typeof getAllConnectorHealth>>)
 
     const { GET } = await import('./route')
     const res = await GET()
@@ -34,7 +34,7 @@ describe('GET /api/connectors/health', () => {
     const { readConnectorConfigs } = await import('@/lib/connectors/config')
     const { getAllConnectorHealth } = await import('@/lib/connectors/registry')
 
-    vi.mocked(readConnectorConfigs).mockReturnValue([])
+    vi.mocked(readConnectorConfigs).mockReturnValue({})
     vi.mocked(getAllConnectorHealth).mockRejectedValue(new Error('Network timeout'))
 
     const { GET } = await import('./route')

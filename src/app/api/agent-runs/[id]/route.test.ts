@@ -26,7 +26,7 @@ const MOCK_RUN = {
 describe('GET /api/agent-runs/[id]', () => {
   it('returns run when found', async () => {
     const { getRun } = await import('@/lib/agent-runs/store')
-    vi.mocked(getRun).mockReturnValue(MOCK_RUN as ReturnType<typeof getRun>)
+    vi.mocked(getRun).mockReturnValue(MOCK_RUN as unknown as ReturnType<typeof getRun>)
 
     const { GET } = await import('./route')
     const res = await GET(new Request('http://localhost'), { params: Promise.resolve({ id: 'run-1' }) })
@@ -49,7 +49,7 @@ describe('GET /api/agent-runs/[id]', () => {
 describe('PATCH /api/agent-runs/[id]', () => {
   it('returns updated run', async () => {
     const { updateRun } = await import('@/lib/agent-runs/store')
-    vi.mocked(updateRun).mockReturnValue({ ...MOCK_RUN, status: 'completed' } as ReturnType<typeof updateRun>)
+    vi.mocked(updateRun).mockReturnValue({ ...MOCK_RUN, status: 'completed' } as unknown as ReturnType<typeof updateRun>)
 
     const { PATCH } = await import('./route')
     const req = new NextRequest('http://localhost', {
@@ -67,7 +67,7 @@ describe('PATCH /api/agent-runs/[id]', () => {
   it('triggers writeRunLessons on completed status', async () => {
     const { updateRun } = await import('@/lib/agent-runs/store')
     const { writeRunLessons } = await import('@/lib/writeback/lessons')
-    vi.mocked(updateRun).mockReturnValue({ ...MOCK_RUN, status: 'completed' } as ReturnType<typeof updateRun>)
+    vi.mocked(updateRun).mockReturnValue({ ...MOCK_RUN, status: 'completed' } as unknown as ReturnType<typeof updateRun>)
 
     const { PATCH } = await import('./route')
     const req = new NextRequest('http://localhost', {
@@ -99,8 +99,8 @@ describe('DELETE /api/agent-runs/[id]', () => {
   it('returns run summary when found', async () => {
     const { getRun } = await import('@/lib/agent-runs/store')
     const { buildRunSummary } = await import('@/lib/writeback/summary')
-    vi.mocked(getRun).mockReturnValue(MOCK_RUN as ReturnType<typeof getRun>)
-    vi.mocked(buildRunSummary).mockReturnValue({ markdown: '# Summary', lessonProposal: null })
+    vi.mocked(getRun).mockReturnValue(MOCK_RUN as unknown as ReturnType<typeof getRun>)
+    vi.mocked(buildRunSummary).mockReturnValue({ markdown: '# Summary', lessonProposal: undefined })
 
     const { DELETE } = await import('./route')
     const res = await DELETE(new Request('http://localhost'), { params: Promise.resolve({ id: 'run-1' }) })

@@ -59,7 +59,7 @@ describe('GET /api/agents/scope', () => {
 describe('POST /api/agents/scope', () => {
   it('returns 200 and success when claim is granted', async () => {
     const { claimScope } = await import('@/lib/agents/scope-lock')
-    vi.mocked(claimScope).mockReturnValue({ success: true, status: 'claimed' as const })
+    vi.mocked(claimScope).mockReturnValue({ success: true, status: 'claimed' as const } as unknown as ReturnType<typeof claimScope>)
 
     const { POST } = await import('./route')
     const req = new NextRequest('http://localhost/api/agents/scope', {
@@ -80,7 +80,7 @@ describe('POST /api/agents/scope', () => {
       success: false,
       status: 'conflict' as const,
       conflict: { agentId: 'other-agent', milestone: 'M100', branch: 'feat/other' },
-    })
+    } as unknown as ReturnType<typeof claimScope>)
 
     const { POST } = await import('./route')
     const req = new NextRequest('http://localhost/api/agents/scope', {
