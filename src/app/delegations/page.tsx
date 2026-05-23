@@ -28,6 +28,7 @@ import {
 import type { Delegation, TaskContract } from '@/lib/models/delegation'
 import type { ProjectBrief } from '@/lib/models/project-brief'
 import { formatAge, isCreatedToday } from '@/lib/utils/delegation-age'
+import { AgentModeBanner } from '@/components/ui/AgentModeBanner'
 import { DelegationDrawer } from '@/components/delegation/DelegationDrawer'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
 import { NewDelegationDialog } from '@/components/delegation/NewDelegationDialog'
@@ -758,6 +759,9 @@ function DelegationsContent() {
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6 md:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
+
+        {/* ── Agent Mode Banner ─────────────────────────────────────────── */}
+        <AgentModeBanner />
 
         {/* ── Header ───────────────────────────────────────────────────── */}
         <header className="flex flex-wrap justify-between items-start gap-4 border-b border-gray-800 pb-5">
