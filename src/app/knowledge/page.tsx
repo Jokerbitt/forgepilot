@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import type { KnowledgeSource, MemoryCard, MemoryCardType, SourceType } from '@/lib/knowledge/types'
 import type { Delegation } from '@/lib/models/delegation'
+import type { UnifiedSearchResult } from '@/app/api/knowledge/search/route'
 import { Badge, EmptyState, StatusDot, cx } from '@/components/ui/primitives'
 
 const STALE_THRESHOLD_DAYS = 30
@@ -109,7 +110,7 @@ function useDebounced<T>(value: T, delay: number): T {
 
 // ─── tabs ────────────────────────────────────────────────────────
 
-type Tab = 'cards' | 'sources'
+type Tab = 'cards' | 'lessons' | 'sources'
 
 // ─── page ────────────────────────────────────────────────────────
 
@@ -127,6 +128,8 @@ export default function KnowledgeCenterPage() {
   const [indexResult, setIndexResult] = useState<IndexResult | null>(null)
   const [delegationLessons, setDelegationLessons] = useState(0)
   const [snapshotCoverage, setSnapshotCoverage] = useState<{ total: number; withSnapshot: number }>({ total: 0, withSnapshot: 0 })
+  const [lessons, setLessons] = useState<UnifiedSearchResult[]>([])
+  const [lessonsLoading, setLessonsLoading] = useState(false)
 
   const debouncedSearch = useDebounced(search, 300)
 
@@ -152,6 +155,17 @@ export default function KnowledgeCenterPage() {
   useEffect(() => {
     loadData().finally(() => setLoading(false))
   }, [loadData])
+
+  // M309: load lessons when tab switches to 'lessons'
+  useEffect(() => {
+    if (tab !== 'lessons') return
+    setLessonsLoading(true)
+    fetch('/api/knowledge/search?store=lesson&limit=100')
+      .then(r => r.json())
+      .then((data: { results?: UnifiedSearchResult[] }) => setLessons(Array.isArray(data.results) ? data.results : []))
+      .catch(() => setLessons([]))
+      .finally(() => setLessonsLoading(false))
+  }, [tab])
 
   const handleIndexNas = async () => {
     setIndexing(true)
@@ -295,18 +309,24 @@ export default function KnowledgeCenterPage() {
 
         {/* Tabs */}
         <div className="mb-6 flex gap-1 border-b border-slate-800">
-          {(['cards', 'sources'] as Tab[]).map(t => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={cx(
-                'border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
-                tab === t ? 'border-sky-500 text-white' : 'border-transparent text-slate-500 hover:text-slate-300'
-              )}
-            >
-              {t === 'cards' ? `Memory Cards (${cards.length})` : `Quellen (${sources.length})`}
-            </button>
-          ))}
+          <button
+            onClick={() => setTab('cards')}
+            className={cx('border-b-2 px-4 py-2.5 text-sm font-medium transition-colors', tab === 'cards' ? 'border-sky-500 text-white' : 'border-transparent text-slate-500 hover:text-slate-300')}
+          >
+            Memory Cards ({cards.length})
+          </button>
+          <button
+            onClick={() => setTab('lessons')}
+            className={cx('border-b-2 px-4 py-2.5 text-sm font-medium transition-colors', tab === 'lessons' ? 'border-emerald-500 text-white' : 'border-transparent text-slate-500 hover:text-slate-300')}
+          >
+            Lektionen ({delegationLessons})
+          </button>
+          <button
+            onClick={() => setTab('sources')}
+            className={cx('border-b-2 px-4 py-2.5 text-sm font-medium transition-colors', tab === 'sources' ? 'border-sky-500 text-white' : 'border-transparent text-slate-500 hover:text-slate-300')}
+          >
+            Quellen ({sources.length})
+          </button>
         </div>
 
         {loading ? (
@@ -326,6 +346,8 @@ export default function KnowledgeCenterPage() {
             expandedCardId={expandedCardId}
             setExpandedCardId={setExpandedCardId}
           />
+        ) : tab === 'lessons' ? (
+          <LessonsTab lessons={lessons} loading={lessonsLoading} />
         ) : (
           <SourcesTab sources={sources} />
         )}
@@ -603,6 +625,87 @@ function KnowledgeCard({
 }
 
 // ─── sources tab ─────────────────────────────────────────────────
+
+// M309: Delegation lessons tab (KnowledgeCards via unified search)
+function LessonsTab({ lessons, loading }: { lessons: UnifiedSearchResult[]; loading: boolean }) {
+  const [search, setSearch] = useState('')
+  const [expanded, setExpanded] = useState<string | null>(null)
+
+  const filtered = search.trim()
+    ? lessons.filter(l =>
+        l.title.toLowerCase().includes(search.toLowerCase()) ||
+        l.body.toLowerCase().includes(search.toLowerCase()) ||
+        l.tags.some(t => t.toLowerCase().includes(search.toLowerCase()))
+      )
+    : lessons
+
+  if (loading) return <p className="text-sm text-slate-500">Lade Lektionen…</p>
+
+  if (lessons.length === 0) {
+    return (
+      <EmptyState
+        title="Noch keine Lektionen"
+        description="Nach erfolgreichen Delegationen werden hier automatisch gelernte Erkenntnisse aus dem Writeback gespeichert."
+      />
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <input
+        type="text"
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        placeholder="Lektionen durchsuchen…"
+        className="w-full rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
+      />
+      <p className="text-xs text-slate-500">{filtered.length} von {lessons.length} Lektionen</p>
+      <div className="space-y-2">
+        {filtered.map(lesson => (
+          <div
+            key={lesson.id}
+            className="rounded-xl border border-slate-800 bg-slate-900 p-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-white truncate">{lesson.title}</p>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {lesson.tags.slice(0, 4).map(tag => (
+                    <span key={tag} className="px-1.5 py-0.5 rounded text-xs bg-slate-800 text-slate-400 font-mono">{tag}</span>
+                  ))}
+                  {lesson.prUrl && (
+                    <a href={lesson.prUrl} target="_blank" rel="noreferrer" className="px-1.5 py-0.5 rounded text-xs bg-sky-900/30 text-sky-400 hover:text-sky-300">
+                      PR ↗
+                    </a>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {lesson.sourceId && (
+                  <Link href={`/delegations/${lesson.sourceId}`} className="text-xs text-slate-500 hover:text-slate-300">
+                    Delegation ↗
+                  </Link>
+                )}
+                <button
+                  onClick={() => setExpanded(expanded === lesson.id ? null : lesson.id)}
+                  className="text-xs text-slate-600 hover:text-slate-400"
+                >
+                  {expanded === lesson.id ? '▲' : '▼'}
+                </button>
+              </div>
+            </div>
+            {expanded === lesson.id && (
+              <div className="mt-3 rounded-lg bg-slate-800/60 p-3 text-xs text-slate-300 whitespace-pre-wrap font-mono leading-relaxed">
+                {lesson.body}
+              </div>
+            )}
+            <p className="mt-2 text-xs text-slate-600">{new Date(lesson.createdAt).toLocaleDateString('de-DE')}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function SourcesTab({ sources }: { sources: KnowledgeSource[] }) {
   if (sources.length === 0) {
