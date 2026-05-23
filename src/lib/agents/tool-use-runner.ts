@@ -91,7 +91,7 @@ const AGENT_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'run_command',
-    description: 'Run a safe command. Allowed: npm test/lint/type-check, grep, find, cat, ls, git log/diff/status.',
+    description: 'Run a safe command. Allowed: npm run test/lint/type-check/build, npm install <pkg>, grep, find, cat, ls, git log/diff/status.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -147,6 +147,17 @@ const AGENT_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'fetch_url',
+    description: 'Fetch the text content of a public URL (GET only). Use to read npm docs, GitHub READMEs, API references. Returns up to 10 KB of text. Blocked for localhost and private IPs.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        url: { type: 'string', description: 'https:// URL to fetch' },
+      },
+      required: ['url'],
+    },
+  },
+  {
     name: 'task_complete',
     description: 'Signal task completion. Call when done.',
     input_schema: {
@@ -198,6 +209,17 @@ function parseAllowedCommand(cmd: string): { bin: string; args: string[] } | und
   if (bin === 'npm' && first === 'test') {
     return { bin, args: ['test', second, ...rest].filter(Boolean) }
   }
+  if (bin === 'npm' && first === 'install' && second && SAFE_ARG_PATTERN.test(second)) {
+    // Allow installing a single named package — no @scope/pkg with slashes or complex flags
+    const pkgArgs = [second, ...rest].filter(Boolean)
+    if (pkgArgs.every(a => SAFE_ARG_PATTERN.test(a))) {
+      return { bin, args: ['install', ...pkgArgs] }
+    }
+    return undefined
+  }
+  if (bin === 'npm' && first === 'uninstall' && second && SAFE_ARG_PATTERN.test(second)) {
+    return { bin, args: ['uninstall', second] }
+  }
   if (bin === 'npx' && first && SAFE_NPX_COMMANDS.has(first)) {
     return { bin, args: [first, second, ...rest].filter(Boolean) }
   }
@@ -248,14 +270,35 @@ interface ToolInput {
   body?: string
   base?: string
   branch?: string
+  url?: string
 }
 
-function executeTool(
+// ─── Security: URL guard for fetch_url ────────────────────────────────────────
+
+const BLOCKED_URL_PATTERNS = [
+  /^https?:\/\/localhost/i,
+  /^https?:\/\/127\./,
+  /^https?:\/\/0\./,
+  /^https?:\/\/10\./,
+  /^https?:\/\/172\.(1[6-9]|2[0-9]|3[01])\./,
+  /^https?:\/\/192\.168\./,
+  /^https?:\/\/169\.254\./,
+  /^https?:\/\/\[::1\]/,
+  /^https?:\/\/\[fc/i,
+  /^https?:\/\/\[fd/i,
+]
+
+function isSafeUrl(url: string): boolean {
+  if (!url.startsWith('https://') && !url.startsWith('http://')) return false
+  return !BLOCKED_URL_PATTERNS.some(p => p.test(url))
+}
+
+async function executeTool(
   toolName: string,
   input: ToolInput,
   projectRoot: string,
   log: (type: LogType, msg: string) => void,
-): { result: string; taskDone?: ToolRunnerResult } {
+): Promise<{ result: string; taskDone?: ToolRunnerResult }> {
   switch (toolName) {
     case 'read_file': {
       const fp = input.path ?? ''
@@ -379,6 +422,30 @@ function executeTool(
         return { result: prUrl }
       } catch (e) { return { result: `Error: ${String(e)}` } }
     }
+    case 'fetch_url': {
+      const url = input.url ?? ''
+      if (!isSafeUrl(url)) {
+        return { result: `Error: '${url}' is blocked. Only public https:// URLs are allowed.` }
+      }
+      try {
+        log('command', `fetch_url: ${url}`)
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'ForgePilot-Agent/1.0' },
+          signal: AbortSignal.timeout(15_000),
+        })
+        if (!res.ok) return { result: `Error: HTTP ${res.status} ${res.statusText}` }
+        const contentType = res.headers.get('content-type') ?? ''
+        const text = await res.text()
+        const truncated = text.slice(0, 10_000)
+        const note = text.length > 10_000 ? `\n\n[Truncated — ${text.length} chars total, showing first 10 KB]` : ''
+        if (contentType.includes('html')) {
+          // Strip HTML tags for readability
+          const stripped = truncated.replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').trim()
+          return { result: stripped + note }
+        }
+        return { result: truncated + note }
+      } catch (e) { return { result: `Error: ${String(e)}` } }
+    }
     case 'task_complete': {
       log('success', `Task complete: ${input.summary ?? ''}`)
       return {
@@ -493,7 +560,7 @@ Tool guidance:
     const toolResults: Anthropic.ToolResultBlockParam[] = []
     for (const block of response.content) {
       if (block.type !== 'tool_use') continue
-      const { result, taskDone } = executeTool(block.name, block.input as ToolInput, projectRoot, log)
+      const { result, taskDone } = await executeTool(block.name, block.input as ToolInput, projectRoot, log)
       toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result })
       if (taskDone) { finalResult = { ...taskDone, turnsUsed }; break }
     }
