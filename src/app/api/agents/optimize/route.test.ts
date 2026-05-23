@@ -40,7 +40,7 @@ describe('POST /api/agents/optimize', () => {
     const { scoreWork } = await import('@/lib/agents/work-quality')
     const { getDriftWarnings } = await import('@/lib/agents/skill-evolver')
 
-    vi.mocked(scoreWork).mockReturnValue({ score: 0.92, grade: 'A', details: {} } as ReturnType<typeof scoreWork>)
+    vi.mocked(scoreWork).mockReturnValue({ score: 0.92, grade: 'A', details: {} } as unknown as ReturnType<typeof scoreWork>)
     vi.mocked(getDriftWarnings).mockReturnValue([])
 
     const { NextRequest } = await import('next/server')

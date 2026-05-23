@@ -17,7 +17,7 @@ const MOCK_RUN = { id: 'run-1', delegationId: 'del-1', status: 'running', tasks:
 describe('GET /api/agents/orchestrate/[runId]', () => {
   it('returns run when found', async () => {
     const { getRun } = await import('@/lib/agents/orchestrated-run')
-    vi.mocked(getRun).mockReturnValue(MOCK_RUN as ReturnType<typeof getRun>)
+    vi.mocked(getRun).mockReturnValue(MOCK_RUN as unknown as ReturnType<typeof getRun>)
 
     const { GET } = await import('./route')
     const res = await GET(new Request('http://localhost'), { params: Promise.resolve({ runId: 'run-1' }) })
