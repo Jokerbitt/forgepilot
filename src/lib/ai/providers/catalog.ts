@@ -4,7 +4,9 @@ import type { AIProviderConfig, AIModelDef } from './types'
 const CLAUDE_MODELS: AIModelDef[] = [
   { id: 'claude-haiku-4-5',  name: 'Claude Haiku 4.5',  purpose: 'fast',   costPer1kInput: 0.0008, costPer1kOutput: 0.004 },
   { id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5', purpose: 'coding', costPer1kInput: 0.003,  costPer1kOutput: 0.015 },
+  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', purpose: 'coding', costPer1kInput: 0.003,  costPer1kOutput: 0.015 },
   { id: 'claude-opus-4-5',   name: 'Claude Opus 4.5',   purpose: 'coding', costPer1kInput: 0.015,  costPer1kOutput: 0.075 },
+  { id: 'claude-opus-4-7',   name: 'Claude Opus 4.7',   purpose: 'coding', costPer1kInput: 0.015,  costPer1kOutput: 0.075 },
 ]
 
 const OPENAI_MODELS: AIModelDef[] = [

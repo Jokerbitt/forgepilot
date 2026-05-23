@@ -146,7 +146,7 @@ function getCriticProviderCandidates(
 
   const cloudDefaults = [
     { providerId: 'xai', model: 'grok-3-mini' },
-    { providerId: 'anthropic', model: 'claude-sonnet-4-5' },
+    { providerId: 'anthropic', model: 'claude-sonnet-4-6' },
     { providerId: 'openai', model: 'o3-mini' },
     { providerId: 'google-gemini', model: 'gemini-1.5-pro' },
     { providerId: 'deepseek', model: 'deepseek-reasoner' },
@@ -228,7 +228,7 @@ export function getCriticProviderPlan(env?: Record<string, string | undefined>):
 function buildCriticUnavailableMessage(): string {
   return (
     'No critic provider returned valid JSON. Configure ' +
-    `${CRITIC_PROVIDERS_ENV}="xai:grok-3-mini,anthropic:claude-sonnet-4-5,google-gemini:gemini-1.5-pro,ollama:qwen2.5-coder:14b" ` +
+    `${CRITIC_PROVIDERS_ENV}="xai:grok-3-mini,anthropic:claude-sonnet-4-6,google-gemini:gemini-1.5-pro,ollama:qwen2.5-coder:14b" ` +
     `or leave ${CRITIC_MODE_ENV}=auto to try configured cloud providers and local Ollama/LM Studio.`
   )
 }

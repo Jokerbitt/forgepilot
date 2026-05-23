@@ -68,7 +68,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
   const runId = randomUUID()
   const now = new Date().toISOString()
-  const model = brief.researchMode === 'deep' ? 'claude-sonnet-4-5' : 'claude-haiku-4-5'
+  const model = brief.researchMode === 'deep' ? 'claude-sonnet-4-6' : 'claude-haiku-4-5'
 
   // Build prompt from brief data
   const researchQuestionsText = brief.researchBriefDraft.researchQuestions.length > 0
