@@ -690,42 +690,28 @@ async function runWithOllamaAgent(
 /**
  * Autonomous tool-use agent via Claude API.
  * Reads/writes files, runs safe commands, and commits code — no claude CLI required.
+ * Uses the same buildPrompt() as the CLI mode so context cards are included.
  */
-async function runWithClaudeAPI(id: string, delegation: Delegation, startTime: Date) {
-  const goal = delegation.contract.goal
-  const dod = (delegation.contract.definitionOfDone ?? []).map(d => `- ${d}`).join('\n') || '- Task erfolgreich abgeschlossen'
+async function runWithClaudeAPI(id: string, delegation: Delegation, startTime: Date, contextCards: MemoryCard[]) {
   const storedKeys = readStoredApiKeys()
   const apiKey = storedKeys.ANTHROPIC_API_KEY?.trim() || ''
 
   const startLog: AgentLog = {
     timestamp: new Date().toISOString(),
     type: 'info',
-    message: '🤖 Autonomer Tool-Use-Agent gestartet (Claude API, kein CLI erforderlich)',
+    message: `🤖 Autonomer Tool-Use-Agent gestartet (Claude API, ${contextCards.length} Kontext-Karten)`,
   }
   await appendLogs(id, [startLog])
 
-  const prompt = [
-    '## Aufgabe',
-    goal,
-    '',
-    '## Definition of Done',
-    dod,
-    '',
-    delegation.contract.context ? `## Kontext\n${delegation.contract.context}` : '',
-    '',
-    '## Anweisungen',
-    '- Lies zuerst die relevanten Dateien um den aktuellen Zustand zu verstehen',
-    '- Erstelle einen Feature-Branch (feat/ oder fix/) bevor du Dateien änderst',
-    '- Implementiere die Änderungen Schritt für Schritt',
-    '- Führe nach Änderungen `npm run type-check` und `npm test` aus',
-    '- Committe die Änderungen mit einer aussagekräftigen Commit-Message',
-    '- Rufe task_complete auf wenn alles fertig ist',
-  ].filter(Boolean).join('\n')
+  const retryContext = buildRetryContext(delegation)
+  const prompt = delegation.contract.orchestratedRunId
+    ? buildSubTaskPrompt(delegation)
+    : buildPrompt(delegation, contextCards, retryContext || undefined)
 
   try {
     const result = await runWithToolUse(prompt, {
       apiKey,
-      model: delegation.contract.llmModel?.trim() || 'claude-sonnet-4-5',
+      model: delegation.contract.llmModel?.trim() || 'claude-sonnet-4-6',
       projectRoot: process.cwd(),
       maxTurns: budgetToMaxTurns(delegation.contract.maxBudgetUsd),
       budgetUsd: delegation.contract.maxBudgetUsd,
@@ -772,7 +758,7 @@ async function runWithClaudeAPI(id: string, delegation: Delegation, startTime: D
     if (finished) {
       recordRuntimeExecuteLoopEvidence(finished, { notes: result.summary })
     }
-    const label = finished?.title || goal.slice(0, 60)
+    const label = finished?.title || delegation.contract.goal.slice(0, 60)
     upsertAttentionItem({
       id: `completion:${id}`,
       type: result.success ? 'delegation_completed' : 'delegation_failed',
@@ -989,7 +975,7 @@ export async function POST(
 
   // Fallback 1: Claude API tool-use loop — real code execution, no CLI required
   if (mode === 'claude-api') {
-    void runWithClaudeAPI(id, delegation, startTime)
+    void runWithClaudeAPI(id, delegation, startTime, contextCards ?? [])
     return NextResponse.json({ started: true, mode: 'claude-api', delegationId: id })
   }
 
