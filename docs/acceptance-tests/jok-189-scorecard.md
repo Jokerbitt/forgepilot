@@ -71,14 +71,25 @@ Einen Mix aus verschiedenen Schwierigkeiten wählen:
 Ergebnisse als JSON in `config/execute-loop-evidence.json` via:
 
 ```bash
-npx tsx scripts/record-acceptance-run.ts \
+npm run evidence:record -- \
   --title "Fix: Typo in Delegation Detail" \
-  --provider anthropic \
-  --brief-minutes 1.5 \
-  --exec-minutes 8 \
   --has-pr true \
   --has-critic true \
   --has-writeback true \
+  --time-saved 15 \
+  --interventions 0 \
+  --pr-url "https://github.com/Jokerbitt/forgepilot/pull/123"
+```
+
+Alternativ direkter Script-Aufruf mit mehr Feldern:
+
+```bash
+npx tsx scripts/record-acceptance-run.ts \
+  --title "Fix: Typo in Delegation Detail" \
+  --has-pr true \
+  --has-critic true \
+  --has-writeback true \
+  --time-saved 15 \
   --interventions 0
 ```
 
