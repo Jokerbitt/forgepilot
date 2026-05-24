@@ -9,6 +9,7 @@ import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist
 import { buttonClassName } from '@/components/ui/primitives'
 import { CriticalPathWidget } from '@/components/critical-path'
 import { MissionControlPanel } from '@/components/mission-control'
+import { ExecuteLoopEvidenceWidget } from '@/components/execute-loop'
 import { AgentModeBanner } from '@/components/ui/AgentModeBanner'
 
 export default function Home() {
@@ -25,6 +26,9 @@ export default function Home() {
             </p>
           </div>
           <div className="flex shrink-0 flex-row flex-wrap gap-2">
+            <Link href="/live" className={buttonClassName('secondary')}>
+              Live View
+            </Link>
             <Link href="/idea" className={buttonClassName('secondary')}>
               Neue Idee
             </Link>
@@ -37,6 +41,10 @@ export default function Home() {
         <OnboardingChecklist />
 
         <MissionControlPanel />
+
+        <section className="mb-6">
+          <ExecuteLoopEvidenceWidget />
+        </section>
 
         <div className="mb-5">
           <CommandCenterPrinciples />
