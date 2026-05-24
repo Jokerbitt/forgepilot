@@ -60,7 +60,7 @@ describe('GET /api/projects', () => {
 
     const { GET } = await import('./route')
     const res = await GET()
-    const body = await res.json() as { id: string; title: string; status: string; metrics: unknown }[]
+    const body = await res.json() as Array<{ id: string; title: string; status: string; metrics: unknown; progress: unknown; pmPlan: unknown; planningMode: string; targetPlatform: string; persistenceStrategy: string }>
 
     expect(res.status).toBe(200)
     expect(body).toHaveLength(1)
@@ -68,5 +68,10 @@ describe('GET /api/projects', () => {
     expect(body[0].title).toBe('Auth Module')
     expect(body[0].status).toBeDefined()
     expect(body[0].metrics).toBeDefined()
+    expect(body[0].progress).toBeDefined()
+    expect(body[0].pmPlan).toBeDefined()
+    expect(body[0].planningMode).toBe('beginner')
+    expect(body[0].targetPlatform).toBe('webapp')
+    expect(body[0].persistenceStrategy).toBe('postgres')
   })
 })

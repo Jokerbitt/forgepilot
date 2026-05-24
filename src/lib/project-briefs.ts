@@ -12,6 +12,7 @@ import type {
   ResearchPrivacyMode,
   SourceRecord,
 } from '@/lib/models/project-brief'
+import { persistenceGuidance, platformGuidance } from '@/lib/project-planning-recommendations'
 
 const PROJECT_BRIEFS_FILE = path.join(process.cwd(), 'config', 'project-briefs.json')
 
@@ -78,6 +79,12 @@ export function buildProjectBrief(input: IdeaIntakeInput, now = new Date(), id =
     problemStatement: input.problemStatement.trim(),
     targetAudience: input.targetAudience.trim(),
     desiredOutcome: input.desiredOutcome.trim(),
+    planningMode: input.planningMode ?? 'beginner',
+    targetPlatform: input.targetPlatform ?? 'undecided',
+    customPlatformNote: input.customPlatformNote?.trim() || undefined,
+    platformGuidance: platformGuidance(input.targetPlatform ?? 'undecided', input.customPlatformNote),
+    persistenceStrategy: input.persistenceStrategy ?? 'recommend',
+    persistenceGuidance: persistenceGuidance(input.persistenceStrategy ?? 'recommend'),
     constraints: input.constraints.map(item => item.trim()).filter(Boolean),
     scope: input.scope,
     researchMode: input.researchMode,

@@ -4,6 +4,9 @@ export type ProjectBriefStatus = 'draft' | 'in_review' | 'accepted' | 'archived'
 export type BriefScope = 'minimal' | 'standard' | 'full'
 export type ResearchMode = 'quick' | 'standard' | 'deep'
 export type ResearchPrivacyMode = 'local' | 'hybrid' | 'cloud'
+export type PlanningMode = 'beginner' | 'expert'
+export type TargetPlatform = 'webapp' | 'desktop' | 'mobile' | 'cross_platform' | 'undecided'
+export type PersistenceStrategy = 'recommend' | 'postgres' | 'sqlite' | 'json_file' | 'supabase' | 'none'
 export type ExecutorType = 'agent' | 'n8n' | 'local_script' | 'browser' | 'human'
 export type ResearchBriefStatus = 'draft' | 'ready' | 'running' | 'completed' | 'cancelled'
 export type ResearchRunStatus = 'queued' | 'running' | 'review_pending' | 'completed' | 'failed' | 'cancelled'
@@ -178,6 +181,12 @@ export interface ProjectBrief {
   problemStatement: string
   targetAudience: string
   desiredOutcome: string
+  planningMode?: PlanningMode
+  targetPlatform?: TargetPlatform
+  customPlatformNote?: string
+  platformGuidance?: string
+  persistenceStrategy?: PersistenceStrategy
+  persistenceGuidance?: string
   constraints: string[]
   scope: BriefScope
   researchMode: ResearchMode
@@ -206,6 +215,10 @@ export interface IdeaIntakeInput {
   problemStatement: string
   targetAudience: string
   desiredOutcome: string
+  planningMode?: PlanningMode
+  targetPlatform?: TargetPlatform
+  customPlatformNote?: string
+  persistenceStrategy?: PersistenceStrategy
   constraints: string[]
   scope: BriefScope
   researchMode: ResearchMode

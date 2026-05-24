@@ -11,6 +11,11 @@ import type { RefinedBriefDraft } from '@/app/api/idea/refine/route'
 interface PipelineResult {
   briefId: string
   briefTitle: string
+  planningMode?: PlanningMode
+  targetPlatform?: TargetPlatform
+  platformGuidance?: string
+  persistenceStrategy?: PersistenceStrategy
+  persistenceGuidance?: string
   workItemCount: number
   topItem: { title: string; estimatedMinutes: number }
   delegation: { id: string; title: string }
@@ -21,6 +26,9 @@ interface PipelineResult {
 type Stage = 'idle' | 'expanding' | 'brief' | 'items' | 'orchestrating' | 'done' | 'error'
 type RunStatus = 'planning' | 'running' | 'done' | 'failed' | 'aborted'
 type TaskStatus = 'pending' | 'assigned' | 'running' | 'done' | 'failed' | 'skipped'
+type PlanningMode = 'beginner' | 'expert'
+type TargetPlatform = 'webapp' | 'desktop' | 'mobile' | 'cross_platform' | 'undecided'
+type PersistenceStrategy = 'recommend' | 'postgres' | 'sqlite' | 'json_file' | 'supabase' | 'none'
 
 interface LiveTask {
   id: string
@@ -54,6 +62,40 @@ const EXAMPLES = [
   'Ein Dashboard für meine Fitnessdaten',
   'KI-gestützte Code-Review-Automatisierung',
   'Kundensupport-Chatbot für meinen Online-Shop',
+]
+
+const TARGET_PLATFORM_LABELS: Record<TargetPlatform, string> = {
+  webapp: 'Webapp',
+  desktop: 'Desktop App',
+  mobile: 'Mobile iOS & Android',
+  cross_platform: 'Cross-platform',
+  undecided: 'ForgePilot empfiehlt',
+}
+
+const PERSISTENCE_LABELS: Record<PersistenceStrategy, string> = {
+  recommend: 'ForgePilot empfiehlt',
+  postgres: 'PostgreSQL',
+  sqlite: 'SQLite',
+  json_file: 'JSON-Dateien',
+  supabase: 'Supabase',
+  none: 'Keine DB',
+}
+
+const TARGET_PLATFORM_OPTIONS: Array<{ value: TargetPlatform; description: string }> = [
+  { value: 'undecided', description: 'ForgePilot entscheidet passend zur Idee.' },
+  { value: 'webapp', description: 'Browser-first fuer SaaS, Dashboards und interne Tools.' },
+  { value: 'desktop', description: 'Lokale Dateien, Offline und Systemintegration.' },
+  { value: 'mobile', description: 'Touch-first fuer iOS und Android.' },
+  { value: 'cross_platform', description: 'Gemeinsamer Kern fuer mehrere Oberflaechen.' },
+]
+
+const PERSISTENCE_OPTIONS: Array<{ value: PersistenceStrategy; description: string }> = [
+  { value: 'recommend', description: 'ForgePilot waehlt die sinnvollste Strategie.' },
+  { value: 'postgres', description: 'Produktiv: Transaktionen, Suche, Audit, parallele Agenten.' },
+  { value: 'sqlite', description: 'Lokal: Desktop, Offline, Single-User.' },
+  { value: 'json_file', description: 'Prototyp/Export: spaeter migrieren.' },
+  { value: 'supabase', description: 'Managed Postgres mit Auth und Realtime.' },
+  { value: 'none', description: 'Keine dauerhafte Speicherung.' },
 ]
 
 const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
@@ -92,6 +134,10 @@ export default function IdeaPage() {
   const [history, setHistory] = useState<IdeaHistoryEntry[]>([])
   const [aborting, setAborting] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
+  const [planningMode, setPlanningMode] = useState<PlanningMode>('beginner')
+  const [targetPlatform, setTargetPlatform] = useState<TargetPlatform>('undecided')
+  const [customPlatformNote, setCustomPlatformNote] = useState('')
+  const [persistenceStrategy, setPersistenceStrategy] = useState<PersistenceStrategy>('recommend')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const historyPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -154,6 +200,9 @@ export default function IdeaPage() {
   }, [history, refreshHistory])
 
   const isRunning = stage !== 'idle' && stage !== 'done' && stage !== 'error'
+  const effectiveTargetPlatform = planningMode === 'beginner' ? 'undecided' : targetPlatform
+  const effectivePersistenceStrategy = planningMode === 'beginner' ? 'recommend' : persistenceStrategy
+  const effectiveCustomPlatformNote = planningMode === 'beginner' ? '' : customPlatformNote.trim()
 
   // ─── Live run polling ──────────────────────────────────────────────────────
 
@@ -240,7 +289,7 @@ export default function IdeaPage() {
       const res = await fetch('/api/pilot/idea-to-production', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idea: idea.trim() }),
+        body: JSON.stringify({ idea: idea.trim(), planningMode, targetPlatform: effectiveTargetPlatform, customPlatformNote: effectiveCustomPlatformNote || undefined, persistenceStrategy: effectivePersistenceStrategy }),
       })
 
       clearTimeout(stageTimer1)
@@ -349,6 +398,41 @@ export default function IdeaPage() {
                 ? 'border-violet-500/40 bg-violet-500/[0.04] shadow-lg shadow-violet-500/10'
                 : 'border-white/[0.08] bg-white/[0.02]',
             )}>
+              <div className="border-b border-white/[0.05] px-4 py-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Planungsmodus</p>
+                    <p className="mt-1 text-xs text-slate-600">{planningMode === 'beginner' ? 'ForgePilot entscheidet Produktform und Datenhaltung automatisch.' : 'Du kannst Architekturvorgaben selbst setzen.'}</p>
+                  </div>
+                  <div className="grid grid-cols-2 rounded-xl border border-white/[0.08] bg-slate-950 p-1">
+                    {([{ value: 'beginner', label: 'Anfänger' }, { value: 'expert', label: 'Experte' }] as const).map(option => (
+                      <button key={option.value} type="button" onClick={() => setPlanningMode(option.value)} className={cx('rounded-lg px-4 py-2 text-xs font-semibold transition', planningMode === option.value ? 'bg-violet-600 text-white shadow-lg shadow-violet-950/30' : 'text-slate-500 hover:text-slate-300')}>{option.label}</button>
+                    ))}
+                  </div>
+                </div>
+                {planningMode === 'beginner' ? (
+                  <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.07] p-4">
+                    <p className="text-sm font-semibold text-emerald-100">Automatische Empfehlung aktiv</p>
+                    <p className="mt-1 text-xs leading-5 text-emerald-100/70">ForgePilot empfiehlt selbst Webapp, Desktop, Mobile oder Cross-platform und waehlt die passende Datenhaltung.</p>
+                  </div>
+                ) : (
+                  <div className="mt-4 grid gap-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Produktform</p>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        {TARGET_PLATFORM_OPTIONS.map(option => <button key={option.value} type="button" onClick={() => setTargetPlatform(option.value)} className={cx('rounded-xl border p-3 text-left transition', targetPlatform === option.value ? 'border-violet-500/45 bg-violet-500/[0.12]' : 'border-white/[0.06] bg-white/[0.025] hover:border-white/[0.12]')}><span className="block text-xs font-semibold text-white">{TARGET_PLATFORM_LABELS[option.value]}</span><span className="mt-1 block text-[11px] leading-4 text-slate-500">{option.description}</span></button>)}
+                      </div>
+                      <input value={customPlatformNote} onChange={e => setCustomPlatformNote(e.target.value)} placeholder="Eigene Vorgabe optional..." className="mt-2 w-full rounded-xl border border-white/[0.06] bg-slate-950 px-3 py-2 text-xs text-slate-200 outline-none placeholder:text-slate-600 focus:border-violet-500/40" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Datenhaltung</p>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        {PERSISTENCE_OPTIONS.map(option => <button key={option.value} type="button" onClick={() => setPersistenceStrategy(option.value)} className={cx('rounded-xl border p-3 text-left transition', persistenceStrategy === option.value ? 'border-sky-500/45 bg-sky-500/[0.12]' : 'border-white/[0.06] bg-white/[0.025] hover:border-white/[0.12]')}><span className="block text-xs font-semibold text-white">{PERSISTENCE_LABELS[option.value]}</span><span className="mt-1 block text-[11px] leading-4 text-slate-500">{option.description}</span></button>)}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
               <textarea
                 ref={textareaRef}
                 value={idea}
@@ -524,6 +608,18 @@ export default function IdeaPage() {
                   <h2 className="text-xl font-bold text-white leading-tight">{result.briefTitle}</h2>
                   <div className="flex flex-wrap gap-4 mt-3">
                     <span className="flex items-center gap-1.5 text-sm text-slate-400">
+                      <span>🧭</span>
+                      <span>{(result.planningMode ?? planningMode) === 'beginner' ? 'Automatik' : 'Experte'}</span>
+                    </span>
+                    <span className="flex items-center gap-1.5 text-sm text-slate-400">
+                      <span>📱</span>
+                      <span>{TARGET_PLATFORM_LABELS[result.targetPlatform ?? effectiveTargetPlatform]}</span>
+                    </span>
+                    <span className="flex items-center gap-1.5 text-sm text-slate-400">
+                      <span>🗄️</span>
+                      <span>{PERSISTENCE_LABELS[result.persistenceStrategy ?? effectivePersistenceStrategy]}</span>
+                    </span>
+                    <span className="flex items-center gap-1.5 text-sm text-slate-400">
                       <span>📋</span>
                       <span>{result.workItemCount} Work Items</span>
                     </span>
@@ -536,10 +632,10 @@ export default function IdeaPage() {
               </div>
               <div className="mt-5 flex flex-wrap gap-3">
                 <Link
-                  href={`/project-briefs/${result.briefId}`}
+                  href={`/projects/${result.briefId}`}
                   className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium bg-violet-600 text-white hover:bg-violet-500 transition-colors"
                 >
-                  <span>📋</span> Brief ansehen
+                  <span>🧭</span> Projekt Workspace öffnen
                 </Link>
                 <Link
                   href={`/orchestrations`}
