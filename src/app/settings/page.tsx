@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import { cx } from '@/components/ui/primitives'
 import { AIProviderStatus } from '@/components/settings/AIProviderStatus'
+import { SystemReadinessPanel } from '@/components/settings/SystemReadinessPanel'
 
 const panelClassName = 'rounded-lg border border-white/[0.07] bg-white/[0.035] p-4 shadow-sm shadow-black/10'
 const inputClassName = 'w-full rounded-md border border-white/[0.09] bg-[#080912] px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/25'
@@ -698,6 +699,8 @@ export default function SettingsPage() {
             </p>
           </div>
         </header>
+
+        <SystemReadinessPanel />
 
         {/* Claude CLI Auth Section */}
         <section className="space-y-4">
