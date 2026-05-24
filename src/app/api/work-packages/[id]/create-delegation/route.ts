@@ -45,6 +45,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
     status: 'pending',
     executionRoute: 'ollama-agent',
     costEstimateUsd: 0,
+    briefId: wp.briefId,
     logs: [{
       timestamp: now,
       type: 'info',

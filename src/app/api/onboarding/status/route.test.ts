@@ -7,6 +7,7 @@ import type { OnboardingStatus } from '@/lib/onboarding/status'
 
 const mockStatusEmpty: OnboardingStatus = {
   hasProvider: false,
+  hasCLIProvider: false,
   hasIdea: false,
   hasDelegation: false,
   isComplete: false,
@@ -16,6 +17,7 @@ const mockStatusEmpty: OnboardingStatus = {
 
 const mockStatusComplete: OnboardingStatus = {
   hasProvider: true,
+  hasCLIProvider: false,
   hasIdea: true,
   hasDelegation: true,
   isComplete: true,
@@ -25,6 +27,7 @@ const mockStatusComplete: OnboardingStatus = {
 
 const mockStatusPartial: OnboardingStatus = {
   hasProvider: true,
+  hasCLIProvider: true,
   hasIdea: true,
   hasDelegation: false,
   isComplete: false,
