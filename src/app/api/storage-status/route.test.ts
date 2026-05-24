@@ -11,6 +11,12 @@ const getStorageStatus = vi.fn<[], { mode: string; hasDatabase: boolean }>()
 
 vi.mock('@/lib/storage/cutover-config', () => ({ getStorageStatus }))
 
+const mockInventory = {
+  stores: [],
+  summary: { total: 0, postgresActive: 0, jsonOnly: 0, dualWrite: 0, highRiskJsonStores: 0, cutoverReadinessScore: 0 },
+}
+vi.mock('@/lib/storage/store-inventory', () => ({ getStoreInventory: vi.fn(() => mockInventory) }))
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('GET /api/storage-status', () => {
