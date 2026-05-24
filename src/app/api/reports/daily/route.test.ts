@@ -98,7 +98,7 @@ describe('GET /api/reports/daily — error info integration', () => {
     expect(body.errors[0].severity).toBe('high')
   })
 
-  it('renders a Recent Errors section in markdown when errors exist', async () => {
+  it('renders an actionable error section in markdown when errors exist', async () => {
     mockErrors.push({
       id: 'err-test-2',
       message: 'Webhook signature verification failed',
@@ -113,17 +113,18 @@ describe('GET /api/reports/daily — error info integration', () => {
     expect(response.headers.get('content-type')).toContain('text/markdown')
 
     const text = await response.text()
-    expect(text).toContain('## Recent Errors')
+    expect(text).toContain('## Aktuelle Fehlerlage')
     expect(text).toContain('Webhook signature verification failed')
     expect(text).toContain('[CRITICAL]')
     expect(text).toContain('webhook')
   })
 
-  it('renders "No recent errors" placeholder in markdown when error log is empty', async () => {
+  it('renders a helpful empty-state placeholder in markdown when error log is empty', async () => {
     const { GET } = await import('./route')
     const response = await GET(makeRequest('markdown'))
     const text = await response.text()
-    expect(text).toContain('## Recent Errors')
-    expect(text).toContain('No recent errors recorded.')
+    expect(text).toContain('## Aktuelle Fehlerlage')
+    expect(text).toContain('Keine aktuellen Fehler protokolliert.')
+    expect(text).toContain('ohne Fehler-Triage')
   })
 })
