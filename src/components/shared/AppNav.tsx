@@ -31,6 +31,7 @@ import {
   FolderOpen,
   Bell,
   Radio,
+  Monitor,
   GraduationCap,
   ClipboardList,
   MapPin,
@@ -42,44 +43,45 @@ import type { AutonomousConfig } from '@/lib/config/autonomous-config'
 import { cx } from '@/components/ui/primitives'
 import { NotificationBell } from '@/components/shared/NotificationBell'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
+import { type Locale, useI18n } from '@/lib/i18n'
 
 interface NavItem {
   href: string
-  label: string
-  shortLabel: string
+  key: keyof ReturnType<typeof useI18n>['nav']
   icon: React.ElementType
   section: string
   isNew?: boolean
 }
 
 const navItems: NavItem[] = [
-  { href: '/', label: 'Command Center', shortLabel: 'Command', icon: LayoutDashboard, section: 'Main' },
-  { href: '/briefing', label: 'Briefing', shortLabel: 'Briefing', icon: ClipboardList, section: 'Main', isNew: true },
-  { href: '/projects', label: 'Plan', shortLabel: 'Plan', icon: FolderOpen, section: 'Main' },
-  { href: '/delegations', label: 'Execute', shortLabel: 'Execute', icon: ListChecks, section: 'Main' },
-  { href: '/knowledge', label: 'Knowledge', shortLabel: 'Knowledge', icon: BookOpen, section: 'Main' },
-  { href: '/knowledge-cards', label: 'Delegation Lessons', shortLabel: 'Lessons', icon: GraduationCap, section: 'More' },
-  { href: '/model-router', label: 'System', shortLabel: 'System', icon: GitBranch, section: 'Main' },
-  { href: '/inbox', label: 'Inbox', shortLabel: 'Inbox', icon: Inbox, section: 'More' },
-  { href: '/notifications', label: 'Notifications', shortLabel: 'Notifs', icon: Bell, section: 'More' },
-  { href: '/project-briefs', label: 'Project Briefs', shortLabel: 'Briefs', icon: FileText, section: 'More' },
-  { href: '/work-items', label: 'Work Items', shortLabel: 'Items', icon: CheckSquare, section: 'More' },
-  { href: '/board', label: 'Agent Board', shortLabel: 'Board', icon: Kanban, section: 'More' },
-  { href: '/active', label: 'Active Runs', shortLabel: 'Active', icon: Activity, section: 'More' },
-  { href: '/agent-runs', label: 'Agent Runs', shortLabel: 'Runs', icon: History, section: 'More' },
-  { href: '/agents', label: 'Agent Control', shortLabel: 'Agents', icon: Bot, section: 'More' },
-  { href: '/orchestrations', label: 'Orchestrierungen', shortLabel: 'Orch.', icon: Network, section: 'More' },
-  { href: '/monitor', label: 'Agent Monitor', shortLabel: 'Monitor', icon: Radio, section: 'More' },
-  { href: '/pm-agent', label: 'PM Agent', shortLabel: 'PM Agent', icon: Brain, section: 'More' },
-  { href: '/knowledge/research', label: 'Research Platform', shortLabel: 'Research', icon: Search, section: 'More' },
-  { href: '/context-packages', label: 'Context Packages', shortLabel: 'Context', icon: Package, section: 'More' },
-  { href: '/planning', label: 'Planning Audit', shortLabel: 'Planning', icon: MapPin, section: 'More' },
-  { href: '/governance', label: 'Governance Hub', shortLabel: 'Gov', icon: Shield, section: 'More' },
-  { href: '/analytics', label: 'Cost Analytics', shortLabel: 'Analytics', icon: BarChart3, section: 'More' },
-  { href: '/idea', label: 'Idea → Production', shortLabel: 'Idea', icon: Lightbulb, section: 'More' },
-  { href: '/pilot', label: 'E2E Pilot', shortLabel: 'Pilot', icon: FlaskConical, section: 'More' },
-  { href: '/digest', label: 'Aktivitäts-Digest', shortLabel: 'Digest', icon: Bell, section: 'Utility' },
-  { href: '/settings', label: 'Settings', shortLabel: 'Settings', icon: Settings, section: 'Utility' },
+  { href: '/', key: 'commandCenter', icon: LayoutDashboard, section: 'Main' },
+  { href: '/idea', key: 'ideaToProduction', icon: Lightbulb, section: 'Main', isNew: true },
+  { href: '/live', key: 'liveView', icon: Monitor, section: 'Main' },
+  { href: '/delegations', key: 'execute', icon: ListChecks, section: 'Main' },
+  { href: '/knowledge', key: 'knowledge', icon: BookOpen, section: 'Main' },
+  { href: '/settings', key: 'settings', icon: Settings, section: 'Main' },
+  { href: '/knowledge-cards', key: 'delegationLessons', icon: GraduationCap, section: 'More' },
+  { href: '/briefing', key: 'briefing', icon: ClipboardList, section: 'More' },
+  { href: '/projects', key: 'plan', icon: FolderOpen, section: 'More' },
+  { href: '/model-router', key: 'system', icon: GitBranch, section: 'More' },
+  { href: '/inbox', key: 'inbox', icon: Inbox, section: 'More' },
+  { href: '/notifications', key: 'notifications', icon: Bell, section: 'More' },
+  { href: '/project-briefs', key: 'projectBriefs', icon: FileText, section: 'More' },
+  { href: '/work-items', key: 'workItems', icon: CheckSquare, section: 'More' },
+  { href: '/board', key: 'agentBoard', icon: Kanban, section: 'More' },
+  { href: '/active', key: 'activeRuns', icon: Activity, section: 'More' },
+  { href: '/agent-runs', key: 'agentRuns', icon: History, section: 'More' },
+  { href: '/agents', key: 'agentControl', icon: Bot, section: 'More' },
+  { href: '/orchestrations', key: 'orchestrations', icon: Network, section: 'More' },
+  { href: '/monitor', key: 'agentMonitor', icon: Radio, section: 'More' },
+  { href: '/pm-agent', key: 'pmAgent', icon: Brain, section: 'More' },
+  { href: '/knowledge/research', key: 'researchPlatform', icon: Search, section: 'More' },
+  { href: '/context-packages', key: 'contextPackages', icon: Package, section: 'More' },
+  { href: '/planning', key: 'planningAudit', icon: MapPin, section: 'More' },
+  { href: '/governance', key: 'governanceHub', icon: Shield, section: 'More' },
+  { href: '/analytics', key: 'costAnalytics', icon: BarChart3, section: 'More' },
+  { href: '/pilot', key: 'e2ePilot', icon: FlaskConical, section: 'More' },
+  { href: '/digest', key: 'activityDigest', icon: Bell, section: 'Utility' },
 ]
 
 const sectionColors: Record<string, string> = {
@@ -92,6 +94,7 @@ const moreNavItems = navItems.filter(item => item.section === 'More')
 const utilityNavItems = navItems.filter(item => item.section === 'Utility')
 
 export function AppNav() {
+  const { locale, setLocale, nav, ui } = useI18n()
   const pathname = usePathname()
   const [running, setRunning] = useState(0)
   const [pending, setPending] = useState(0)
@@ -172,7 +175,7 @@ export function AppNav() {
         {/* Nav sections */}
         <div className="flex-1 overflow-y-auto py-3 scrollbar-hide">
           <NavSection
-            title="Workspace"
+            title={ui.workspace}
             items={primaryNavItems}
             pathname={pathname}
             running={running}
@@ -181,6 +184,8 @@ export function AppNav() {
             unreadNotificationCount={unreadNotificationCount}
             autonomousModeActive={autonomousModeActive}
             titleClassName={sectionColors.Main}
+            nav={nav}
+            ui={ui}
           />
           <details open={isMoreActive} className="mx-2 mt-3 rounded-lg border border-white/[0.06] bg-white/[0.02]">
             <summary
@@ -189,7 +194,7 @@ export function AppNav() {
                 isMoreActive ? 'text-violet-300' : 'text-slate-500'
               )}
             >
-              More
+              {ui.more}
             </summary>
             <div className="pb-2">
               {moreNavItems.map(item => {
@@ -205,7 +210,7 @@ export function AppNav() {
                   <SidebarLink
                     key={item.href}
                     href={item.href}
-                    label={item.label}
+                    label={nav[item.key].label}
                     icon={item.icon}
                     isActive={isActive}
                     count={count}
@@ -230,7 +235,7 @@ export function AppNav() {
                 onClick={() => signOut({ callbackUrl: '/login' })}
                 className="mt-1 text-xs font-medium text-slate-500 transition hover:text-slate-300"
               >
-                Abmelden
+                {ui.logout}
               </button>
             </div>
           )}
@@ -241,7 +246,7 @@ export function AppNav() {
               <SidebarLink
                 key={item.href}
                 href={item.href}
-                label={item.label}
+                label={nav[item.key].label}
                 icon={item.icon}
                 isActive={isActive}
                 autonomousActive={isAutonomousSettings}
@@ -258,13 +263,31 @@ export function AppNav() {
             >
               <span className="flex items-center gap-2">
                 <Command className="h-3 w-3" />
-                <span className="lg:hidden">Search</span>
-                <span className="hidden lg:inline">Quick search</span>
+                <span className="lg:hidden">{ui.search}</span>
+                <span className="hidden lg:inline">{ui.quickSearch}</span>
               </span>
               <kbd className="hidden rounded border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-slate-500 lg:inline">⌘K</kbd>
             </button>
             <ThemeToggle />
             <NotificationBell initialUnreadCount={unreadNotificationCount} />
+          </div>
+
+          <div className="flex rounded-lg border border-white/[0.06] bg-white/[0.02] p-1">
+            {(['de', 'en'] as Locale[]).map(option => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setLocale(option)}
+                className={cx(
+                  'flex-1 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors',
+                  locale === option
+                    ? 'bg-violet-500/20 text-violet-200'
+                    : 'text-slate-500 hover:text-slate-300'
+                )}
+              >
+                {option}
+              </button>
+            ))}
           </div>
 
           {running > 0 && (
@@ -273,7 +296,9 @@ export function AppNav() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
               </span>
-              <p className="text-xs font-medium text-emerald-300">{running} Agent{running > 1 ? 's' : ''} running</p>
+              <p className="text-xs font-medium text-emerald-300">
+                {running} {running > 1 ? ui.agentsRunning : ui.agentRunning}
+              </p>
             </div>
           )}
         </div>
@@ -302,7 +327,7 @@ export function AppNav() {
                       : 'text-slate-400 hover:bg-white/[0.06] hover:text-white'
                   )}
                 >
-                  {item.shortLabel}
+                  {nav[item.key].short}
                 </Link>
               )
             })}
@@ -310,7 +335,7 @@ export function AppNav() {
               href="/settings"
               className="shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white"
             >
-              More
+              {ui.more}
             </Link>
           </div>
           {totalActive > 0 && (
@@ -336,6 +361,8 @@ function NavSection({
   unreadNotificationCount,
   autonomousModeActive,
   titleClassName,
+  nav,
+  ui,
 }: {
   title: string
   items: NavItem[]
@@ -346,6 +373,8 @@ function NavSection({
   unreadNotificationCount: number
   autonomousModeActive: boolean
   titleClassName: string
+  nav: ReturnType<typeof useI18n>['nav']
+  ui: ReturnType<typeof useI18n>['ui']
 }) {
   return (
     <div className="mb-1">
@@ -365,12 +394,13 @@ function NavSection({
           <SidebarLink
             key={item.href}
             href={item.href}
-            label={item.label}
+            label={nav[item.key].label}
             icon={item.icon}
             isActive={isActive}
             count={count}
             isLive={isLive}
             isNew={item.isNew}
+            newLabel={ui.new}
             autonomousActive={isAutonomousSettings}
           />
         )
@@ -387,6 +417,7 @@ function SidebarLink({
   count,
   isLive,
   isNew,
+  newLabel = 'New',
   autonomousActive,
   compact = false,
 }: {
@@ -397,6 +428,7 @@ function SidebarLink({
   count?: number
   isLive?: boolean
   isNew?: boolean
+  newLabel?: string
   autonomousActive?: boolean
   compact?: boolean
 }) {
@@ -443,7 +475,7 @@ function SidebarLink({
           <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
         </span>
       ) : isNew ? (
-        <span className="ml-auto rounded bg-violet-500/20 px-1 py-0.5 text-[9px] font-bold text-violet-400">NEU</span>
+        <span className="ml-auto rounded bg-violet-500/20 px-1 py-0.5 text-[9px] font-bold uppercase text-violet-400">{newLabel}</span>
       ) : isActive ? (
         <ChevronRight className="ml-2 h-3 w-3 shrink-0 text-violet-400/50" />
       ) : null}

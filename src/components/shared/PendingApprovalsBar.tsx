@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle, ChevronRight, Clock, X } from 'lucide-react'
 import type { Delegation } from '@/lib/models/delegation'
+import { useI18n } from '@/lib/i18n'
 
 export const MAX_VISIBLE = 3
 export const POLL_MS = 15_000
@@ -41,6 +42,7 @@ export function getDelegationLabel(d: Delegation): string {
  * - Polls /api/delegations every 15 s; re-shows when dismissed if new items appear
  */
 export function PendingApprovalsBar() {
+  const { ui } = useI18n()
   const [pending, setPending] = useState<Delegation[]>([])
   const [dismissed, setDismissed] = useState(false)
   const [approving, setApproving] = useState<Set<string>>(new Set())
@@ -123,7 +125,7 @@ export function PendingApprovalsBar() {
         <div className="flex shrink-0 items-center gap-2">
           <Clock className="h-3.5 w-3.5 text-amber-400" />
           <span className="whitespace-nowrap text-xs font-semibold text-amber-200">
-            {visiblePending.length} awaiting approval
+            {visiblePending.length} {ui.awaitingApproval}
           </span>
         </div>
 
@@ -164,7 +166,7 @@ export function PendingApprovalsBar() {
                     disabled={isApproving}
                     className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300 transition-colors hover:bg-amber-500/30 disabled:opacity-50"
                   >
-                    {isApproving ? '…' : 'Approve'}
+                    {isApproving ? '…' : ui.approve}
                   </button>
                 )}
               </div>
@@ -176,7 +178,7 @@ export function PendingApprovalsBar() {
               href="/delegations"
               className="whitespace-nowrap text-xs font-medium text-amber-400 hover:text-amber-300 hover:underline"
             >
-              +{overflow} more
+              +{overflow} {ui.moreItems}
             </Link>
           )}
         </div>
@@ -187,13 +189,13 @@ export function PendingApprovalsBar() {
             href="/delegations"
             className="flex items-center gap-0.5 whitespace-nowrap text-[11px] font-medium text-amber-400/70 transition-colors hover:text-amber-300"
           >
-            View all
+            {ui.viewAll}
             <ChevronRight className="h-3 w-3" />
           </Link>
           <button
             data-testid="dismiss-btn"
             onClick={() => setDismissed(true)}
-            aria-label="Dismiss"
+            aria-label={ui.dismiss}
             className="rounded p-1 text-slate-500 transition-colors hover:bg-white/[0.06] hover:text-slate-300"
           >
             <X className="h-3.5 w-3.5" />

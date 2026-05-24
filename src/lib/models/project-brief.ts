@@ -2,6 +2,8 @@ import type { CriticReview } from '@/lib/brief-critic/types'
 
 export type ProjectBriefStatus = 'draft' | 'in_review' | 'accepted' | 'archived'
 export type BriefScope = 'minimal' | 'standard' | 'full'
+export type TargetPlatform = 'webapp' | 'desktop' | 'mobile' | 'cross_platform' | 'undecided'
+export type PersistenceStrategy = 'recommend' | 'postgres' | 'sqlite' | 'json_file' | 'supabase' | 'none'
 export type ResearchMode = 'quick' | 'standard' | 'deep'
 export type ResearchPrivacyMode = 'local' | 'hybrid' | 'cloud'
 export type ExecutorType = 'agent' | 'n8n' | 'local_script' | 'browser' | 'human'
@@ -178,6 +180,12 @@ export interface ProjectBrief {
   problemStatement: string
   targetAudience: string
   desiredOutcome: string
+  planningMode?: PlanningMode
+  targetPlatform?: TargetPlatform
+  customPlatformNote?: string
+  platformGuidance?: string
+  persistenceStrategy?: PersistenceStrategy
+  persistenceGuidance?: string
   constraints: string[]
   scope: BriefScope
   researchMode: ResearchMode
@@ -206,6 +214,10 @@ export interface IdeaIntakeInput {
   problemStatement: string
   targetAudience: string
   desiredOutcome: string
+  planningMode?: PlanningMode
+  targetPlatform?: TargetPlatform
+  customPlatformNote?: string
+  persistenceStrategy?: PersistenceStrategy
   constraints: string[]
   scope: BriefScope
   researchMode: ResearchMode
@@ -214,3 +226,5 @@ export interface IdeaIntakeInput {
 
 export type IdeaIntakeField = keyof IdeaIntakeInput
 export type IdeaIntakeValidationErrors = Partial<Record<IdeaIntakeField, string>>
+
+export type PlanningMode = 'beginner' | 'expert'
