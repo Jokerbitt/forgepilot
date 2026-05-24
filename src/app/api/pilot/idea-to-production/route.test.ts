@@ -216,6 +216,43 @@ describe('POST /api/pilot/idea-to-production', () => {
     expect(data.taskCount).toBe(1) // MOCK_TASKS has 1 task
   })
 
+  it('passes resolved beginner architecture choices into the brief builder', async () => {
+    mockGenerateText
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          title: 'Team Dashboard',
+          rawIdea: 'Build a browser dashboard for team reports',
+          problemStatement: 'Teams need report visibility',
+          targetAudience: 'Product teams',
+          desiredOutcome: 'A shared dashboard',
+          constraints: [],
+          scope: 'minimal',
+          researchMode: 'quick',
+          privacyMode: 'local',
+        }),
+        provider: 'anthropic',
+        model: 'claude-haiku-4-5',
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify([
+          { title: 'Create dashboard shell', type: 'ticket', priority: 1, estimatedMinutes: 45, risk: 'A' },
+        ]),
+        provider: 'anthropic',
+        model: 'claude-haiku-4-5',
+      })
+
+    const { POST } = await import('./route')
+    const res = await POST(makeRequest({ idea: 'Build a browser dashboard for team reports', planningMode: 'beginner' }))
+
+    expect(res.status).toBe(201)
+    expect(mockBuildProjectBrief).toHaveBeenCalledOnce()
+    expect(mockBuildProjectBrief.mock.calls[0][0]).toMatchObject({
+      planningMode: 'beginner',
+      targetPlatform: 'webapp',
+      persistenceStrategy: 'postgres',
+    })
+  })
+
   it('prepends new items before existing local-items', async () => {
     const existingItem = {
       id: 'old-item',
