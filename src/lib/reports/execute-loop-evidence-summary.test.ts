@@ -46,6 +46,8 @@ describe('execute-loop evidence summary', () => {
     expect(summary.releaseGate.ready).toBe(false)
     expect(summary.releaseGate.remainingProvenRuns).toBe(4)
     expect(summary.nextAction).toContain('4 more real small ticket loops')
+    expect(summary.recommendedRuns).toHaveLength(5)
+    expect(summary.recommendedRuns.find(item => item.status === 'next')?.category).toBe('bugfix')
   })
 
   it('opens the release gate when the target number of real runs is proven', () => {
@@ -56,5 +58,6 @@ describe('execute-loop evidence summary', () => {
     expect(summary.progressPct).toBe(100)
     expect(summary.releaseGate.ready).toBe(true)
     expect(summary.nextAction).toContain('V1 readiness')
+    expect(summary.recommendedRuns.every(item => item.status !== 'next')).toBe(true)
   })
 })

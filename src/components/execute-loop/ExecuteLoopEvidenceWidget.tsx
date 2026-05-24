@@ -42,6 +42,17 @@ interface ExecuteLoopEvidenceSummary {
     remainingProvenRuns: number
     reason: string
   }
+  recommendedRuns: Array<{
+    id: string
+    title: string
+    category: 'bugfix' | 'feature' | 'api' | 'refactor' | 'test'
+    goal: string
+    why: string
+    acceptanceCriteria: string[]
+    verification: string[]
+    evidenceCommand: string
+    status: 'done' | 'next' | 'queued'
+  }>
 }
 
 interface EvidenceResponse {
@@ -88,6 +99,20 @@ function sourceTone(source: EvidenceSource): 'neutral' | 'info' | 'success' {
   if (source === 'harness-dry-run') return 'neutral'
   if (source === 'runtime-aggregate') return 'info'
   return 'success'
+}
+
+function categoryLabel(category: ExecuteLoopEvidenceSummary['recommendedRuns'][number]['category']): string {
+  if (category === 'bugfix') return 'Bugfix'
+  if (category === 'feature') return 'Feature'
+  if (category === 'api') return 'API'
+  if (category === 'refactor') return 'Refactor'
+  return 'Test'
+}
+
+function recommendationTone(status: ExecuteLoopEvidenceSummary['recommendedRuns'][number]['status']): 'success' | 'warning' | 'neutral' {
+  if (status === 'done') return 'success'
+  if (status === 'next') return 'warning'
+  return 'neutral'
 }
 
 function RunRow({ run }: { run: ExecuteLoopEvidenceRun }) {
@@ -254,6 +279,31 @@ export function ExecuteLoopEvidenceWidget({ className }: { className?: string })
           )}
         </div>
       </div>
+
+      {summary.recommendedRuns.length > 0 && (
+        <div className="border-t border-white/[0.07] px-5 py-5">
+          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Akzeptanzplan</p>
+              <h3 className="text-sm font-semibold text-white">Die nächsten realistischen Produktivläufe</h3>
+            </div>
+            <p className="text-xs text-slate-500">Erst nach 5 echten Läufen ist der Alltagseinsatz belastbar.</p>
+          </div>
+          <ol className="grid gap-3 lg:grid-cols-5">
+            {summary.recommendedRuns.map((item, index) => (
+              <li key={item.id} className="rounded-lg border border-white/[0.07] bg-black/20 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-semibold text-slate-500">#{index + 1}</span>
+                  <Badge tone={recommendationTone(item.status)}>{item.status === 'done' ? 'erledigt' : item.status === 'next' ? 'als Nächstes' : 'wartet'}</Badge>
+                </div>
+                <Badge tone="info" className="mt-3">{categoryLabel(item.category)}</Badge>
+                <p className="mt-3 text-sm font-semibold leading-5 text-white">{item.title}</p>
+                <p className="mt-2 text-xs leading-5 text-slate-400">{item.why}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
     </Panel>
   )
 }

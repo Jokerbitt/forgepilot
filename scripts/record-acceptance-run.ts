@@ -70,6 +70,10 @@ function boolArg(name: string): boolean {
   return val === 'true' || val === '1' || val === 'yes'
 }
 
+function boolArgDefault(name: string, defaultValue: boolean): boolean {
+  return arg(name) === undefined ? defaultValue : boolArg(name)
+}
+
 function numArg(name: string): number | undefined {
   const val = arg(name)
   return val !== undefined ? parseFloat(val) : undefined
@@ -87,9 +91,9 @@ const CONFIG_DIR = process.env.FORGEPILOT_DATA_DIR ?? path.join(process.cwd(), '
 const EVIDENCE_FILE = path.join(CONFIG_DIR, 'execute-loop-evidence.json')
 
 const title = requireArg('title')
-const hasBrief = boolArg('has-brief') || true
-const hasDelegation = boolArg('has-delegation') || true
-const hasExecute = boolArg('has-execute') || true
+const hasBrief = boolArgDefault('has-brief', true)
+const hasDelegation = boolArgDefault('has-delegation', true)
+const hasExecute = boolArgDefault('has-execute', true)
 const hasTests = boolArg('has-tests')
 const hasPR = boolArg('has-pr')
 const hasCritic = boolArg('has-critic')
