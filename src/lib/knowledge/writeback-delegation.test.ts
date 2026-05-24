@@ -14,9 +14,11 @@ vi.mock('@/lib/ai/text-generation', () => ({
   generateText: (...args: unknown[]) => mockGenerateText(...args),
 }))
 
-const mockWriteKnowledgeCard = vi.fn()
+const mockWriteKnowledgeCard    = vi.fn()
+const mockFindBySource          = vi.fn().mockReturnValue([])   // no existing cards by default
 vi.mock('@/lib/knowledge/knowledge-card', () => ({
-  writeKnowledgeCard: (...args: unknown[]) => mockWriteKnowledgeCard(...args),
+  writeKnowledgeCard:          (...args: unknown[]) => mockWriteKnowledgeCard(...args),
+  findKnowledgeCardsBySource:  (...args: unknown[]) => mockFindBySource(...args),
 }))
 
 vi.mock('@/lib/logger', () => ({
@@ -96,7 +98,7 @@ describe('writebackDelegationKnowledge', () => {
     expect(callArg.content).toContain('learned something useful')
   })
 
-  it('fail-open: LLM throws → card still written with raw output', async () => {
+  it('quality gate: LLM throws with unstructured raw output → quality gate rejects, written:false', async () => {
     mockGenerateText.mockRejectedValue(new Error('LLM unavailable'))
 
     const result = await writebackDelegationKnowledge(
@@ -104,13 +106,10 @@ describe('writebackDelegationKnowledge', () => {
       'Some raw output from the agent',
     )
 
-    expect(result.written).toBe(true)
-    expect(result.cardId).toBe('card-uuid-1')
-    expect(mockWriteKnowledgeCard).toHaveBeenCalledOnce()
-    // Content should fall back to raw data
-    const callArg = mockWriteKnowledgeCard.mock.calls[0][0] as Record<string, unknown>
-    expect(callArg.content).toContain('Raw execution output')
-    expect(callArg.content).toContain('Some raw output from the agent')
+    // Raw output fallback has no bullet points → quality gate correctly rejects it
+    expect(result.written).toBe(false)
+    expect(result.reason).toBeDefined()
+    expect(mockWriteKnowledgeCard).not.toHaveBeenCalled()
   })
 
   it('tags include delegation, riskClass, and executionRoute', async () => {

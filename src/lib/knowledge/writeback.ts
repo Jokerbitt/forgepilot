@@ -4,8 +4,9 @@ import { createKnowledgeCardRepository } from '@/lib/repositories/knowledgeCardR
 import type { CreateKnowledgeCardInput } from '@/lib/repositories/knowledgeCardRepository'
 import { aiLogger } from '@/lib/logger'
 import { generateText } from '@/lib/ai/text-generation'
-import { writeKnowledgeCard } from '@/lib/knowledge/knowledge-card'
+import { writeKnowledgeCard, findKnowledgeCardsBySource } from '@/lib/knowledge/knowledge-card'
 import { writeKnowledgeCardToNas } from '@/lib/knowledge/nas-writeback'
+import { shouldWriteCard } from '@/lib/knowledge/quality-gate'
 
 // ─── M220: Delegation Knowledge Writeback ────────────────────────────────────
 
@@ -30,6 +31,17 @@ export async function writebackDelegationKnowledge(
     const riskClass = delegation.contract.riskClass ?? 'B'
     const mode = delegation.executionRoute ?? 'unknown'
     const truncatedOutput = executionOutput.slice(0, 500)
+    const cardTitle = delegation.title || delegation.contract.goal.slice(0, 80)
+
+    // Deduplication: skip if a card already exists for this delegation
+    const existing = findKnowledgeCardsBySource(delegation.id)
+    if (existing.length > 0) {
+      aiLogger.info(
+        { event: 'knowledge.writeback.skipped', delegationId: delegation.id, reason: 'duplicate' },
+        'Knowledge writeback skipped — card already exists for this delegation',
+      )
+      return { written: false, reason: 'Card already exists for this delegation' }
+    }
 
     let content: string
 
@@ -37,7 +49,7 @@ export async function writebackDelegationKnowledge(
     try {
       const result = await generateText({
         system: 'You are a knowledge extraction assistant. Respond ONLY with Markdown bullet points.',
-        prompt: `Fasse in 3-5 Stichpunkten zusammen, was bei dieser Delegation gelernt wurde.\nTitel: ${delegation.title}\nOutput (max 500 Zeichen): ${truncatedOutput}\nAntworte NUR mit Markdown-Bullet-Points.`,
+        prompt: `Fasse in 3-5 Stichpunkten zusammen, was bei dieser Delegation gelernt wurde.\nTitel: ${cardTitle}\nOutput (max 500 Zeichen): ${truncatedOutput}\nAntworte NUR mit Markdown-Bullet-Points.`,
         maxTokens: 300,
         purpose: 'fast',
       })
@@ -46,18 +58,29 @@ export async function writebackDelegationKnowledge(
       content = `**Raw execution output (LLM summary unavailable):**\n\n${truncatedOutput}`
     }
 
+    // Quality gate: only persist if content meets minimum standards
+    const gate = shouldWriteCard(cardTitle, content, [], delegation.id)
+    if (!gate.allow) {
+      aiLogger.warn(
+        { event: 'knowledge.writeback.rejected', delegationId: delegation.id, reason: gate.reason, qualityScore: gate.qualityScore },
+        'Knowledge writeback rejected by quality gate',
+      )
+      return { written: false, reason: gate.reason }
+    }
+
     const card = writeKnowledgeCard({
-      title: delegation.title || delegation.contract.goal.slice(0, 80),
+      title: cardTitle,
       content,
       source: 'delegation',
       sourceId: delegation.id,
       briefId: delegation.briefId,
       prUrl: delegation.summaryReport?.prUrl,
       tags: ['delegation', riskClass, mode],
+      qualityScore: gate.qualityScore,
     })
 
     aiLogger.info(
-      { event: 'knowledge.writeback.delegation', delegationId: delegation.id, cardId: card.id },
+      { event: 'knowledge.writeback.delegation', delegationId: delegation.id, cardId: card.id, qualityScore: gate.qualityScore },
       'Delegation knowledge card written',
     )
 

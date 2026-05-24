@@ -18,6 +18,7 @@ export interface KnowledgeCard {
   briefId?: string
   prUrl?: string
   tags: string[]
+  qualityScore?: number   // 0–100, set by quality gate on writeback
   createdAt: string
   updatedAt: string
 }
@@ -108,7 +109,7 @@ export function deleteKnowledgeCard(id: string): KnowledgeCard | undefined {
   return deleted
 }
 
-export type KnowledgeCardPatch = Partial<Pick<KnowledgeCard, 'title' | 'content' | 'tags' | 'prUrl'>>
+export type KnowledgeCardPatch = Partial<Pick<KnowledgeCard, 'title' | 'content' | 'tags' | 'prUrl' | 'qualityScore'>>
 
 /**
  * Patch an existing KnowledgeCard. Only `title`, `content`, `tags`, and `prUrl` are writable.
@@ -121,10 +122,11 @@ export function updateKnowledgeCard(id: string, patch: KnowledgeCardPatch): Know
 
   const updated: KnowledgeCard = {
     ...cards[index],
-    ...(patch.title   !== undefined && { title:   patch.title }),
-    ...(patch.content !== undefined && { content: patch.content }),
-    ...(patch.tags    !== undefined && { tags:    patch.tags }),
-    ...(patch.prUrl   !== undefined && { prUrl:   patch.prUrl }),
+    ...(patch.title        !== undefined && { title:        patch.title }),
+    ...(patch.content      !== undefined && { content:      patch.content }),
+    ...(patch.tags         !== undefined && { tags:         patch.tags }),
+    ...(patch.prUrl        !== undefined && { prUrl:        patch.prUrl }),
+    ...(patch.qualityScore !== undefined && { qualityScore: patch.qualityScore }),
     updatedAt: new Date().toISOString(),
   }
   cards[index] = updated
