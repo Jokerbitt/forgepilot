@@ -29,6 +29,7 @@ vi.mock('fs', () => {
 vi.mock('@/lib/config/paths', () => ({
   getDocsDir: () => '/nas/docs',
   getDataDir: () => '/data',
+  isDocsDirAvailable: () => false,
 }))
 
 vi.mock('@/lib/context/pii-scrubber', () => ({
@@ -51,9 +52,11 @@ function setClaudeMd(content = '# Conventions\nUse TypeScript strict.') {
 }
 
 function setKnowledgeStore(cards: Array<{
-  title: string; body: string; tags: string[]; type: string
+  title: string; body: string; tags: string[]; type: string; privacyClass?: string
 }>) {
-  fsFiles['/data/knowledge-store.json'] = JSON.stringify({ cards })
+  // Default privacyClass to 'internal' so cards pass the cloud-safe filter
+  const normalized = cards.map(c => ({ privacyClass: 'internal', ...c }))
+  fsFiles['/data/knowledge-store.json'] = JSON.stringify({ cards: normalized })
 }
 
 function setSourceDir(dir: string, files: Array<{ name: string; content: string; isFile?: boolean }>) {
