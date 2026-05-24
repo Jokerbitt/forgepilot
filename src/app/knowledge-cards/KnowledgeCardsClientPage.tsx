@@ -449,14 +449,28 @@ function KnowledgeCardRow({
         </div>
       </div>
 
-      {/* Tag chips */}
-      {card.tags.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-1.5">
+      {/* Tag chips + quality score */}
+      {(card.tags.length > 0 || card.qualityScore !== undefined) && (
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
           {card.tags.map(tag => (
             <Badge key={tag} tone="neutral">
               {tag}
             </Badge>
           ))}
+          {card.qualityScore !== undefined && (
+            <span
+              className={`ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] font-mono tabular-nums ${
+                card.qualityScore >= 80
+                  ? 'bg-emerald-500/10 text-emerald-400'
+                  : card.qualityScore >= 50
+                    ? 'bg-amber-500/10 text-amber-400'
+                    : 'bg-red-500/10 text-red-400'
+              }`}
+              title={`Quality score: ${card.qualityScore}/100`}
+            >
+              Q{card.qualityScore}
+            </span>
+          )}
         </div>
       )}
 
