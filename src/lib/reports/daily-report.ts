@@ -161,6 +161,13 @@ export interface DailyReport {
   failedDelegationActionPlan: FailedDelegationActionPlan
   delegationQueuePlan: DelegationQueuePlan
   prompts: DailyReportPrompt[]
+  /** Explicit "do not build yet" list — keeps scope tight, copied into LLM prompts */
+  doNotBuild: string[]
+  /** Agent tasks split by required LLM capability tier */
+  agentTasksByCapability: {
+    localTasks: DailyReportTask[]   // summaries, triage, confidence, scope-check
+    cloudTasks: DailyReportTask[]   // architecture, security, complex reviews
+  }
   markdown: string
 }
 
@@ -590,6 +597,76 @@ function buildNextActions(risks: DailyReportRisk[], loop: DailyReportFirstRealVa
   return actions.slice(0, 5)
 }
 
+function buildDoNotBuild(risks: DailyReportRisk[], loop: DailyReportFirstRealValueLoop): string[] {
+  const list: string[] = []
+  const riskIds = new Set(risks.map(r => r.id))
+  const loopDone = loop.progressPct >= 100
+
+  if (!loopDone) {
+    list.push('New product areas beyond M4 scope until First Real Value Loop is proven')
+    list.push('Agent registry overengineering, skill library, agent control plane')
+  }
+  if (riskIds.has('json-primary-storage')) {
+    list.push('Supabase-required features until Postgres cutover is validated')
+  }
+  if (riskIds.has('auth-disabled')) {
+    list.push('User-facing sharing / public access features while auth is disabled')
+  }
+  list.push('UI redesigns that do not increase clarity for the 5-second decision test')
+  list.push('Features the LLM reviewer has not validated against current priorities')
+
+  return list
+}
+
+function buildAgentTasksByCapability(
+  nextActions: DailyReportTask[],
+): { localTasks: DailyReportTask[]; cloudTasks: DailyReportTask[] } {
+  const localOwners: Array<DailyReportTask['owner']> = ['critic-llm', 'assistant-auto']
+  const cloudOwners: Array<DailyReportTask['owner']> = ['codex', 'claude']
+
+  const localTasks: DailyReportTask[] = [
+    ...nextActions.filter(t => localOwners.includes(t.owner)),
+    {
+      id: 'local-triage',
+      title: 'Summarise failed delegations and flag retryable ones',
+      owner: 'assistant-auto',
+      priority: 'P1',
+      acceptanceCriteria: [
+        'Each failed delegation gets a one-sentence cause diagnosis.',
+        'Retryable items are flagged with suggested fix.',
+        'No secrets or write access required.',
+      ],
+    },
+    {
+      id: 'local-scope-check',
+      title: 'Validate scope of pending delegations against current priorities',
+      owner: 'assistant-auto',
+      priority: 'P2',
+      acceptanceCriteria: [
+        'Each pending delegation is either confirmed in scope or flagged as out-of-scope.',
+        'Output is a brief list with a confidence score per item.',
+      ],
+    },
+  ]
+
+  const cloudTasks: DailyReportTask[] = [
+    ...nextActions.filter(t => cloudOwners.includes(t.owner)),
+    {
+      id: 'cloud-architecture-review',
+      title: 'Architecture/security review of the current storage and auth layer',
+      owner: 'claude',
+      priority: 'P1',
+      acceptanceCriteria: [
+        'Auth bypass risks are documented and mitigated.',
+        'Storage cutover readiness score is reviewed and gaps identified.',
+        'No credentials or internal secrets needed — uses the public Daily Report snapshot.',
+      ],
+    },
+  ]
+
+  return { localTasks, cloudTasks }
+}
+
 function buildAssistantRouting(): DailyReportAssistantRouting {
   const criticPlan = getCriticProviderPlan()
   const bestCandidate = criticPlan.candidates.find(candidate => candidate.configured !== false) ?? criticPlan.candidates[0]
@@ -882,6 +959,21 @@ export function renderDailyReportMarkdown(report: Omit<DailyReport, 'markdown'>)
     lines.push(`- ${action.priority} ${action.owner}: ${action.title}`)
   }
 
+  lines.push(``, `## Capability Split`)
+  lines.push(`### Local / lightweight LLM tasks`)
+  for (const task of report.agentTasksByCapability.localTasks) {
+    lines.push(`- ${task.priority} ${task.owner}: ${task.title}`)
+  }
+  lines.push(`### Cloud / complex agent tasks`)
+  for (const task of report.agentTasksByCapability.cloudTasks) {
+    lines.push(`- ${task.priority} ${task.owner}: ${task.title}`)
+  }
+
+  lines.push(``, `## Do Not Build Yet`)
+  for (const item of report.doNotBuild) {
+    lines.push(`- ${item}`)
+  }
+
   lines.push(``, `## Prompts`)
   for (const prompt of report.prompts) {
     lines.push(`### ${prompt.target}: ${prompt.title}`, `Preferred route: ${prompt.preferredRoute}`, prompt.prompt, ``)
@@ -956,6 +1048,8 @@ export function buildDailyReport(input: BuildDailyReportInput): DailyReport {
   const firstRealValueLoop = buildFirstRealValueLoop(status)
   const executeLoopEvidence = buildExecuteLoopEvidence(status, generatedAt, input.executeLoopEvidence)
   const nextActions = buildNextActions(risks, firstRealValueLoop)
+  const doNotBuild = buildDoNotBuild(risks, firstRealValueLoop)
+  const agentTasksByCapability = buildAgentTasksByCapability(nextActions)
   const assistantRouting = buildAssistantRouting()
   const failedDelegationTriage = buildFailedDelegationTriage(input.delegations)
   const failedDelegationActionPlan = buildFailedDelegationActionPlan(failedDelegationTriage)
@@ -974,6 +1068,8 @@ export function buildDailyReport(input: BuildDailyReportInput): DailyReport {
     status,
     risks,
     nextActions,
+    doNotBuild,
+    agentTasksByCapability,
     firstRealValueLoop,
     executeLoopEvidence,
     assistantRouting,
