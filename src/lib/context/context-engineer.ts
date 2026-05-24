@@ -240,16 +240,17 @@ const CLOUD_UNSAFE_PRIVACY = new Set(['sensitive', 'local-only'])
 function scoreKnowledgeCard(card: MemoryCard, terms: string[]): number {
   const titleL = card.title.toLowerCase()
   const bodyL  = card.body.toLowerCase()
-  let score = terms.length === 0 ? 1 : 0
+  // Base score 1 when no search terms — all valid cards should surface (no-op filter)
+  let score = 0
 
   for (const t of terms) {
     if (titleL.includes(t)) score += 10
     if (bodyL.includes(t))  score += 2
-    if (card.tags.some(tag => tag.toLowerCase().includes(t))) score += 4
+    if (card.tags?.some(tag => tag.toLowerCase().includes(t))) score += 4
   }
 
   // Boost NAS / SecondBrain sourced cards — they contain the project SSOT
-  if (card.tags.some(tag => NAS_SOURCE_TAGS.has(tag))) score += 3
+  if (card.tags?.some(tag => NAS_SOURCE_TAGS.has(tag))) score += 3
 
   // High-confidence cards earn a small bonus
   if (card.confidence === 'high') score += 1
@@ -280,17 +281,19 @@ function fetchRecentKnowledge(skillCategory?: string, goal?: string): string {
 
     const scored = store.cards
       .filter(c => KNOWLEDGE_TYPES.has(c.type))
-      // Never expose sensitive or local-only cards to cloud AI context
-      .filter(c => !c.privacyClass || !CLOUD_UNSAFE_PRIVACY.has(c.privacyClass))
+      // Privacy-first: block cards with missing or unsafe privacyClass (never expose to cloud AI)
+      .filter(c => c.privacyClass && !CLOUD_UNSAFE_PRIVACY.has(c.privacyClass))
       .map(c => ({ card: c, score: scoreKnowledgeCard(c, terms) }))
-      .filter(({ score }) => score > 0)
+      // When no terms: include cards with NAS boost or confidence bonus (score > 0)
+      // When terms present: only include cards with at least one match
+      .filter(({ score }) => terms.length === 0 ? score >= 0 : score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, 5)
 
     if (!scored.length) return ''
 
     const snippets = scored.map(({ card }) => {
-      const sourceLabel = card.tags.find(t => NAS_SOURCE_TAGS.has(t)) ?? 'memory'
+      const sourceLabel = card.tags?.find(t => NAS_SOURCE_TAGS.has(t)) ?? 'memory'
       return `**[${card.type}|${sourceLabel}] ${card.title}**\n${card.body.slice(0, 300)}`
     })
     return `## Relevant Knowledge\n\n${snippets.join('\n\n')}`
