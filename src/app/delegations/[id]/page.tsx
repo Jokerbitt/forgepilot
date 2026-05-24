@@ -20,6 +20,7 @@ import { KnowledgeWritebackPanel } from '@/components/delegation/KnowledgeWriteb
 import { KnowledgeCardList } from '@/components/knowledge'
 import { DelegationLiveLog } from '@/components/delegation/DelegationLiveLog'
 import { DelegationNextActionPanel } from '@/components/delegation/DelegationNextActionPanel'
+import { AgentActivityExplainer } from '@/components/delegation/AgentActivityExplainer'
 import { PreflightCheckList } from '@/components/delegation/PreflightCheckList'
 import { CostMeter } from '@/components/delegation/CostMeter'
 import { downloadLogsAsText } from '@/lib/delegations/log-export'
@@ -755,6 +756,9 @@ export default function DelegationDetailPage() {
           onCreatePR={handleCreatePR}
           creatingPR={creatingPR}
         />
+
+        {/* ── Agent activity explainer ─────────────────────────────────── */}
+        <AgentActivityExplainer delegation={d} />
 
         {/* ── Preflight Results (M224) ─────────────────────────────────── */}
         {(preflightLoading || preflightResult) && (
