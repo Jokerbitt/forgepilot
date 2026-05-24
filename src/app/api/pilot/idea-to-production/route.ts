@@ -22,7 +22,7 @@ import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
 import { buildProjectBrief, saveProjectBrief } from '@/lib/project-briefs'
-import type { IdeaIntakeInput } from '@/lib/models/project-brief'
+import type { IdeaIntakeInput, PersistenceStrategy, PlanningMode, TargetPlatform } from '@/lib/models/project-brief'
 import type { WorkItem } from '@/lib/models/work-item'
 import type { Delegation } from '@/lib/models/delegation'
 import { decomposeWithAI } from '@/lib/agents/ai-decomposer'
@@ -32,6 +32,14 @@ import { appendIdeaHistory } from '@/lib/pilot/idea-history-store'
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import { parseBody, isValidationError } from '@/lib/validation/api'
 import { IdeaToProductionSchema } from '@/lib/validation/schemas'
+import {
+  persistenceLabel,
+  persistencePromptGuidance,
+  platformLabel,
+  platformPromptGuidance,
+  resolvePersistenceStrategy,
+  resolveTargetPlatform,
+} from '@/lib/project-planning-recommendations'
 
 const LOCAL_ITEMS_FILE = path.join(process.cwd(), 'config', 'local-items.json')
 
@@ -54,12 +62,23 @@ function writeLocalItems(items: WorkItem[]): void {
 
 // ─── AI: Expand idea → IdeaIntakeInput ────────────────────────────────────
 
-async function expandIdea(idea: string): Promise<IdeaIntakeInput> {
+async function expandIdea(
+  idea: string,
+  planningMode: PlanningMode,
+  targetPlatform: TargetPlatform,
+  persistenceStrategy: PersistenceStrategy,
+  customPlatformNote?: string,
+): Promise<IdeaIntakeInput> {
   const system = `Du bist ein erfahrener Product Manager.
 Deine Aufgabe: Wandle eine rohe Idee in ein strukturiertes Projektsteckbrief-Format um.
 Antworte AUSSCHLIESSLICH mit gültigem JSON, keine Erklärungen, keine Markdown-Blöcke.`
 
   const prompt = `Rohe Idee: "${idea}"
+Planungsmodus: ${planningMode === 'beginner' ? 'Anfaenger-Automatik' : 'Expertenmodus'}
+Gewaehlte Produktform: ${platformLabel(targetPlatform)}
+Plattform-Hinweis: ${platformPromptGuidance(targetPlatform, customPlatformNote)}
+Gewaehlte Datenhaltung: ${persistenceLabel(persistenceStrategy)}
+Datenhaltungs-Hinweis: ${persistencePromptGuidance(persistenceStrategy)}
 
 Generiere ein JSON-Objekt mit diesen Feldern:
 {
@@ -68,6 +87,10 @@ Generiere ein JSON-Objekt mit diesen Feldern:
   "problemStatement": "Welches Problem wird gelöst? (1-2 Sätze)",
   "targetAudience": "Für wen ist das? (1 Satz)",
   "desiredOutcome": "Was ist das gewünschte Ergebnis? (1-2 Sätze)",
+  "planningMode": "${planningMode}",
+  "targetPlatform": "${targetPlatform}",
+  "customPlatformNote": "${customPlatformNote?.trim() ?? ''}",
+  "persistenceStrategy": "${persistenceStrategy}",
   "constraints": ["Constraint 1", "Constraint 2"],
   "scope": "minimal",
   "researchMode": "quick",
@@ -78,7 +101,8 @@ Generiere ein JSON-Objekt mit diesen Feldern:
     const result = await generateText({ system, prompt, maxTokens: 1200, purpose: 'fast' })
     const json = stripJsonCodeFence(result.text)
     const match = result.text.match(/\{[\s\S]*\}/)
-    return JSON.parse(json || (match?.[0] ?? '{}')) as IdeaIntakeInput
+    const parsed = JSON.parse(json || (match?.[0] ?? '{}')) as IdeaIntakeInput
+    return { ...parsed, planningMode, targetPlatform, customPlatformNote, persistenceStrategy }
   } catch {
     // Fallback: build a minimal IdeaIntakeInput from the raw idea
     const words = idea.split(' ').slice(0, 6).join(' ')
@@ -88,7 +112,11 @@ Generiere ein JSON-Objekt mit diesen Feldern:
       problemStatement: idea,
       targetAudience: 'Produktteam und Anwender',
       desiredOutcome: `Implementierung von: ${idea}`,
-      constraints: [],
+      planningMode,
+      targetPlatform,
+      customPlatformNote,
+      persistenceStrategy,
+      constraints: [platformPromptGuidance(targetPlatform, customPlatformNote), persistencePromptGuidance(persistenceStrategy)],
       scope: 'minimal',
       researchMode: 'quick',
       privacyMode: 'local',
@@ -161,9 +189,13 @@ export async function POST(req: Request) {
   if (isValidationError(parsed)) return parsed
 
   const idea = parsed.idea
+  const planningMode = parsed.planningMode
+  const customPlatformNote = parsed.customPlatformNote?.trim()
+  const targetPlatform = resolveTargetPlatform(idea.trim(), parsed.targetPlatform, customPlatformNote)
+  const persistenceStrategy = resolvePersistenceStrategy(idea.trim(), parsed.persistenceStrategy, targetPlatform)
 
   // Step 1: Expand idea → structured fields
-  const intakeInput = await expandIdea(idea.trim())
+  const intakeInput = await expandIdea(idea.trim(), planningMode, targetPlatform, persistenceStrategy, customPlatformNote)
 
   // Step 2: Build + save Project Brief
   const brief = buildProjectBrief(intakeInput)
@@ -195,7 +227,11 @@ export async function POST(req: Request) {
       id: `contract-${delegationId}`,
       workItemId: topItem.id,
       goal: topItem.title,
-      context: `Project: ${brief.title}. ${brief.problemStatement}`,
+      context: `Project: ${brief.title}. ${brief.problemStatement}
+Produktform: ${platformLabel(targetPlatform)}.
+${brief.platformGuidance ?? ''}
+Datenhaltung: ${persistenceLabel(persistenceStrategy)}.
+${brief.persistenceGuidance ?? ''}`,
       definitionOfDone: [`${topItem.title} is implemented`, 'Tests pass', 'No TypeScript errors'],
       riskClass: topItem.risk,
       maxBudgetUsd: 0,
@@ -230,6 +266,11 @@ export async function POST(req: Request) {
   return NextResponse.json({
     briefId: brief.id,
     briefTitle: brief.title,
+    planningMode: brief.planningMode,
+    targetPlatform: brief.targetPlatform,
+    platformGuidance: brief.platformGuidance,
+    persistenceStrategy: brief.persistenceStrategy,
+    persistenceGuidance: brief.persistenceGuidance,
     workItemCount: newItems.length,
     topItem,
     delegation: createdDelegation,

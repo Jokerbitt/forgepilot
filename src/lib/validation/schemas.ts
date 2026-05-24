@@ -645,6 +645,10 @@ export type PilotInput = z.infer<typeof PilotInputSchema>
 
 export const IdeaToProductionSchema = z.object({
   idea: z.string().min(5, 'idea required').max(2000),
+  planningMode: z.enum(['beginner', 'expert']).optional().default('beginner'),
+  targetPlatform: z.enum(['webapp', 'desktop', 'mobile', 'cross_platform', 'undecided']).optional().default('undecided'),
+  customPlatformNote: z.string().max(500).optional(),
+  persistenceStrategy: z.enum(['recommend', 'postgres', 'sqlite', 'json_file', 'supabase', 'none']).optional().default('recommend'),
 })
 
 export type IdeaToProductionInput = z.infer<typeof IdeaToProductionSchema>
