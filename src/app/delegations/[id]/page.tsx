@@ -446,9 +446,12 @@ export default function DelegationDetailPage() {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2 mb-2">
-                <span className="text-xs font-mono text-gray-600 bg-gray-800 px-2 py-0.5 rounded border border-gray-700">
+                <Link
+                  href={`/work-items?q=${encodeURIComponent(d.contract.workItemId ?? '')}`}
+                  className="text-xs font-mono text-gray-500 bg-gray-800 px-2 py-0.5 rounded border border-gray-700 hover:border-gray-600 hover:text-gray-300 transition-colors"
+                >
                   {d.contract.workItemId}
-                </span>
+                </Link>
                 <span className={`px-2 py-0.5 text-xs rounded-md border font-semibold uppercase tracking-wider ${STATUS_COLORS[d.status] || STATUS_COLORS.pending} ${d.status === 'running' ? 'animate-pulse' : ''}`}>
                   {STATUS_LABELS[d.status] || d.status}
                 </span>

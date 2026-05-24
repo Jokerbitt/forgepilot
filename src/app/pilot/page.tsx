@@ -29,7 +29,7 @@ type PrivacyMode = 'local-only' | 'hybrid' | 'cloud-approved'
 type RiskClass = 'A' | 'B' | 'C'
 
 export default function PilotPage() {
-  const [workItemId, setWorkItemId] = useState('LOCAL-DEMO-001')
+  const [workItemId, setWorkItemId] = useState('')
   const [title, setTitle] = useState('')
   const [goal, setGoal] = useState('')
   const [privacyMode, setPrivacyMode] = useState<PrivacyMode>('hybrid')
@@ -81,6 +81,7 @@ export default function PilotPage() {
               <input
                 value={workItemId}
                 onChange={e => setWorkItemId(e.target.value)}
+                placeholder="z.B. FP-123 oder LINEAR-456"
                 disabled={running}
                 className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-600 focus:border-sky-500 focus:outline-none disabled:opacity-60"
               />

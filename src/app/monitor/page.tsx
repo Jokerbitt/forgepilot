@@ -75,73 +75,6 @@ const EMPTY_SNAPSHOT: MonitorSnapshot = {
   totals: { tokensToday: 0, costTodayUsd: 0, costThisMonthUsd: 0, callsToday: 0, avgResponseMs: 0, successRate: 1 },
 }
 
-const MOCK: MonitorSnapshot = {
-  timestamp: new Date().toISOString(),
-  activeAgents: [],
-  recentAgents: [
-    {
-      id: 'demo-1',
-      name: 'Idea → Brief Pipeline',
-      status: 'completed',
-      provider: 'google-gemini',
-      model: 'gemini-2.0-flash',
-      purpose: 'fast',
-      task: 'Idee analysiert und strukturiert',
-      startedAt: new Date(Date.now() - 45000).toISOString(),
-      inputTokens: 620,
-      outputTokens: 280,
-      totalTokens: 900,
-      costUsd: 0.000068,
-    },
-  ],
-  providerStats: [
-    {
-      providerId: 'google-gemini',
-      providerName: 'Google Gemini',
-      model: 'gemini-2.0-flash',
-      callsToday: 7,
-      callsTotal: 47,
-      tokensToday: 5400,
-      tokensTotal: 32100,
-      costTodayUsd: 0.000405,
-      costTotalUsd: 0.002408,
-      avgLatencyMs: 1180,
-      errorRate: 0,
-      freeQuotaUsed: 7,
-      freeQuotaLimit: 1500,
-    },
-    {
-      providerId: 'together',
-      providerName: 'Together.ai',
-      model: 'Llama 3.3 70B',
-      callsToday: 0,
-      callsTotal: 3,
-      tokensToday: 0,
-      tokensTotal: 2700,
-      costTodayUsd: 0,
-      costTotalUsd: 0.00237,
-      avgLatencyMs: 890,
-      errorRate: 0,
-    },
-  ],
-  recommendations: [
-    {
-      type: 'info',
-      severity: 'info',
-      title: 'Alles im gruenen Bereich',
-      description: 'Gemini Free Tier: 7 / 1.500 Calls heute. Together.ai als Backup aktiv.',
-    },
-  ],
-  totals: {
-    tokensToday: 5400,
-    costTodayUsd: 0.000405,
-    costThisMonthUsd: 0.002813,
-    callsToday: 7,
-    avgResponseMs: 1180,
-    successRate: 1.0,
-  },
-}
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatTokens(n: number): string {
@@ -298,7 +231,6 @@ export default function MonitorPage() {
       setUseMock(false)
       setIsLive((data.activeAgents?.length ?? 0) > 0)
     } catch {
-      // API not yet built — keep mock data
       setSnapshot(prev => ({ ...prev, timestamp: new Date().toISOString() }))
       setUseMock(true)
     }
