@@ -115,12 +115,15 @@ function CompletionBanner() {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function buildSteps(status: OnboardingStatus): WizardStep[] {
+  const providerDescription = status.hasCLIProvider
+    ? 'CLI-Provider erkannt (claude oder codex) — ForgePilot kann ohne API-Key arbeiten. Optional: zusätzliche API-Keys für Cloud-Modelle konfigurieren.'
+    : 'Verbinde einen KI-Anbieter (z.B. Anthropic, OpenAI, Ollama) mit einem API-Key — oder installiere die claude CLI für Zero-API-Key-Betrieb.'
+
   return [
     {
       number: 1,
       title: 'AI Provider einrichten',
-      description:
-        'Verbinde einen KI-Anbieter (z.B. Anthropic, OpenAI, Ollama) mit einem API-Key, damit ForgePilot Aufgaben ausführen kann.',
+      description: providerDescription,
       href: '/settings',
       ctaLabel: 'Zu den Einstellungen',
       done: status.hasProvider,
@@ -159,6 +162,7 @@ async function fetchOnboardingStatus(): Promise<OnboardingStatus> {
     // Fallback: all incomplete
     return {
       hasProvider: false,
+      hasCLIProvider: false,
       hasIdea: false,
       hasDelegation: false,
       isComplete: false,

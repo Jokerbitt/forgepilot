@@ -5,13 +5,17 @@
  *   - config/ai-providers.json  (hasProvider: at least one enabled provider with an API key)
  *   - config/idea-history.json  (hasIdea: at least one idea entry)
  *   - config/delegations.json   (hasDelegation: at least one delegation entry)
+ *
+ * Zero-API-key path: also detects `claude` or `codex` CLI binaries as valid providers.
  */
 
 import fs from 'fs'
+import { execFileSync } from 'child_process'
 import { getConfigPath } from '@/lib/config/paths'
 
 export interface OnboardingStatus {
   hasProvider: boolean
+  hasCLIProvider: boolean
   hasIdea: boolean
   hasDelegation: boolean
   isComplete: boolean
@@ -46,6 +50,24 @@ function readJsonObject(filename: string): Record<string, unknown> {
 
 // ─── Provider detection ───────────────────────────────────────────────────────
 
+/** Returns true if the named binary is on PATH — timeout-safe, never throws. */
+function isBinaryAvailable(binary: string): boolean {
+  try {
+    execFileSync('which', [binary], { encoding: 'utf8', timeout: 2000 })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Detect zero-API-key CLI providers: `claude` (Anthropic CLI) or `codex` (OpenAI Codex CLI).
+ * These let ForgePilot run without any API key by delegating to subscription-based CLIs.
+ */
+export function detectHasCLIProvider(): boolean {
+  return isBinaryAvailable('claude') || isBinaryAvailable('codex')
+}
+
 /**
  * Detect whether at least one AI provider has an API key configured.
  *
@@ -53,6 +75,7 @@ function readJsonObject(filename: string): Record<string, unknown> {
  *   1. Check config/ai-providers.json for providerOverrides that include an apiKey.
  *   2. Check environment variables for known provider keys (ANTHROPIC_API_KEY, etc.)
  *   3. Check config/api-keys.json for any non-empty string value.
+ *   4. Check for CLI providers (claude / codex binary on PATH).
  */
 function detectHasProvider(): boolean {
   // Check providerOverrides in ai-providers.json
@@ -120,12 +143,14 @@ function detectHasProvider(): boolean {
     }
   }
 
-  return false
+  // Zero-API-key path: CLI providers count as configured providers
+  return detectHasCLIProvider()
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export function getOnboardingStatus(): OnboardingStatus {
+  const hasCLIProvider = detectHasCLIProvider()
   const hasProvider = detectHasProvider()
   const hasIdea = readJsonArray('idea-history.json').length > 0
   const hasDelegation = readJsonArray('delegations.json').length > 0
@@ -134,6 +159,7 @@ export function getOnboardingStatus(): OnboardingStatus {
 
   return {
     hasProvider,
+    hasCLIProvider,
     hasIdea,
     hasDelegation,
     isComplete: hasProvider && hasIdea && hasDelegation,

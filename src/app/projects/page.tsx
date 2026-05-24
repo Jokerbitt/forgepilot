@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, CheckCircle2, CircleDot, FileText, GitBranch, ListChecks, PlayCircle, ShieldCheck } from 'lucide-react'
 import { Badge, Panel, StatusDot, buttonClassName, cx } from '@/components/ui/primitives'
 import type { ProjectSummary } from '@/app/api/projects/route'
+import { persistenceLabel, platformLabel } from '@/lib/project-planning-recommendations'
 
 type ProjectStatus = ProjectSummary['status']
 
@@ -122,7 +123,10 @@ export default function ProjectsPage() {
                     <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{project.problemStatement || 'Kein Problem Statement gepflegt.'}</p>
                     <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
                       <span>{project.metrics.workPackages} Pakete</span>
-                      <Badge tone={statusMeta[project.status].tone}>{statusMeta[project.status].label}</Badge>
+                      <span className="flex flex-wrap items-center justify-end gap-1.5">
+                        <Badge tone={project.planningMode === 'expert' ? 'warning' : 'success'}>{project.planningMode === 'expert' ? 'Experte' : 'Auto'}</Badge>
+                        <Badge tone={statusMeta[project.status].tone}>{statusMeta[project.status].label}</Badge>
+                      </span>
                     </div>
                   </button>
                 ))}
@@ -163,6 +167,9 @@ function ProjectBlueprint({ project }: { project: ProjectSummary }) {
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={meta.tone}>{meta.label}</Badge>
               {project.pipeline && <Badge tone="privacy">Idea Pipeline</Badge>}
+              <Badge tone={project.planningMode === 'expert' ? 'warning' : 'success'}>{project.planningMode === 'expert' ? 'Experte' : 'Automatik'}</Badge>
+              <Badge tone="info">{platformLabel(project.targetPlatform ?? 'undecided')}</Badge>
+              <Badge tone="privacy">{persistenceLabel(project.persistenceStrategy ?? 'recommend')}</Badge>
             </div>
             <h2 className="mt-4 text-2xl font-semibold tracking-tight text-white">{project.title}</h2>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">{project.problemStatement || meta.description}</p>
@@ -171,6 +178,25 @@ function ProjectBlueprint({ project }: { project: ProjectSummary }) {
             {project.nextAction.label}
             <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Link>
+          <Link href={`/projects/${project.id}`} className={buttonClassName('secondary', 'shrink-0')}>
+            Workspace öffnen
+          </Link>
+        </div>
+      </Panel>
+
+      <Panel className="p-5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">ForgePilot Empfehlung</p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <div className="rounded-lg border border-white/[0.07] bg-slate-950 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Produktform</p>
+            <p className="mt-2 text-sm font-semibold text-white">{platformLabel(project.targetPlatform ?? 'undecided')}</p>
+            <p className="mt-2 text-xs leading-5 text-slate-500">{project.platformGuidance ?? 'Noch keine Empfehlung gespeichert.'}</p>
+          </div>
+          <div className="rounded-lg border border-white/[0.07] bg-slate-950 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Datenhaltung</p>
+            <p className="mt-2 text-sm font-semibold text-white">{persistenceLabel(project.persistenceStrategy ?? 'recommend')}</p>
+            <p className="mt-2 text-xs leading-5 text-slate-500">{project.persistenceGuidance ?? 'Noch keine Empfehlung gespeichert.'}</p>
+          </div>
         </div>
       </Panel>
 

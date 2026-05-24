@@ -1,4 +1,8 @@
 import type { DailyReportExecuteLoopEvidenceRun } from './daily-report'
+import {
+  buildExecuteLoopAcceptancePlan,
+  type ExecuteLoopAcceptancePlanItem,
+} from './execute-loop-acceptance-plan'
 
 export interface ExecuteLoopEvidenceSummary {
   targetRuns: number
@@ -16,6 +20,7 @@ export interface ExecuteLoopEvidenceSummary {
     remainingProvenRuns: number
     reason: string
   }
+  recommendedRuns: ExecuteLoopAcceptancePlanItem[]
 }
 
 export function isProvenExecuteLoopRun(run: DailyReportExecuteLoopEvidenceRun): boolean {
@@ -69,5 +74,6 @@ export function buildExecuteLoopEvidenceSummary(
         ? 'Enough real value loops are proven for a V1 readiness review.'
         : `${remainingProvenRuns} proven real value loop${remainingProvenRuns === 1 ? '' : 's'} still required before claiming productive reliability.`,
     },
+    recommendedRuns: buildExecuteLoopAcceptancePlan(runs, targetRuns),
   }
 }
