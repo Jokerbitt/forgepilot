@@ -17,7 +17,8 @@
 import fs from 'fs'
 import path from 'path'
 import { scrubPII } from './pii-scrubber'
-import { getDocsDir, getDataDir } from '@/lib/config/paths'
+import { getDocsDir, getDataDir, isDocsDirAvailable } from '@/lib/config/paths'
+import type { MemoryCard, KnowledgeStore } from '@/lib/knowledge/types'
 import type { ScrubResult } from './pii-scrubber'
 
 export interface ContextLayer {
@@ -223,23 +224,36 @@ function fetchConventions(): string {
   return `## Project Conventions (excerpt)\n\n${content}`
 }
 
-// Card types surfaced in the context window — excludes 'risk' (too noisy)
-// and 'requirement' (handled via task layer).
-const KNOWLEDGE_TYPES = new Set(['learning', 'context', 'pattern', 'decision', 'reference'])
+// All valid MemoryCardType values are included.
+// 'risk' and 'requirement' cards from NAS are valuable context for agents.
+const KNOWLEDGE_TYPES: ReadonlySet<string> = new Set([
+  'learning', 'context', 'pattern', 'decision', 'risk', 'requirement',
+])
 
-function scoreKnowledgeCard(
-  card: { title: string; body: string; tags: string[]; type: string },
-  terms: string[],
-): number {
-  if (terms.length === 0) return 1
+// Tags that identify NAS / SecondBrain sourced cards — get a score boost to
+// surface project SSOT knowledge over generic agent-run cards.
+const NAS_SOURCE_TAGS = new Set(['nas', 'secondbrain'])
+
+// Privacy classes that must NOT be sent to cloud AI providers.
+const CLOUD_UNSAFE_PRIVACY = new Set(['sensitive', 'local-only'])
+
+function scoreKnowledgeCard(card: MemoryCard, terms: string[]): number {
   const titleL = card.title.toLowerCase()
   const bodyL  = card.body.toLowerCase()
-  let score = 0
+  let score = terms.length === 0 ? 1 : 0
+
   for (const t of terms) {
     if (titleL.includes(t)) score += 10
     if (bodyL.includes(t))  score += 2
     if (card.tags.some(tag => tag.toLowerCase().includes(t))) score += 4
   }
+
+  // Boost NAS / SecondBrain sourced cards — they contain the project SSOT
+  if (card.tags.some(tag => NAS_SOURCE_TAGS.has(tag))) score += 3
+
+  // High-confidence cards earn a small bonus
+  if (card.confidence === 'high') score += 1
+
   return score
 }
 
@@ -248,8 +262,14 @@ function fetchRecentKnowledge(skillCategory?: string, goal?: string): string {
     const storePath = path.join(getDataDir(), 'knowledge-store.json')
     if (!fs.existsSync(storePath)) return ''
 
-    const store = JSON.parse(fs.readFileSync(storePath, 'utf-8')) as {
-      cards: Array<{ title: string; body: string; tags: string[]; type: string }>
+    const store = JSON.parse(fs.readFileSync(storePath, 'utf-8')) as KnowledgeStore
+
+    if (!store.cards?.length) {
+      // If FORGEPILOT_DOCS_DIR is set but nothing has been indexed yet, surface a hint
+      if (isDocsDirAvailable()) {
+        return '## Relevant Knowledge\n\n_No knowledge cards indexed yet. Run `/api/knowledge/index-nas` to populate the knowledge store from the NAS SSOT._'
+      }
+      return ''
     }
 
     // Collect search terms from skill category + goal keywords
@@ -260,14 +280,19 @@ function fetchRecentKnowledge(skillCategory?: string, goal?: string): string {
 
     const scored = store.cards
       .filter(c => KNOWLEDGE_TYPES.has(c.type))
+      // Never expose sensitive or local-only cards to cloud AI context
+      .filter(c => !c.privacyClass || !CLOUD_UNSAFE_PRIVACY.has(c.privacyClass))
       .map(c => ({ card: c, score: scoreKnowledgeCard(c, terms) }))
-      .filter(({ score }) => score > 0 || terms.length === 0)
+      .filter(({ score }) => score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, 5)
 
     if (!scored.length) return ''
 
-    const snippets = scored.map(({ card }) => `**[${card.type}] ${card.title}**\n${card.body.slice(0, 300)}`)
+    const snippets = scored.map(({ card }) => {
+      const sourceLabel = card.tags.find(t => NAS_SOURCE_TAGS.has(t)) ?? 'memory'
+      return `**[${card.type}|${sourceLabel}] ${card.title}**\n${card.body.slice(0, 300)}`
+    })
     return `## Relevant Knowledge\n\n${snippets.join('\n\n')}`
   } catch {
     return ''

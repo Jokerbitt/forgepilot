@@ -29,6 +29,7 @@ vi.mock('fs', () => {
 vi.mock('@/lib/config/paths', () => ({
   getDocsDir: () => '/nas/docs',
   getDataDir: () => '/data',
+  isDocsDirAvailable: () => false,
 }))
 
 vi.mock('@/lib/context/pii-scrubber', () => ({
