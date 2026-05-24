@@ -4,12 +4,16 @@
  * Reads LLM_MODE env var and probes available providers in priority order:
  *   Anthropic → Groq → Ollama → LM Studio → placeholder
  *
+ * Also exports selectBestProvider() for task-complexity-aware routing that
+ * includes CLI-based providers (Claude Code Max, Codex Pro) as zero-key options.
+ *
  * All probes are timeout-safe (≤2 s) and fail-open (never throw).
  */
 
 import { readStoredApiKeys } from '@/lib/connectors/config'
 import { isOllamaRunning, getAvailableOllamaModels, getOllamaBaseUrl } from '@/lib/ai/ollama-client'
 import { getAllProviderConfigs } from '@/lib/ai/providers/config-store'
+import { whichSync } from '@/lib/ai/providers/cli-runner'
 import type { AIProviderConfig, ModelPurpose } from '@/lib/ai/providers/types'
 
 // ─── Public types ─────────────────────────────────────────────────────────────
@@ -435,3 +439,189 @@ export function getCurrentLlmMode(): LLMMode {
 
 // Re-export for convenience
 export { getOllamaBaseUrl }
+
+// ─── CLI detection ────────────────────────────────────────────────────────────
+
+export interface CLIProviderStatus {
+  claudeCLI: boolean
+  codexCLI: boolean
+}
+
+/** Detect locally installed CLI providers (zero API key needed). */
+export function detectCLIProviders(): CLIProviderStatus {
+  return {
+    claudeCLI: whichSync('claude') !== null,
+    codexCLI:  whichSync('codex')  !== null,
+  }
+}
+
+// ─── Task-complexity router ───────────────────────────────────────────────────
+
+export type TaskComplexity = 'simple' | 'coding' | 'complex'
+
+export interface RouterPreferences {
+  preferLocal: boolean
+  allowPaidAPIs: boolean
+}
+
+export const DEFAULT_ROUTER_PREFS: RouterPreferences = {
+  preferLocal: true,
+  allowPaidAPIs: true,
+}
+
+export interface RouterRecommendation {
+  providerId: string
+  providerName: string
+  model: string
+  reason: string
+  isFree: boolean
+  isLocal: boolean
+  isCLI: boolean
+  estimatedCostPer1kTokens: number
+}
+
+function pickBestModelForPurpose(
+  config: AIProviderConfig,
+  purpose: 'fast' | 'coding',
+): string {
+  const candidates = config.models.filter(
+    m => m.purpose === purpose || m.purpose === 'both',
+  )
+  if (candidates.length === 0) return config.models[0]?.id ?? ''
+  candidates.sort((a, b) => (a.costPer1kInput ?? 0) - (b.costPer1kInput ?? 0))
+  return candidates[0].id
+}
+
+function cheapestEnabledProvider(
+  configs: AIProviderConfig[],
+  purpose: 'fast' | 'coding',
+): RouterRecommendation | null {
+  const ranked = configs
+    .filter(c => c.enabled && c.id !== 'ollama')
+    .map(c => {
+      const model = pickBestModelForPurpose(c, purpose)
+      const modelDef = c.models.find(m => m.id === model)
+      const cost = modelDef?.costPer1kInput ?? 999
+      return { config: c, model, cost, isFree: modelDef?.isFree ?? cost === 0 }
+    })
+    .sort((a, b) => a.cost - b.cost)
+
+  const top = ranked[0]
+  if (!top) return null
+
+  return {
+    providerId: top.config.id,
+    providerName: top.config.name,
+    model: top.model,
+    reason: top.isFree
+      ? 'Günstigster API-Provider (kostenlos)'
+      : `Günstigster API-Provider ($${top.cost.toFixed(4)}/1k tokens)`,
+    isFree: top.isFree,
+    isLocal: false,
+    isCLI: false,
+    estimatedCostPer1kTokens: top.cost,
+  }
+}
+
+/**
+ * Selects the best available provider for a specific task complexity.
+ *
+ * Routing priority (local-first by default):
+ *   simple  → Ollama → claude-cli → cheapest API
+ *   coding  → claude-cli → codex-cli → anthropic API → cheapest API
+ *   complex → claude-cli → anthropic opus → cheapest API
+ */
+export function selectBestProvider(
+  complexity: TaskComplexity,
+  prefs: RouterPreferences = DEFAULT_ROUTER_PREFS,
+): RouterRecommendation | null {
+  const { claudeCLI, codexCLI } = detectCLIProviders()
+  const configs = getAllProviderConfigs()
+
+  if (complexity === 'simple') {
+    if (prefs.preferLocal) {
+      const ollama = configs.find(c => c.id === 'ollama' && c.enabled)
+      if (ollama) {
+        return {
+          providerId: 'ollama',
+          providerName: 'Ollama (Lokal)',
+          model: ollama.models[0]?.id ?? 'llama3',
+          reason: 'Lokal & kostenlos — ideal für einfache Aufgaben',
+          isFree: true, isLocal: true, isCLI: false,
+          estimatedCostPer1kTokens: 0,
+        }
+      }
+      if (claudeCLI) {
+        return {
+          providerId: 'claude-cli',
+          providerName: 'Claude CLI (Max Abo)',
+          model: 'claude-cli',
+          reason: 'Claude CLI — kein API-Key nötig (Max-Abo)',
+          isFree: true, isLocal: true, isCLI: true,
+          estimatedCostPer1kTokens: 0,
+        }
+      }
+    }
+    return prefs.allowPaidAPIs ? cheapestEnabledProvider(configs, 'fast') : null
+  }
+
+  if (complexity === 'coding') {
+    if (prefs.preferLocal && claudeCLI) {
+      return {
+        providerId: 'claude-cli',
+        providerName: 'Claude CLI (Max Abo)',
+        model: 'claude-cli',
+        reason: 'Claude CLI — stark für Code, kein API-Key nötig',
+        isFree: true, isLocal: true, isCLI: true,
+        estimatedCostPer1kTokens: 0,
+      }
+    }
+    if (prefs.preferLocal && codexCLI) {
+      return {
+        providerId: 'codex-cli',
+        providerName: 'Codex CLI (Pro Abo)',
+        model: 'codex-cli',
+        reason: 'Codex CLI — spezialisiert auf Code, kein API-Key nötig',
+        isFree: true, isLocal: true, isCLI: true,
+        estimatedCostPer1kTokens: 0,
+      }
+    }
+    const anthropic = configs.find(c => c.id === 'anthropic' && c.enabled)
+    if (anthropic && prefs.allowPaidAPIs) {
+      const model = pickBestModelForPurpose(anthropic, 'coding')
+      const modelDef = anthropic.models.find(m => m.id === model)
+      return {
+        providerId: 'anthropic', providerName: 'Anthropic (Claude API)', model,
+        reason: 'Claude API — beste Qualität für Code-Aufgaben',
+        isFree: false, isLocal: false, isCLI: false,
+        estimatedCostPer1kTokens: modelDef?.costPer1kInput ?? 0.003,
+      }
+    }
+    return prefs.allowPaidAPIs ? cheapestEnabledProvider(configs, 'coding') : null
+  }
+
+  // complex
+  if (prefs.preferLocal && claudeCLI) {
+    return {
+      providerId: 'claude-cli',
+      providerName: 'Claude CLI (Max Abo)',
+      model: 'claude-cli',
+      reason: 'Claude CLI — auch für komplexe Architektur-Aufgaben geeignet',
+      isFree: true, isLocal: true, isCLI: true,
+      estimatedCostPer1kTokens: 0,
+    }
+  }
+  const anthropic = configs.find(c => c.id === 'anthropic' && c.enabled)
+  if (anthropic && prefs.allowPaidAPIs) {
+    const opusModels = anthropic.models.filter(m => m.id.includes('opus'))
+    const model = opusModels[opusModels.length - 1]?.id ?? pickBestModelForPurpose(anthropic, 'coding')
+    const modelDef = anthropic.models.find(m => m.id === model)
+    return {
+      providerId: 'anthropic', providerName: 'Anthropic (Claude Opus)', model,
+      reason: 'Claude Opus — beste Qualität für komplexe/architektonische Aufgaben',
+      isFree: false, isLocal: false, isCLI: false,
+      estimatedCostPer1kTokens: modelDef?.costPer1kInput ?? 0.015,
+    }
+  }
+  return prefs.allowPaidAPIs ? cheapestEnabledProvider(configs, 'coding') : null
+}
