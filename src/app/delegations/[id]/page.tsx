@@ -20,6 +20,7 @@ import { KnowledgeWritebackPanel } from '@/components/delegation/KnowledgeWriteb
 import { KnowledgeCardList } from '@/components/knowledge'
 import { DelegationLiveLog } from '@/components/delegation/DelegationLiveLog'
 import { DelegationNextActionPanel } from '@/components/delegation/DelegationNextActionPanel'
+import { DelegationErrorBanner } from '@/components/delegation/DelegationErrorBanner'
 import { PreflightCheckList } from '@/components/delegation/PreflightCheckList'
 import { CostMeter } from '@/components/delegation/CostMeter'
 import { downloadLogsAsText } from '@/lib/delegations/log-export'
@@ -27,6 +28,7 @@ import { InlineNoteEditor } from '@/components/delegation/InlineNoteEditor'
 import { DurationBar } from '@/components/delegation/DurationBar'
 import { DelegationTagEditor } from '@/components/delegation/DelegationTagEditor'
 import type { PreflightResult } from '@/lib/preflight'
+import { useI18n } from '@/lib/i18n'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
   switch (status) {
@@ -74,6 +76,7 @@ const RISK_COLORS: Record<string, string> = {
 }
 
 export default function DelegationDetailPage() {
+  const { ui } = useI18n()
   const params = useParams()
   const router = useRouter()
   const id = typeof params.id === 'string' ? params.id : ''
@@ -553,17 +556,17 @@ export default function DelegationDetailPage() {
                   </a>
                   {d.summaryReport.prState === 'merged' && (
                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-950/50 text-violet-300 border border-violet-800/40" title={d.summaryReport.prMergedAt ? `Gemergt: ${new Date(d.summaryReport.prMergedAt).toLocaleString('de-DE')}` : 'Gemergt'}>
-                      Merged
+                      {ui.merged}
                     </span>
                   )}
                   {d.summaryReport.prState === 'closed' && (
                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-950/50 text-red-400 border border-red-800/40">
-                      Closed
+                      {ui.closed}
                     </span>
                   )}
                   {(d.summaryReport.prState === 'open' || !d.summaryReport.prState) && (
                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-950/50 text-emerald-400 border border-emerald-800/40">
-                      Open
+                      {ui.open}
                     </span>
                   )}
                 </div>
@@ -578,19 +581,19 @@ export default function DelegationDetailPage() {
                 disabled={orchestrating}
                 className="px-3 py-1.5 text-xs bg-violet-900/40 text-violet-300 hover:bg-violet-900/70 border border-violet-800/60 rounded-lg transition-colors disabled:opacity-40"
                 title="Task in atomare Sub-Tasks zerlegen und den besten Agenten zuweisen">
-                {orchestrating ? '⚙ Zerlege…' : '⚙ Orchestrieren'}
+                {orchestrating ? `⚙ ${ui.decomposing}` : `⚙ ${ui.orchestrate}`}
               </button>
               <button onClick={handleCopy}
                 className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${copied ? 'text-green-400 border-green-800' : 'text-gray-500 border-gray-800 hover:text-gray-300'}`}
                 title="Permalink kopieren">
-                {copied ? '✓ Kopiert' : '🔗 Link'}
+                {copied ? `✓ ${ui.copied}` : '🔗 Link'}
               </button>
               {(d.logs ?? []).length > 0 && (
                 <button
                   onClick={() => downloadLogsAsText(d)}
                   className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-600 rounded-lg transition-colors"
                   title="Logs als Textdatei herunterladen">
-                  ⬇ Logs
+                  ⬇ {ui.downloadLogs}
                 </button>
               )}
             </div>
@@ -601,7 +604,7 @@ export default function DelegationDetailPage() {
 
             {/* Status tile */}
             <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Status</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">{ui.status}</span>
               <span className={`text-xs font-bold ${STATUS_COLORS[d.status]?.split(' ')[1] ?? 'text-gray-400'}`}>
                 {STATUS_LABELS[d.status] || d.status}
               </span>
@@ -618,7 +621,7 @@ export default function DelegationDetailPage() {
 
             {/* Risk tile */}
             <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Risiko</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">{ui.risk}</span>
               <span className={`text-xs font-bold ${RISK_COLORS[d.contract.riskClass]?.split(' ')[1] ?? 'text-gray-400'}`}>
                 Risk {d.contract.riskClass}
               </span>
@@ -627,7 +630,7 @@ export default function DelegationDetailPage() {
 
             {/* Cost tile */}
             <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Kosten</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">{ui.costs}</span>
               <CostMeter
                 actualCostUsd={d.actualCostUsd}
                 estimateCostUsd={d.costEstimateUsd}
@@ -648,7 +651,7 @@ export default function DelegationDetailPage() {
                   ⎇ #{d.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? ''}
                 </a>
               ) : (
-                <span className="text-xs text-gray-600">Kein PR</span>
+                <span className="text-xs text-gray-600">{ui.noPr}</span>
               )}
               {prStatus && (
                 <span className={`text-[10px] font-medium ${
@@ -656,7 +659,7 @@ export default function DelegationDetailPage() {
                   prStatus.state === 'closed' ? 'text-gray-500' :
                   'text-emerald-500'
                 }`}>
-                  {prStatus.state === 'merged' ? 'Merged' : prStatus.state === 'closed' ? 'Closed' : 'Open'}
+                  {prStatus.state === 'merged' ? ui.merged : prStatus.state === 'closed' ? ui.closed : ui.open}
                   {prStatus.ciState === 'success' ? ' · CI ✓' : prStatus.ciState === 'failure' ? ' · CI ✗' : ''}
                 </span>
               )}
@@ -664,7 +667,7 @@ export default function DelegationDetailPage() {
 
             {/* Grok Critic tile */}
             <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Critic</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">{ui.critic}</span>
               {d.criticScore ? (
                 <>
                   <span className={`text-xs font-bold ${
@@ -673,14 +676,14 @@ export default function DelegationDetailPage() {
                     'text-red-400'
                   }`}>
                     {d.criticScore.verdict === 'approved' ? '✓ OK' :
-                     d.criticScore.verdict === 'needs-revision' ? '⚠ Revision' : '✗ Abgelehnt'}
+                     d.criticScore.verdict === 'needs-revision' ? `⚠ ${ui.revision}` : `✗ ${ui.rejected}`}
                   </span>
                   <span className="text-[10px] text-gray-600">
                     {Math.round((d.criticScore.correctness + d.criticScore.efficiency + d.criticScore.drift) / 3)}pts
                   </span>
                 </>
               ) : d.status === 'completed' ? (
-                <span className="text-xs text-gray-600 italic">Ausstehend</span>
+                <span className="text-xs text-gray-600 italic">{ui.pending}</span>
               ) : (
                 <span className="text-xs text-gray-700">–</span>
               )}
@@ -688,9 +691,9 @@ export default function DelegationDetailPage() {
             {/* Retry tile — only shown when retryCount > 0 */}
             {(d.retryCount ?? 0) > 0 && (
               <div className="bg-amber-950/30 border border-amber-800/40 rounded-lg px-3 py-2 flex flex-col gap-0.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Retries</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">{ui.retries}</span>
                 <span className="text-sm font-bold text-amber-400">↺ {d.retryCount}</span>
-                <span className="text-[10px] text-amber-700/70">Versuche</span>
+                <span className="text-[10px] text-amber-700/70">{ui.attempts}</span>
               </div>
             )}
           </div>
@@ -700,8 +703,8 @@ export default function DelegationDetailPage() {
             <div className="mt-3 flex items-start gap-2 rounded-lg border border-blue-900/40 bg-blue-950/20 px-3 py-2.5 text-xs text-blue-300/80">
               <span className="shrink-0 mt-0.5">ℹ</span>
               <span>
-                Diese Delegation läuft im <strong>Simulations-Modus</strong> (Route: {d.executionRoute}).
-                Für echte Ausführung Claude CLI oder einen lokalen Agenten konfigurieren.
+                Diese Delegation läuft im <strong>{ui.simulationMode}</strong> (Route: {d.executionRoute}).{' '}
+                {ui.realExecutionHint}
               </span>
             </div>
           )}
@@ -716,8 +719,8 @@ export default function DelegationDetailPage() {
 
           {/* ── Timing ───────────────────────────────────────────────── */}
           <div className="mt-3 flex flex-wrap gap-4 text-[10px] text-gray-700">
-            <span>Erstellt: {new Date(d.createdAt).toLocaleString('de-DE')}</span>
-            <span>Aktualisiert: {new Date(d.updatedAt).toLocaleString('de-DE')}</span>
+            <span>{ui.created}: {new Date(d.createdAt).toLocaleString('de-DE')}</span>
+            <span>{ui.updated}: {new Date(d.updatedAt).toLocaleString('de-DE')}</span>
           </div>
 
           {/* ── M230: Chain links ────────────────────────────────────── */}
@@ -729,7 +732,7 @@ export default function DelegationDetailPage() {
                   className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gray-700 bg-gray-900 text-gray-400 hover:text-violet-300 hover:border-violet-800 transition-colors"
                 >
                   <span className="text-gray-600">←</span>
-                  Fortgesetzt von: <span className="font-mono text-gray-500 truncate max-w-[160px]">{d.chainedFromId.slice(0, 8)}…</span>
+                  {ui.continuedFrom}: <span className="font-mono text-gray-500 truncate max-w-[160px]">{d.chainedFromId.slice(0, 8)}…</span>
                 </Link>
               )}
               {d.chainedDelegationId && (
@@ -738,7 +741,7 @@ export default function DelegationDetailPage() {
                   className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-violet-900/60 bg-violet-950/30 text-violet-300 hover:text-violet-200 hover:border-violet-700 transition-colors"
                 >
                   <span>→</span>
-                  Weiter mit: <span className="font-mono text-violet-400 truncate max-w-[160px]">{d.chainedDelegationId.slice(0, 8)}…</span>
+                  {ui.continueWith}: <span className="font-mono text-violet-400 truncate max-w-[160px]">{d.chainedDelegationId.slice(0, 8)}…</span>
                 </Link>
               )}
             </div>
@@ -755,6 +758,11 @@ export default function DelegationDetailPage() {
           onCreatePR={handleCreatePR}
           creatingPR={creatingPR}
         />
+
+        {/* ── Error Banner — shown for failed delegations with an error message ── */}
+        {d.status === 'failed' && d.errorMessage && (
+          <DelegationErrorBanner errorMessage={d.errorMessage} />
+        )}
 
         {/* ── Preflight Results (M224) ─────────────────────────────────── */}
         {(preflightLoading || preflightResult) && (
@@ -807,7 +815,7 @@ export default function DelegationDetailPage() {
                     disabled={executing}
                     className="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-600 disabled:opacity-40 transition-colors"
                   >
-                    {executing ? 'Startet…' : '▶ Ausführen'}
+                    {executing ? 'Startet…' : `▶ ${ui.execute}`}
                   </button>
                 )}
                 <button onClick={() => setOrchestratedRun(null)} className="text-xs text-slate-600 hover:text-slate-400">✕</button>
@@ -865,7 +873,7 @@ export default function DelegationDetailPage() {
                           }}
                           className="text-xs text-amber-400 hover:text-amber-300 border border-amber-800/40 rounded px-1.5 py-0.5 hover:bg-amber-950/30 transition-colors"
                         >
-                          ↺ Retry
+                          ↺ {ui.retries}
                         </button>
                       )}
                     </div>
@@ -874,7 +882,7 @@ export default function DelegationDetailPage() {
               })}
             </div>
             <p className="mt-3 text-xs text-slate-600">
-              Klare Acceptance Criteria pro Task → weniger Agentic Drift
+              {ui.acceptanceCriteriaNote}
             </p>
           </div>
         )}
@@ -884,7 +892,7 @@ export default function DelegationDetailPage() {
           <details className="bg-gray-900 border border-gray-800 rounded-xl p-5 group">
             <summary className="flex items-center justify-between cursor-pointer list-none">
               <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                Kontext bei Ausführung ({d.contextSnapshot.cards.length} Karten · ~{d.contextSnapshot.tokenEstimate} Tokens)
+                {ui.contextAtExecution} ({d.contextSnapshot.cards.length} {ui.cards} · ~{d.contextSnapshot.tokenEstimate} {ui.tokens})
               </h2>
               <span className="text-gray-600 text-xs group-open:rotate-180 transition-transform">▼</span>
             </summary>
@@ -897,7 +905,7 @@ export default function DelegationDetailPage() {
               ))}
             </ul>
             <p className="mt-2 text-xs text-gray-600">
-              Erstellt: {new Date(d.contextSnapshot.builtAt).toLocaleString('de-DE')}
+              {ui.created}: {new Date(d.contextSnapshot.builtAt).toLocaleString('de-DE')}
             </p>
           </details>
         )}
@@ -912,13 +920,13 @@ export default function DelegationDetailPage() {
           <section className="bg-gray-900 border border-emerald-900/30 rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">
-                Gelerntes Wissen
+                {ui.learnedKnowledge}
               </h2>
               <a
                 href="/knowledge-cards"
                 className="text-xs text-emerald-600 hover:text-emerald-400 transition-colors"
               >
-                Alle Wissenskarten →
+                {ui.allKnowledgeCards} →
               </a>
             </div>
             <KnowledgeCardList delegationId={id} />
@@ -928,15 +936,15 @@ export default function DelegationDetailPage() {
         {/* ── PR Details (wenn PR vorhanden) ────────────────────────────── */}
         {d.summaryReport?.prUrl && (
           <div className="bg-gray-900 border border-emerald-900/30 rounded-xl p-4">
-            <h2 className="text-xs font-semibold text-emerald-600 uppercase tracking-wider mb-3">Pull Request</h2>
+            <h2 className="text-xs font-semibold text-emerald-600 uppercase tracking-wider mb-3">{ui.pullRequest}</h2>
             <div className="flex flex-wrap items-start gap-4">
               <div className="flex-1 min-w-0">
                 <a href={d.summaryReport.prUrl} target="_blank" rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-400 hover:text-emerald-300 transition-colors">
-                  ⎇ PR #{d.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? ''} auf GitHub öffnen
+                  ⎇ PR #{d.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? ''} {ui.openPrOnGithub}
                 </a>
                 {prStatusLoading && (
-                  <span className="ml-3 text-[10px] text-gray-600">CI-Status wird geladen…</span>
+                  <span className="ml-3 text-[10px] text-gray-600">{ui.ciLoading}</span>
                 )}
               </div>
               {prStatus && !prStatusLoading && (
@@ -946,7 +954,7 @@ export default function DelegationDetailPage() {
                     prStatus.state === 'closed' ? 'bg-gray-900 text-gray-500 border-gray-700' :
                     'bg-emerald-950/40 text-emerald-400 border-emerald-800'
                   }`}>
-                    {prStatus.state === 'merged' ? '⎇ Merged' : prStatus.state === 'closed' ? '⊘ Closed' : '⎇ Open'}
+                    {prStatus.state === 'merged' ? `⎇ ${ui.merged}` : prStatus.state === 'closed' ? `⊘ ${ui.closed}` : `⎇ ${ui.open}`}
                   </span>
                   <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded border ${
                     prStatus.ciState === 'success' ? 'bg-green-950/40 text-green-400 border-green-800' :
@@ -954,9 +962,9 @@ export default function DelegationDetailPage() {
                     prStatus.ciState === 'pending' ? 'bg-yellow-950/40 text-yellow-400 border-yellow-800' :
                     'bg-gray-900 text-gray-500 border-gray-700'
                   }`}>
-                    {prStatus.ciState === 'success' ? '✓ CI grün' :
-                     prStatus.ciState === 'failure' ? '✗ CI fehlgeschlagen' :
-                     prStatus.ciState === 'pending' ? '⏳ CI läuft' : '○ CI unbekannt'}
+                    {prStatus.ciState === 'success' ? `✓ ${ui.ciGreen}` :
+                     prStatus.ciState === 'failure' ? `✗ ${ui.ciFailed}` :
+                     prStatus.ciState === 'pending' ? `⏳ ${ui.ciRunning}` : `○ ${ui.ciUnknown}`}
                   </span>
                 </div>
               )}
@@ -977,7 +985,7 @@ export default function DelegationDetailPage() {
                   </a>
                 ))}
                 {prStatus.ciChecks.length > 6 && (
-                  <span className="text-[10px] text-gray-600">+{prStatus.ciChecks.length - 6} weitere…</span>
+                  <span className="text-[10px] text-gray-600">+{prStatus.ciChecks.length - 6} {ui.moreItems}…</span>
                 )}
               </div>
             )}
