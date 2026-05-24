@@ -13,9 +13,9 @@ import { getAuthReadiness } from '@/lib/auth/readiness'
 const ERROR_LIMIT = 10
 
 function renderErrorMarkdownSection(errors: ErrorInfo[]): string {
-  const lines: string[] = ['', '## Recent Errors']
+  const lines: string[] = ['', '## Aktuelle Fehlerlage']
   if (errors.length === 0) {
-    lines.push('- No recent errors recorded.')
+    lines.push('- Keine aktuellen Fehler protokolliert. Der Daily Report kann ohne Fehler-Triage weiterverwendet werden.')
     return lines.join('\n')
   }
   for (const error of errors) {
