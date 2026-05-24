@@ -10,6 +10,8 @@ interface Props {
   onRetryEscalate?: () => void
   onCreatePR?: () => void
   creatingPR?: boolean
+  /** Last log message from the execution — shown when running */
+  lastLogMessage?: string
 }
 
 interface Action {
@@ -89,6 +91,7 @@ export function getGuidance(d: Delegation, props: Omit<Props, 'delegation'>): Gu
         colorClass: 'text-violet-300',
         borderClass: 'border-violet-900/50 bg-violet-950/20',
       }
+    // lastLogMessage handled in render below
 
     case 'completed':
       if (!hasPr && !hasCritic) {
@@ -204,7 +207,7 @@ export function getGuidance(d: Delegation, props: Omit<Props, 'delegation'>): Gu
   }
 }
 
-export function DelegationNextActionPanel({ delegation, ...props }: Props) {
+export function DelegationNextActionPanel({ delegation, lastLogMessage, ...props }: Props) {
   const guidance = getGuidance(delegation, props)
   if (!guidance) return null
 
@@ -214,6 +217,11 @@ export function DelegationNextActionPanel({ delegation, ...props }: Props) {
       <div className="flex-1 min-w-0">
         <p className={`text-sm font-semibold ${guidance.colorClass}`}>{guidance.title}</p>
         <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{guidance.body}</p>
+        {delegation.status === 'running' && lastLogMessage && (
+          <p className="mt-1.5 text-[11px] text-violet-300/60 font-mono truncate" title={lastLogMessage}>
+            ↳ {lastLogMessage}
+          </p>
+        )}
         {guidance.actions.length > 0 && (
           <div className="flex flex-wrap gap-2 mt-2.5">
             {guidance.actions.map((action, i) =>
