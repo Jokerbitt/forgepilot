@@ -7,6 +7,10 @@ vi.mock('@/lib/config/backup', () => ({
   restoreBackup: vi.fn(),
 }))
 
+vi.mock('@/lib/cron/auth', () => ({
+  isCronAuthorized: vi.fn(() => true),
+}))
+
 beforeEach(() => {
   vi.clearAllMocks()
 })
@@ -76,5 +80,15 @@ describe('POST /api/backup', () => {
     const req = new NextRequest('http://localhost/api/backup?restore=2020-01-01', { method: 'POST', body: null })
     const res = await POST(req)
     expect(res.status).toBe(404)
+  })
+
+  it('returns 401 when not authorized', async () => {
+    const { isCronAuthorized } = await import('@/lib/cron/auth')
+    vi.mocked(isCronAuthorized).mockReturnValue(false)
+
+    const { POST } = await import('./route')
+    const req = new NextRequest('http://localhost/api/backup', { method: 'POST', body: null })
+    const res = await POST(req)
+    expect(res.status).toBe(401)
   })
 })
