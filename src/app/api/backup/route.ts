@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { runBackup, listBackups, restoreBackup } from '@/lib/config/backup'
+import { isCronAuthorized } from '@/lib/cron/auth'
 
 export async function GET(): Promise<NextResponse> {
   try {
@@ -21,6 +22,10 @@ export async function GET(): Promise<NextResponse> {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  if (!isCronAuthorized(req, 'backup')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(req.url)
     const restoreDate = searchParams.get('restore')
