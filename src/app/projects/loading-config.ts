@@ -1,0 +1,1 @@
+export const PROJECTS_LOADING_SKELETON_COUNT = 3
