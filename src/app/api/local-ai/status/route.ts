@@ -15,13 +15,21 @@ export interface LocalAIStatusResult {
   ollama: ProviderStatus
   anthropic: ProviderStatus
   claudeCode: ProviderStatus
-  /** 'real' = claude CLI available + API key configured. 'simulation' = fallback mode. */
+  /** 'real' = claude CLI available + API key or Max subscription. 'simulation' = fallback mode. */
   executeMode: 'real' | 'simulation'
   /** Human-readable hint shown in UI when not fully ready */
   executeModeHint: string
   defaultPrivacyMode: 'local-only' | 'hybrid' | 'cloud-approved'
   checkedAt: string
 }
+
+interface ClaudeAuthInfo {
+  loggedIn: boolean
+  subscriptionType?: string
+  authMethod?: string
+}
+
+type ClaudeCodeStatus = ProviderStatus & { authInfo?: ClaudeAuthInfo }
 
 async function checkOllama(endpoint: string): Promise<ProviderStatus> {
   try {
@@ -54,20 +62,28 @@ function checkAnthropic(): ProviderStatus {
   }
 }
 
-function checkClaudeCode(): ProviderStatus {
+function checkClaudeCode(): ClaudeCodeStatus {
   try {
     execSync('claude --version', { stdio: 'ignore', timeout: 3000 })
-    return {
-      name: 'Claude Code',
-      status: 'healthy',
-      detail: 'claude CLI verfügbar',
+    // Check if authenticated with claude.ai (Max subscription = no API key needed)
+    try {
+      const raw = execSync('claude auth status --json', { timeout: 5000, encoding: 'utf8' })
+      const auth = JSON.parse(raw.trim()) as ClaudeAuthInfo
+      if (auth.loggedIn && auth.subscriptionType) {
+        const label = auth.subscriptionType === 'max' ? 'Max aktiv' : auth.subscriptionType
+        return {
+          name: 'Claude Code',
+          status: 'healthy',
+          detail: `claude CLI — ${label}`,
+          authInfo: auth,
+        }
+      }
+    } catch {
+      // auth status check failed — CLI exists but auth unknown
     }
+    return { name: 'Claude Code', status: 'healthy', detail: 'claude CLI verfügbar' }
   } catch {
-    return {
-      name: 'Claude Code',
-      status: 'offline',
-      detail: 'claude CLI nicht installiert',
-    }
+    return { name: 'Claude Code', status: 'offline', detail: 'claude CLI nicht installiert' }
   }
 }
 
@@ -83,18 +99,23 @@ function getDefaultPrivacyMode(): LocalAIStatusResult['defaultPrivacyMode'] {
 
 function deriveExecuteMode(
   anthropic: ProviderStatus,
-  claudeCode: ProviderStatus,
+  claudeCode: ClaudeCodeStatus,
 ): Pick<LocalAIStatusResult, 'executeMode' | 'executeModeHint'> {
   const cliReady = claudeCode.status === 'healthy'
   const keyReady = anthropic.status === 'healthy'
+  // Max subscription via OAuth counts as credential — no API key required
+  const maxSubscription = claudeCode.authInfo?.loggedIn === true && Boolean(claudeCode.authInfo?.subscriptionType)
 
-  if (cliReady && keyReady) {
+  if (cliReady && (keyReady || maxSubscription)) {
+    const label = maxSubscription && !keyReady
+      ? `claude CLI (${claudeCode.authInfo?.subscriptionType ?? 'max'}) — kein API Key nötig`
+      : 'claude CLI + API Key'
     return {
       executeMode: 'real',
-      executeModeHint: 'Echter Agent bereit — claude CLI + API Key vorhanden',
+      executeModeHint: `Echter Agent bereit — ${label}`,
     }
   }
-  if (cliReady && !keyReady) {
+  if (cliReady && !keyReady && !maxSubscription) {
     return {
       executeMode: 'simulation',
       executeModeHint: 'claude CLI bereit — fehlt: Anthropic-Guthaben aufladen oder API Key in Einstellungen setzen',
