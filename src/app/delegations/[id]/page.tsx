@@ -21,6 +21,7 @@ import { KnowledgeCardList } from '@/components/knowledge'
 import { DelegationLiveLog } from '@/components/delegation/DelegationLiveLog'
 import { DelegationNextActionPanel } from '@/components/delegation/DelegationNextActionPanel'
 import { AgentActivityExplainer } from '@/components/delegation/AgentActivityExplainer'
+import { DelegationErrorBanner } from '@/components/delegation/DelegationErrorBanner'
 import { PreflightCheckList } from '@/components/delegation/PreflightCheckList'
 import { CostMeter } from '@/components/delegation/CostMeter'
 import { downloadLogsAsText } from '@/lib/delegations/log-export'
@@ -792,12 +793,9 @@ export default function DelegationDetailPage() {
           )}
         </div>
 
-        {/* ── Error message (prominent, when failed) ──────────────────── */}
+        {/* ── Structured error recovery (when failed) ─────────────────── */}
         {d.status === 'failed' && d.errorMessage && (
-          <div className="rounded-xl border border-red-900/50 bg-red-950/20 px-4 py-3">
-            <p className="text-xs font-semibold text-red-400 mb-1">Fehlerdetails</p>
-            <p className="text-xs text-red-300/80 font-mono break-words whitespace-pre-wrap">{d.errorMessage}</p>
-          </div>
+          <DelegationErrorBanner errorMessage={d.errorMessage} />
         )}
 
         {/* ── Next Action Panel ────────────────────────────────────────── */}
