@@ -616,5 +616,70 @@ describe('renderDailyReportMarkdown', () => {
     expect(markdown).toContain('## Delegation Queue Plan')
     expect(markdown).toContain('## Top Risks')
     expect(markdown).toContain('## Next Actions')
+    expect(markdown).toContain('## Do Not Build Yet')
+    expect(markdown).toContain('## Capability Split')
+  })
+})
+
+describe('doNotBuild', () => {
+  it('includes scope guard entries when first real value loop is not done', () => {
+    const report = buildDailyReport({
+      now,
+      storageMode: 'json',
+      authDisabled: false,
+      projectBriefs: [],
+      knowledgeCards: [],
+      attentionItems: [],
+      delegations: [],
+    })
+    expect(report.doNotBuild.length).toBeGreaterThan(0)
+    expect(report.doNotBuild.some(item => item.toLowerCase().includes('agent registry') || item.toLowerCase().includes('product areas'))).toBe(true)
+  })
+
+  it('includes Supabase guard when storage is json', () => {
+    const report = buildDailyReport({
+      now,
+      storageMode: 'json',
+      authDisabled: false,
+      projectBriefs: [],
+      knowledgeCards: [],
+      attentionItems: [],
+      delegations: [],
+    })
+    expect(report.doNotBuild.some(item => item.toLowerCase().includes('supabase') || item.toLowerCase().includes('postgres cutover'))).toBe(true)
+  })
+})
+
+describe('agentTasksByCapability', () => {
+  it('has local tasks with assistant-auto or critic-llm owner', () => {
+    const report = buildDailyReport({
+      now,
+      storageMode: 'postgres',
+      authDisabled: false,
+      projectBriefs: [],
+      knowledgeCards: [],
+      attentionItems: [],
+      delegations: [],
+    })
+    const { localTasks, cloudTasks } = report.agentTasksByCapability
+    expect(localTasks.length).toBeGreaterThan(0)
+    expect(cloudTasks.length).toBeGreaterThan(0)
+    expect(localTasks.every(t => t.owner === 'assistant-auto' || t.owner === 'critic-llm')).toBe(true)
+    expect(cloudTasks.every(t => t.owner === 'codex' || t.owner === 'claude')).toBe(true)
+  })
+
+  it('local task ids (local-triage, local-scope-check) are always included', () => {
+    const report = buildDailyReport({
+      now,
+      storageMode: 'postgres',
+      authDisabled: false,
+      projectBriefs: [],
+      knowledgeCards: [],
+      attentionItems: [],
+      delegations: [],
+    })
+    const ids = report.agentTasksByCapability.localTasks.map(t => t.id)
+    expect(ids).toContain('local-triage')
+    expect(ids).toContain('local-scope-check')
   })
 })
