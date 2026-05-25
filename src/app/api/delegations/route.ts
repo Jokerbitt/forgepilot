@@ -37,6 +37,20 @@ function backfillTitle(d: Delegation): Delegation {
   return { ...d, title: d.contract.goal.slice(0, 80) }
 }
 
+function parseBooleanParam(value: string | null): boolean {
+  if (!value) return false
+  return ['1', 'true', 'yes'].includes(value.toLowerCase())
+}
+
+function isUrgentDelegation(d: Delegation): boolean {
+  return (
+    d.status === 'failed'
+    || d.contract.riskClass === 'C'
+    || (d.status === 'pending' && d.contract.requiresApproval)
+    || (d.priority ?? 0) >= 8
+  )
+}
+
 export async function GET(request: NextRequest) {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
   await reapStaleDelegations(repo)
@@ -55,6 +69,11 @@ export async function GET(request: NextRequest) {
     delegations = delegations.filter(
       d => d.briefId === briefIdParam || d.contract.workItemId === briefIdParam
     )
+  }
+
+  // Optional urgent filter: ?urgent=true → only delegations needing operator attention
+  if (parseBooleanParam(request.nextUrl.searchParams.get('urgent'))) {
+    delegations = delegations.filter(isUrgentDelegation)
   }
 
   // Optional limit: ?limit=50
