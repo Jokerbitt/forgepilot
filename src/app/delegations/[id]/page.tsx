@@ -222,6 +222,16 @@ export default function DelegationDetailPage() {
   const [executing, setExecuting] = useState(false)
   const orchPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // Knowledge writeback card count for this delegation
+  const [writebackCount, setWritebackCount] = useState<number | null>(null)
+  useEffect(() => {
+    if (!id) return
+    fetch(`/api/knowledge-cards?sourceId=${id}`)
+      .then(r => r.json())
+      .then((d: { total?: number }) => setWritebackCount(d.total ?? 0))
+      .catch(() => undefined)
+  }, [id])
+
   const [creatingPR, setCreatingPR] = useState(false)
   const [prError, setPrError] = useState<string | null>(null)
   const [logsExpanded, setLogsExpanded] = useState(false)
@@ -460,10 +470,29 @@ export default function DelegationDetailPage() {
                   Risk {d.contract.riskClass}
                 </span>
                 <ApprovalBadge requiresApproval={d.contract.requiresApproval} riskClass={d.contract.riskClass} compact />
+                {d.contract.outputPolicy && d.contract.outputPolicy !== 'none' && (
+                  <span className="px-2 py-0.5 text-xs rounded border border-indigo-800/50 bg-indigo-950/30 text-indigo-400 font-medium">
+                    {d.contract.outputPolicy === 'pr' ? '⎇ PR'
+                     : d.contract.outputPolicy === 'writeback' ? '📝 Writeback'
+                     : d.contract.outputPolicy === 'pr-and-writeback' ? '⎇ PR + 📝' : null}
+                  </span>
+                )}
               </div>
               <h1 className="text-xl font-bold text-white leading-snug">{d.title || d.contract.goal}</h1>
               {d.contract.context && (
                 <p className="text-sm text-gray-500 mt-2 leading-relaxed">{d.contract.context}</p>
+              )}
+              {d.contract.writeScope && d.contract.writeScope.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {d.contract.writeScope.slice(0, 8).map(s => (
+                    <span key={s} className="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-[10px] text-gray-500 font-mono">
+                      {s}
+                    </span>
+                  ))}
+                  {d.contract.writeScope.length > 8 && (
+                    <span className="text-[10px] text-gray-600">+{d.contract.writeScope.length - 8}</span>
+                  )}
+                </div>
               )}
             </div>
 
@@ -689,6 +718,20 @@ export default function DelegationDetailPage() {
                 <span className="text-xs text-gray-700">–</span>
               )}
             </div>
+            {/* Writeback tile */}
+            <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Writeback</span>
+              {writebackCount === null ? (
+                <span className="text-xs text-gray-700">–</span>
+              ) : writebackCount > 0 ? (
+                <a href="/knowledge-cards" className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors">
+                  {writebackCount} Karten
+                </a>
+              ) : (
+                <span className="text-xs text-gray-600">Keine</span>
+              )}
+            </div>
+
             {/* Retry tile — only shown when retryCount > 0 */}
             {(d.retryCount ?? 0) > 0 && (
               <div className="bg-amber-950/30 border border-amber-800/40 rounded-lg px-3 py-2 flex flex-col gap-0.5">
@@ -749,6 +792,14 @@ export default function DelegationDetailPage() {
           )}
         </div>
 
+        {/* ── Error message (prominent, when failed) ──────────────────── */}
+        {d.status === 'failed' && d.errorMessage && (
+          <div className="rounded-xl border border-red-900/50 bg-red-950/20 px-4 py-3">
+            <p className="text-xs font-semibold text-red-400 mb-1">Fehlerdetails</p>
+            <p className="text-xs text-red-300/80 font-mono break-words whitespace-pre-wrap">{d.errorMessage}</p>
+          </div>
+        )}
+
         {/* ── Next Action Panel ────────────────────────────────────────── */}
         <DelegationNextActionPanel
           delegation={d}
@@ -758,6 +809,7 @@ export default function DelegationDetailPage() {
           onRetryEscalate={handleRetryEscalate}
           onCreatePR={handleCreatePR}
           creatingPR={creatingPR}
+          lastLogMessage={d.status === 'running' ? (d.logs ?? []).filter(l => l.type !== 'thought').slice(-1)[0]?.message : undefined}
         />
 
         {/* ── Agent activity explainer ─────────────────────────────────── */}
