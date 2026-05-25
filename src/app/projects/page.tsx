@@ -6,6 +6,7 @@ import { ArrowRight, CheckCircle2, CircleDot, FileText, GitBranch, ListChecks, P
 import { Badge, Panel, StatusDot, buttonClassName, cx } from '@/components/ui/primitives'
 import type { ProjectSummary } from '@/app/api/projects/route'
 import { persistenceLabel, platformLabel } from '@/lib/project-planning-recommendations'
+import { PROJECTS_LOADING_SKELETON_COUNT } from './loading-config'
 
 type ProjectStatus = ProjectSummary['status']
 
@@ -62,6 +63,10 @@ export default function ProjectsPage() {
     attention: projects.filter(project => project.status === 'attention').length,
   }), [projects])
 
+  if (loading) {
+    return <ProjectsLoadingSkeleton />
+  }
+
   return (
     <main className="min-h-screen bg-[#08080d] text-white">
       <div className="border-b border-white/[0.07] bg-[#0b0b11]/95">
@@ -100,9 +105,7 @@ export default function ProjectsPage() {
             <div className="border-b border-white/[0.07] p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Projektliste</p>
             </div>
-            {loading ? (
-              <div className="space-y-3 p-4">{[0, 1, 2].map(item => <div key={item} className="h-20 rounded-lg border border-white/[0.06] bg-white/[0.03]" />)}</div>
-            ) : projects.length === 0 ? (
+            {projects.length === 0 ? (
               <div className="p-5">
                 <p className="text-sm font-semibold text-white">Noch kein Projekt angelegt</p>
                 <p className="mt-2 text-xs leading-5 text-slate-500">Starte mit einer Idee, damit ForgePilot daraus einen steuerbaren Plan macht.</p>
@@ -144,6 +147,95 @@ export default function ProjectsPage() {
               </div>
             </Panel>
           )}
+        </section>
+      </div>
+    </main>
+  )
+}
+
+function ProjectsLoadingSkeleton() {
+  return (
+    <main className="min-h-screen bg-[#08080d] text-white" aria-busy="true" aria-label="Projects werden geladen">
+      <div className="border-b border-white/[0.07] bg-[#0b0b11]/95">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+          <div className="min-w-0">
+            <div className="h-4 w-56 rounded bg-white/[0.06]" />
+            <div className="mt-4 h-8 w-64 rounded bg-white/[0.08]" />
+            <div className="mt-3 h-4 w-full max-w-xl rounded bg-white/[0.05]" />
+          </div>
+          <div className="flex gap-2">
+            <div className="h-10 w-28 rounded-lg border border-white/[0.07] bg-white/[0.04]" />
+            <div className="h-10 w-24 rounded-lg border border-violet-500/20 bg-violet-500/10" />
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto grid max-w-7xl gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:px-8">
+        <aside className="space-y-5">
+          <Panel className="p-5">
+            <div className="h-3 w-24 rounded bg-white/[0.06]" />
+            <div className="mt-4 grid grid-cols-4 gap-2">
+              {Array.from({ length: 4 }, (_, item) => (
+                <div key={item} className="rounded-lg border border-white/[0.07] bg-white/[0.03] p-3">
+                  <div className="mx-auto h-6 w-8 rounded bg-white/[0.08]" />
+                  <div className="mx-auto mt-2 h-3 w-12 rounded bg-white/[0.05]" />
+                </div>
+              ))}
+            </div>
+          </Panel>
+
+          <Panel className="overflow-hidden">
+            <div className="border-b border-white/[0.07] p-4">
+              <div className="h-3 w-28 rounded bg-white/[0.06]" />
+            </div>
+            <div className="space-y-3 p-4">
+              {Array.from({ length: PROJECTS_LOADING_SKELETON_COUNT }, (_, item) => (
+                <div key={item} className="rounded-lg border border-white/[0.06] bg-white/[0.03] p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="h-4 w-40 rounded bg-white/[0.08]" />
+                    <div className="h-2.5 w-2.5 rounded-full bg-slate-700" />
+                  </div>
+                  <div className="mt-3 h-3 w-full rounded bg-white/[0.05]" />
+                  <div className="mt-2 h-3 w-2/3 rounded bg-white/[0.04]" />
+                  <div className="mt-4 flex justify-between">
+                    <div className="h-3 w-16 rounded bg-white/[0.05]" />
+                    <div className="h-5 w-24 rounded-full bg-white/[0.05]" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Panel>
+        </aside>
+
+        <section className="min-w-0 space-y-5">
+          <Panel className="p-6">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap gap-2">
+                  {[0, 1, 2, 3].map(item => <div key={item} className="h-6 w-20 rounded-full bg-white/[0.06]" />)}
+                </div>
+                <div className="mt-5 h-8 w-2/3 rounded bg-white/[0.08]" />
+                <div className="mt-4 h-4 w-full max-w-3xl rounded bg-white/[0.05]" />
+                <div className="mt-2 h-4 w-3/4 rounded bg-white/[0.04]" />
+              </div>
+              <div className="h-10 w-36 rounded-lg border border-violet-500/20 bg-violet-500/10" />
+            </div>
+          </Panel>
+
+          <Panel className="p-5">
+            <div className="h-3 w-40 rounded bg-white/[0.06]" />
+            <div className="mt-5 grid gap-3 lg:grid-cols-4">
+              {Array.from({ length: 4 }, (_, item) => (
+                <div key={item} className="rounded-lg border border-white/[0.07] bg-white/[0.02] p-4">
+                  <div className="h-8 w-8 rounded-lg bg-white/[0.06]" />
+                  <div className="mt-5 h-4 w-24 rounded bg-white/[0.08]" />
+                  <div className="mt-3 h-8 w-12 rounded bg-white/[0.06]" />
+                  <div className="mt-4 h-3 w-full rounded bg-white/[0.04]" />
+                  <div className="mt-2 h-3 w-2/3 rounded bg-white/[0.04]" />
+                </div>
+              ))}
+            </div>
+          </Panel>
         </section>
       </div>
     </main>
