@@ -66,6 +66,27 @@ describe('GET /api/onboarding/status', () => {
     expect(data.totalSteps).toBe(3)
   })
 
+  it('preserves CLI provider readiness for zero-API-key onboarding', async () => {
+    const { GET } = await makeRoute(mockStatusPartial)
+    const res = await GET()
+    const data = await res.json() as OnboardingStatus
+
+    expect(res.status).toBe(200)
+    expect(data.hasCLIProvider).toBe(true)
+    expect(data.hasProvider).toBe(true)
+    expect(data.isComplete).toBe(false)
+  })
+
+  it('keeps completion math stable when all onboarding steps are complete', async () => {
+    const { GET } = await makeRoute(mockStatusComplete)
+    const res = await GET()
+    const data = await res.json() as OnboardingStatus
+
+    expect(res.status).toBe(200)
+    expect(data.completedSteps).toBe(data.totalSteps)
+    expect(data.isComplete).toBe(true)
+  })
+
   it('isComplete is false when no providers are configured', async () => {
     const { GET } = await makeRoute(mockStatusEmpty)
     const res = await GET()
