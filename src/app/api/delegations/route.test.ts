@@ -105,6 +105,40 @@ describe('GET /api/delegations', () => {
     expect(body[0].id).toBe('del-001')
   })
 
+  it('filters by ?urgent=true and only returns delegations needing attention', async () => {
+    const urgentApproval = makeDelegation({
+      id: 'del-approval',
+      status: 'pending',
+      contract: { ...makeDelegation().contract, requiresApproval: true },
+    })
+    const urgentFailed = makeDelegation({ id: 'del-failed', status: 'failed' })
+    const urgentPriority = makeDelegation({ id: 'del-priority', priority: 9 })
+    const urgentRisk = makeDelegation({
+      id: 'del-risk-c',
+      contract: { ...makeDelegation().contract, riskClass: 'C' },
+    })
+    const normal = makeDelegation({ id: 'del-normal', status: 'approved', priority: 2 })
+
+    repoListByStatus.mockResolvedValueOnce([
+      urgentApproval,
+      urgentFailed,
+      urgentPriority,
+      urgentRisk,
+      normal,
+    ])
+
+    const { GET } = await import('./route')
+    const res = await GET(makeGetRequest('http://localhost/api/delegations?urgent=true'))
+    const body = await res.json() as Delegation[]
+
+    expect(body.map(d => d.id)).toEqual([
+      'del-approval',
+      'del-failed',
+      'del-priority',
+      'del-risk-c',
+    ])
+  })
+
   it('limits results with ?limit=1', async () => {
     const delegations = [makeDelegation({ id: 'del-001' }), makeDelegation({ id: 'del-002' })]
     repoListByStatus.mockResolvedValueOnce(delegations)
