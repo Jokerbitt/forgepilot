@@ -61,6 +61,7 @@ describe('buildProjectBrief', () => {
 
     expect(brief.id).toBe('brief-1')
     expect(brief.status).toBe('in_review')
+    expect(brief.planningMode).toBe('beginner')
     expect(brief.requirements).toHaveLength(3)
     expect(brief.researchBriefDraft.preferredExecutor).toBe('agent')
     expect(brief.researchBriefDraft.preferredSourceTypes).toEqual(['obsidian', 'nas', 'docs', 'pdf'])
@@ -71,6 +72,21 @@ describe('buildProjectBrief', () => {
 
     expect(brief.researchBriefDraft.preferredSourceTypes).toContain('web')
     expect(brief.researchBriefDraft.preferredSourceTypes).toContain('github')
+  })
+
+  it('keeps explicit expert architecture choices on the brief', () => {
+    const brief = buildProjectBrief({
+      ...validInput,
+      planningMode: 'expert',
+      targetPlatform: 'desktop',
+      persistenceStrategy: 'sqlite',
+    }, new Date('2026-05-16T10:00:00.000Z'), 'brief-expert')
+
+    expect(brief.planningMode).toBe('expert')
+    expect(brief.targetPlatform).toBe('desktop')
+    expect(brief.persistenceStrategy).toBe('sqlite')
+    expect(brief.platformGuidance).toContain('Desktop App')
+    expect(brief.persistenceGuidance).toContain('SQLite')
   })
 })
 

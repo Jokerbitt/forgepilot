@@ -17,12 +17,6 @@ import { getMilestonesByBriefId, getWorkPackagesByBriefId } from '@/lib/knowledg
 import type { ProjectBrief } from '@/lib/models/project-brief'
 import type { Delegation } from '@/lib/models/delegation'
 import type { IdeaHistoryEntry } from '@/lib/pilot/idea-history-store'
-import {
-  persistenceGuidance,
-  resolvePersistenceStrategy,
-  resolveTargetPlatform,
-  platformGuidance,
-} from '@/lib/project-planning-recommendations'
 
 type ProjectPlanStatus = 'intake' | 'planning' | 'ready' | 'in_progress' | 'attention' | 'completed'
 
@@ -117,23 +111,17 @@ export async function GET() {
   const projects: ProjectSummary[] = briefs.map((brief: ProjectBrief) => {
     const entry = historyByBriefId.get(brief.id)
     const plan = buildPlanningSummary(brief, delegations)
-    const recommendationSource = `${brief.rawIdea ?? ''} ${brief.problemStatement ?? ''}`.trim()
-    const targetPlatform = resolveTargetPlatform(recommendationSource, brief.targetPlatform ?? 'undecided', brief.customPlatformNote)
-    const persistenceStrategy = resolvePersistenceStrategy(recommendationSource, brief.persistenceStrategy ?? 'recommend', targetPlatform)
-    const architecture = {
-      planningMode: brief.planningMode ?? 'beginner',
-      targetPlatform,
-      platformGuidance: brief.platformGuidance ?? platformGuidance(targetPlatform, brief.customPlatformNote),
-      persistenceStrategy,
-      persistenceGuidance: brief.persistenceGuidance ?? persistenceGuidance(persistenceStrategy),
-    }
 
     if (!entry) {
       return {
         id: brief.id,
         title: brief.title,
         problemStatement: brief.problemStatement ?? '',
-        ...architecture,
+        planningMode: brief.planningMode ?? 'beginner',
+        targetPlatform: brief.targetPlatform ?? 'undecided',
+        platformGuidance: brief.platformGuidance,
+        persistenceStrategy: brief.persistenceStrategy ?? 'recommend',
+        persistenceGuidance: brief.persistenceGuidance,
         createdAt: brief.createdAt ?? new Date().toISOString(),
         ...plan,
       }
@@ -154,7 +142,11 @@ export async function GET() {
       id: brief.id,
       title: brief.title,
       problemStatement: brief.problemStatement ?? '',
-      ...architecture,
+      planningMode: brief.planningMode ?? 'beginner',
+      targetPlatform: brief.targetPlatform ?? 'undecided',
+      platformGuidance: brief.platformGuidance,
+      persistenceStrategy: brief.persistenceStrategy ?? 'recommend',
+      persistenceGuidance: brief.persistenceGuidance,
       createdAt: brief.createdAt ?? entry.createdAt,
       ...plan,
       pipeline: {
@@ -191,6 +183,20 @@ function buildPlanningSummary(brief: ProjectBrief, delegations: Delegation[]) {
   const runningDelegations = linkedDelegations.filter(delegation => delegation.status === 'running').length
   const completedDelegations = linkedDelegations.filter(delegation => delegation.status === 'completed').length
   const failedDelegations = linkedDelegations.filter(delegation => delegation.status === 'failed').length
+  const activeDelegations = linkedDelegations.filter(delegation => delegation.status === 'running' || delegation.status === 'approved')
+  const delegationSummaries = linkedDelegations
+    .slice()
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, 8)
+    .map(toDelegationSummary)
+  const totalProgressUnits = Math.max(workPackages.length, linkedDelegations.length, acceptedRequirements > 0 ? 1 : 0)
+  const completedProgressUnits = workPackages.length > 0
+    ? completedWorkPackages
+    : linkedDelegations.length > 0
+      ? completedDelegations
+      : acceptedRequirements > 0
+        ? 1
+        : 0
 
   const metrics = {
     milestones: milestones.length,
@@ -203,42 +209,45 @@ function buildPlanningSummary(brief: ProjectBrief, delegations: Delegation[]) {
     openRisks,
     acceptedRequirements,
   }
-
-  const progressTotal = Math.max(workPackages.length, linkedDelegations.length, 1)
-  const progressCompleted = workPackages.length > 0 ? completedWorkPackages : completedDelegations
   const progress = {
-    pct: Math.round((progressCompleted / progressTotal) * 100),
-    completed: progressCompleted,
-    total: progressTotal,
+    pct: totalProgressUnits > 0 ? Math.round((completedProgressUnits / totalProgressUnits) * 100) : 0,
+    completed: completedProgressUnits,
+    total: totalProgressUnits,
     running: runningDelegations,
     failed: failedDelegations,
   }
-  const activeAgents = linkedDelegations.filter(delegation => delegation.status === 'running').slice(0, 4).map(toDelegationSummary)
-  const recentDelegations = [...linkedDelegations]
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 6)
-    .map(toDelegationSummary)
-  const pmPlan = buildProjectManagerPlan({ briefId: brief.id, workPackages, linkedDelegations, failedDelegations, runningDelegations })
-  const base = { metrics, progress, activeAgents, recentDelegations, pmPlan }
+  const shared = {
+    progress,
+    activeAgents: activeDelegations.map(toDelegationSummary),
+    recentDelegations: delegationSummaries,
+    pmPlan: buildProjectManagerPlan({
+      briefId: brief.id,
+      workPackages,
+      linkedDelegations,
+      failedDelegations,
+      runningDelegations,
+    }),
+  }
 
   if (failedDelegations > 0 || blockedWorkPackages > 0) {
-    return { status: 'attention' as const, ...base, nextAction: { label: 'Blocker klaeren', href: `/delegations?briefId=${brief.id}&status=failed`, tone: 'danger' as const } }
+    return { status: 'attention' as const, metrics, ...shared, nextAction: { label: 'Blocker klaeren', href: `/delegations?briefId=${brief.id}&status=failed`, tone: 'danger' as const } }
   }
   if (workPackages.length > 0 && completedWorkPackages === workPackages.length) {
-    return { status: 'completed' as const, ...base, nextAction: { label: 'Abschluss pruefen', href: `/project-briefs/${brief.id}`, tone: 'success' as const } }
+    return { status: 'completed' as const, metrics, ...shared, nextAction: { label: 'Abschluss pruefen', href: `/project-briefs/${brief.id}`, tone: 'success' as const } }
   }
   if (runningDelegations > 0 || linkedDelegations.some(delegation => delegation.status === 'approved' || delegation.status === 'pending')) {
-    return { status: 'in_progress' as const, ...base, nextAction: { label: 'Delegationen steuern', href: `/delegations?briefId=${brief.id}`, tone: 'info' as const } }
+    return { status: 'in_progress' as const, metrics, ...shared, nextAction: { label: 'Delegationen steuern', href: `/delegations?briefId=${brief.id}`, tone: 'info' as const } }
   }
   if (workPackages.length > 0) {
-    return { status: 'ready' as const, ...base, nextAction: { label: 'Delegation erstellen', href: `/delegations?new=1&briefId=${brief.id}`, tone: 'success' as const } }
+    return { status: 'ready' as const, metrics, ...shared, nextAction: { label: 'Delegation erstellen', href: `/delegations?new=1&briefId=${brief.id}`, tone: 'success' as const } }
   }
   if (acceptedRequirements > 0 || milestones.length > 0) {
-    return { status: 'planning' as const, ...base, nextAction: { label: 'Arbeitspakete planen', href: `/project-briefs/${brief.id}`, tone: 'warning' as const } }
+    return { status: 'planning' as const, metrics, ...shared, nextAction: { label: 'Arbeitspakete planen', href: `/project-briefs/${brief.id}`, tone: 'warning' as const } }
   }
   return {
     status: 'intake' as const,
-    ...base,
+    metrics,
+    ...shared,
     nextAction: {
       label: openRisks > 0 ? 'Annahmen klaeren' : 'Brief schaerfen',
       href: `/project-briefs/${brief.id}`,
@@ -281,20 +290,76 @@ function buildProjectManagerPlan(input: {
   const linkedWorkItemIds = new Set(input.linkedDelegations.map(delegation => delegation.contract.workItemId))
 
   for (const delegation of input.linkedDelegations.filter(item => item.status === 'failed').slice(0, 2)) {
-    nextSteps.push({ id: `fix-${delegation.id}`, title: delegation.title, action: 'fix_failed', reason: 'Diese Delegation ist fehlgeschlagen und sollte vor neuen Starts triagiert werden.', href: `/delegations/${delegation.id}`, riskClass: delegation.contract.riskClass, canAutoStart: false, delegationId: delegation.id })
+    nextSteps.push({
+      id: `fix-${delegation.id}`,
+      title: delegation.title,
+      action: 'fix_failed',
+      reason: 'Diese Delegation ist fehlgeschlagen und sollte vor neuen Starts triagiert werden.',
+      href: `/delegations/${delegation.id}`,
+      riskClass: delegation.contract.riskClass,
+      canAutoStart: false,
+      delegationId: delegation.id,
+    })
   }
+
   for (const delegation of input.linkedDelegations.filter(item => item.status === 'running').slice(0, 2)) {
-    nextSteps.push({ id: `monitor-${delegation.id}`, title: delegation.title, action: 'monitor_running', reason: 'Hier arbeitet bereits ein KI-Agent. Erst Fortschritt pruefen, bevor weitere parallele Arbeit startet.', href: `/delegations/${delegation.id}`, riskClass: delegation.contract.riskClass, canAutoStart: false, delegationId: delegation.id })
+    nextSteps.push({
+      id: `monitor-${delegation.id}`,
+      title: delegation.title,
+      action: 'monitor_running',
+      reason: 'Hier arbeitet bereits ein KI-Agent. Erst Fortschritt prüfen, bevor weitere parallele Arbeit startet.',
+      href: `/delegations/${delegation.id}`,
+      riskClass: delegation.contract.riskClass,
+      canAutoStart: false,
+      delegationId: delegation.id,
+    })
   }
+
   for (const delegation of input.linkedDelegations.filter(item => item.status === 'approved').slice(0, 3)) {
-    nextSteps.push({ id: `start-${delegation.id}`, title: delegation.title, action: 'start_delegation', reason: 'Diese Delegation ist freigegeben und kann in einem kontrollierten Batch gestartet werden.', href: `/delegations/${delegation.id}`, riskClass: delegation.contract.riskClass, canAutoStart: delegation.contract.riskClass !== 'C', delegationId: delegation.id })
+    nextSteps.push({
+      id: `start-${delegation.id}`,
+      title: delegation.title,
+      action: 'start_delegation',
+      reason: 'Diese Delegation ist freigegeben und kann in einem kontrollierten Batch gestartet werden.',
+      href: `/delegations/${delegation.id}`,
+      riskClass: delegation.contract.riskClass,
+      canAutoStart: delegation.contract.riskClass !== 'C',
+      delegationId: delegation.id,
+    })
   }
+
   for (const wp of input.workPackages.filter(item => !linkedWorkItemIds.has(item.id)).slice(0, 4)) {
     const isRisky = wp.riskClass === 'C' || wp.status === 'blocked'
-    nextSteps.push({ id: `wp-${wp.id}`, title: wp.title, action: isRisky ? 'clarify_risk' : 'create_delegation', reason: isRisky ? 'Dieses Arbeitspaket braucht zuerst Klaerung, weil Risiko oder Blocker zu hoch sind.' : 'Dieses Arbeitspaket hat noch keine Delegation und ist ein sinnvoller naechster Schritt.', href: isRisky ? `/project-briefs/${input.briefId}` : `/work-items`, riskClass: wp.riskClass, canAutoStart: !isRisky, workPackageId: wp.id })
+    nextSteps.push({
+      id: `wp-${wp.id}`,
+      title: wp.title,
+      action: isRisky ? 'clarify_risk' : 'create_delegation',
+      reason: isRisky
+        ? 'Dieses Arbeitspaket braucht zuerst Klärung, weil Risiko oder Blocker zu hoch sind.'
+        : 'Dieses Arbeitspaket hat noch keine Delegation und ist ein sinnvoller nächster Schritt.',
+      href: isRisky ? `/project-briefs/${input.briefId}` : `/work-items`,
+      riskClass: wp.riskClass,
+      canAutoStart: !isRisky,
+      workPackageId: wp.id,
+    })
   }
-  if (nextSteps.length === 0) nextSteps.push({ id: `plan-${input.briefId}`, title: 'Arbeitspakete aus dem Plan ableiten', action: 'plan_work_packages', reason: 'Der Projektmanager braucht konkrete Arbeitspakete, bevor sinnvoll delegiert werden kann.', href: `/project-briefs/${input.briefId}`, canAutoStart: false })
 
-  const summary = input.failedDelegations > 0 ? 'Erst Fehler beheben, dann neue Agenten starten.' : input.runningDelegations > 0 ? 'Agenten laufen bereits. Beobachten und nur kleine Batches starten.' : 'Sichere naechste Schritte sind bereit. Starte mit kleinen Delegations und pruefe danach den Fortschritt.'
+  if (nextSteps.length === 0) {
+    nextSteps.push({
+      id: `plan-${input.briefId}`,
+      title: 'Arbeitspakete aus dem Plan ableiten',
+      action: 'plan_work_packages',
+      reason: 'Der Projektmanager braucht konkrete Arbeitspakete, bevor sinnvoll delegiert werden kann.',
+      href: `/project-briefs/${input.briefId}`,
+      canAutoStart: false,
+    })
+  }
+
+  const summary = input.failedDelegations > 0
+    ? 'Erst Fehler beheben, dann neue Agenten starten.'
+    : input.runningDelegations > 0
+      ? 'Agenten laufen bereits. Beobachten und nur kleine Batches starten.'
+      : 'Sichere nächste Schritte sind bereit. Starte mit kleinen Delegations und prüfe danach den Fortschritt.'
+
   return { summary, nextSteps: nextSteps.slice(0, 5) }
 }

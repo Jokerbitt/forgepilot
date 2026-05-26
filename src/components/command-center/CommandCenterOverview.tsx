@@ -113,9 +113,9 @@ export function CommandCenterOverview() {
       return {
         eyebrow: 'Blocker',
         title: `${failed.length} Delegation${failed.length === 1 ? '' : 'en'} brauchen Review`,
-        detail: 'Fehlerhafte Ausfuehrungen zuerst klaeren. Das stabilisiert den Kern-Flow, bevor neue Arbeit gestartet wird.',
+        detail: 'Fehlerhafte Ausführungen zuerst klären. Das stabilisiert den Kern-Flow, bevor neue Arbeit gestartet wird.',
         href: '/delegations?filter=failed',
-        actionLabel: 'Fehler pruefen',
+        actionLabel: 'Fehler prüfen',
         tone: 'blocked',
       }
     }
@@ -124,9 +124,9 @@ export function CommandCenterOverview() {
       return {
         eyebrow: 'Entscheidung',
         title: `${pending.length} Freigabe${pending.length === 1 ? '' : 'n'} wartet`,
-        detail: 'Der schnellste Fortschritt entsteht jetzt durch klare Freigabe oder Ablehnung vorbereiteter Delegations.',
+        detail: 'Der schnellste Fortschritt entsteht jetzt durch klare Freigabe oder Ablehnung vorbereiteter Delegationen.',
         href: '/delegations?filter=pending',
-        actionLabel: 'Freigaben pruefen',
+        actionLabel: 'Freigaben prüfen',
         tone: 'attention',
       }
     }
@@ -135,9 +135,9 @@ export function CommandCenterOverview() {
       return {
         eyebrow: 'Startbereit',
         title: `${approved.length} Delegation${approved.length === 1 ? '' : 'en'} kann gestartet werden`,
-        detail: 'Der Scope ist vorbereitet. Starte die naechste Aufgabe, solange Kontext und Akzeptanzkriterien frisch sind.',
+        detail: 'Der Scope ist vorbereitet. Starte die nächste Aufgabe, solange Kontext und Abnahmekriterien frisch sind.',
         href: '/delegations?filter=approved',
-        actionLabel: 'Queue oeffnen',
+        actionLabel: 'Queue öffnen',
         tone: 'ready',
       }
     }
@@ -145,7 +145,7 @@ export function CommandCenterOverview() {
     return {
       eyebrow: 'Naechste Aktion',
       title: 'Neue Delegation aus einer klaren Idee erzeugen',
-      detail: 'Fokus fuer V1: Idee strukturieren, Scope begrenzen, KI arbeiten lassen, kritisch pruefen, Wissen sichern.',
+      detail: 'Fokus für V1: Idee strukturieren, Scope begrenzen, KI arbeiten lassen, kritisch prüfen, Wissen sichern.',
       href: '/delegations?new=1',
       actionLabel: 'Delegation starten',
       tone: 'ready',
@@ -207,26 +207,26 @@ function QueuePlanCard({
     <section className="col-span-12 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.035] p-6 shadow-sm shadow-black/20 lg:col-span-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-cyan-300">Safe Execution Queue</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-cyan-300">Sichere Ausführungsqueue</p>
           <h3 className="mt-1 text-lg font-semibold text-white">Was darf jetzt wirklich starten?</h3>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
-            ForgePilot begrenzt Parallelstarts, zeigt wartende Freigaben und empfiehlt nur den naechsten sicheren Batch.
+            ForgePilot begrenzt Parallelstarts, zeigt wartende Freigaben und empfiehlt nur den nächsten sicheren Batch.
           </p>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center sm:min-w-56">
           <MetricPill label="Freigegeben" value={plan?.stats.approved ?? '--'} />
-          <MetricPill label="Laeuft" value={plan?.stats.running ?? '--'} />
+          <MetricPill label="Läuft" value={plan?.stats.running ?? '--'} />
           <MetricPill label="Limit" value={plan?.maxConcurrent ?? '--'} />
         </div>
       </div>
 
       <div className="mt-5 rounded-lg border border-white/[0.06] bg-black/20 p-4">
         <p className="text-sm font-medium text-white">
-          {plan?.nextAction ?? 'Queue Plan wird geladen oder ist erst nach Login verfuegbar.'}
+          {plan?.nextAction ?? 'Queue-Plan wird geladen oder ist erst nach Login verfügbar.'}
         </p>
         {plan && (
           <p className="mt-2 text-xs leading-5 text-slate-500">
-            Empfohlener Batch: {plan.recommendedStartIds.length > 0 ? plan.recommendedStartIds.join(', ') : 'kein Start noetig'}.
+            Empfohlener Batch: {plan.recommendedStartIds.length > 0 ? plan.recommendedStartIds.join(', ') : 'kein Start nötig'}.
           </p>
         )}
       </div>
@@ -274,7 +274,7 @@ function QueuePlanCard({
               >
                 <p className="truncate text-sm font-medium text-white">{item.title}</p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Risk {item.riskClass} · {item.requiresApproval ? 'Freigabe erforderlich' : 'Risiko pruefen'}
+                  Risk {item.riskClass} · {item.requiresApproval ? 'Freigabe erforderlich' : 'Risiko prüfen'}
                 </p>
               </Link>
             )) : (
@@ -307,7 +307,7 @@ function QueuePlanCard({
           {starting ? 'Starte Batch...' : result === 'started' ? 'Gestartet' : 'Empfohlenen Batch starten'}
         </button>
         <Link href="/delegations?filter=pending" className={buttonClassName('secondary', 'min-h-10 flex-1')}>
-          Freigaben pruefen
+          Freigaben prüfen
         </Link>
         <button
           type="button"
@@ -320,7 +320,7 @@ function QueuePlanCard({
 
       {result === 'failed' && (
         <p className="mt-3 rounded-lg border border-rose-500/25 bg-rose-500/[0.06] px-3 py-2 text-xs text-rose-100">
-          Start fehlgeschlagen. Pruefe Provider, Auth und die betroffene Delegation, bevor du erneut startest.
+          Start fehlgeschlagen. Prüfe Provider, Auth und die betroffene Delegation, bevor du erneut startest.
         </p>
       )}
     </section>
@@ -382,7 +382,7 @@ function ActiveDelegationsCard({
   return (
     <section className="col-span-12 rounded-xl border border-white/[0.08] bg-white/[0.03] p-6 shadow-sm shadow-black/20 lg:col-span-5">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-lg font-semibold text-white">Aktive Delegations</h3>
+        <h3 className="text-lg font-semibold text-white">Aktive Delegationen</h3>
         <span className="text-sm text-slate-500">{running.length} laufend</span>
       </div>
 
@@ -401,8 +401,8 @@ function ActiveDelegationsCard({
           </Link>
         )) : (
           <div className="rounded-lg border border-dashed border-white/[0.08] p-5">
-            <p className="text-sm font-medium text-white">Keine aktiven Delegations</p>
-            <p className="mt-1 text-sm text-slate-500">Starte eine neue Delegation, sobald der naechste Scope klar ist.</p>
+            <p className="text-sm font-medium text-white">Keine aktiven Delegationen</p>
+            <p className="mt-1 text-sm text-slate-500">Starte eine neue Delegation, sobald der nächste Scope klar ist.</p>
           </div>
         )}
       </div>
@@ -463,11 +463,11 @@ function SystemHealthCard({ stats }: { stats: DashboardStats | null }) {
 
   return (
     <section className="col-span-12 rounded-xl border border-white/[0.08] bg-white/[0.03] p-6 shadow-sm shadow-black/20 lg:col-span-4">
-      <h3 className="text-lg font-semibold text-white">System Health</h3>
+      <h3 className="text-lg font-semibold text-white">Systemstatus</h3>
       <div className="mt-5 space-y-4">
         <HealthLine label="AI Provider" value={activeProviders > 0 ? `${activeProviders} aktiv` : 'einrichten'} ok={activeProviders > 0} href="/settings/providers" />
-        <HealthLine label="Tests" value={testsGreen > 0 ? `${testsGreen} gruen` : 'kein Lauf'} ok={testsGreen > 0} href="/analytics" />
-        <HealthLine label="AI Calls heute" value={aiCallsToday} ok href="/governance" />
+        <HealthLine label="Tests" value={testsGreen > 0 ? `${testsGreen} grün` : 'kein Lauf'} ok={testsGreen > 0} href="/analytics" />
+        <HealthLine label="KI-Aufrufe heute" value={aiCallsToday} ok href="/governance" />
       </div>
     </section>
   )
@@ -512,13 +512,13 @@ function DailyAssistantReadinessCard({ report }: { report: DailyReport | null })
     <section className="col-span-12 rounded-xl border border-white/[0.08] bg-white/[0.03] p-6 shadow-sm shadow-black/20 lg:col-span-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-white">Daily Assistant Readiness</h3>
+          <h3 className="text-lg font-semibold text-white">Tägliche Assistant-Bereitschaft</h3>
           <p className="mt-1 text-sm text-slate-500">
-            Betriebscheck fuer den Alltag: sicher, verbunden, beweisbar und handlungsfaehig.
+            Betriebscheck für den Alltag: sicher, verbunden, beweisbar und handlungsfähig.
           </p>
         </div>
         <span className={cx('inline-flex w-fit items-center rounded-full border px-2.5 py-1 text-xs font-semibold uppercase tracking-wide', statusTone)}>
-          {readiness?.status ?? 'loading'}
+          {readiness?.status ?? 'lädt'}
         </span>
       </div>
 
@@ -550,7 +550,7 @@ function DailyAssistantReadinessCard({ report }: { report: DailyReport | null })
           ))}
           {!readiness && (
             <div className="rounded-lg border border-dashed border-white/[0.08] p-4 text-sm text-slate-500 sm:col-span-2">
-              Lade Daily Assistant Readiness...
+              Lade tägliche Assistant-Bereitschaft...
             </div>
           )}
         </div>
@@ -641,11 +641,11 @@ function DailyCriticReportCard({
     <section className="col-span-12 rounded-xl border border-white/[0.08] bg-white/[0.03] p-6 shadow-sm shadow-black/20 lg:col-span-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold text-white">Assistant Daily Report</h3>
+          <h3 className="text-lg font-semibold text-white">Täglicher Assistant Report</h3>
           <p className="mt-1 text-xs text-slate-500">LLM-neutraler Handoff ohne Secrets.</p>
         </div>
         <span className={cx('rounded-full border px-2.5 py-1 text-xs font-semibold uppercase tracking-wide', verdictTone)}>
-          {report?.executiveVerdict.status ?? 'loading'}
+          {report?.executiveVerdict.status ?? 'lädt'}
         </span>
       </div>
 
@@ -657,14 +657,14 @@ function DailyCriticReportCard({
           </div>
           <div className="min-w-0">
             <p className="text-sm font-medium text-white">
-              {latest ? `Delegation: ${latest.title}` : 'Report: MVP-Risiken und naechste Aufgaben'}
+              {latest ? `Delegation: ${latest.title}` : 'Report: MVP-Risiken und nächste Aufgaben'}
             </p>
             <p className="mt-1 text-sm leading-5 text-slate-500">
               {topWarning
                 ? topWarning.message
                 : latest
-                  ? latest.status === 'failed' ? 'Review noetig: Ausfuehrung fehlgeschlagen.' : 'Letzter Lauf abgeschlossen. Score zeigt die aktuelle Review-Qualitaet.'
-                  : report?.risks[0]?.title ?? 'Sobald Daten vorhanden sind, erscheint hier die kritische Qualitaetslage.'}
+                  ? latest.status === 'failed' ? 'Review nötig: Ausführung fehlgeschlagen.' : 'Letzter Lauf abgeschlossen. Score zeigt die aktuelle Review-Qualität.'
+                  : report?.risks[0]?.title ?? 'Sobald Daten vorhanden sind, erscheint hier die kritische Qualitätslage.'}
             </p>
           </div>
         </div>
@@ -676,7 +676,7 @@ function DailyCriticReportCard({
         </p>
         <div className="mt-3 grid grid-cols-3 gap-2 text-center">
           <MetricPill label="Risiken" value={report?.risks.length ?? '--'} />
-          <MetricPill label="Actions" value={report?.nextActions.length ?? '--'} />
+          <MetricPill label="Aktionen" value={report?.nextActions.length ?? '--'} />
           <MetricPill label="Coverage" value={report ? `${report.status.quality.criticCoveragePct}%` : '--'} />
         </div>
       </div>
@@ -775,7 +775,7 @@ function DailyCriticReportCard({
               href={loopStep.href}
               className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3 text-sm font-semibold text-emerald-100 transition-colors hover:border-emerald-300/35 hover:bg-emerald-400/15"
             >
-              Naechste Aktion oeffnen
+              Nächste Aktion öffnen
               <ArrowRight className="h-4 w-4" />
             </Link>
           )}
@@ -790,7 +790,7 @@ function DailyCriticReportCard({
           className={buttonClassName('primary', 'min-h-10 flex-1 disabled:pointer-events-none disabled:opacity-50')}
         >
           <Clipboard className="h-4 w-4" />
-          {copyState === 'copied' ? 'Kopiert' : copyState === 'failed' ? 'Manuell kopieren' : 'Fuer LLM kopieren'}
+          {copyState === 'copied' ? 'Kopiert' : copyState === 'failed' ? 'Manuell kopieren' : 'Für LLM kopieren'}
         </button>
         <a
           href="/api/reports/daily?format=markdown"
@@ -841,7 +841,7 @@ function QuickIdeaCard({
         </div>
         <div>
           <h3 className="text-lg font-semibold text-white">Schnell eine neue Idee eingeben</h3>
-          <p className="mt-1 text-sm text-slate-500">Aus einer Idee wird der naechste strukturierte Brief.</p>
+          <p className="mt-1 text-sm text-slate-500">Aus einer Idee wird der nächste strukturierte Brief.</p>
         </div>
       </div>
 
@@ -991,7 +991,7 @@ function GrokHandoffCard() {
       {handoffState === 'idle' && (
         <div className="mt-4 rounded-lg border border-dashed border-violet-500/20 p-4 text-center">
           <p className="text-sm text-slate-500">
-            Erstelle ein Handoff-Paket um den Report + Prompt fuer Grok zu kopieren und Feedback zurueck zu importieren.
+            Erstelle ein Handoff-Paket, um den Report + Prompt für Grok zu kopieren und Feedback zurück zu importieren.
           </p>
         </div>
       )}
@@ -1000,7 +1000,7 @@ function GrokHandoffCard() {
         <div className="mt-4 space-y-4">
           {/* Context summary */}
           <div className="grid grid-cols-2 gap-2">
-            <MetricPill label="Aktive Delegations" value={handoff.safeContext.activeDelegations} />
+            <MetricPill label="Aktive Delegationen" value={handoff.safeContext.activeDelegations} />
             <MetricPill label="Offene Approvals" value={handoff.safeContext.pendingApprovals} />
           </div>
 
@@ -1069,7 +1069,7 @@ export function CommandCenterPrinciples() {
   return (
     <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/[0.04] px-4 py-3 text-xs text-cyan-100">
       <ShieldCheck className="mr-2 inline h-4 w-4 align-text-bottom text-cyan-300" />
-      Fokus: naechste sinnvolle Aktion, klare Delegation, kritischer Review, kein ueberladenes Swarm-Dashboard.
+      Fokus: nächste sinnvolle Aktion, klare Delegation, kritischer Review, kein überladenes Swarm-Dashboard.
     </div>
   )
 }
