@@ -32,6 +32,7 @@ import type { PreflightResult } from '@/lib/preflight'
 import { AgentPhaseIndicator } from '@/components/delegation/AgentPhaseIndicator'
 import { inferAgentPhase } from '@/lib/delegations/agent-phase'
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection'
+import { AffectedFilesPanel } from '@/components/delegation/AffectedFilesPanel'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
   switch (status) {
@@ -484,8 +485,13 @@ export default function DelegationDetailPage() {
               </div>
               <h1 className="text-xl font-bold text-white leading-snug">{d.title || d.contract.goal}</h1>
               {/* Live phase indicator — shows current execution state at a glance */}
-              <div className="mt-2">
+              <div className="mt-2 flex flex-wrap items-start gap-3">
                 <AgentPhaseIndicator info={inferAgentPhase(d)} showProgress />
+                <AffectedFilesPanel
+                  logs={d.logs}
+                  summaryReport={d.summaryReport}
+                  isRunning={d.status === 'running'}
+                />
               </div>
               {d.contract.context && (
                 <p className="text-sm text-gray-500 mt-2 leading-relaxed">{d.contract.context}</p>

@@ -7,6 +7,7 @@ import type { AgentLog, Delegation, DelegationStatus } from '@/lib/models/delega
 import { Badge, EmptyState, Panel, buttonClassName, cx } from '@/components/ui/primitives'
 import { AgentPhaseIndicator } from '@/components/delegation/AgentPhaseIndicator'
 import { inferAgentPhase } from '@/lib/delegations/agent-phase'
+import { AffectedFilesPanel } from '@/components/delegation/AffectedFilesPanel'
 
 const REFRESH_MS = 5_000
 const MAX_VISIBLE = 8
@@ -232,6 +233,14 @@ function DelegationActivityCard({ delegation }: { delegation: Delegation }) {
           <ExternalLink className="h-3.5 w-3.5" />
         </Link>
       </div>
+
+      {/* Affected files — shown when available from report or running logs */}
+      <AffectedFilesPanel
+        logs={delegation.logs}
+        summaryReport={delegation.summaryReport}
+        isRunning={delegation.status === 'running'}
+        className="mt-3"
+      />
 
       <div className="mt-4 grid gap-2 sm:grid-cols-5">
         {phases.map(phase => (
