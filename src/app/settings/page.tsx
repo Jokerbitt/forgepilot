@@ -1242,6 +1242,43 @@ export default function SettingsPage() {
                 </select>
               </div>
             </div>
+
+            {/* M20.2: Multi-Delegation Queue Settings */}
+            <div className="mt-4 border-t border-white/[0.06] pt-4 space-y-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Queue &amp; Auto-Start</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Max. parallele Agents</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={config.maxConcurrentAgents ?? 2}
+                    onChange={e => setConfig({ ...config, maxConcurrentAgents: Math.max(1, parseInt(e.target.value) || 1) })}
+                    className={inputClassName}
+                  />
+                  <p className="text-[11px] text-slate-600 mt-1">Delegationen, die gleichzeitig laufen dürfen (Standard: 2)</p>
+                </div>
+                <div className="flex flex-col justify-center">
+                  <label className="flex items-center gap-3 cursor-pointer select-none">
+                    <div
+                      onClick={() => setConfig({ ...config, autoStartApproved: !config.autoStartApproved })}
+                      className={cx(
+                        'relative h-5 w-9 rounded-full transition-colors cursor-pointer',
+                        config.autoStartApproved ? 'bg-violet-600' : 'bg-white/[0.08]',
+                      )}
+                    >
+                      <span className={cx(
+                        'absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform',
+                        config.autoStartApproved ? 'translate-x-4' : 'translate-x-0.5',
+                      )} />
+                    </div>
+                    <span className="text-sm text-slate-300">Auto-Start genehmigte Delegationen</span>
+                  </label>
+                  <p className="text-[11px] text-slate-600 mt-1 ml-12">Neue &apos;approved&apos; Delegationen sofort starten</p>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
