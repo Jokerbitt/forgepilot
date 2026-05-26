@@ -362,18 +362,17 @@ export default function IdeaPage() {
       <div className="flex-1 flex flex-col items-center justify-start px-6 py-12 max-w-3xl mx-auto w-full">
 
         {/* Hero */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/[0.08] px-4 py-1.5 mb-6">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/[0.08] px-4 py-1.5 mb-5">
             <span className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />
-            <span className="text-xs font-semibold text-violet-300 tracking-wide">Idea → Production Paradigm</span>
+            <span className="text-xs font-semibold text-violet-300 tracking-wide">Plan Mode</span>
           </div>
           <h1 className="text-4xl font-bold tracking-tight text-white mb-3">
-            Deine Idee.<br />
-            <span className="text-violet-400">Sofort gebaut.</span>
+            Beschreibe, was du bauen willst.
           </h1>
           <p className="text-slate-400 text-lg max-w-xl mx-auto leading-relaxed">
-            Beschreibe was du bauen willst — ForgePilot erstellt den Brief,
-            die Aufgaben, und orchestriert die KI-Agenten vollautomatisch.
+            ForgePilot macht daraus einen verständlichen Plan, empfiehlt App-Typ und Datenbank
+            und bereitet die ersten Delegationen vor.
           </p>
         </div>
 
@@ -426,16 +425,16 @@ export default function IdeaPage() {
               <div className="border-b border-white/[0.05] px-4 py-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Planungsmodus</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Arbeitsweise</p>
                     <p className="mt-1 text-xs text-slate-600">
                       {planningMode === 'beginner'
-                        ? 'ForgePilot trifft Produkt- und Architekturentscheidungen automatisch.'
-                        : 'Du kannst Produktform und Datenhaltung selbst vorgeben.'}
+                        ? 'Empfohlen: ForgePilot waehlt sinnvolle Defaults und erklaert sie im Plan.'
+                        : 'Expertenmodus: du kannst Produktform und Datenhaltung selbst setzen.'}
                     </p>
                   </div>
                   <div className="grid grid-cols-2 rounded-xl border border-white/[0.08] bg-slate-950 p-1">
                     {([
-                      { value: 'beginner', label: 'Anfänger' },
+                      { value: 'beginner', label: 'Automatisch' },
                       { value: 'expert', label: 'Experte' },
                     ] as const).map(option => (
                       <button
@@ -455,24 +454,18 @@ export default function IdeaPage() {
                   </div>
                 </div>
                 {planningMode === 'beginner' ? (
-                  <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.07] p-4">
-                    <p className="text-sm font-semibold text-emerald-100">Anfänger-Modus: automatische Empfehlung aktiv</p>
+                  <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.07] px-4 py-3">
+                    <p className="text-sm font-semibold text-emerald-100">Automatik aktiv</p>
                     <p className="mt-1 text-xs leading-5 text-emerald-100/70">
-                      ForgePilot entscheidet selbst, ob Webapp, Desktop, Mobile oder Cross-platform sinnvoll ist und welche Datenhaltung passt. Die Begründung erscheint im erzeugten Brief.
+                      App-Typ, Datenbank, MVP-Schnitt und erste Delegationen werden empfohlen. Du bestaetigst erst, bevor Agenten loslegen.
                     </p>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      <div className="rounded-lg border border-emerald-500/15 bg-black/15 px-3 py-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-200/70">App-Typ</p>
-                        <p className="mt-1 text-xs text-emerald-50/80">ForgePilot empfiehlt automatisch</p>
-                      </div>
-                      <div className="rounded-lg border border-emerald-500/15 bg-black/15 px-3 py-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-200/70">Datenbank</p>
-                        <p className="mt-1 text-xs text-emerald-50/80">Produktiv sinnvoll statt JSON-Default</p>
-                      </div>
-                    </div>
                   </div>
                 ) : (
-                  <div className="mt-4 space-y-4">
+                  <details className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.025]">
+                    <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-200">
+                      Expertenoptionen anzeigen
+                    </summary>
+                    <div className="space-y-4 border-t border-white/[0.06] p-4">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Produktform</p>
                       <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -521,7 +514,8 @@ export default function IdeaPage() {
                         ))}
                       </div>
                     </div>
-                  </div>
+                    </div>
+                  </details>
                 )}
               </div>
               <textarea
@@ -546,7 +540,7 @@ export default function IdeaPage() {
                     title="Idee schrittweise verfeinern (KI-Fragen → besserer Brief)"
                     className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium text-violet-400 hover:text-violet-300 border border-violet-800/50 hover:border-violet-700 bg-violet-950/20 hover:bg-violet-950/40 transition-all"
                   >
-                    <span>✨</span> Verfeinern
+                    Verfeinern
                   </button>
                   <button
                     onClick={() => void handleBuild()}
@@ -558,8 +552,7 @@ export default function IdeaPage() {
                         : 'bg-white/[0.04] text-slate-600 cursor-not-allowed',
                     )}
                   >
-                    <span>🚀</span>
-                    {hasAssistantPrompt ? 'Brief aus Vorschlag erstellen' : 'Build It'}
+                    {hasAssistantPrompt ? 'Brief aus Vorschlag erstellen' : 'Plan erstellen'}
                   </button>
                 </div>
               </div>

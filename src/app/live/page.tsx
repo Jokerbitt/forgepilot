@@ -45,7 +45,18 @@ interface StorageStatusResponse {
 interface ExecuteHealthResponse {
   ready?: boolean
   executionMode?: string
+  zeroKeyReady?: boolean
+  apiKeysOptional?: boolean
   checks?: Record<string, { ok: boolean; detail: string }>
+}
+
+interface CliStatusResponse {
+  activeMode?: 'claude-cli' | 'codex-cli' | 'claude-api' | 'openai-api' | 'simulation'
+  zeroKeyReady?: boolean
+  apiKeysOptional?: boolean
+  recommendation?: string
+  claude?: { available?: boolean; version?: string | null; detail?: string }
+  codex?: { available?: boolean; version?: string | null; detail?: string }
 }
 
 interface DailyReportResponse {
@@ -127,18 +138,29 @@ function statusIcon(tone: Tone) {
 
 async function fetchJson<T>(href: string, timeoutMs = 5000): Promise<{ ok: true; data: T } | { ok: false; detail: string }> {
   const controller = new AbortController()
-  const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
-  try {
+  let timeoutId: number | null = null
+  const timeoutPromise = new Promise<{ ok: false; detail: string }>(resolve => {
+    timeoutId = window.setTimeout(() => {
+      controller.abort()
+      resolve({ ok: false, detail: `Timeout nach ${Math.round(timeoutMs / 1000)}s` })
+    }, timeoutMs)
+  })
+
+  const fetchPromise = (async (): Promise<{ ok: true; data: T } | { ok: false; detail: string }> => {
     const res = await fetch(href, { cache: 'no-store', signal: controller.signal })
     if (!res.ok) return { ok: false, detail: `HTTP ${res.status}` }
     return { ok: true, data: await res.json() as T }
+  })()
+
+  try {
+    return await Promise.race([fetchPromise, timeoutPromise])
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       return { ok: false, detail: `Timeout nach ${Math.round(timeoutMs / 1000)}s` }
     }
     return { ok: false, detail: error instanceof Error ? error.message : 'Nicht erreichbar' }
   } finally {
-    window.clearTimeout(timeout)
+    if (timeoutId !== null) window.clearTimeout(timeoutId)
   }
 }
 
@@ -149,22 +171,25 @@ export default function LiveViewPage() {
   const [delegations, setDelegations] = useState<DelegationStatsResponse | null>(null)
   const [storage, setStorage] = useState<StorageStatusResponse | null>(null)
   const [executeHealth, setExecuteHealth] = useState<ExecuteHealthResponse | null>(null)
+  const [cliStatus, setCliStatus] = useState<CliStatusResponse | null>(null)
   const [dailyReport, setDailyReport] = useState<DailyReportResponse | null>(null)
   const [endpoints, setEndpoints] = useState<EndpointState[]>([])
 
   const refresh = async () => {
     setLoading(true)
-    const [healthRes, statsRes, storageRes, executeRes, reportRes] = await Promise.all([
+    const [healthRes, statsRes, storageRes, executeRes, cliRes, reportRes] = await Promise.all([
       fetchJson<{ status?: string }>('/api/health'),
       fetchJson<DelegationStatsResponse>('/api/delegations/stats'),
       fetchJson<StorageStatusResponse>('/api/storage-status'),
       fetchJson<ExecuteHealthResponse>('/api/execute-loop/health'),
+      fetchJson<CliStatusResponse>('/api/system/cli-status'),
       fetchJson<DailyReportResponse>('/api/reports/daily', 8000),
     ])
 
     if (statsRes.ok) setDelegations(statsRes.data)
     if (storageRes.ok) setStorage(storageRes.data)
     if (executeRes.ok) setExecuteHealth(executeRes.data)
+    if (cliRes.ok) setCliStatus(cliRes.data)
     if (reportRes.ok) setDailyReport(reportRes.data)
 
     setEndpoints([
@@ -193,6 +218,12 @@ export default function LiveViewPage() {
         href: '/api/execute-loop/health',
         status: executeRes.ok && executeRes.data.ready ? 'ready' : executeRes.ok ? 'attention' : 'blocked',
         detail: executeRes.ok ? executeRes.data.executionMode ?? 'Status verfügbar.' : executeRes.detail,
+      },
+      {
+        label: 'Zero-Key Agenten',
+        href: '/api/system/cli-status',
+        status: cliRes.ok && cliRes.data.zeroKeyReady ? 'ready' : cliRes.ok ? 'attention' : 'blocked',
+        detail: cliRes.ok ? cliRes.data.recommendation ?? cliRes.data.activeMode ?? 'Status verfügbar.' : cliRes.detail,
       },
       {
         label: 'Daily Report',
@@ -230,6 +261,13 @@ export default function LiveViewPage() {
   const provenRuns = dailyReport?.executeLoopEvidence?.provenRuns ?? 0
   const targetRuns = dailyReport?.executeLoopEvidence?.targetRuns ?? 5
   const previewUrl = selectedPath
+  const zeroKeyLabel = cliStatus?.activeMode === 'claude-cli'
+    ? 'Claude Max bereit'
+    : cliStatus?.activeMode === 'codex-cli'
+      ? 'Codex CLI bereit'
+      : cliStatus?.zeroKeyReady
+        ? 'CLI bereit'
+        : 'CLI prüfen'
 
   return (
     <main className="min-h-screen bg-[#08080d] px-5 py-6 text-slate-100 lg:px-8">
@@ -289,11 +327,55 @@ export default function LiveViewPage() {
           />
           <StatusCard
             icon={<Shield className="h-5 w-5" />}
-            label="Betrieb"
-            value={storage?.mode ?? dailyReport?.status?.operations?.storageMode ?? 'unbekannt'}
-            detail={dailyReport?.status?.operations?.authDisabled ? 'Login ist lokal deaktiviert.' : 'Login aktiv.'}
-            tone={dailyReport?.status?.operations?.authDisabled ? 'attention' : 'ready'}
+            label="Zero-Key Ausführung"
+            value={zeroKeyLabel}
+            detail={cliStatus?.recommendation ?? 'Claude/Codex CLI prüfen. API-Keys bleiben optional.'}
+            tone={cliStatus?.zeroKeyReady ? 'ready' : 'attention'}
           />
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Ausführungsmodus</p>
+                <h2 className="mt-1 text-xl font-bold text-white">{zeroKeyLabel}</h2>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+                  ForgePilot bevorzugt authentifizierte lokale CLIs, damit du Claude Max oder Codex ohne API-Key
+                  nutzen kannst. API-Keys sind nur ein optionaler Fallback.
+                </p>
+              </div>
+              <span className={cx('inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold', toneClasses(cliStatus?.zeroKeyReady ? 'ready' : 'attention'))}>
+                {statusIcon(cliStatus?.zeroKeyReady ? 'ready' : 'attention')}
+                {cliStatus?.activeMode ?? 'lädt'}
+              </span>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <ToolReadiness
+                label="Claude Code / Max"
+                available={Boolean(cliStatus?.claude?.available)}
+                detail={cliStatus?.claude?.detail ?? 'Status wird geladen.'}
+                version={cliStatus?.claude?.version}
+              />
+              <ToolReadiness
+                label="Codex CLI"
+                available={Boolean(cliStatus?.codex?.available)}
+                detail={cliStatus?.codex?.detail ?? 'Status wird geladen.'}
+                version={cliStatus?.codex?.version}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-4">
+            <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Betrieb</p>
+            <p className="mt-1 text-xl font-bold text-white">{storage?.mode ?? dailyReport?.status?.operations?.storageMode ?? 'unbekannt'}</p>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              {dailyReport?.status?.operations?.authDisabled ? 'Login ist lokal deaktiviert, damit du vor Launch schnell testen kannst.' : 'Login ist aktiv.'}
+            </p>
+            <p className="mt-3 text-xs leading-5 text-slate-500">
+              Execute Loop: {executeHealth?.executionMode ?? 'noch nicht geladen'}
+            </p>
+          </div>
         </section>
 
         <LiveAgentActivityPanel />
@@ -389,6 +471,34 @@ export default function LiveViewPage() {
         </section>
       </div>
     </main>
+  )
+}
+
+function ToolReadiness({
+  label,
+  available,
+  detail,
+  version,
+}: {
+  label: string
+  available: boolean
+  detail: string
+  version?: string | null
+}) {
+  const tone: Tone = available ? 'ready' : 'attention'
+  return (
+    <div className="rounded-lg border border-white/[0.06] bg-white/[0.025] p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-100">{label}</p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">{detail}</p>
+        </div>
+        <span className={cx('shrink-0 rounded-full border px-2 py-1 text-[11px] font-semibold', toneClasses(tone))}>
+          {available ? 'Bereit' : 'Fehlt'}
+        </span>
+      </div>
+      {version && <p className="mt-2 truncate text-[11px] text-slate-600">{version}</p>}
+    </div>
   )
 }
 

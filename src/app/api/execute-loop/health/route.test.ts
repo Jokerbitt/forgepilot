@@ -28,12 +28,12 @@ describe('GET /api/execute-loop/health', () => {
     expect(body.executionMode).toBeDefined()
   })
 
-  it('returns status when claude CLI is missing', async () => {
+  it('returns status when CLI agents are missing', async () => {
     const { execSync } = await import('child_process')
     const { readStoredApiKeys } = await import('@/lib/connectors/config')
 
     vi.mocked(execSync).mockImplementation((cmd: string) => {
-      if ((cmd as string).includes('claude')) throw new Error('not found')
+      if ((cmd as string).includes('claude') || (cmd as string).includes('codex')) throw new Error('not found')
       return '' as unknown as ReturnType<typeof execSync>
     })
     vi.mocked(readStoredApiKeys).mockReturnValue({} as ReturnType<typeof readStoredApiKeys>)
@@ -44,5 +44,25 @@ describe('GET /api/execute-loop/health', () => {
 
     expect(res.status).toBe(200)
     expect(body.executionMode).toContain('simulation')
+  })
+
+  it('uses codex CLI as zero-key fallback when claude CLI is missing', async () => {
+    const { execSync } = await import('child_process')
+    const { readStoredApiKeys } = await import('@/lib/connectors/config')
+
+    vi.mocked(execSync).mockImplementation((cmd: string) => {
+      if ((cmd as string).includes('claude')) throw new Error('not found')
+      if ((cmd as string).includes('codex')) return 'codex 1.0.0' as unknown as ReturnType<typeof execSync>
+      return '' as unknown as ReturnType<typeof execSync>
+    })
+    vi.mocked(readStoredApiKeys).mockReturnValue({} as ReturnType<typeof readStoredApiKeys>)
+
+    const { GET } = await import('./route')
+    const res = await GET()
+    const body = await res.json() as { executionMode: string; zeroKeyReady: boolean }
+
+    expect(res.status).toBe(200)
+    expect(body.executionMode).toContain('codex-cli')
+    expect(body.zeroKeyReady).toBe(true)
   })
 })
