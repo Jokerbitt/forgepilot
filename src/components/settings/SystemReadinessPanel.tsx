@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { AIStatus } from '@/app/api/ai/status/route'
 import type { ConnectorHealth } from '@/lib/connectors/types'
+import type { SmokeTestResult } from '@/app/api/smoke-test/route'
 import { cx } from '@/components/ui/primitives'
 
 interface ConnectorHealthResponse {
@@ -68,13 +69,15 @@ export function SystemReadinessPanel() {
     { id: 'linear', label: 'Linear', icon: '▲', status: 'loading', detail: 'Prüfe Verbindung…' },
     { id: 'ai', label: 'AI Provider', icon: '⚡', status: 'loading', detail: 'Prüfe Verfügbarkeit…' },
     { id: 'ollama', label: 'Ollama (lokal)', icon: '🖥', status: 'loading', detail: 'Prüfe lokalen Server…' },
+    { id: 'smoke', label: 'Smoke Test', icon: '🔬', status: 'loading', detail: 'Prüfe Systemgesundheit…' },
   ])
 
   useEffect(() => {
     const load = async () => {
-      const [connRes, aiRes] = await Promise.allSettled([
+      const [connRes, aiRes, smokeRes] = await Promise.allSettled([
         fetch('/api/connectors/health'),
         fetch('/api/ai/status'),
+        fetch('/api/smoke-test'),
       ])
 
       const updated: SystemCard[] = []
@@ -161,6 +164,21 @@ export function SystemReadinessPanel() {
         hint: !ollamaRunning ? 'ollama serve starten für lokale Ausführung' : undefined,
       })
 
+      // ── Smoke Test ────────────────────────────────────────────────────────────
+      let smokeResult: SmokeTestResult | undefined
+      if (smokeRes.status === 'fulfilled') {
+        try { smokeResult = await smokeRes.value.json() as SmokeTestResult } catch { /* ignore */ }
+      }
+
+      updated.push({
+        id: 'smoke',
+        label: 'Smoke Test',
+        icon: '🔬',
+        status: smokeResult?.ok ? 'ok' : smokeResult ? 'error' : 'warn',
+        detail: smokeResult?.summary ?? 'Nicht erreichbar',
+        hint: smokeResult && !smokeResult.ok ? 'API-Endpoint prüfen' : undefined,
+      })
+
       setCards(updated)
     }
 
@@ -195,7 +213,7 @@ export function SystemReadinessPanel() {
           {anyError ? 'Aktion erforderlich' : anyWarn ? 'Optionale Verbindungen fehlen' : 'Alle Systeme verbunden'}
         </span>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         {cards.map(card => (
           <SystemCardView key={card.id} card={card} />
         ))}

@@ -98,7 +98,8 @@ ${dod}
    (run type-check BEFORE build — never in parallel)
 6. Commit: git commit -m "${commitPrefix}: <description>"
 7. PR: gh pr create --title "${commitPrefix}: ${c.goal.substring(0, 60).replace(/"/g, "'")}" --body "## Summary\\n- <bullets>\\n\\n## Test plan\\n- [ ] tests pass"
-8. Final output: print DONE: <one-sentence summary>
+8. Smoke-test: curl -sf http://localhost:3000/api/smoke-test | grep '"ok":true' || echo "ESCALATION: smoke-test failed — UI regression detected"
+9. Final output: print DONE: <one-sentence summary>
 \`\`\`
 
 ## Anti-drift rules (critical — read before each major action)
