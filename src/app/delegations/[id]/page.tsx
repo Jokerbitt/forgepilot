@@ -29,6 +29,10 @@ import { InlineNoteEditor } from '@/components/delegation/InlineNoteEditor'
 import { DurationBar } from '@/components/delegation/DurationBar'
 import { DelegationTagEditor } from '@/components/delegation/DelegationTagEditor'
 import type { PreflightResult } from '@/lib/preflight'
+import { AgentPhaseIndicator } from '@/components/delegation/AgentPhaseIndicator'
+import { inferAgentPhase } from '@/lib/delegations/agent-phase'
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection'
+import { AffectedFilesPanel } from '@/components/delegation/AffectedFilesPanel'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
   switch (status) {
@@ -480,6 +484,15 @@ export default function DelegationDetailPage() {
                 )}
               </div>
               <h1 className="text-xl font-bold text-white leading-snug">{d.title || d.contract.goal}</h1>
+              {/* Live phase indicator — shows current execution state at a glance */}
+              <div className="mt-2 flex flex-wrap items-start gap-3">
+                <AgentPhaseIndicator info={inferAgentPhase(d)} showProgress />
+                <AffectedFilesPanel
+                  logs={d.logs}
+                  summaryReport={d.summaryReport}
+                  isRunning={d.status === 'running'}
+                />
+              </div>
               {d.contract.context && (
                 <p className="text-sm text-gray-500 mt-2 leading-relaxed">{d.contract.context}</p>
               )}
@@ -1075,8 +1088,11 @@ export default function DelegationDetailPage() {
 
           {/* Contract Details */}
           <div className="space-y-4">
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Contract</h2>
+            <CollapsibleSection
+              title="Technische Details"
+              collapsedHint={`${d.executionRoute} · Risk ${d.contract.riskClass} · $${d.contract.maxBudgetUsd.toFixed(2)}`}
+              defaultOpen={false}
+            >
               <dl className="space-y-2 text-sm">
                 <div className="flex justify-between gap-2">
                   <dt className="text-gray-500">Route</dt>
@@ -1113,7 +1129,7 @@ export default function DelegationDetailPage() {
                   </div>
                 )}
               </dl>
-            </div>
+            </CollapsibleSection>
 
             <AutopilotReadinessBadge contract={d.contract} showReasons />
 
@@ -1244,10 +1260,13 @@ export default function DelegationDetailPage() {
         {/* Agent Run Replay */}
         <AgentRunReplayView delegationId={id} />
 
-        {/* Allowed Tools */}
+        {/* Allowed Tools — collapsible expert detail */}
         {d.contract.allowedTools?.length > 0 && (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Erlaubte Tools</h2>
+          <CollapsibleSection
+            title="Erlaubte Tools"
+            collapsedHint={`${d.contract.allowedTools.length} Tools`}
+            defaultOpen={false}
+          >
             <div className="flex flex-wrap gap-1.5">
               {d.contract.allowedTools.map(tool => (
                 <span key={tool} className="px-2 py-0.5 text-xs rounded bg-gray-800 border border-gray-700 text-gray-400 font-mono">
@@ -1255,7 +1274,7 @@ export default function DelegationDetailPage() {
                 </span>
               ))}
             </div>
-          </div>
+          </CollapsibleSection>
         )}
 
         {/* Comment Thread */}
