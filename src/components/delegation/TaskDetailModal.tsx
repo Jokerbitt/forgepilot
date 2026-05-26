@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Delegation, DelegationStatus, ExecutionRoute, PrivacyMode, TaskType } from '@/lib/models/delegation'
 import type { RiskClass } from '@/lib/models/work-item'
+import { captureError } from '@/lib/logger/browser'
 
 interface TaskDetailModalProps {
   delegation: Delegation | null
@@ -107,7 +108,7 @@ export function TaskDetailModal({ delegation, isOpen, onClose }: TaskDetailModal
       onClose()
       router.refresh()
     } catch (err) {
-      console.error(err)
+      captureError(err, 'TaskDetailModal:save')
       setSaving(false)
     }
   }
@@ -145,7 +146,7 @@ export function TaskDetailModal({ delegation, isOpen, onClose }: TaskDetailModal
       onClose()
       router.refresh()
     } catch (err) {
-      console.error(err)
+      captureError(err, 'TaskDetailModal:save')
       setSaving(false)
     }
   }

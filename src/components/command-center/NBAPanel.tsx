@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { NBARecommendation } from '@/lib/models/nba'
 import { NBACard } from './NBACard'
+import { captureError } from '@/lib/logger/browser'
 
 export function NBAPanel() {
   const [recs, setRecs] = useState<NBARecommendation[]>([])
@@ -19,7 +20,7 @@ export function NBAPanel() {
       setRecs(data.recommendations || [])
       setLastRefreshed(new Date())
     } catch (err) {
-      console.error(err)
+      captureError(err, 'NBAPanel:fetchRecs')
     } finally {
       setLoading(false)
       setRefreshing(false)

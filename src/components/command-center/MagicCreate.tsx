@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ManualTicketModal } from './ManualTicketModal'
 import { MagicConfirmModal } from './MagicConfirmModal'
+import { captureError } from '@/lib/logger/browser'
 
 const SUGGESTIONS = [
   "✨ Neues Feature: ",
@@ -38,7 +39,7 @@ export function MagicCreate() {
           setAvailableMilestones(data.milestones)
         }
       }
-    }).catch(console.error)
+    }).catch(err => captureError(err, 'MagicCreate:fetch'))
   }, [])
 
   useEffect(() => {
@@ -77,7 +78,7 @@ export function MagicCreate() {
       setPrompt('')
       router.refresh()
     } catch (error) {
-      console.error('Failed to create ticket', error)
+      captureError(error, 'MagicCreate:createTicket')
       setLoading(false)
     }
   }

@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import Link from 'next/link'
+import { captureError } from '@/lib/logger/browser'
 
 export default function GlobalError({
   error,
@@ -11,9 +12,7 @@ export default function GlobalError({
   reset: () => void
 }) {
   useEffect(() => {
-    // Client component — Pino is Node-only. Sentry (M97) captures this automatically.
-    // eslint-disable-next-line no-console
-    console.error('[page.crash]', { message: error.message, digest: error.digest })
+    captureError(error, 'page.crash')
   }, [error])
 
   return (
