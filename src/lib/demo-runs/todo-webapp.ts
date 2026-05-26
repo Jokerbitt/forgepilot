@@ -221,3 +221,86 @@ export function buildTodoWebAppDemoRun(now = new Date(), ids?: { briefId?: strin
 
   return { brief, delegation, appPreviewHref }
 }
+
+export function buildTodoWebAppRunnerPrDelegation(
+  now = new Date(),
+  ids?: { briefId?: string; delegationId?: string },
+): Delegation {
+  const delegationId = ids?.delegationId ?? randomUUID()
+  const briefId = ids?.briefId
+  const createdAt = now.toISOString()
+
+  return {
+    id: delegationId,
+    title: 'Runner PR Proof: ToDo Planner Persistenz',
+    briefId,
+    briefTitle: briefId ? 'Demo: ToDo Planner WebApp' : undefined,
+    status: 'approved',
+    executionRoute: 'runner',
+    costEstimateUsd: 0.08,
+    actualCostUsd: 0,
+    priority: 10,
+    tags: ['runner-pr-proof', 'todo-webapp', 'first-real-app-run'],
+    createdAt,
+    updatedAt: createdAt,
+    contract: {
+      id: `${delegationId}-contract`,
+      workItemId: 'todo-planner-persistence-proof',
+      goal: [
+        'Make the ToDo Planner demo feel like a real small app by persisting tasks in localStorage,',
+        'adding a reset-to-demo action, and keeping the UI simple and understandable.',
+      ].join(' '),
+      context: [
+        'This is the hard First Real App Run proof after the demo harness.',
+        'Work only on the ToDo Planner demo surface and closely related tests.',
+        'Do not redesign ForgePilot globally.',
+        'Keep the experience German-first and beginner-friendly.',
+        'The app must still work without API keys.',
+      ].join('\n'),
+      taskType: 'feature',
+      definitionOfDone: [
+        'Tasks persist across page reloads via localStorage.',
+        'A visible reset action restores the original demo tasks.',
+        'The next-action/progress area still updates when tasks are toggled or added.',
+        'Add or update a focused test for the changed ToDo demo behavior where practical.',
+        'Run npm run type-check and npm run lint before creating the PR.',
+      ],
+      riskClass: 'A',
+      maxBudgetUsd: 0.25,
+      maxCostUsd: 0.5,
+      allowedTools: ['read', 'write', 'shell', 'git', 'gh'],
+      branchStrategy: 'feature',
+      requiresApproval: false,
+      privacyMode: 'local',
+      llmModel: 'claude-cli',
+      outputMode: 'stream',
+      skillCategory: 'ui-component',
+      allowedFilePatterns: [
+        'src/app/demo/todo-planner/**',
+        'src/lib/demo-runs/**',
+        'src/components/**/todo**',
+        'src/**/*.test.ts',
+        'src/**/*.test.tsx',
+      ],
+      createdAt,
+      llmProvider: 'claude-cli',
+      toolPolicy: 'code-write',
+      outputPolicy: 'pr-and-writeback',
+      approvalMode: 'auto',
+      writeScope: ['src/app/demo/todo-planner', 'src/lib/demo-runs'],
+      executionRoute: 'runner',
+    },
+    logs: [
+      {
+        timestamp: createdAt,
+        type: 'info',
+        message: 'Runner-PR-Beweis vorbereitet: kleiner Persistenzauftrag fuer die ToDo Planner Demo.',
+      },
+      {
+        timestamp: createdAt,
+        type: 'thought',
+        message: 'Scope bewusst klein gehalten: localStorage, Reset, UX-Klarheit, PR statt grossem Produktumbau.',
+      },
+    ],
+  }
+}

@@ -86,9 +86,20 @@ interface DailyReportResponse {
 interface DemoRunResponse {
   ok?: boolean
   title?: string
+  projectId?: string
   projectHref?: string
   delegationHref?: string
   appPreviewHref?: string
+  nextAction?: string
+  error?: string
+}
+
+interface RunnerPrResponse {
+  ok?: boolean
+  reused?: boolean
+  delegationHref?: string
+  status?: string
+  execution?: { started?: boolean; mode?: string; error?: string } | null
   nextAction?: string
   error?: string
 }
@@ -191,6 +202,8 @@ export default function LiveViewPage() {
   const [dailyReport, setDailyReport] = useState<DailyReportResponse | null>(null)
   const [demoRun, setDemoRun] = useState<DemoRunResponse | null>(null)
   const [demoRunLoading, setDemoRunLoading] = useState(false)
+  const [runnerPr, setRunnerPr] = useState<RunnerPrResponse | null>(null)
+  const [runnerPrLoading, setRunnerPrLoading] = useState(false)
   const [endpoints, setEndpoints] = useState<EndpointState[]>([])
 
   const refresh = async () => {
@@ -454,6 +467,64 @@ export default function LiveViewPage() {
               )}
             </div>
           )}
+          <div className="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/[0.08] px-4 py-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-amber-100">Haerterer Produktionsbeweis</p>
+                <p className="mt-1 max-w-3xl text-xs leading-5 text-amber-100/70">
+                  Erstellt eine kleine echte Runner-Delegation: ToDo Planner Aufgaben per localStorage speichern,
+                  Reset-Aktion ergaenzen, validieren und PR erzeugen. Scope bleibt eng, damit der Runner realistisch fertig wird.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={runnerPrLoading}
+                onClick={async () => {
+                  setRunnerPrLoading(true)
+                  setRunnerPr(null)
+                  try {
+                    const res = await fetch('/api/demo-runs/todo-webapp/runner-pr', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ execute: true, briefId: demoRun?.projectId }),
+                    })
+                    const data = await res.json() as RunnerPrResponse
+                    setRunnerPr(res.ok ? data : { error: data.error ?? `HTTP ${res.status}` })
+                    await refresh()
+                  } catch (error) {
+                    setRunnerPr({ error: error instanceof Error ? error.message : 'Runner-PR konnte nicht gestartet werden.' })
+                  } finally {
+                    setRunnerPrLoading(false)
+                  }
+                }}
+                className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-amber-400/50 bg-amber-500/15 px-3.5 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <PlayCircle className="h-4 w-4" />
+                {runnerPrLoading ? 'Runner startet...' : 'Echten Runner-PR starten'}
+              </button>
+            </div>
+            {runnerPr && (
+              <div className={cx(
+                'mt-3 rounded-md border px-3 py-2 text-sm',
+                runnerPr.error || runnerPr.execution?.error
+                  ? 'border-rose-500/25 bg-rose-500/10 text-rose-200'
+                  : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100',
+              )}>
+                {runnerPr.error || runnerPr.execution?.error ? (
+                  <p>{runnerPr.error ?? runnerPr.execution?.error}</p>
+                ) : (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p>
+                      {runnerPr.execution?.started
+                        ? `Runner gestartet (${runnerPr.execution.mode ?? 'auto'}).`
+                        : runnerPr.nextAction}
+                    </p>
+                    {runnerPr.delegationHref && <Link href={runnerPr.delegationHref} className={buttonClassName('secondary')}>Runner-Delegation</Link>}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </section>
 
         <LiveAgentActivityPanel />

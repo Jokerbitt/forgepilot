@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTodoWebAppDemoRun } from './todo-webapp'
+import { buildTodoWebAppDemoRun, buildTodoWebAppRunnerPrDelegation } from './todo-webapp'
 
 describe('buildTodoWebAppDemoRun', () => {
   it('creates a project brief, completed delegation, logs and app preview link', () => {
@@ -21,5 +21,19 @@ describe('buildTodoWebAppDemoRun', () => {
     expect(run.delegation.summaryReport?.filesAdded).toContain('src/app/demo/todo-planner/page.tsx')
     expect(run.delegation.criticScore?.verdict).toBe('approved')
     expect(run.appPreviewHref).toBe('/demo/todo-planner')
+  })
+
+  it('creates a narrow approved runner PR proof delegation', () => {
+    const delegation = buildTodoWebAppRunnerPrDelegation(
+      new Date('2026-05-26T10:00:00.000Z'),
+      { briefId: 'brief-demo', delegationId: '22222222-2222-4222-8222-222222222222' },
+    )
+
+    expect(delegation.status).toBe('approved')
+    expect(delegation.executionRoute).toBe('runner')
+    expect(delegation.contract.maxBudgetUsd).toBeGreaterThan(0)
+    expect(delegation.contract.definitionOfDone).toContain('Tasks persist across page reloads via localStorage.')
+    expect(delegation.contract.allowedFilePatterns).toContain('src/app/demo/todo-planner/**')
+    expect(delegation.tags).toContain('runner-pr-proof')
   })
 })
