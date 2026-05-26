@@ -257,6 +257,11 @@ export default function DelegationDetailPage() {
   // M230: clone delegation
   const [cloningDelegation, setCloningDelegation] = useState(false)
 
+  // Local merge
+  const [merging, setMerging] = useState(false)
+  const [mergeResult, setMergeResult] = useState<{ merged: boolean; mergeCommit?: string; baseBranch?: string; githubRemote?: boolean } | null>(null)
+  const [mergeError, setMergeError] = useState<string | null>(null)
+
   // App Preview
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -303,6 +308,25 @@ export default function DelegationDetailPage() {
       alert('Qualitäts-Check konnte nicht gestartet werden.')
     } finally {
       setQualityCheckLoading(false)
+    }
+  }
+
+  const handleMerge = async () => {
+    if (!delegation) return
+    setMerging(true)
+    setMergeError(null)
+    try {
+      const res = await fetch(`/api/delegations/${id}/merge`, { method: 'POST' })
+      const data = await res.json() as { merged?: boolean; mergeCommit?: string; baseBranch?: string; githubRemote?: boolean; error?: string }
+      if (res.ok && data.merged) {
+        setMergeResult(data as { merged: boolean; mergeCommit?: string; baseBranch?: string; githubRemote?: boolean })
+      } else {
+        setMergeError(data.error ?? 'Merge fehlgeschlagen')
+      }
+    } catch {
+      setMergeError('Netzwerkfehler beim Mergen')
+    } finally {
+      setMerging(false)
     }
   }
 
@@ -1342,6 +1366,88 @@ export default function DelegationDetailPage() {
                   '▶ Im Browser öffnen'
                 )}
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Merge + PR Panel — shown when completed */}
+        {d.status === 'completed' && (
+          <div className="rounded-xl border border-slate-700/50 bg-slate-900/20 p-4">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Ergebnis übernehmen</p>
+            <div className="flex flex-wrap items-center gap-2">
+
+              {/* Merge in main */}
+              {!mergeResult ? (
+                <button
+                  onClick={handleMerge}
+                  disabled={merging}
+                  className="flex items-center gap-2 rounded-lg border border-violet-700/60 bg-violet-950/30 px-4 py-2 text-sm font-semibold text-violet-300 hover:border-violet-500 hover:text-violet-200 transition-colors disabled:opacity-50"
+                >
+                  {merging ? (
+                    <>
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border border-violet-400 border-t-transparent" />
+                      Mergt…
+                    </>
+                  ) : (
+                    <>⎇ In main mergen</>
+                  )}
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 rounded-lg border border-emerald-800/50 bg-emerald-950/20 px-3 py-2">
+                  <span className="text-emerald-400 text-sm">✓ Gemergt</span>
+                  {mergeResult.mergeCommit && (
+                    <span className="font-mono text-xs text-slate-500">{mergeResult.mergeCommit}</span>
+                  )}
+                  {mergeResult.baseBranch && (
+                    <span className="text-xs text-slate-600">→ {mergeResult.baseBranch}</span>
+                  )}
+                </div>
+              )}
+
+              {/* GitHub PR — always available for completed delegations */}
+              {!d.summaryReport?.prUrl ? (
+                <button
+                  onClick={handleCreatePR}
+                  disabled={creatingPR}
+                  className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800/50 px-4 py-2 text-sm font-semibold text-slate-300 hover:border-slate-400 hover:text-white transition-colors disabled:opacity-50"
+                >
+                  {creatingPR ? (
+                    <>
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border border-slate-400 border-t-transparent" />
+                      Erstellt PR…
+                    </>
+                  ) : (
+                    <>⤴ GitHub PR erstellen</>
+                  )}
+                </button>
+              ) : (
+                <a
+                  href={d.summaryReport.prUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 rounded-lg border border-emerald-800/50 bg-emerald-950/20 px-3 py-2 text-sm font-semibold text-emerald-400 hover:text-emerald-300 transition-colors"
+                >
+                  ⤴ PR #{d.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? ''}
+                  {d.summaryReport.prState === 'merged' && (
+                    <span className="text-xs text-violet-400">· Merged</span>
+                  )}
+                </a>
+              )}
+
+              {/* Errors */}
+              {mergeError && (
+                <p className="w-full text-xs text-red-400 mt-1">{mergeError}</p>
+              )}
+              {prError && (
+                <p className="w-full text-xs text-red-400 mt-1">{prError}</p>
+              )}
+
+              {/* Hint after merge: GitHub PR available */}
+              {mergeResult?.githubRemote && !d.summaryReport?.prUrl && (
+                <p className="w-full text-xs text-slate-500 mt-0.5">
+                  Repo hat GitHub Remote — du kannst jetzt auch einen PR erstellen.
+                </p>
+              )}
             </div>
           </div>
         )}
