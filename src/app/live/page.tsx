@@ -9,12 +9,13 @@ import {
   Clock3,
   ExternalLink,
   Monitor,
+  PlayCircle,
   RefreshCw,
   Route,
   Shield,
 } from 'lucide-react'
 import { LiveAgentActivityPanel } from '@/components/live/LiveAgentActivityPanel'
-import { cx } from '@/components/ui/primitives'
+import { buttonClassName, cx } from '@/components/ui/primitives'
 
 type Tone = 'ready' | 'attention' | 'blocked' | 'neutral'
 
@@ -82,6 +83,16 @@ interface DailyReportResponse {
   }
 }
 
+interface DemoRunResponse {
+  ok?: boolean
+  title?: string
+  projectHref?: string
+  delegationHref?: string
+  appPreviewHref?: string
+  nextAction?: string
+  error?: string
+}
+
 const previewPages = [
   {
     label: 'Command Center',
@@ -97,6 +108,11 @@ const previewPages = [
     label: 'Ausführen',
     href: '/delegations',
     description: 'Delegations prüfen, freigeben, starten und Ergebnisse kontrollieren.',
+  },
+  {
+    label: 'ToDo Demo',
+    href: '/demo/todo-planner',
+    description: 'Die erste testbare Demo-App aus dem ForgePilot-Run.',
   },
   {
     label: 'Branches',
@@ -173,6 +189,8 @@ export default function LiveViewPage() {
   const [executeHealth, setExecuteHealth] = useState<ExecuteHealthResponse | null>(null)
   const [cliStatus, setCliStatus] = useState<CliStatusResponse | null>(null)
   const [dailyReport, setDailyReport] = useState<DailyReportResponse | null>(null)
+  const [demoRun, setDemoRun] = useState<DemoRunResponse | null>(null)
+  const [demoRunLoading, setDemoRunLoading] = useState(false)
   const [endpoints, setEndpoints] = useState<EndpointState[]>([])
 
   const refresh = async () => {
@@ -376,6 +394,66 @@ export default function LiveViewPage() {
               Execute Loop: {executeHealth?.executionMode ?? 'noch nicht geladen'}
             </p>
           </div>
+        </section>
+
+        <section className="rounded-xl border border-violet-500/20 bg-violet-500/[0.07] p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-violet-200/70">First Real App Run</p>
+              <h2 className="mt-1 text-xl font-bold text-white">ToDo WebApp Testlauf starten</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-violet-100/75">
+                Erzeugt automatisch ein Projekt, eine Delegation, sichtbare Agenten-Logs und eine kleine testbare
+                ToDo Planner WebApp. Ohne API-Key, mit Claude/Codex CLI als bevorzugtem Zero-Key-Modus.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={demoRunLoading}
+              onClick={async () => {
+                setDemoRunLoading(true)
+                setDemoRun(null)
+                try {
+                  const res = await fetch('/api/demo-runs/todo-webapp', { method: 'POST' })
+                  const data = await res.json() as DemoRunResponse
+                  setDemoRun(res.ok ? data : { error: data.error ?? `HTTP ${res.status}` })
+                  if (res.ok) {
+                    await refresh()
+                    setSelectedPath(data.appPreviewHref ?? '/demo/todo-planner')
+                  }
+                } catch (error) {
+                  setDemoRun({ error: error instanceof Error ? error.message : 'Demo-Run konnte nicht gestartet werden.' })
+                } finally {
+                  setDemoRunLoading(false)
+                }
+              }}
+              className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg border border-violet-400/70 bg-violet-500 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-violet-500/20 transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <PlayCircle className="h-4 w-4" />
+              {demoRunLoading ? 'Starte Testlauf...' : 'ToDo WebApp Run starten'}
+            </button>
+          </div>
+          {demoRun && (
+            <div className={cx(
+              'mt-4 rounded-lg border px-4 py-3 text-sm',
+              demoRun.error ? 'border-rose-500/25 bg-rose-500/10 text-rose-200' : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100',
+            )}>
+              {demoRun.error ? (
+                <p>{demoRun.error}</p>
+              ) : (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-semibold">{demoRun.title ?? 'Demo-Run erstellt'}</p>
+                    <p className="mt-1 text-xs opacity-80">{demoRun.nextAction}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {demoRun.delegationHref && <Link href={demoRun.delegationHref} className={buttonClassName('secondary')}>Delegation</Link>}
+                    {demoRun.projectHref && <Link href={demoRun.projectHref} className={buttonClassName('secondary')}>Projekt</Link>}
+                    {demoRun.appPreviewHref && <Link href={demoRun.appPreviewHref} className={buttonClassName('primary')}>Demo oeffnen</Link>}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         <LiveAgentActivityPanel />
