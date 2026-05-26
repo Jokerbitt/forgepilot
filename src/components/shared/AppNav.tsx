@@ -57,13 +57,14 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/', key: 'commandCenter', icon: LayoutDashboard, section: 'Main' },
   { href: '/idea', key: 'ideaToProduction', icon: Lightbulb, section: 'Main', isNew: true },
+  { href: '/projects', key: 'plan', icon: FolderOpen, section: 'Main' },
   { href: '/live', key: 'liveView', icon: Monitor, section: 'Main' },
-  { href: '/delegations', key: 'execute', icon: ListChecks, section: 'Main' },
-  { href: '/knowledge', key: 'knowledge', icon: BookOpen, section: 'Main' },
-  { href: '/settings', key: 'settings', icon: Settings, section: 'Main' },
+  { href: '/delegations', key: 'execute', icon: ListChecks, section: 'More' },
+  { href: '/knowledge', key: 'knowledge', icon: BookOpen, section: 'More' },
+  { href: '/branches', key: 'system', icon: GitBranch, section: 'More' },
+  { href: '/settings', key: 'settings', icon: Settings, section: 'More' },
   { href: '/knowledge-cards', key: 'delegationLessons', icon: GraduationCap, section: 'More' },
   { href: '/briefing', key: 'briefing', icon: ClipboardList, section: 'More' },
-  { href: '/projects', key: 'plan', icon: FolderOpen, section: 'More' },
   { href: '/model-router', key: 'system', icon: GitBranch, section: 'More' },
   { href: '/inbox', key: 'inbox', icon: Inbox, section: 'More' },
   { href: '/notifications', key: 'notifications', icon: Bell, section: 'More' },
@@ -216,7 +217,7 @@ export function AppNav() {
                 isMoreActive ? 'text-violet-300' : 'text-slate-500'
               )}
             >
-              {ui.more}
+              Expert Tools
             </summary>
             <div className="pb-2">
               {moreNavItems.map(item => {
