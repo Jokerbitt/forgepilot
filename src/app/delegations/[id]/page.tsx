@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import type { Delegation, DelegationStatus, DelegationReport } from '@/lib/models/delegation'
+import type { Delegation, DelegationStatus, DelegationReport, DoDQualityCheck } from '@/lib/models/delegation'
 import type { OrchestratedRun } from '@/lib/agents/orchestrated-run'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
@@ -29,6 +29,10 @@ import { InlineNoteEditor } from '@/components/delegation/InlineNoteEditor'
 import { DurationBar } from '@/components/delegation/DurationBar'
 import { DelegationTagEditor } from '@/components/delegation/DelegationTagEditor'
 import type { PreflightResult } from '@/lib/preflight'
+import { AgentPhaseIndicator } from '@/components/delegation/AgentPhaseIndicator'
+import { inferAgentPhase } from '@/lib/delegations/agent-phase'
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection'
+import { AffectedFilesPanel } from '@/components/delegation/AffectedFilesPanel'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
   switch (status) {
@@ -252,6 +256,79 @@ export default function DelegationDetailPage() {
 
   // M230: clone delegation
   const [cloningDelegation, setCloningDelegation] = useState(false)
+
+  // Local merge
+  const [merging, setMerging] = useState(false)
+  const [mergeResult, setMergeResult] = useState<{ merged: boolean; mergeCommit?: string; baseBranch?: string; githubRemote?: boolean } | null>(null)
+  const [mergeError, setMergeError] = useState<string | null>(null)
+
+  // App Preview
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+  // DoD Quality Check
+  const [qualityCheck, setQualityCheck] = useState<DoDQualityCheck | null>(
+    (delegation as (Delegation & { qualityCheck?: DoDQualityCheck }) | null)?.qualityCheck ?? null
+  )
+  const [qualityCheckLoading, setQualityCheckLoading] = useState(false)
+
+  const handleOpenPreview = async () => {
+    if (!delegation) return
+    setPreviewLoading(true)
+    try {
+      const res = await fetch(`/api/delegations/${id}/preview`, { method: 'POST' })
+      const data = await res.json() as { url?: string; error?: string; message?: string }
+      if (data.url) {
+        setPreviewUrl(data.url)
+        window.open(data.url, '_blank', 'noopener')
+      } else if (data.message) {
+        alert(data.message)
+      } else if (data.error) {
+        alert(`Vorschau-Fehler: ${data.error}`)
+      }
+    } catch {
+      alert('Vorschau konnte nicht gestartet werden.')
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  const handleQualityCheck = async () => {
+    if (!delegation) return
+    setQualityCheckLoading(true)
+    try {
+      const res = await fetch(`/api/delegations/${id}/quality-check`, { method: 'POST' })
+      const data = await res.json() as { qualityCheck?: DoDQualityCheck; error?: string }
+      if (res.ok && data.qualityCheck) {
+        setQualityCheck(data.qualityCheck)
+      } else {
+        alert(`Qualitäts-Check fehlgeschlagen: ${data.error ?? 'Unbekannter Fehler'}`)
+      }
+    } catch {
+      alert('Qualitäts-Check konnte nicht gestartet werden.')
+    } finally {
+      setQualityCheckLoading(false)
+    }
+  }
+
+  const handleMerge = async () => {
+    if (!delegation) return
+    setMerging(true)
+    setMergeError(null)
+    try {
+      const res = await fetch(`/api/delegations/${id}/merge`, { method: 'POST' })
+      const data = await res.json() as { merged?: boolean; mergeCommit?: string; baseBranch?: string; githubRemote?: boolean; error?: string }
+      if (res.ok && data.merged) {
+        setMergeResult(data as { merged: boolean; mergeCommit?: string; baseBranch?: string; githubRemote?: boolean })
+      } else {
+        setMergeError(data.error ?? 'Merge fehlgeschlagen')
+      }
+    } catch {
+      setMergeError('Netzwerkfehler beim Mergen')
+    } finally {
+      setMerging(false)
+    }
+  }
 
   const handleClone = async () => {
     if (!delegation) return
@@ -480,6 +557,15 @@ export default function DelegationDetailPage() {
                 )}
               </div>
               <h1 className="text-xl font-bold text-white leading-snug">{d.title || d.contract.goal}</h1>
+              {/* Live phase indicator — shows current execution state at a glance */}
+              <div className="mt-2 flex flex-wrap items-start gap-3">
+                <AgentPhaseIndicator info={inferAgentPhase(d)} showProgress />
+                <AffectedFilesPanel
+                  logs={d.logs}
+                  summaryReport={d.summaryReport}
+                  isRunning={d.status === 'running'}
+                />
+              </div>
               {d.contract.context && (
                 <p className="text-sm text-gray-500 mt-2 leading-relaxed">{d.contract.context}</p>
               )}
@@ -1038,7 +1124,7 @@ export default function DelegationDetailPage() {
                 )}
               </div>
             )}
-            {d.summaryReport.keyPoints.length > 0 && (
+            {d.summaryReport?.keyPoints && d.summaryReport.keyPoints.length > 0 && (
               <ul className="mt-3 pt-3 border-t border-gray-800 space-y-1">
                 {d.summaryReport.keyPoints.map((pt, i) => (
                   <li key={i} className="text-sm text-green-400/80 flex items-start gap-1.5">
@@ -1075,8 +1161,11 @@ export default function DelegationDetailPage() {
 
           {/* Contract Details */}
           <div className="space-y-4">
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Contract</h2>
+            <CollapsibleSection
+              title="Technische Details"
+              collapsedHint={`${d.executionRoute} · Risk ${d.contract.riskClass}${d.contract.maxBudgetUsd != null ? ` · $${d.contract.maxBudgetUsd.toFixed(2)}` : ''}`}
+              defaultOpen={false}
+            >
               <dl className="space-y-2 text-sm">
                 <div className="flex justify-between gap-2">
                   <dt className="text-gray-500">Route</dt>
@@ -1104,7 +1193,7 @@ export default function DelegationDetailPage() {
                 )}
                 <div className="flex justify-between gap-2">
                   <dt className="text-gray-500">Budget</dt>
-                  <dd className="text-gray-300 font-mono">${d.contract.maxBudgetUsd.toFixed(2)}</dd>
+                  <dd className="text-gray-300 font-mono">{d.contract.maxBudgetUsd != null ? `$${d.contract.maxBudgetUsd.toFixed(2)}` : '–'}</dd>
                 </div>
                 {d.actualCostUsd != null && (
                   <div className="flex justify-between gap-2">
@@ -1113,7 +1202,7 @@ export default function DelegationDetailPage() {
                   </div>
                 )}
               </dl>
-            </div>
+            </CollapsibleSection>
 
             <AutopilotReadinessBadge contract={d.contract} showReasons />
 
@@ -1154,7 +1243,7 @@ export default function DelegationDetailPage() {
             )}
 
             {/* Summary Report keyPoints — only if no prUrl (prUrl case handled above) */}
-            {d.summaryReport && !d.summaryReport.prUrl && (
+            {d.summaryReport && !d.summaryReport.prUrl && d.summaryReport.keyPoints && (
               <div className="bg-gray-900 border border-green-900/40 rounded-xl p-4">
                 <h2 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Ergebnis</h2>
                 <ul className="space-y-1">
@@ -1204,12 +1293,12 @@ export default function DelegationDetailPage() {
               >
                 <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
                   <span className={`h-1.5 w-1.5 rounded-full ${d.status === 'running' ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`} />
-                  Execution Log
+                  Ausführungsprotokoll
                   {d.logs && d.logs.length > 0 && (
                     <span className="ml-1 text-[10px] text-gray-700 font-mono normal-case">{d.logs.length} Einträge</span>
                   )}
                 </h2>
-                <span className="text-xs text-gray-600">{logsExpanded ? '▲ Einklappen' : '▼ Logs anzeigen'}</span>
+                <span className="text-xs text-gray-600">{logsExpanded ? '▲ Einklappen' : '▼ Protokoll anzeigen'}</span>
               </button>
               {logsExpanded && (
                 <div className="px-4 pb-4">
@@ -1234,20 +1323,245 @@ export default function DelegationDetailPage() {
                       onStatusChange={handleLiveStatusChange}
                     />
                   </div>
-                  <p className="text-xs text-green-400/60 italic">Agent läuft — Logs anzeigen um Details zu sehen.</p>
+                  <p className="text-xs text-green-400/60 italic">Agent läuft — Protokoll anzeigen um Details zu sehen.</p>
                 </div>
               )}
             </div>
           </div>
         </div>
 
+        {/* App Preview — shown when completed and targetRepo is set */}
+        {d.status === 'completed' && (d as { targetRepo?: string }).targetRepo && (
+          <div className="rounded-xl border border-emerald-800/40 bg-emerald-950/10 p-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-emerald-300">Ergebnis ansehen</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Agent hat Änderungen auf einen Feature-Branch committed. Starte einen Preview-Server um die App zu testen.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {previewUrl && (
+                <a
+                  href={previewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-emerald-400 hover:text-emerald-300 underline font-mono"
+                >
+                  {previewUrl}
+                </a>
+              )}
+              <button
+                onClick={handleOpenPreview}
+                disabled={previewLoading}
+                className="rounded-lg border border-emerald-700/60 bg-emerald-900/30 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-800/40 hover:text-emerald-200 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {previewLoading ? (
+                  <>
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border border-emerald-400 border-t-transparent" />
+                    Starte…
+                  </>
+                ) : previewUrl ? (
+                  '↗ Erneut öffnen'
+                ) : (
+                  '▶ Im Browser öffnen'
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Merge + PR Panel — shown when completed */}
+        {d.status === 'completed' && (
+          <div className="rounded-xl border border-slate-700/50 bg-slate-900/20 p-4">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Ergebnis übernehmen</p>
+            <div className="flex flex-wrap items-center gap-2">
+
+              {/* Merge in main */}
+              {!mergeResult ? (
+                <button
+                  onClick={handleMerge}
+                  disabled={merging}
+                  className="flex items-center gap-2 rounded-lg border border-violet-700/60 bg-violet-950/30 px-4 py-2 text-sm font-semibold text-violet-300 hover:border-violet-500 hover:text-violet-200 transition-colors disabled:opacity-50"
+                >
+                  {merging ? (
+                    <>
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border border-violet-400 border-t-transparent" />
+                      Mergt…
+                    </>
+                  ) : (
+                    <>⎇ In main mergen</>
+                  )}
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 rounded-lg border border-emerald-800/50 bg-emerald-950/20 px-3 py-2">
+                  <span className="text-emerald-400 text-sm">✓ Gemergt</span>
+                  {mergeResult.mergeCommit && (
+                    <span className="font-mono text-xs text-slate-500">{mergeResult.mergeCommit}</span>
+                  )}
+                  {mergeResult.baseBranch && (
+                    <span className="text-xs text-slate-600">→ {mergeResult.baseBranch}</span>
+                  )}
+                </div>
+              )}
+
+              {/* GitHub PR — always available for completed delegations */}
+              {!d.summaryReport?.prUrl ? (
+                <button
+                  onClick={handleCreatePR}
+                  disabled={creatingPR}
+                  className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800/50 px-4 py-2 text-sm font-semibold text-slate-300 hover:border-slate-400 hover:text-white transition-colors disabled:opacity-50"
+                >
+                  {creatingPR ? (
+                    <>
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border border-slate-400 border-t-transparent" />
+                      Erstellt PR…
+                    </>
+                  ) : (
+                    <>⤴ GitHub PR erstellen</>
+                  )}
+                </button>
+              ) : (
+                <a
+                  href={d.summaryReport.prUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 rounded-lg border border-emerald-800/50 bg-emerald-950/20 px-3 py-2 text-sm font-semibold text-emerald-400 hover:text-emerald-300 transition-colors"
+                >
+                  ⤴ PR #{d.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? ''}
+                  {d.summaryReport.prState === 'merged' && (
+                    <span className="text-xs text-violet-400">· Merged</span>
+                  )}
+                </a>
+              )}
+
+              {/* Errors */}
+              {mergeError && (
+                <p className="w-full text-xs text-red-400 mt-1">{mergeError}</p>
+              )}
+              {prError && (
+                <p className="w-full text-xs text-red-400 mt-1">{prError}</p>
+              )}
+
+              {/* Hint after merge: GitHub PR available */}
+              {mergeResult?.githubRemote && !d.summaryReport?.prUrl && (
+                <p className="w-full text-xs text-slate-500 mt-0.5">
+                  Repo hat GitHub Remote — du kannst jetzt auch einen PR erstellen.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* DoD Quality Check — shown when completed and DoD defined */}
+        {d.status === 'completed' && d.contract.definitionOfDone?.length > 0 && (
+          <div className="rounded-xl border border-slate-700/50 bg-slate-900/30 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-200">DoD Qualitäts-Check</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  KI bewertet ob der Agent alle Kriterien erfüllt hat
+                </p>
+              </div>
+              {!qualityCheck && (
+                <button
+                  onClick={handleQualityCheck}
+                  disabled={qualityCheckLoading}
+                  className="rounded-lg border border-slate-600 bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-slate-500 hover:text-white transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {qualityCheckLoading ? (
+                    <>
+                      <span className="h-2.5 w-2.5 animate-spin rounded-full border border-slate-400 border-t-transparent" />
+                      Prüft…
+                    </>
+                  ) : '✦ Jetzt prüfen'}
+                </button>
+              )}
+              {qualityCheck && (
+                <button
+                  onClick={handleQualityCheck}
+                  disabled={qualityCheckLoading}
+                  className="text-xs text-slate-600 hover:text-slate-400 transition-colors disabled:opacity-50"
+                >
+                  {qualityCheckLoading ? 'Prüft…' : '↺ Neu prüfen'}
+                </button>
+              )}
+            </div>
+
+            {qualityCheck && (
+              <>
+                {/* Verdict banner */}
+                <div className={`rounded-lg px-3 py-2 flex items-center justify-between ${
+                  qualityCheck.verdict === 'passed'
+                    ? 'bg-emerald-950/40 border border-emerald-800/50'
+                    : qualityCheck.verdict === 'partial'
+                    ? 'bg-amber-950/40 border border-amber-800/50'
+                    : 'bg-red-950/40 border border-red-800/50'
+                }`}>
+                  <span className={`text-sm font-bold ${
+                    qualityCheck.verdict === 'passed' ? 'text-emerald-300'
+                    : qualityCheck.verdict === 'partial' ? 'text-amber-300'
+                    : 'text-red-300'
+                  }`}>
+                    {qualityCheck.verdict === 'passed' ? '✅ Bestanden'
+                      : qualityCheck.verdict === 'partial' ? '⚠️ Teilweise erfüllt'
+                      : '❌ Nicht erfüllt'}
+                  </span>
+                  <span className={`text-xs font-mono font-bold ${
+                    qualityCheck.overallScore >= 80 ? 'text-emerald-400'
+                    : qualityCheck.overallScore >= 50 ? 'text-amber-400'
+                    : 'text-red-400'
+                  }`}>
+                    {qualityCheck.overallScore}/100
+                  </span>
+                </div>
+
+                {/* Criteria list */}
+                <div className="space-y-1.5">
+                  {qualityCheck.criteria.map((c, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs">
+                      <span className={`shrink-0 mt-0.5 ${c.met ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {c.met ? '✓' : '✗'}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <span className={c.met ? 'text-slate-300' : 'text-slate-400 line-through'}>{c.item}</span>
+                        {c.notes && (
+                          <p className="text-slate-600 mt-0.5 leading-relaxed">{c.notes}</p>
+                        )}
+                      </div>
+                      <span className={`shrink-0 text-[10px] px-1 rounded ${
+                        c.confidence === 'high' ? 'text-slate-600 bg-slate-800'
+                        : c.confidence === 'medium' ? 'text-amber-700 bg-amber-950/30'
+                        : 'text-red-700 bg-red-950/30'
+                      }`}>
+                        {c.confidence}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Retry suggestion */}
+                {qualityCheck.suggestion && qualityCheck.verdict !== 'passed' && (
+                  <div className="rounded-lg border border-violet-800/40 bg-violet-950/20 px-3 py-2">
+                    <p className="text-xs text-violet-300">
+                      <span className="font-semibold">Verbesserungsvorschlag:</span> {qualityCheck.suggestion}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         {/* Agent Run Replay */}
         <AgentRunReplayView delegationId={id} />
 
-        {/* Allowed Tools */}
+        {/* Allowed Tools — collapsible expert detail */}
         {d.contract.allowedTools?.length > 0 && (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Erlaubte Tools</h2>
+          <CollapsibleSection
+            title="Erlaubte Tools"
+            collapsedHint={`${d.contract.allowedTools.length} Tools`}
+            defaultOpen={false}
+          >
             <div className="flex flex-wrap gap-1.5">
               {d.contract.allowedTools.map(tool => (
                 <span key={tool} className="px-2 py-0.5 text-xs rounded bg-gray-800 border border-gray-700 text-gray-400 font-mono">
@@ -1255,7 +1569,7 @@ export default function DelegationDetailPage() {
                 </span>
               ))}
             </div>
-          </div>
+          </CollapsibleSection>
         )}
 
         {/* Comment Thread */}

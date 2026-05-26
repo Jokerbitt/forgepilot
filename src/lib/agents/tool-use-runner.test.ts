@@ -594,6 +594,8 @@ describe('runWithToolUse', () => {
       execFileSync('git', ['init'], { cwd: dir })
       execFileSync('git', ['checkout', '-b', 'main'], { cwd: dir })
     }
+    execFileSync('git', ['config', 'user.email', 'test@ci.local'], { cwd: dir })
+    execFileSync('git', ['config', 'user.name', 'CI Test'], { cwd: dir })
     execFileSync('git', ['add', '.'], { cwd: dir })
     execFileSync('git', ['commit', '--allow-empty', '-m', 'init'], { cwd: dir })
 

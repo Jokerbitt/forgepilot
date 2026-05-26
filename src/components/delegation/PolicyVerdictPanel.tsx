@@ -44,7 +44,7 @@ export function PolicyVerdictPanel({ contract }: Props) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(contract),
     })
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : Promise.reject(r))
       .then((d: PolicyDecision) => setDecision(d))
       .catch(() => setDecision(null))
       .finally(() => setLoading(false))
@@ -61,7 +61,7 @@ export function PolicyVerdictPanel({ contract }: Props) {
 
   if (!decision) return null
 
-  const style = VERDICT_STYLES[decision.verdict]
+  const style = VERDICT_STYLES[decision.verdict] ?? VERDICT_STYLES.review
 
   return (
     <div className={cx('rounded-lg border p-3', style.border, style.bg)}>
