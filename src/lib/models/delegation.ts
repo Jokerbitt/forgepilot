@@ -189,6 +189,8 @@ export interface Delegation {
     tokenEstimate: number
     builtAt: string
   }
+  /** Target GitHub repo URL for the agent to work against (overrides ForgePilot's own repo) */
+  targetRepo?: string
   createdAt: string
   updatedAt: string
 }

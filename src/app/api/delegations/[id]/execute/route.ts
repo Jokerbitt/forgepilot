@@ -177,6 +177,44 @@ function parsePrUrlFromOutput(output: string): string | undefined {
 }
 
 /**
+ * After a successful agent run, detect uncommitted git changes and open a PR.
+ * Used for runners that don't natively create PRs (e.g. Ollama).
+ * Returns the PR URL if created, undefined otherwise.
+ */
+function tryCreatePrFromGitChanges(options: {
+  workdir: string
+  branchName: string
+  commitMessage: string
+  prTitle: string
+  prBody: string
+  delegationId: string
+}): string | undefined {
+  const { workdir, branchName, commitMessage, prTitle, prBody, delegationId } = options
+  try {
+    const status = execSync('git status --porcelain', { cwd: workdir, encoding: 'utf8', timeout: 5000 }).trim()
+    if (!status) {
+      delegationLogger.info({ event: 'pr.skip.no_changes', delegationId }, 'No git changes detected — skipping auto-PR')
+      return undefined
+    }
+    const safeBranch = branchName.replace(/[^a-zA-Z0-9._/-]/g, '-').slice(0, 80)
+    execSync(`git checkout -b ${safeBranch}`, { cwd: workdir, stdio: 'ignore', timeout: 5000 })
+    execSync('git add -A', { cwd: workdir, stdio: 'ignore', timeout: 10000 })
+    execSync(`git commit -m ${JSON.stringify(commitMessage)}`, { cwd: workdir, stdio: 'ignore', timeout: 10000 })
+    execSync(`git push origin ${safeBranch}`, { cwd: workdir, stdio: 'ignore', timeout: 30000 })
+    const prUrl = execSync(
+      `gh pr create --title ${JSON.stringify(prTitle)} --body ${JSON.stringify(prBody)}`,
+      { cwd: workdir, encoding: 'utf8', timeout: 30000 },
+    ).trim()
+    const url = parsePrUrlFromOutput(prUrl) ?? prUrl
+    delegationLogger.info({ event: 'pr.created', url, delegationId }, 'Auto-PR created after Ollama run')
+    return url
+  } catch (err) {
+    delegationLogger.warn({ event: 'pr.create.failed', error: String(err), delegationId }, 'Auto-PR creation failed')
+    return undefined
+  }
+}
+
+/**
  * M217: Auto-merge PR for Risk A delegations.
  * Risk A = safe/additive → auto-merge when CI passes.
  * Risk B = modifies existing → manual review needed.
@@ -204,7 +242,7 @@ function isClaudeAvailable(): boolean {
   }
 }
 
-function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd: number, riskClass: string) {
+function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd: number, riskClass: string, targetRepo?: string) {
   const storedKeys = readStoredApiKeys()
   const anthropicKey = storedKeys.ANTHROPIC_API_KEY?.trim() || undefined
   const maxTurns = budgetToClaudeCliMaxTurns(budgetUsd)
@@ -223,7 +261,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
 
   let runnerWorkspace: RunnerWorkspace
   try {
-    runnerWorkspace = prepareRunnerWorkspace({ delegationId: id })
+    runnerWorkspace = prepareRunnerWorkspace({ delegationId: id, targetRepo })
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
     void appendLogs(id, [{
@@ -673,6 +711,25 @@ async function runWithOllamaAgent(
         void triggerChain(finished, result.summary).catch(() => {})
       }
 
+      // Auto-PR: if Ollama run succeeded and git changes exist, open a PR
+      if (result.success) {
+        const prUrl = tryCreatePrFromGitChanges({
+          workdir: process.cwd(),
+          branchName: `ollama/${id.slice(0, 8)}-${Date.now()}`,
+          commitMessage: `feat: ${(finished.title || finished.contract.goal).slice(0, 72)}\n\nDelegation: ${id}`,
+          prTitle: finished.title || finished.contract.goal.slice(0, 72),
+          prBody: `**Delegation:** ${id}\n**Model:** ${model}\n**Turns:** ${result.turns}\n\n${result.summary.slice(0, 500)}`,
+          delegationId: id,
+        })
+        if (prUrl) {
+          await appendLogs(id, [{
+            timestamp: new Date().toISOString(),
+            type: 'success',
+            message: `🔗 Auto-PR erstellt: ${prUrl}`,
+          }])
+        }
+      }
+
       const label = finished.title || finished.contract.goal.slice(0, 60)
       const savedStr = result.costSavings.savedUsd > 0
         ? ` · 💰 $${result.costSavings.savedUsd.toFixed(4)} gespart`
@@ -1056,7 +1113,7 @@ export async function POST(
   }
 
   if (mode === 'claude-cli') {
-    runWithClaudeCLI(id, prompt, startTime, delegation.contract.maxBudgetUsd, delegation.contract.riskClass)
+    runWithClaudeCLI(id, prompt, startTime, delegation.contract.maxBudgetUsd, delegation.contract.riskClass, delegation.targetRepo)
     return NextResponse.json({ started: true, mode: 'claude-cli', delegationId: id })
   }
 

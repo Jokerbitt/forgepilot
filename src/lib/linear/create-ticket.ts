@@ -18,6 +18,8 @@ export async function createLinearTicketForBrief(params: {
   title: string
   description: string
   briefId: string
+  /** Link this ticket to an existing Linear project */
+  projectId?: string
 }): Promise<LinearTicketResult> {
   const linear = createLinearClient()
   if (!linear) {
@@ -27,6 +29,7 @@ export async function createLinearTicketForBrief(params: {
     const issue = await linear.createIssue({
       title: params.title,
       description: `**ForgePilot Brief:** ${params.briefId}\n\n${params.description}`,
+      projectId: params.projectId,
     })
     if (!issue) return { created: false, reason: 'Linear API returned no issue' }
     apiLogger.info({ event: 'linear.ticket.created', issueId: issue.id, identifier: issue.identifier, briefId: params.briefId })

@@ -194,6 +194,23 @@ export interface LinearCreateIssueInput {
   title: string
   description?: string
   priority?: number
+  /** Link this issue to an existing Linear project */
+  projectId?: string
+}
+
+export interface LinearCreatedProject {
+  id: string
+  name: string
+  url: string
+  slugId: string
+}
+
+export interface LinearCreateProjectInput {
+  teamId: string
+  name: string
+  description?: string
+  /** 'planned' | 'inProgress' | 'paused' | 'completed' | 'cancelled' */
+  state?: string
 }
 
 export interface LinearCreatedIssue {
@@ -259,8 +276,8 @@ export async function createLinearIssue(
   if (!apiKey) throw new Error('LINEAR_API_KEY not configured')
 
   const mutation = `
-    mutation CreateIssue($teamId: String!, $title: String!, $description: String, $priority: Int) {
-      issueCreate(input: { teamId: $teamId, title: $title, description: $description, priority: $priority }) {
+    mutation CreateIssue($teamId: String!, $title: String!, $description: String, $priority: Int, $projectId: String) {
+      issueCreate(input: { teamId: $teamId, title: $title, description: $description, priority: $priority, projectId: $projectId }) {
         success
         issue { id identifier url }
       }
@@ -280,6 +297,7 @@ export async function createLinearIssue(
         title: input.title,
         description: input.description,
         priority: input.priority,
+        projectId: input.projectId ?? null,
       },
     }),
   })
@@ -301,6 +319,103 @@ export async function createLinearIssue(
   if (!issue) throw new Error('Linear did not return a created issue')
 
   return issue
+}
+
+/**
+ * Create a Linear Project and return its id/url.
+ * Projects in Linear are portfolio-level containers for issues.
+ */
+export async function createLinearProject(
+  config: LinearConnectorConfig,
+  input: LinearCreateProjectInput,
+  fetcher: Fetcher = fetch,
+): Promise<LinearCreatedProject> {
+  const apiKey = config.apiKey
+  if (!apiKey) throw new Error('LINEAR_API_KEY not configured')
+
+  const mutation = `
+    mutation CreateProject($name: String!, $teamIds: [String!]!, $description: String, $state: String) {
+      projectCreate(input: { name: $name, teamIds: $teamIds, description: $description, state: $state }) {
+        success
+        project { id name url slugId }
+      }
+    }
+  `
+
+  const response = await fetcher(config.apiUrl ?? 'https://api.linear.app/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: apiKey },
+    body: JSON.stringify({
+      query: mutation,
+      variables: {
+        name: input.name,
+        teamIds: [input.teamId],
+        description: input.description ?? null,
+        state: input.state ?? 'inProgress',
+      },
+    }),
+  })
+
+  if (!response.ok) throw new Error(`Linear API error: HTTP ${response.status}`)
+
+  const payload = await response.json() as {
+    data?: { projectCreate?: { success: boolean; project?: LinearCreatedProject } }
+    errors?: unknown[]
+  }
+
+  if (payload.errors?.length) throw new Error(`Linear GraphQL error: ${JSON.stringify(payload.errors)}`)
+
+  const project = payload.data?.projectCreate?.project
+  if (!project) throw new Error('Linear did not return a created project')
+
+  return project
+}
+
+/**
+ * Find an existing Linear project by name within a team.
+ */
+export async function findLinearProjectByName(
+  config: LinearConnectorConfig,
+  input: { teamId: string; name: string },
+  fetcher: Fetcher = fetch,
+): Promise<LinearCreatedProject | null> {
+  const apiKey = config.apiKey
+  if (!apiKey) throw new Error('LINEAR_API_KEY not configured')
+
+  const query = `
+    query FindProject($teamId: ID!, $name: String!) {
+      projects(first: 5, filter: { name: { eq: $name }, members: { some: { teams: { some: { id: { eq: $teamId } } } } } }) {
+        nodes { id name url slugId }
+      }
+    }
+  `
+
+  const response = await fetcher(config.apiUrl ?? 'https://api.linear.app/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: apiKey },
+    body: JSON.stringify({ query, variables: { teamId: input.teamId, name: input.name } }),
+  })
+
+  if (!response.ok) return null
+
+  const payload = await response.json() as {
+    data?: { projects?: { nodes?: LinearCreatedProject[] } }
+  }
+
+  return payload.data?.projects?.nodes?.[0] ?? null
+}
+
+/**
+ * Ensure a Linear project exists (find or create).
+ */
+export async function findOrCreateLinearProject(
+  config: LinearConnectorConfig,
+  input: LinearCreateProjectInput,
+  fetcher: Fetcher = fetch,
+): Promise<LinearCreatedProject> {
+  const existing = await findLinearProjectByName(config, { teamId: input.teamId, name: input.name }, fetcher)
+  if (existing) return existing
+  return createLinearProject(config, input, fetcher)
 }
 
 function hasGraphQlErrors(payload: unknown): boolean {

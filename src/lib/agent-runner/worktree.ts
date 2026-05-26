@@ -62,18 +62,47 @@ function linkNodeModules(sourceCwd: string, workspacePath: string): void {
   fs.symlinkSync(source, target, 'dir')
 }
 
+export function getTargetRepo(
+  env: Record<string, string | undefined> = process.env,
+): string | undefined {
+  return env.FORGEPILOT_RUNNER_TARGET_REPO?.trim() || undefined
+}
+
 export function prepareRunnerWorkspace(options: {
   delegationId: string
   sourceCwd?: string
   env?: Record<string, string | undefined>
+  /** Override target repo URL (takes precedence over env var) */
+  targetRepo?: string
 }): RunnerWorkspace {
   const sourceCwd = options.sourceCwd ?? process.cwd()
   const env = options.env ?? process.env
   const root = getRunnerWorktreeRoot(env)
-  const baseRef = getRunnerBaseRef(env)
   const workspacePath = path.join(root, sanitizeWorktreeName(options.delegationId))
+  const targetRepo = options.targetRepo ?? getTargetRepo(env)
 
   fs.mkdirSync(root, { recursive: true })
+
+  if (targetRepo) {
+    // Clone mode: agent works against an external repository
+    if (fs.existsSync(workspacePath)) {
+      fs.rmSync(workspacePath, { recursive: true, force: true })
+    }
+    execFileSync('git', ['clone', '--depth', '1', targetRepo, workspacePath], {
+      stdio: 'ignore',
+    })
+
+    return {
+      path: workspacePath,
+      cleanup: () => {
+        if (env.FORGEPILOT_KEEP_RUNNER_WORKTREES === 'true') return
+        fs.rmSync(workspacePath, { recursive: true, force: true })
+      },
+    }
+  }
+
+  // Worktree mode: agent works against ForgePilot's own repo
+  const baseRef = getRunnerBaseRef(env)
   removeExistingWorktree(workspacePath, sourceCwd)
 
   execFileSync('git', ['worktree', 'add', '--detach', workspacePath, baseRef], {

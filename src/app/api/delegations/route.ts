@@ -71,17 +71,25 @@ export async function GET(request: NextRequest) {
     )
   }
 
+  // Optional search filter: ?search=keyword → match title or goal
+  const searchParam = request.nextUrl.searchParams.get('search')?.trim().toLowerCase()
+  if (searchParam) {
+    delegations = delegations.filter(d =>
+      (d.title ?? '').toLowerCase().includes(searchParam)
+      || d.contract.goal.toLowerCase().includes(searchParam)
+      || (d.briefTitle ?? '').toLowerCase().includes(searchParam)
+    )
+  }
+
   // Optional urgent filter: ?urgent=true → only delegations needing operator attention
   if (parseBooleanParam(request.nextUrl.searchParams.get('urgent'))) {
     delegations = delegations.filter(isUrgentDelegation)
   }
 
-  // Optional limit: ?limit=50
-  const limit = request.nextUrl.searchParams.get('limit')
-  if (limit) {
-    const n = parseInt(limit, 10)
-    if (!isNaN(n) && n > 0) delegations = delegations.slice(0, n)
-  }
+  // Limit: ?limit=N (default 100 to prevent slow loads with large JSON stores)
+  const limitParam = request.nextUrl.searchParams.get('limit')
+  const limit = limitParam ? parseInt(limitParam, 10) : 100
+  if (!isNaN(limit) && limit > 0) delegations = delegations.slice(0, limit)
 
   return NextResponse.json(delegations)
 }
