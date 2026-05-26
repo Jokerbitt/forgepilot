@@ -12,6 +12,7 @@ vi.mock('@/lib/auth/require-auth', () => ({ requireAuth: vi.fn() }))
 vi.mock('child_process', () => ({
   spawn: vi.fn(),
   execSync: vi.fn().mockImplementation(() => { throw new Error('claude not found') }),
+  execFile: vi.fn(),
 }))
 vi.mock('@/lib/connectors/config', () => ({
   readStoredApiKeys: vi.fn().mockReturnValue({}),
