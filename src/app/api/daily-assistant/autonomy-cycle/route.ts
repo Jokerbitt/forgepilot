@@ -58,6 +58,21 @@ export async function POST(request: NextRequest) {
   const config = getNBAConfig()
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
   const timeoutMinutes = Math.max(5, Math.min(240, Number(body.timeoutMinutes ?? 10)))
+  let delivery: unknown = null
+
+  if (!body.dryRun) {
+    const deliveryResponse = await fetch(new URL('/api/daily-assistant/delivery-cycle', internalBaseUrl()).toString(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        cookie: request.headers.get('cookie') ?? '',
+      },
+      body: JSON.stringify({ force: body.force }),
+    }).catch(() => null)
+    delivery = deliveryResponse
+      ? await deliveryResponse.json().catch(() => null)
+      : null
+  }
 
   const reaped = await reapStaleDelegations(repo, { runningSilentMinutes: timeoutMinutes })
   const delegations = await repo.listByStatus()
@@ -69,6 +84,7 @@ export async function POST(request: NextRequest) {
       status: 'blocked',
       message: `${counts.failed} fehlgeschlagene Delegation(en) blockieren Autonomie. Bitte erst Fehler prüfen oder bewusst erneut starten.`,
       reaped,
+      delivery,
       counts,
       candidate: null,
       started: false,
@@ -89,6 +105,7 @@ export async function POST(request: NextRequest) {
         ? `Maximal ${config.maxConcurrentAgents} Agent(en) laufen bereits. Assistant wartet.`
         : 'Keine sichere freigegebene Delegation startbereit. Plane eine neue Idee oder gib die naechste Aufgabe frei.',
       reaped,
+      delivery,
       counts,
       runningCount,
       candidate: null,
@@ -104,6 +121,7 @@ export async function POST(request: NextRequest) {
         ? 'Sichere Delegation startbereit.'
         : 'Balanced/Kontrollmodus: sichere Delegation gefunden. Starte sie bewusst mit Assistant uebernehmen.',
       reaped,
+      delivery,
       counts,
       runningCount,
       candidate: candidatePayload(candidate),
@@ -131,6 +149,7 @@ export async function POST(request: NextRequest) {
       message: `Assistant konnte die Delegation nicht starten (HTTP ${executeResponse.status}).`,
       error: errorBody.slice(0, 500),
       reaped,
+      delivery,
       counts,
       candidate: candidatePayload(candidate),
       started: false,
@@ -144,6 +163,7 @@ export async function POST(request: NextRequest) {
     status: 'started',
     message: 'Assistant hat die naechste sichere Delegation gestartet und ueberwacht sie jetzt in der Live View.',
     reaped,
+    delivery,
     counts,
     runningCount: runningCount + 1,
     candidate: candidatePayload(candidate),
