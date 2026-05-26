@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { buildDailyAssistantAction, canStartAutonomously, describeAutonomy, sortAssistantQueue } from './next-action'
+import {
+  buildDailyAssistantAction,
+  buildDailyAssistantBlockers,
+  buildDailyAssistantSteps,
+  canStartAutonomously,
+  describeAutonomy,
+  sortAssistantQueue,
+} from './next-action'
 
 const base = {
   pending: 0,
@@ -91,5 +98,37 @@ describe('canStartAutonomously', () => {
       requiresApproval: true,
       updatedAt: '2026-01-01T00:00:00.000Z',
     }, 'autopilot')).toBe(false)
+  })
+})
+
+describe('buildDailyAssistantSteps', () => {
+  it('turns a failed state into a concrete recovery plan', () => {
+    const steps = buildDailyAssistantSteps({ ...base, failed: 2 })
+    expect(steps.map(step => step.state)).toEqual(['now', 'next', 'later'])
+    expect(steps[0].href).toContain('urgent=true')
+    expect(steps[0].title).toContain('Fehler')
+  })
+
+  it('guides an empty day into idea planning and first delegation', () => {
+    const steps = buildDailyAssistantSteps(base)
+    expect(steps[0].id).toBe('describe-idea')
+    expect(steps[2].title).toContain('Erste kleine Delegation')
+  })
+})
+
+describe('buildDailyAssistantBlockers', () => {
+  it('reports launch and autonomy blockers without hiding warnings', () => {
+    const blockers = buildDailyAssistantBlockers(
+      { ...base, failed: 1, authDisabled: true, storageMode: 'json' },
+      [{ id: 'risky', title: 'Risky', status: 'approved', riskClass: 'C', updatedAt: '2026-01-01T00:00:00.000Z' }],
+    )
+
+    expect(blockers.map(blocker => blocker.id)).toEqual([
+      'failed-delegations',
+      'risk-c-work',
+      'auth-disabled',
+      'json-storage',
+    ])
+    expect(blockers[0].severity).toBe('critical')
   })
 })

@@ -1,38 +1,25 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowRight, Bot, CheckCircle2, Clock3, Loader2, Play, RefreshCw, ShieldAlert, Sparkles } from 'lucide-react'
 import { buttonClassName, cx } from '@/components/ui/primitives'
 import {
-  buildDailyAssistantAction,
   canStartAutonomously,
-  describeAutonomy,
-  sortAssistantQueue,
+  type DailyAssistantAction,
+  type DailyAssistantBlocker,
   type DailyAssistantQueueItem,
+  type DailyAssistantStep,
 } from '@/lib/daily-assistant/next-action'
 
 interface DelegationStats {
+  total?: number
   pending?: number
   approved?: number
   running?: number
   failed?: number
   prOpen?: number
   prMerged?: number
-}
-
-interface DailyReport {
-  dailyAssistant?: {
-    status?: 'ready' | 'attention' | 'blocked'
-    score?: number
-    nextFocus?: string
-  }
-  status?: {
-    operations?: {
-      authDisabled?: boolean
-      storageMode?: string
-    }
-  }
 }
 
 interface SettingsResponse {
@@ -42,21 +29,14 @@ interface SettingsResponse {
   maxConcurrentAgents?: number
 }
 
-interface DelegationResponse {
-  id: string
-  title?: string
-  status: DailyAssistantQueueItem['status']
-  updatedAt: string
-  contract?: {
-    goal?: string
-    riskClass?: DailyAssistantQueueItem['riskClass']
-    requiresApproval?: boolean
-  }
-}
-
 interface AssistantSnapshot {
+  generatedAt: string
+  readinessScore: number
+  action: DailyAssistantAction
+  autonomyText: string
+  steps: DailyAssistantStep[]
+  blockers: DailyAssistantBlocker[]
   stats: DelegationStats
-  report: DailyReport
   settings: SettingsResponse
   queue: DailyAssistantQueueItem[]
 }
@@ -85,25 +65,7 @@ export function DailyAssistantPanel() {
     setLoading(true)
     setError(null)
     try {
-      const [stats, report, settings] = await Promise.all([
-        fetchJson<DelegationStats>('/api/delegations/stats'),
-        fetchJson<DailyReport>('/api/reports/daily'),
-        fetchJson<SettingsResponse>('/api/settings'),
-      ])
-      const delegations = await fetchJson<DelegationResponse[]>('/api/delegations?statuses=failed,running,approved,pending&limit=12')
-      setSnapshot({
-        stats,
-        report,
-        settings,
-        queue: sortAssistantQueue(delegations.map(delegation => ({
-          id: delegation.id,
-          title: delegation.title || delegation.contract?.goal || delegation.id,
-          status: delegation.status,
-          riskClass: delegation.contract?.riskClass ?? 'A',
-          requiresApproval: delegation.contract?.requiresApproval,
-          updatedAt: delegation.updatedAt,
-        }))).slice(0, 6),
-      })
+      setSnapshot(await fetchJson<AssistantSnapshot>('/api/daily-assistant'))
     } catch {
       setError('Daily Assistant konnte den aktuellen Stand gerade nicht laden.')
     } finally {
@@ -115,27 +77,18 @@ export function DailyAssistantPanel() {
     void refresh()
   }, [])
 
-  const assistantInput = useMemo(() => {
-    const stats = snapshot?.stats ?? {}
-    const operations = snapshot?.report.status?.operations
-    return {
-      pending: stats.pending ?? 0,
-      approved: stats.approved ?? 0,
-      running: stats.running ?? 0,
-      failed: stats.failed ?? 0,
-      prOpen: stats.prOpen ?? 0,
-      prMerged: stats.prMerged ?? 0,
-      authDisabled: operations?.authDisabled ?? false,
-      storageMode: operations?.storageMode,
-      nextFocus: snapshot?.report.dailyAssistant?.nextFocus,
-      approvalMode: snapshot?.settings.approvalMode ?? 'balanced',
-    }
-  }, [snapshot])
-
-  const action = buildDailyAssistantAction(assistantInput)
-  const autonomyText = describeAutonomy(assistantInput)
-  const score = snapshot?.report.dailyAssistant?.score ?? 0
-  const autonomousCount = (snapshot?.queue ?? []).filter(item => canStartAutonomously(item, assistantInput.approvalMode)).length
+  const assistantStats = snapshot?.stats ?? {}
+  const action = snapshot?.action ?? {
+    id: 'loading',
+    title: 'Daily Assistant lädt den aktuellen Stand',
+    detail: 'ForgePilot sammelt Projekte, Delegationen, PRs und Blocker.',
+    href: '/live',
+    primaryLabel: 'Live öffnen',
+    tone: 'attention' as const,
+  }
+  const autonomyText = snapshot?.autonomyText ?? 'Assistant Mode: ForgePilot sammelt den Tagesplan.'
+  const score = snapshot?.readinessScore ?? 0
+  const autonomousCount = (snapshot?.queue ?? []).filter(item => canStartAutonomously(item, snapshot?.settings.approvalMode)).length
   const approvalMode = snapshot?.settings.approvalMode ?? 'balanced'
   const autopilotMinScore = snapshot?.settings.autopilotMinScore ?? 85
   const autopilotMaxRiskClass = snapshot?.settings.autopilotMaxRiskClass ?? 'A'
@@ -215,16 +168,54 @@ export function DailyAssistantPanel() {
             Readiness {score}/100
           </div>
           <p className="mt-1 text-xs opacity-75">
-            {assistantInput.prMerged} PRs gemergt · {assistantInput.failed} Fehler · {assistantInput.running} aktiv
+            {assistantStats.prMerged ?? 0} PRs gemergt · {assistantStats.failed ?? 0} Fehler · {assistantStats.running ?? 0} aktiv
           </p>
         </div>
       </div>
 
       <div className="mt-5 grid gap-3 md:grid-cols-4">
-        <Metric label="Wartet" value={assistantInput.pending} />
-        <Metric label="Bereit" value={assistantInput.approved} />
-        <Metric label="Aktiv" value={assistantInput.running} />
-        <Metric label="Offene PRs" value={assistantInput.prOpen} />
+        <Metric label="Wartet" value={assistantStats.pending ?? 0} />
+        <Metric label="Bereit" value={assistantStats.approved ?? 0} />
+        <Metric label="Aktiv" value={assistantStats.running ?? 0} />
+        <Metric label="Offene PRs" value={assistantStats.prOpen ?? 0} />
+      </div>
+
+      <div className="mt-5 rounded-xl border border-white/[0.07] bg-black/20 p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-white">Tagesplan</h3>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Drei klare Schritte statt Rätselraten: was jetzt zählt, was danach kommt und was warten kann.
+            </p>
+          </div>
+          {snapshot?.generatedAt && (
+            <span className="text-xs text-slate-600">
+              Stand {new Date(snapshot.generatedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+        </div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-3">
+          {(snapshot?.steps ?? []).map(step => (
+            <Link
+              key={step.id}
+              href={step.href}
+              className={cx(
+                'rounded-lg border px-3 py-3 transition hover:border-violet-500/30 hover:bg-violet-500/[0.05]',
+                step.state === 'now' ? 'border-violet-500/25 bg-violet-500/10' : 'border-white/[0.06] bg-white/[0.025]',
+              )}
+            >
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                {step.state === 'now' ? 'Jetzt' : step.state === 'next' ? 'Danach' : 'Später'}
+              </span>
+              <p className="mt-2 text-sm font-semibold text-white">{step.title}</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">{step.detail}</p>
+              <span className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-violet-200">
+                {step.label}
+                <ArrowRight className="h-3.5 w-3.5" />
+              </span>
+            </Link>
+          ))}
+        </div>
       </div>
 
       <div className="mt-5 rounded-xl border border-white/[0.07] bg-black/20 p-4">
@@ -316,7 +307,7 @@ export function DailyAssistantPanel() {
                     <span className="rounded-full border border-white/[0.07] bg-white/[0.04] px-2 py-0.5 text-[11px] font-semibold text-slate-400">
                       Risk {item.riskClass}
                     </span>
-                    {canStartAutonomously(item, assistantInput.approvalMode) && (
+                    {canStartAutonomously(item, approvalMode) && (
                       <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-200">
                         Autonom möglich
                       </span>
@@ -346,6 +337,29 @@ export function DailyAssistantPanel() {
           {error ?? message}
         </div>
       )}
+
+      {snapshot?.blockers?.length ? (
+        <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4">
+          <h3 className="text-sm font-semibold text-white">Was Autonomie gerade begrenzt</h3>
+          <div className="mt-3 grid gap-2 lg:grid-cols-2">
+            {snapshot.blockers.map(blocker => (
+              <Link
+                key={blocker.id}
+                href={blocker.href}
+                className={cx(
+                  'rounded-lg border px-3 py-2 transition hover:bg-white/[0.04]',
+                  blocker.severity === 'critical'
+                    ? 'border-red-500/20 bg-red-500/10'
+                    : 'border-amber-500/20 bg-amber-500/10',
+                )}
+              >
+                <p className="text-sm font-semibold text-white">{blocker.title}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-400">{blocker.detail}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-5 flex flex-col gap-3 sm:flex-row">
         <Link href={action.href} className={buttonClassName('primary', 'min-h-11 flex-1')}>
