@@ -286,7 +286,7 @@ function DelegationsContent() {
         if (showNewDialog) { setShowNewDialog(false); return }
       } else if (e.key === 'n' || e.key === 'N') {
         e.preventDefault()
-        setShowQuickCreate(true)
+        setShowNewDialog(true)
       } else if (e.key === '/') {
         e.preventDefault()
         searchInputRef.current?.focus()
@@ -848,11 +848,11 @@ function DelegationsContent() {
                 )}
               </div>
             )}
-            {/* Direct create button — bypasses NBA recommendation flow (JOK-76) */}
+            {/* Direct create button — opens full NewDelegationDialog with KI-DoD + feature suggestions */}
             <button
-              onClick={() => setShowQuickCreate(true)}
+              onClick={() => setShowNewDialog(true)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors min-h-[44px]"
-              title="Neue Delegation direkt erstellen [N]"
+              title="Neue Delegation mit KI-Vorschlägen erstellen [N]"
             >
               <Plus size={16} />
               <span>Neue Delegation</span>

@@ -1124,7 +1124,7 @@ export default function DelegationDetailPage() {
                 )}
               </div>
             )}
-            {d.summaryReport.keyPoints.length > 0 && (
+            {d.summaryReport?.keyPoints && d.summaryReport.keyPoints.length > 0 && (
               <ul className="mt-3 pt-3 border-t border-gray-800 space-y-1">
                 {d.summaryReport.keyPoints.map((pt, i) => (
                   <li key={i} className="text-sm text-green-400/80 flex items-start gap-1.5">
@@ -1243,7 +1243,7 @@ export default function DelegationDetailPage() {
             )}
 
             {/* Summary Report keyPoints — only if no prUrl (prUrl case handled above) */}
-            {d.summaryReport && !d.summaryReport.prUrl && (
+            {d.summaryReport && !d.summaryReport.prUrl && d.summaryReport.keyPoints && (
               <div className="bg-gray-900 border border-green-900/40 rounded-xl p-4">
                 <h2 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Ergebnis</h2>
                 <ul className="space-y-1">

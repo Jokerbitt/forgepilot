@@ -93,7 +93,7 @@ export function buildTimelineEvents(delegation: Delegation): TimelineEvent[] {
       type: 'completed',
       label: 'Abgeschlossen',
       timestamp: delegation.updatedAt,
-      details: delegation.summaryReport?.keyPoints[0]?.slice(0, 100),
+      details: delegation.summaryReport?.keyPoints?.[0]?.slice(0, 100),
     })
   } else if (delegation.status === 'failed') {
     events.push({
