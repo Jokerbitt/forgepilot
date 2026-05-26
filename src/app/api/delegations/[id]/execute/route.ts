@@ -52,8 +52,8 @@ async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Dele
 
 function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryContext?: string): string {
   const c = delegation.contract
-  const slug = c.workItemId.replace(/[^a-z0-9-]/gi, '-').toLowerCase()
-  const branch = `${c.branchStrategy}/${slug}-task`
+  const slug = (c.workItemId ?? delegation.id).replace(/[^a-z0-9-]/gi, '-').toLowerCase()
+  const branch = `${c.branchStrategy ?? 'feature'}/${slug}-task`
   const commitPrefix = c.taskType || 'feat'
   const maxTurns = budgetToClaudeCliMaxTurns(c.maxBudgetUsd)
   const checkpointTurn = Math.max(10, Math.floor(maxTurns * 0.4))
@@ -291,7 +291,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
 
   const proc = spawn(
     'claude',
-    ['-p', prompt, '--dangerously-skip-permissions', '--max-turns', String(maxTurns)],
+    ['-p', prompt, '--dangerously-skip-permissions', '--max-turns', String(maxTurns), '--output-format', 'stream-json', '--verbose'],
     {
       cwd: runnerWorkspace.path,
       detached: true,
@@ -311,6 +311,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
 
   const logBuffer: AgentLog[] = []
   let fullOutput = ''
+  let stdoutBuffer = ''
   let flushTimer: ReturnType<typeof setTimeout> | null = null
 
   const scheduleFlush = () => {
@@ -323,21 +324,71 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     }, 2000)
   }
 
-  proc.stdout?.on('data', (chunk: Buffer) => {
-    const text = chunk.toString()
-    fullOutput += text
-    const lines = text.split('\n').filter(l => l.trim())
-    for (const line of lines) {
-      // Detect agent-emitted signals: ESCALATION and PROGRESS lines
-      const isEscalation = line.startsWith('ESCALATION:')
-      const isProgress   = line.startsWith('PROGRESS:')
-      logBuffer.push({
-        timestamp: new Date().toISOString(),
-        type: isEscalation ? 'error' : isProgress ? 'thought' : line.startsWith('$') ? 'command' : 'info',
-        message: line.substring(0, 500),
-      })
+  // Summarise a tool input into a human-readable one-liner
+  function summariseTool(name: string, input: Record<string, unknown>): string {
+    switch (name) {
+      case 'Bash': {
+        const cmd = String(input.command ?? '').replace(/\s+/g, ' ').trim()
+        return `$ ${cmd.slice(0, 120)}`
+      }
+      case 'Read':   return `📖 ${input.file_path ?? input.path ?? ''}`
+      case 'Edit':   return `✏️  ${input.file_path ?? ''} — ${String(input.old_string ?? '').slice(0, 60).replace(/\n/g, '↵')}…`
+      case 'Write':  return `💾 ${input.file_path ?? ''}`
+      case 'WebFetch': return `🌐 ${input.url ?? ''}`
+      case 'WebSearch': return `🔍 ${input.query ?? ''}`
+      case 'TodoWrite':
+      case 'TodoRead': return `📋 ${name}`
+      default:       return `🔧 ${name}(${Object.keys(input).join(', ')})`
     }
-    scheduleFlush()
+  }
+
+  // Parse one complete NDJSON line from stream-json output
+  function parseStreamLine(line: string): void {
+    let event: Record<string, unknown>
+    try { event = JSON.parse(line) } catch { return }
+
+    const type = event.type as string
+
+    if (type === 'assistant') {
+      const msg = event.message as { content?: Array<{ type: string; text?: string; name?: string; input?: Record<string, unknown> }> }
+      for (const block of msg?.content ?? []) {
+        if (block.type === 'text' && block.text?.trim()) {
+          logBuffer.push({ timestamp: new Date().toISOString(), type: 'thought', message: block.text.trim().slice(0, 500) })
+        } else if (block.type === 'tool_use' && block.name) {
+          const summary = summariseTool(block.name, block.input ?? {})
+          logBuffer.push({ timestamp: new Date().toISOString(), type: 'command', message: summary })
+        }
+      }
+      scheduleFlush()
+    } else if (type === 'tool_result') {
+      // Show tool output briefly (first non-empty line, max 200 chars)
+      const content = event.content as Array<{ type: string; text?: string }> | undefined
+      const text = content?.find(c => c.type === 'text')?.text?.trim()
+      if (text) {
+        const firstLine = text.split('\n').find(l => l.trim()) ?? ''
+        if (firstLine) {
+          logBuffer.push({ timestamp: new Date().toISOString(), type: 'info', message: firstLine.slice(0, 200) })
+          scheduleFlush()
+        }
+      }
+    } else if (type === 'result') {
+      // Extract final cost from the result event
+      const cost = event.total_cost_usd as number | undefined
+      if (cost != null) fullOutput += `\nCost: $${cost.toFixed(4)}`
+    }
+  }
+
+  proc.stdout?.on('data', (chunk: Buffer) => {
+    stdoutBuffer += chunk.toString()
+    // Process complete NDJSON lines
+    const lines = stdoutBuffer.split('\n')
+    stdoutBuffer = lines.pop() ?? '' // keep incomplete last line
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      fullOutput += trimmed + '\n'
+      parseStreamLine(trimmed)
+    }
   })
 
   proc.stderr?.on('data', (chunk: Buffer) => {
@@ -943,7 +994,7 @@ function runSimulation(id: string, delegation: Delegation) {
     { delay: 800,  type: 'info',    message: `📋 Task geladen: ${goal.substring(0, 80)}` },
     { delay: 1200, type: budgetLog.type, message: budgetLog.message },
     { delay: 1800, type: 'info',    message: '🔍 Analysiere Projektstruktur...' },
-    { delay: 3000, type: 'command', message: `$ git checkout -b ${delegation.contract.branchStrategy}/${delegation.contract.workItemId.replace(/[^a-z0-9-]/gi, '-').toLowerCase()}-task` },
+    { delay: 3000, type: 'command', message: `$ git checkout -b ${delegation.contract.branchStrategy ?? 'feature'}/${(delegation.contract.workItemId ?? delegation.id).replace(/[^a-z0-9-]/gi, '-').toLowerCase()}-task` },
     { delay: 4500, type: 'thought', message: '💭 Verstehe Anforderungen aus Definition of Done...' },
     { delay: 6000, type: 'info',    message: '📝 Implementierung läuft...' },
     { delay: 9000, type: 'command', message: '$ npm test -- --run' },
