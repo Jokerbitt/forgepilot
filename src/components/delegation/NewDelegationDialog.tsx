@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Delegation, ExecutionRoute, OutputMode, TaskContract, TaskType } from '@/lib/models/delegation'
 import type { RiskClass } from '@/lib/models/work-item'
 import { DELEGATION_TEMPLATES, templateToContract } from '@/lib/delegations/templates'
@@ -58,6 +58,16 @@ export function NewDelegationDialog({
   const [selectedFeatures, setSelectedFeatures] = useState<Set<number>>(new Set())
   const [batchCreating, setBatchCreating] = useState(false)
   const [batchDone, setBatchDone] = useState(0)
+  const [project, setProject] = useState('')
+  const [customProject, setCustomProject] = useState('')
+  const [projectOptions, setProjectOptions] = useState<string[]>([])
+
+  useEffect(() => {
+    fetch('/api/delegations/projects')
+      .then(r => r.json() as Promise<{ projects: string[] }>)
+      .then(data => setProjectOptions(data.projects ?? []))
+      .catch(() => setProjectOptions([]))
+  }, [])
 
   const handleTemplateSelect = (t: typeof TEMPLATES[0]) => {
     setSelectedTemplate(t)
@@ -152,7 +162,7 @@ export function NewDelegationDialog({
         costEstimateUsd: maxBudgetUsd * 0.5,
         contract: {
           id: `con-${Date.now()}-${idx}`,
-          workItemId: workItemId.trim() || 'MANUAL',
+          workItemId: selectedProject || 'MANUAL',
           goal: f.goal,
           context: context.trim(),
           taskType: (selectedTemplate?.id as TaskType | undefined) ?? undefined,
@@ -198,6 +208,7 @@ export function NewDelegationDialog({
   }
 
   const effectiveDod = dodItems.filter(d => d.trim())
+  const selectedProject = project === '__new__' ? customProject.trim() : project
 
   const handleCreate = async () => {
     if (!goal.trim()) {
@@ -219,7 +230,7 @@ export function NewDelegationDialog({
       briefTitle: prefillBriefTitle,
       contract: {
         id: `con-${Date.now()}`,
-        workItemId: workItemId.trim() || 'MANUAL',
+        workItemId: selectedProject || 'MANUAL',
         goal: goal.trim(),
         context: context.trim(),
         taskType: (selectedTemplate?.id as TaskType | undefined) ?? undefined,
@@ -267,6 +278,34 @@ export function NewDelegationDialog({
           </div>
 
           <div className="p-6 space-y-5">
+
+            {/* Project selector */}
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">
+                Projekt <span className="text-red-400">*</span>
+              </label>
+              <select
+                value={project}
+                onChange={e => setProject(e.target.value)}
+                className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white text-sm focus:border-blue-500 focus:outline-none"
+              >
+                <option value="" disabled>Projekt wählen…</option>
+                {projectOptions.map(p => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+                <option value="__new__">+ Neues Projekt…</option>
+              </select>
+              {project === '__new__' && (
+                <input
+                  type="text"
+                  value={customProject}
+                  onChange={e => setCustomProject(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                  placeholder="projekt-slug (Buchstaben, Zahlen, Bindestriche)"
+                  className="w-full mt-2 bg-gray-900 border border-gray-800 rounded-lg p-3 text-white text-sm focus:border-blue-500 focus:outline-none placeholder-gray-600"
+                  autoFocus
+                />
+              )}
+            </div>
 
             {/* Goal */}
             <div>
@@ -630,7 +669,7 @@ export function NewDelegationDialog({
             </button>
             <button
               onClick={handleCreate}
-              disabled={!goal.trim() || saving}
+              disabled={!goal.trim() || !selectedProject || saving}
               className="px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg transition-colors flex items-center gap-2"
             >
               {saving ? (
