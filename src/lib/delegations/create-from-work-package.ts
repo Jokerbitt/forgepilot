@@ -1,7 +1,17 @@
+import { execSync } from 'child_process'
 import { randomUUID } from 'crypto'
-import type { Delegation } from '@/lib/models/delegation'
+import type { Delegation, ExecutionRoute } from '@/lib/models/delegation'
 import type { WorkPackage } from '@/lib/models/milestone'
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
+
+function resolveDefaultExecutionRoute(): ExecutionRoute {
+  try {
+    execSync('claude --version', { stdio: 'ignore', timeout: 3000 })
+    return 'local-agent'
+  } catch {
+    return 'ollama-agent'
+  }
+}
 
 export async function createDelegationFromWorkPackage(wp: WorkPackage): Promise<Delegation> {
   const now = new Date().toISOString()
@@ -28,7 +38,7 @@ export async function createDelegationFromWorkPackage(wp: WorkPackage): Promise<
       createdAt: now,
     },
     status: 'pending',
-    executionRoute: 'ollama-agent',
+    executionRoute: resolveDefaultExecutionRoute(),
     costEstimateUsd: 0,
     briefId: wp.briefId,
     logs: [{

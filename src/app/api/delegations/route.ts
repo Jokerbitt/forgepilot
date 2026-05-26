@@ -76,12 +76,10 @@ export async function GET(request: NextRequest) {
     delegations = delegations.filter(isUrgentDelegation)
   }
 
-  // Optional limit: ?limit=50
-  const limit = request.nextUrl.searchParams.get('limit')
-  if (limit) {
-    const n = parseInt(limit, 10)
-    if (!isNaN(n) && n > 0) delegations = delegations.slice(0, n)
-  }
+  // Limit: ?limit=N (default 100 to prevent slow loads with large JSON stores)
+  const limitParam = request.nextUrl.searchParams.get('limit')
+  const limit = limitParam ? parseInt(limitParam, 10) : 100
+  if (!isNaN(limit) && limit > 0) delegations = delegations.slice(0, limit)
 
   return NextResponse.json(delegations)
 }

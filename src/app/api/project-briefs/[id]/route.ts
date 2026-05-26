@@ -50,6 +50,34 @@ export async function PATCH(request: Request, { params }: RouteParams) {
           briefId: updated.id,
         }),
       ).catch(() => { /* non-critical */ })
+
+      // Auto-create GitHub repo when brief is accepted and GitHub is connected
+      if (!updated.githubRepoUrl) {
+        import('@/lib/connectors/config').then(async ({ readConnectorConfigs }) => {
+          const { github: ghConfig } = readConnectorConfigs()
+          if (!ghConfig?.token?.trim()) return
+          const { createGitHubRepo } = await import('@/lib/connectors/github')
+          const { updateProjectBrief, saveProjectBrief, readProjectBriefs } = await import('@/lib/project-briefs')
+          const repoName = updated.title
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .slice(0, 80) || 'project'
+          const created = await createGitHubRepo(ghConfig!, {
+            name: repoName,
+            description: updated.problemStatement?.slice(0, 200) ?? '',
+            isPrivate: true,
+          })
+          const latest = readProjectBriefs().find(b => b.id === updated.id)
+          if (latest) {
+            const patched = updateProjectBrief(latest.id, {
+              githubRepoUrl: created.html_url,
+              githubRepoName: created.full_name,
+            })
+            if (patched) saveProjectBrief(patched)
+          }
+        }).catch(() => { /* non-critical — GitHub repo creation is best-effort */ })
+      }
     }
 
     return NextResponse.json(updated)

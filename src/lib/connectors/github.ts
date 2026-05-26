@@ -605,3 +605,68 @@ function inferGitHubRisk(title: string, labels: string[]): RiskClass {
 function hasLabel(labels: string[], wanted: string): boolean {
   return labels.some((label) => label.toLowerCase() === wanted)
 }
+
+export interface GitHubRepoCreated {
+  id: number
+  name: string
+  full_name: string
+  html_url: string
+  clone_url: string
+  private: boolean
+}
+
+export interface GitHubCreateRepoInput {
+  /** Repository name (slug, no spaces) */
+  name: string
+  description?: string
+  isPrivate?: boolean
+  /** Create under this org instead of the authenticated user */
+  org?: string
+}
+
+/**
+ * Create a new GitHub repository for the authenticated user or an org.
+ * Returns the created repo metadata including html_url and clone_url.
+ */
+export async function createGitHubRepo(
+  config: GitHubConnectorConfig,
+  input: GitHubCreateRepoInput,
+  fetcher: Fetcher = fetch,
+): Promise<GitHubRepoCreated> {
+  const token = config.token?.trim()
+  if (!token) throw new Error('GITHUB_TOKEN not configured')
+
+  const apiBase = config.apiUrl ?? 'https://api.github.com'
+  const endpoint = input.org
+    ? `${apiBase}/orgs/${input.org}/repos`
+    : `${apiBase}/user/repos`
+
+  const response = await fetcher(endpoint, {
+    method: 'POST',
+    headers: githubHeaders(token),
+    body: JSON.stringify({
+      name: input.name,
+      description: input.description ?? '',
+      private: input.isPrivate ?? true,
+      auto_init: true,
+    }),
+  })
+
+  if (response.status === 422) {
+    // Repo already exists — fetch and return it
+    const owner = input.org ?? config.owner
+    if (!owner) throw new Error('GitHub owner not configured')
+    const existing = await fetcher(`${apiBase}/repos/${owner}/${input.name}`, {
+      headers: githubHeaders(token),
+    })
+    if (!existing.ok) throw new Error(`GitHub API error: HTTP ${existing.status} — repo may already exist`)
+    return existing.json() as Promise<GitHubRepoCreated>
+  }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    throw new Error(`GitHub API error: HTTP ${response.status}${text ? ` — ${text.slice(0, 200)}` : ''}`)
+  }
+
+  return response.json() as Promise<GitHubRepoCreated>
+}
