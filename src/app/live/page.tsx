@@ -13,6 +13,7 @@ import {
   Route,
   Shield,
 } from 'lucide-react'
+import { LiveAgentActivityPanel } from '@/components/live/LiveAgentActivityPanel'
 import { cx } from '@/components/ui/primitives'
 
 type Tone = 'ready' | 'attention' | 'blocked' | 'neutral'
@@ -289,6 +290,8 @@ export default function LiveViewPage() {
             tone={dailyReport?.status?.operations?.authDisabled ? 'attention' : 'ready'}
           />
         </section>
+
+        <LiveAgentActivityPanel />
 
         <section className="grid min-h-[720px] gap-5 xl:grid-cols-[380px_1fr]">
           <aside className="space-y-4">

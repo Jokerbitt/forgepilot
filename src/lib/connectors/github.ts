@@ -28,10 +28,34 @@ interface GitHubPullRequestView {
   state: 'open' | 'closed'
   draft?: boolean
   merged_at?: string | null
+  body?: string | null
+  head?: { ref?: string; sha?: string; repo?: { full_name?: string } | null }
+  base?: { ref?: string }
+  mergeable?: boolean | null
+  mergeable_state?: string
+  additions?: number
+  deletions?: number
+  changed_files?: number
+  commits?: number
   labels?: Array<{ name: string }>
   user?: GitHubUserItem | null
   updated_at: string
   created_at: string
+}
+
+interface GitHubPullRequestFileView {
+  filename: string
+  status: string
+  additions: number
+  deletions: number
+  changes: number
+  patch?: string
+}
+
+interface GitHubCommitView {
+  sha: string
+  html_url?: string
+  commit?: { message?: string }
 }
 
 interface GitHubIssueView {
@@ -89,6 +113,276 @@ export interface GitHubCreatedIssue {
   number: number
   html_url: string
   title: string
+}
+
+export interface GitHubPullRequestSummary {
+  number: number
+  title: string
+  url: string
+  state: 'open' | 'closed'
+  draft: boolean
+  author?: string
+  headRef: string
+  headSha: string
+  baseRef: string
+  updatedAt: string
+  mergeable: boolean | null
+  mergeableState?: string
+  additions: number
+  deletions: number
+  changedFiles: number
+  commits: number
+  risk: 'low' | 'medium' | 'high'
+}
+
+export interface GitHubPullRequestPreview extends GitHubPullRequestSummary {
+  body?: string
+  files: Array<{
+    filename: string
+    status: string
+    additions: number
+    deletions: number
+    changes: number
+    patchPreview?: string
+  }>
+  commitMessages: Array<{ sha: string; message: string; url?: string }>
+  checks: {
+    state: 'success' | 'failure' | 'pending' | 'error' | 'unknown'
+    items: Array<{ name: string; status: string; url?: string }>
+  }
+  mergeRecommendation: {
+    status: 'ready' | 'review' | 'blocked'
+    reasons: string[]
+  }
+}
+
+export interface GitHubMergePullRequestInput {
+  number: number
+  sha?: string
+  title?: string
+  message?: string
+}
+
+export interface GitHubMergePullRequestResult {
+  sha?: string
+  merged: boolean
+  message: string
+}
+
+function getDefaultRepo(config: GitHubConnectorConfig): { owner: string; repo: string; apiUrl: string; token: string } {
+  const token = config.token?.trim()
+  const owner = config.owner?.trim() || 'Jokerbitt'
+  const repo = config.repositories?.[0]?.trim() || 'forgepilot'
+  if (!token) throw new Error('GITHUB_TOKEN not configured')
+  return { owner, repo, apiUrl: config.apiUrl ?? 'https://api.github.com', token }
+}
+
+function githubHeaders(token: string): HeadersInit {
+  return {
+    Accept: 'application/vnd.github+json',
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    'X-GitHub-Api-Version': '2022-11-28',
+  }
+}
+
+async function githubJson<T>(url: string, token: string, fetcher: Fetcher, init?: RequestInit): Promise<T> {
+  const response = await fetcher(url, {
+    ...init,
+    headers: {
+      ...githubHeaders(token),
+      ...(init?.headers ?? {}),
+    },
+  })
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    throw new Error(`GitHub API error: HTTP ${response.status}${text ? ` ${text.slice(0, 180)}` : ''}`)
+  }
+  return await response.json() as T
+}
+
+function toPullRequestSummary(pr: GitHubPullRequestView): GitHubPullRequestSummary {
+  const changedFiles = pr.changed_files ?? 0
+  const additions = pr.additions ?? 0
+  const deletions = pr.deletions ?? 0
+  return {
+    number: pr.number,
+    title: pr.title,
+    url: pr.html_url,
+    state: pr.state,
+    draft: Boolean(pr.draft),
+    author: pr.user?.login,
+    headRef: pr.head?.ref ?? '',
+    headSha: pr.head?.sha ?? '',
+    baseRef: pr.base?.ref ?? 'main',
+    updatedAt: pr.updated_at,
+    mergeable: pr.mergeable ?? null,
+    mergeableState: pr.mergeable_state,
+    additions,
+    deletions,
+    changedFiles,
+    commits: pr.commits ?? 0,
+    risk: inferPullRequestReviewRisk(pr.title, changedFiles, additions + deletions, pr.draft),
+  }
+}
+
+function inferPullRequestReviewRisk(
+  title: string,
+  changedFiles: number,
+  lineChanges: number,
+  draft?: boolean,
+): 'low' | 'medium' | 'high' {
+  const haystack = title.toLowerCase()
+  if (draft || haystack.includes('security') || haystack.includes('auth') || haystack.includes('migration')) return 'high'
+  if (changedFiles >= 8 || lineChanges >= 500 || haystack.includes('refactor')) return 'medium'
+  return 'low'
+}
+
+function buildMergeRecommendation(
+  pr: GitHubPullRequestSummary,
+  checks: GitHubPullRequestPreview['checks'],
+): GitHubPullRequestPreview['mergeRecommendation'] {
+  const reasons: string[] = []
+  if (pr.draft) reasons.push('Pull Request ist noch als Draft markiert.')
+  if (pr.state !== 'open') reasons.push('Pull Request ist nicht offen.')
+  if (pr.mergeable === false) reasons.push('GitHub meldet Merge-Konflikte.')
+  if (checks.state === 'failure' || checks.state === 'error') reasons.push('Mindestens ein Check ist fehlgeschlagen.')
+  if (checks.state === 'pending') reasons.push('Checks laufen noch.')
+  if (pr.risk === 'high') reasons.push('Hohe Risiko-Einstufung: manuelles Review empfohlen.')
+
+  if (reasons.some(reason => /Draft|nicht offen|Merge-Konflikte|fehlgeschlagen/i.test(reason))) {
+    return { status: 'blocked', reasons }
+  }
+  if (reasons.length > 0 || pr.mergeable === null || checks.state === 'unknown') {
+    return { status: 'review', reasons: reasons.length ? reasons : ['GitHub hat Mergebarkeit oder Checks noch nicht vollstaendig bewertet.'] }
+  }
+  return { status: 'ready', reasons: ['PR ist offen, mergebar und Checks sind gruen.'] }
+}
+
+async function getPullRequestChecks(
+  config: { apiUrl: string; owner: string; repo: string; token: string },
+  sha: string,
+  fetcher: Fetcher,
+): Promise<GitHubPullRequestPreview['checks']> {
+  if (!sha) return { state: 'unknown', items: [] }
+  try {
+    const data = await githubJson<{
+      check_runs?: Array<{ name?: string; conclusion?: string | null; status?: string; html_url?: string }>
+    }>(
+      `${config.apiUrl}/repos/${config.owner}/${config.repo}/commits/${sha}/check-runs`,
+      config.token,
+      fetcher,
+    )
+    const runs = data.check_runs ?? []
+    const items = runs.map(run => ({
+      name: run.name ?? 'GitHub Check',
+      status: run.conclusion ?? run.status ?? 'unknown',
+      url: run.html_url,
+    }))
+    if (items.length === 0) return { state: 'unknown', items }
+    if (items.some(item => ['failure', 'timed_out', 'cancelled'].includes(item.status))) return { state: 'failure', items }
+    if (items.some(item => ['action_required', 'startup_failure'].includes(item.status))) return { state: 'error', items }
+    if (items.some(item => !['success', 'skipped', 'neutral'].includes(item.status))) return { state: 'pending', items }
+    return { state: 'success', items }
+  } catch {
+    return { state: 'unknown', items: [] }
+  }
+}
+
+export async function listGitHubPullRequests(
+  config: GitHubConnectorConfig,
+  fetcher: Fetcher = fetch,
+): Promise<GitHubPullRequestSummary[]> {
+  const repoConfig = getDefaultRepo(config)
+  const pulls = await githubJson<GitHubPullRequestView[]>(
+    `${repoConfig.apiUrl}/repos/${repoConfig.owner}/${repoConfig.repo}/pulls?state=open&per_page=30&sort=updated&direction=desc`,
+    repoConfig.token,
+    fetcher,
+  )
+
+  return Promise.all(
+    pulls.map(async pr => {
+      try {
+        const detail = await githubJson<GitHubPullRequestView>(
+          `${repoConfig.apiUrl}/repos/${repoConfig.owner}/${repoConfig.repo}/pulls/${pr.number}`,
+          repoConfig.token,
+          fetcher,
+        )
+        return toPullRequestSummary(detail)
+      } catch {
+        return toPullRequestSummary(pr)
+      }
+    }),
+  )
+}
+
+export async function getGitHubPullRequestPreview(
+  config: GitHubConnectorConfig,
+  number: number,
+  fetcher: Fetcher = fetch,
+): Promise<GitHubPullRequestPreview> {
+  const repoConfig = getDefaultRepo(config)
+  const [pr, files, commits] = await Promise.all([
+    githubJson<GitHubPullRequestView>(
+      `${repoConfig.apiUrl}/repos/${repoConfig.owner}/${repoConfig.repo}/pulls/${number}`,
+      repoConfig.token,
+      fetcher,
+    ),
+    githubJson<GitHubPullRequestFileView[]>(
+      `${repoConfig.apiUrl}/repos/${repoConfig.owner}/${repoConfig.repo}/pulls/${number}/files?per_page=100`,
+      repoConfig.token,
+      fetcher,
+    ),
+    githubJson<GitHubCommitView[]>(
+      `${repoConfig.apiUrl}/repos/${repoConfig.owner}/${repoConfig.repo}/pulls/${number}/commits?per_page=100`,
+      repoConfig.token,
+      fetcher,
+    ),
+  ])
+  const summary = toPullRequestSummary(pr)
+  const checks = await getPullRequestChecks(repoConfig, summary.headSha, fetcher)
+
+  return {
+    ...summary,
+    body: pr.body ?? undefined,
+    files: files.map(file => ({
+      filename: file.filename,
+      status: file.status,
+      additions: file.additions,
+      deletions: file.deletions,
+      changes: file.changes,
+      patchPreview: file.patch?.slice(0, 3000),
+    })),
+    commitMessages: commits.map(commit => ({
+      sha: commit.sha,
+      message: commit.commit?.message ?? commit.sha,
+      url: commit.html_url,
+    })),
+    checks,
+    mergeRecommendation: buildMergeRecommendation(summary, checks),
+  }
+}
+
+export async function mergeGitHubPullRequest(
+  config: GitHubConnectorConfig,
+  input: GitHubMergePullRequestInput,
+  fetcher: Fetcher = fetch,
+): Promise<GitHubMergePullRequestResult> {
+  const repoConfig = getDefaultRepo(config)
+  return await githubJson<GitHubMergePullRequestResult>(
+    `${repoConfig.apiUrl}/repos/${repoConfig.owner}/${repoConfig.repo}/pulls/${input.number}/merge`,
+    repoConfig.token,
+    fetcher,
+    {
+      method: 'PUT',
+      body: JSON.stringify({
+        commit_title: input.title,
+        commit_message: input.message,
+        sha: input.sha,
+        merge_method: 'squash',
+      }),
+    },
+  )
 }
 
 export async function findGitHubIssueByTitle(
