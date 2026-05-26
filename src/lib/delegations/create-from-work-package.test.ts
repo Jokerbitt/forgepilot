@@ -29,9 +29,12 @@ const baseWorkPackage: WorkPackage = {
   description: 'Build OAuth2 login flow with Google and GitHub providers',
   status: 'ready',
   riskClass: 'A',
+  priority: 'medium',
   estimatedHours: 8,
   definitionOfDone: ['Tests pass', 'PR reviewed', 'Deployed to staging'],
   tags: ['auth', 'backend'],
+  dependsOn: [],
+  delegationIds: [],
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 }
