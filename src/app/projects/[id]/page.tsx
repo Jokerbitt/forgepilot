@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Bot, CheckCircle2, ExternalLink, FileText, Rocket, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Bot, CheckCircle2, ExternalLink, Eye, FileText, GitPullRequest, Rocket, ShieldCheck } from 'lucide-react'
 import { Badge, Metric, Panel, buttonClassName, cx } from '@/components/ui/primitives'
 import type { ProjectSummary } from '@/app/api/projects/route'
 
@@ -189,6 +189,35 @@ export default function ProjectDetailPage() {
 
       <div className="mx-auto grid max-w-7xl gap-5 px-4 py-6 sm:px-6 xl:grid-cols-[minmax(0,1fr)_360px] lg:px-8">
         <section className="space-y-5">
+          <Panel className="border-violet-500/20 bg-violet-500/[0.045] p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-violet-300">Projekt-Arbeitsfläche</p>
+                <h2 className="mt-2 text-xl font-semibold text-white">{project.nextAction.label}</h2>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+                  Das ist der zentrale Ort fuer dieses Projekt: naechste Aktion, laufende Agenten, Feature-Delegations und Review-Status.
+                </p>
+              </div>
+              <Link href={project.nextAction.href} className={buttonClassName(project.nextAction.tone === 'danger' ? 'destructive' : 'primary', 'shrink-0')}>
+                Jetzt fortfahren
+                <ExternalLink className="h-4 w-4" />
+              </Link>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              <Link href="/live" className={buttonClassName('secondary', 'justify-center')}>
+                <Eye className="h-4 w-4" />
+                Live verfolgen
+              </Link>
+              <Link href="/branches" className={buttonClassName('secondary', 'justify-center')}>
+                <GitPullRequest className="h-4 w-4" />
+                PRs prüfen
+              </Link>
+              <Link href={`/delegations?new=1&briefId=${project.id}`} className={buttonClassName('secondary', 'justify-center')}>
+                Feature delegieren
+              </Link>
+            </div>
+          </Panel>
+
           <Panel className="p-5">
             <div className="flex items-center justify-between text-xs text-slate-500">
               <span>Projektfortschritt</span>

@@ -88,6 +88,11 @@ const previewPages = [
     description: 'Delegations prüfen, freigeben, starten und Ergebnisse kontrollieren.',
   },
   {
+    label: 'Branches',
+    href: '/branches',
+    description: 'Pull Requests prüfen, Änderungen ansehen und sicher in main mergen.',
+  },
+  {
     label: 'Wissen',
     href: '/knowledge',
     description: 'Gespeicherte Erkenntnisse und Writebacks ansehen.',
