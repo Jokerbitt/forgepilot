@@ -93,6 +93,8 @@ export function DailyAssistantPanel() {
   const autopilotMinScore = snapshot?.settings.autopilotMinScore ?? 85
   const autopilotMaxRiskClass = snapshot?.settings.autopilotMaxRiskClass ?? 'A'
   const maxConcurrentAgents = snapshot?.settings.maxConcurrentAgents ?? 2
+  const safeStartItems = (snapshot?.queue ?? []).filter(item => item.status === 'approved' && item.riskClass !== 'C')
+  const nextSafeStart = safeStartItems[0]
 
   const runAutopilotOnce = async () => {
     setWorking(true)
@@ -140,6 +142,22 @@ export function DailyAssistantPanel() {
       setError('Autonomie-Modus konnte nicht gespeichert werden.')
     } finally {
       setSavingMode(false)
+    }
+  }
+
+  const startDelegation = async (id: string, title: string) => {
+    setWorking(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const response = await fetch(`/api/delegations/${encodeURIComponent(id)}/start`, { method: 'POST' })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      setMessage(`Delegation gestartet: ${title}`)
+      await refresh()
+    } catch {
+      setError('Delegation konnte nicht gestartet werden. Prüfe Logs, Provider und Freigabe.')
+    } finally {
+      setWorking(false)
     }
   }
 
@@ -295,13 +313,14 @@ export function DailyAssistantPanel() {
           </div>
         ) : snapshot?.queue.length ? (
           <div className="mt-4 space-y-2">
-            {snapshot.queue.map(item => (
-              <Link
+            {snapshot.queue.map(item => {
+              const canStartNow = item.status === 'approved' && item.riskClass !== 'C'
+              return (
+              <div
                 key={item.id}
-                href={`/delegations/${item.id}`}
                 className="flex flex-col gap-2 rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-3 transition hover:border-violet-500/30 hover:bg-violet-500/[0.05] sm:flex-row sm:items-center sm:justify-between"
               >
-                <span className="min-w-0">
+                <Link href={`/delegations/${item.id}`} className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-2">
                     <StatusPill status={item.status} />
                     <span className="rounded-full border border-white/[0.07] bg-white/[0.04] px-2 py-0.5 text-[11px] font-semibold text-slate-400">
@@ -314,13 +333,26 @@ export function DailyAssistantPanel() {
                     )}
                   </span>
                   <span className="mt-2 block truncate text-sm font-semibold text-slate-100">{item.title}</span>
-                </span>
-                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500">
-                  Öffnen
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </span>
-              </Link>
-            ))}
+                </Link>
+                <div className="flex shrink-0 items-center gap-2">
+                  {canStartNow && (
+                    <button
+                      type="button"
+                      onClick={() => void startDelegation(item.id, item.title)}
+                      disabled={working}
+                      className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-violet-600 px-3 text-xs font-semibold text-white transition hover:bg-violet-500 disabled:opacity-50"
+                    >
+                      <Play className="h-3.5 w-3.5" />
+                      Starten
+                    </button>
+                  )}
+                  <Link href={`/delegations/${item.id}`} className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                    Öffnen
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+              </div>
+            )})}
           </div>
         ) : (
           <div className="mt-4 rounded-lg border border-dashed border-white/[0.08] px-3 py-4 text-sm text-slate-500">
@@ -362,10 +394,22 @@ export function DailyAssistantPanel() {
       ) : null}
 
       <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-        <Link href={action.href} className={buttonClassName('primary', 'min-h-11 flex-1')}>
-          {action.primaryLabel}
-          <ArrowRight className="h-4 w-4" />
-        </Link>
+        {action.id === 'start-approved-work' && nextSafeStart ? (
+          <button
+            type="button"
+            onClick={() => void startDelegation(nextSafeStart.id, nextSafeStart.title)}
+            disabled={working || loading}
+            className={buttonClassName('primary', 'min-h-11 flex-1 disabled:opacity-50')}
+          >
+            {working ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+            Nächste sichere Delegation starten
+          </button>
+        ) : (
+          <Link href={action.href} className={buttonClassName('primary', 'min-h-11 flex-1')}>
+            {action.primaryLabel}
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        )}
         <Link href="/idea" className={buttonClassName('secondary', 'min-h-11 flex-1')}>
           <Sparkles className="h-4 w-4" />
           Neue Idee planen
