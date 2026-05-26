@@ -55,6 +55,9 @@ export function NewDelegationDialog({
   const [dodError, setDodError] = useState<string | null>(null)
   const [features, setFeatures] = useState<FeatureSuggestion[]>([])
   const [showFeatures, setShowFeatures] = useState(false)
+  const [selectedFeatures, setSelectedFeatures] = useState<Set<number>>(new Set())
+  const [batchCreating, setBatchCreating] = useState(false)
+  const [batchDone, setBatchDone] = useState(0)
 
   const handleTemplateSelect = (t: typeof TEMPLATES[0]) => {
     setSelectedTemplate(t)
@@ -116,6 +119,68 @@ export function NewDelegationDialog({
     } finally {
       setGeneratingDod(false)
     }
+  }
+
+  const toggleFeature = (i: number) => {
+    setSelectedFeatures(prev => {
+      const next = new Set(prev)
+      next.has(i) ? next.delete(i) : next.add(i)
+      return next
+    })
+  }
+
+  const toggleAllFeatures = () => {
+    setSelectedFeatures(prev =>
+      prev.size === features.length ? new Set() : new Set(features.map((_, i) => i))
+    )
+  }
+
+  const handleBatchCreate = async () => {
+    if (selectedFeatures.size === 0) return
+    setBatchCreating(true)
+    setBatchDone(0)
+    const now = new Date().toISOString()
+    let created = 0
+    for (const idx of Array.from(selectedFeatures).sort()) {
+      const f = features[idx]
+      const id = `del-${Date.now()}-${idx}`
+      const newDelegation: Delegation = {
+        id,
+        title: f.name,
+        status: 'pending',
+        executionRoute,
+        costEstimateUsd: maxBudgetUsd * 0.5,
+        contract: {
+          id: `con-${Date.now()}-${idx}`,
+          workItemId: workItemId.trim() || 'MANUAL',
+          goal: f.goal,
+          context: context.trim(),
+          taskType: (selectedTemplate?.id as TaskType | undefined) ?? undefined,
+          definitionOfDone: ['Task erfolgreich abgeschlossen'],
+          riskClass,
+          maxBudgetUsd,
+          allowedTools: selectedTemplate?.tools ?? ['read_file', 'write_file'],
+          branchStrategy,
+          requiresApproval: riskClass === 'C',
+          privacyMode,
+          llmModel,
+          outputMode,
+          createdAt: now,
+        },
+        createdAt: now,
+        updatedAt: now,
+      }
+      await fetch('/api/delegations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newDelegation),
+      })
+      created++
+      setBatchDone(created)
+      onCreate(newDelegation)
+    }
+    setBatchCreating(false)
+    onClose()
   }
 
   const handleDodChange = (idx: number, value: string) => {
@@ -296,55 +361,116 @@ export function NewDelegationDialog({
             {/* Feature Suggestions */}
             {features.length > 0 && (
               <div>
-                <button
-                  type="button"
-                  onClick={() => setShowFeatures(v => !v)}
-                  className="flex items-center gap-1.5 text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 hover:text-gray-300 transition-colors w-full"
-                >
-                  <span>{showFeatures ? '▾' : '▸'}</span>
-                  💡 Feature-Ideen ({features.length})
-                </button>
+                {/* Header row */}
+                <div className="flex items-center justify-between mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowFeatures(v => !v)}
+                    className="flex items-center gap-1.5 text-xs font-bold text-gray-500 uppercase tracking-wide hover:text-gray-300 transition-colors"
+                  >
+                    <span>{showFeatures ? '▾' : '▸'}</span>
+                    💡 Feature-Ideen ({features.length})
+                  </button>
+                  {showFeatures && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={toggleAllFeatures}
+                        className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                      >
+                        {selectedFeatures.size === features.length ? 'Keine' : 'Alle'}
+                      </button>
+                      {selectedFeatures.size > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleBatchCreate}
+                          disabled={batchCreating}
+                          className="flex items-center gap-1.5 px-3 py-1 rounded-lg border border-blue-700/60 bg-blue-950/30 text-blue-300 text-xs font-semibold hover:border-blue-500 hover:text-blue-200 transition-colors disabled:opacity-50"
+                        >
+                          {batchCreating ? (
+                            <>
+                              <span className="inline-block w-2.5 h-2.5 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
+                              {batchDone}/{selectedFeatures.size} erstellt…
+                            </>
+                          ) : (
+                            <>⚡ {selectedFeatures.size} delegieren</>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {showFeatures && (
                   <div className="rounded-lg border border-gray-800 bg-gray-900/60 overflow-hidden">
                     <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-gray-800">
-                          <th className="text-left px-3 py-2 text-gray-600 font-semibold">Feature</th>
-                          <th className="text-left px-3 py-2 text-gray-600 font-semibold">Aufwand</th>
-                          <th className="text-left px-3 py-2 text-gray-600 font-semibold">Wann</th>
-                          <th className="px-3 py-2" />
-                        </tr>
-                      </thead>
                       <tbody>
-                        {features.map((f, i) => (
-                          <tr key={i} className="border-b border-gray-800/50 last:border-0 hover:bg-gray-800/30 transition-colors">
-                            <td className="px-3 py-2 text-gray-200 font-medium">{f.name}</td>
-                            <td className="px-3 py-2">
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                                f.complexity === 'Klein'  ? 'bg-emerald-950/50 text-emerald-400' :
-                                f.complexity === 'Mittel' ? 'bg-amber-950/50 text-amber-400' :
-                                                            'bg-red-950/50 text-red-400'
-                              }`}>{f.complexity}</span>
-                            </td>
-                            <td className="px-3 py-2 text-gray-500">{f.when}</td>
-                            <td className="px-3 py-2 text-right">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setGoal(f.goal)
-                                  setDodItems([''])
-                                  setFeatures([])
-                                  setShowFeatures(false)
-                                }}
-                                className="px-2 py-0.5 rounded border border-gray-700 text-gray-400 hover:border-blue-600 hover:text-blue-400 transition-colors whitespace-nowrap"
-                              >
-                                → Delegieren
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                        {features.map((f, i) => {
+                          const checked = selectedFeatures.has(i)
+                          return (
+                            <tr
+                              key={i}
+                              onClick={() => toggleFeature(i)}
+                              className={`border-b border-gray-800/50 last:border-0 cursor-pointer transition-colors ${
+                                checked ? 'bg-blue-950/20' : 'hover:bg-gray-800/30'
+                              }`}
+                            >
+                              {/* Checkbox */}
+                              <td className="pl-3 pr-2 py-2.5 w-6 shrink-0">
+                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                                  checked
+                                    ? 'bg-blue-600 border-blue-500'
+                                    : 'border-gray-600 bg-gray-900'
+                                }`}>
+                                  {checked && <span className="text-white text-[10px] leading-none">✓</span>}
+                                </div>
+                              </td>
+                              {/* Name */}
+                              <td className={`py-2.5 pr-2 font-medium transition-colors ${checked ? 'text-white' : 'text-gray-300'}`}>
+                                {f.name}
+                              </td>
+                              {/* Complexity */}
+                              <td className="py-2.5 pr-2">
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap ${
+                                  f.complexity === 'Klein'  ? 'bg-emerald-950/50 text-emerald-400' :
+                                  f.complexity === 'Mittel' ? 'bg-amber-950/50 text-amber-400' :
+                                                              'bg-red-950/50 text-red-400'
+                                }`}>{f.complexity}</span>
+                              </td>
+                              {/* When */}
+                              <td className="py-2.5 pr-3 text-gray-600 text-right whitespace-nowrap">{f.when}</td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
+
+                    {/* Quick single-select footer hint */}
+                    <div className="px-3 py-2 border-t border-gray-800 flex items-center justify-between">
+                      <span className="text-[10px] text-gray-700">
+                        {selectedFeatures.size === 0
+                          ? 'Zeilen anklicken zum Auswählen'
+                          : `${selectedFeatures.size} ausgewählt`}
+                      </span>
+                      {selectedFeatures.size === 1 && (() => {
+                        const f = features[Array.from(selectedFeatures)[0]]
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setGoal(f.goal)
+                              setDodItems([''])
+                              setFeatures([])
+                              setShowFeatures(false)
+                              setSelectedFeatures(new Set())
+                            }}
+                            className="text-[10px] text-blue-500 hover:text-blue-300 transition-colors"
+                          >
+                            → Als Ziel übernehmen
+                          </button>
+                        )
+                      })()}
+                    </div>
                   </div>
                 )}
               </div>
