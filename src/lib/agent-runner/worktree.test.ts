@@ -162,7 +162,7 @@ describe('prepareRunnerWorkspace — clone mode', () => {
 
       expect(execFileSyncMock).toHaveBeenCalledWith(
         'git',
-        ['clone', '--depth', '1', 'https://github.com/owner/target-repo.git', workspace.path],
+        ['clone', '--no-single-branch', '--depth', '5', 'https://github.com/owner/target-repo.git', workspace.path],
         expect.objectContaining({ stdio: 'ignore' }),
       )
       expect(workspace.path).toContain('del-clone-test')
@@ -185,7 +185,7 @@ describe('prepareRunnerWorkspace — clone mode', () => {
 
       expect(execFileSyncMock).toHaveBeenCalledWith(
         'git',
-        expect.arrayContaining(['clone', '--depth', '1', 'https://github.com/owner/env-repo.git']),
+        expect.arrayContaining(['clone', '--no-single-branch', '--depth', '5', 'https://github.com/owner/env-repo.git']),
         expect.any(Object),
       )
     } finally {
@@ -211,6 +211,32 @@ describe('prepareRunnerWorkspace — clone mode', () => {
       )
       expect(cloneCall![1]).toContain('https://github.com/override/repo.git')
       expect(cloneCall![1]).not.toContain('https://github.com/other/repo.git')
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('uses git worktree add for local absolute paths instead of git clone', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-local-root-'))
+
+    try {
+      prepareRunnerWorkspace({
+        delegationId: 'del-local-path',
+        env: { FORGEPILOT_RUNNER_ROOT: root },
+        targetRepo: '/Users/sven/dev/myproject',
+      })
+
+      // Should call git worktree add, NOT git clone
+      const cloneCall = execFileSyncMock.mock.calls.find(
+        c => c[0] === 'git' && (c[1] as string[]).includes('clone'),
+      )
+      expect(cloneCall).toBeUndefined()
+
+      const worktreeCall = execFileSyncMock.mock.calls.find(
+        c => c[0] === 'git' && (c[1] as string[]).includes('worktree'),
+      )
+      expect(worktreeCall).toBeDefined()
+      expect(worktreeCall![1]).toContain('add')
     } finally {
       fs.rmSync(root, { recursive: true, force: true })
     }

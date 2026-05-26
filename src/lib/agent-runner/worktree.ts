@@ -84,12 +84,44 @@ export function prepareRunnerWorkspace(options: {
   fs.mkdirSync(root, { recursive: true })
 
   if (targetRepo) {
-    // Clone mode: agent works against an external repository
+    const isLocalPath = path.isAbsolute(targetRepo) || targetRepo.startsWith('~') || targetRepo.startsWith('./')
+
+    if (isLocalPath) {
+      // Local repo mode: create a worktree inside the target repo
+      const resolvedRepo = targetRepo.startsWith('~')
+        ? targetRepo.replace('~', os.homedir())
+        : path.resolve(targetRepo)
+
+      removeExistingWorktree(workspacePath, resolvedRepo)
+
+      // Create temp worktree inside the local repo
+      const baseRef = getRunnerBaseRef(env)
+      execFileSync('git', ['worktree', 'add', '--detach', workspacePath, baseRef], {
+        cwd: resolvedRepo,
+        stdio: 'ignore',
+      })
+      if (!fs.existsSync(workspacePath)) fs.mkdirSync(workspacePath, { recursive: true })
+
+      // Symlink node_modules from the local repo if available
+      linkNodeModules(resolvedRepo, workspacePath)
+
+      return {
+        path: workspacePath,
+        cleanup: () => {
+          if (env.FORGEPILOT_KEEP_RUNNER_WORKTREES === 'true') return
+          removeExistingWorktree(workspacePath, resolvedRepo)
+        },
+      }
+    }
+
+    // Remote clone mode: agent works against a GitHub/remote repository
     if (fs.existsSync(workspacePath)) {
       fs.rmSync(workspacePath, { recursive: true, force: true })
     }
-    execFileSync('git', ['clone', '--depth', '1', targetRepo, workspacePath], {
+    // --no-single-branch so the agent can create and push new branches
+    execFileSync('git', ['clone', '--no-single-branch', '--depth', '5', targetRepo, workspacePath], {
       stdio: 'ignore',
+      timeout: 120_000,
     })
 
     return {
