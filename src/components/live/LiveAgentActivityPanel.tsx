@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Activity, CheckCircle2, Clock3, ExternalLink, GitPullRequest, PlayCircle, RefreshCw, XCircle } from 'lucide-react'
 import type { AgentLog, Delegation, DelegationStatus } from '@/lib/models/delegation'
 import { Badge, EmptyState, Panel, buttonClassName, cx } from '@/components/ui/primitives'
+import { AgentPhaseIndicator } from '@/components/delegation/AgentPhaseIndicator'
+import { inferAgentPhase } from '@/lib/delegations/agent-phase'
 
 const REFRESH_MS = 5_000
 const MAX_VISIBLE = 8
@@ -214,9 +216,16 @@ function DelegationActivityCard({ delegation }: { delegation: Delegation }) {
           <Link href={detailHref} className="mt-2 block truncate text-base font-semibold text-white hover:text-violet-200">
             {delegation.title || delegation.contract.goal}
           </Link>
-          <p className="mt-1 text-sm leading-6 text-slate-400">
-            Der Agent {statusText[delegation.status]}. Letzte Aktualisierung: {formatTime(delegation.updatedAt)}.
-          </p>
+          {/* Dynamic phase — replaces generic status text for running/failed/done */}
+          {(delegation.status === 'running' || delegation.status === 'failed' || delegation.status === 'completed') ? (
+            <div className="mt-2">
+              <AgentPhaseIndicator info={inferAgentPhase(delegation)} showProgress />
+            </div>
+          ) : (
+            <p className="mt-1 text-sm leading-6 text-slate-400">
+              Der Agent {statusText[delegation.status]}. Letzte Aktualisierung: {formatTime(delegation.updatedAt)}.
+            </p>
+          )}
         </div>
         <Link href={detailHref} className={buttonClassName(delegation.status === 'approved' ? 'primary' : 'secondary', 'shrink-0')}>
           {getNextActionLabel(delegation.status)}
