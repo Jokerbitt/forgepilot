@@ -161,7 +161,7 @@ export async function runPreflight(
   delegation: Delegation,
   ghToken?: string
 ): Promise<PreflightResult> {
-  const slug = delegation.contract.workItemId.replace(/[^a-z0-9-]/gi, '-').toLowerCase()
+  const slug = (delegation.contract.workItemId ?? delegation.id).replace(/[^a-z0-9-]/gi, '-').toLowerCase()
   const branchStrategy = delegation.contract.branchStrategy ?? 'feature'
   const branchName = `${branchStrategy}/${slug}-task`
 

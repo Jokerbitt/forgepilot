@@ -191,6 +191,23 @@ export interface Delegation {
   }
   /** Target GitHub repo URL for the agent to work against (overrides ForgePilot's own repo) */
   targetRepo?: string
+  /** Auto-generated DoD quality check result after execution */
+  qualityCheck?: DoDQualityCheck
   createdAt: string
   updatedAt: string
+}
+
+export interface DoDCriterion {
+  item: string
+  met: boolean
+  confidence: 'high' | 'medium' | 'low'
+  notes: string
+}
+
+export interface DoDQualityCheck {
+  criteria: DoDCriterion[]
+  overallScore: number   // 0-100
+  verdict: 'passed' | 'partial' | 'failed'
+  suggestion?: string    // natural-language retry hint if not passed
+  checkedAt: string
 }
