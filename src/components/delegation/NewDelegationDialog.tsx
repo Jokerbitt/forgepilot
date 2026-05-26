@@ -61,6 +61,7 @@ export function NewDelegationDialog({
   const [project, setProject] = useState('')
   const [customProject, setCustomProject] = useState('')
   const [projectOptions, setProjectOptions] = useState<string[]>([])
+  const [targetRepo, setTargetRepo] = useState('')
 
   useEffect(() => {
     fetch('/api/delegations/projects')
@@ -228,6 +229,7 @@ export function NewDelegationDialog({
       costEstimateUsd: maxBudgetUsd * 0.5,
       briefId: prefillBriefId,
       briefTitle: prefillBriefTitle,
+      targetRepo: targetRepo.trim() || undefined,
       contract: {
         id: `con-${Date.now()}`,
         workItemId: selectedProject || 'MANUAL',
@@ -305,6 +307,21 @@ export function NewDelegationDialog({
                   autoFocus
                 />
               )}
+            </div>
+
+            {/* Target Repository */}
+            <div>
+              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">
+                Ziel-Repository <span className="text-gray-600 font-normal normal-case">(optional — leer = ForgePilot)</span>
+              </label>
+              <input
+                type="text"
+                value={targetRepo}
+                onChange={e => setTargetRepo(e.target.value)}
+                placeholder="/Users/dein-name/dev/mein-projekt  oder  https://github.com/org/repo"
+                className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white text-sm focus:border-blue-500 focus:outline-none placeholder-gray-600 font-mono"
+              />
+              <p className="mt-1 text-xs text-gray-600">Lokaler Pfad oder GitHub-URL — Agent klont und arbeitet isoliert</p>
             </div>
 
             {/* Goal */}

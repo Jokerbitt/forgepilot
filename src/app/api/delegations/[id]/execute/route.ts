@@ -38,6 +38,7 @@ import { checkParallelCompletion } from '@/lib/delegation-parallel'
 import { triggerCriticRetry } from '@/lib/delegations/critic-retry'
 import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-runtime-evidence'
 import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, type RunnerWorkspace } from '@/lib/agent-runner/worktree'
+import { buildCodebaseContext, buildDynamicSystemPrompt } from '@/lib/agent/codebase-context'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
@@ -50,11 +51,10 @@ async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Dele
   })
 }
 
-function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryContext?: string): string {
+function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryContext?: string, worktreePath?: string): string {
   const c = delegation.contract
   const slug = (c.workItemId ?? delegation.id).replace(/[^a-z0-9-]/gi, '-').toLowerCase()
   const branch = `${c.branchStrategy ?? 'feature'}/${slug}-task`
-  const commitPrefix = c.taskType || 'feat'
   const maxTurns = budgetToClaudeCliMaxTurns(c.maxBudgetUsd)
   const checkpointTurn = Math.max(10, Math.floor(maxTurns * 0.4))
 
@@ -69,55 +69,63 @@ function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryC
       : ''
 
   const context = c.context?.trim()
-    ? `\n## Context\n${c.context.trim()}\n${contextCardsBlock}${retryContext ?? ''}`
+    ? `${c.context.trim()}\n${contextCardsBlock}${retryContext ?? ''}`
     : `${contextCardsBlock}${retryContext ?? ''}`
 
   const skillBlock = buildSkillBlock(c.skillCategory, c.allowedFilePatterns)
+
+  // Use dynamic codebase context when a worktree path is available
+  const repoPath = worktreePath ?? process.cwd()
+  try {
+    const ctx = buildCodebaseContext(repoPath)
+    return buildDynamicSystemPrompt(ctx, c.goal, {
+      riskClass: c.riskClass,
+      branch,
+      maxTurns,
+      checkpointTurn,
+      dod,
+      context,
+      workItemId: c.workItemId ?? delegation.id,
+      taskType: c.taskType,
+      skillBlock,
+      retryContext,
+    })
+  } catch {
+    // Fallback to static ForgePilot prompt if context read fails
+  }
 
   return `You are an autonomous software engineering agent working on **ForgePilot** — a local-first AI Workflow OS built with Next.js 14, TypeScript strict, Tailwind CSS, and Vitest.
 
 ## Task
 ${c.goal}
-${context}
+${context ? `\n## Context\n${context}\n` : ''}
 ## Definition of Done (check each before creating PR)
 ${dod}
 
 ## Constraints
 - Risk class: **${c.riskClass}** (A = safe/additive, B = modifies existing, C = needs human review)
 - Branch: \`${branch}\`
-- Max budget: $${c.maxBudgetUsd} (~${maxTurns} turns)
+- Max budget: ~${maxTurns} turns
 - Work item: ${c.workItemId}
 
-## Execution protocol (follow exactly, in order)
+## Escalation Protocol
+If blocked or uncertain, print: ESCALATION: <reason> | OPTIONS: <A> | <B> | RECOMMEND: <A or B>
+
+## Execution Protocol
 \`\`\`
-1. Read CLAUDE.md  →  understand conventions and project structure
+1. Read CLAUDE.md  →  understand conventions
 2. git checkout -b ${branch}
-3. Explore: read relevant source files before writing any code
-4. Implement: small, focused changes — one concern per commit
-5. Verify: npm run test:run && npm run lint && npm run type-check
-   (run type-check BEFORE build — never in parallel)
-6. Commit: git commit -m "${commitPrefix}: <description>"
-7. PR: gh pr create --title "${commitPrefix}: ${c.goal.substring(0, 60).replace(/"/g, "'")}" --body "## Summary\\n- <bullets>\\n\\n## Test plan\\n- [ ] tests pass"
-8. Smoke-test: curl -sf http://localhost:3000/api/smoke-test | grep '"ok":true' || echo "ESCALATION: smoke-test failed — UI regression detected"
-9. Final output: print DONE: <one-sentence summary>
+3. Explore relevant files before writing code
+4. Implement in small focused commits
+5. npm run test:run && npm run lint && npm run type-check
+6. gh pr create --title "feat: ${c.goal.substring(0, 60).replace(/"/g, "'")}"
+7. Print DONE: <summary>
 \`\`\`
 
-## Anti-drift rules (critical — read before each major action)
-- **Stay in scope**: only modify files directly needed for this task. Touching unrelated files = scope drift.
-- **No gold-plating**: implement exactly what the Definition of Done requires. Nothing more.
-- **Turn checkpoint**: at turn ${checkpointTurn}, stop and re-read "## Task" and "## Definition of Done" above before continuing.
-- **Progress signal every 10 turns**: print "PROGRESS: <what done> | <what next> | <turns used>/${maxTurns}"
-- **Abort conditions** — stop immediately and print "ESCALATION: <reason>" if:
-  - You've used more than 60% of turns without a commit
-  - A step fails 3 times with the same error
-  - The task requires touching Risk-C files and riskClass is A or B
-  - You are unsure which of 2+ approaches to take
-
-## Quality rules
-- No \`any\` types. No unused imports. No comments stating the obvious.
-- Tests must cover the new behavior — not just type-check.
-- Never commit directly to main. Never force-push.
-- If a step fails, diagnose root cause before retrying.
+## Anti-drift rules
+- Stay in scope. No gold-plating.
+- Checkpoint at turn ${checkpointTurn}: re-read Task + DoD.
+- PROGRESS signal every 10 turns.
 ${skillBlock}
 Start now.`
 }
@@ -243,7 +251,14 @@ function isClaudeAvailable(): boolean {
   }
 }
 
-function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd: number, riskClass: string, targetRepo?: string) {
+function runWithClaudeCLI(
+  id: string,
+  promptOrDelegation: string | { delegation: Delegation; contextCards?: MemoryCard[]; retryContext?: string },
+  startTime: Date,
+  budgetUsd: number,
+  riskClass: string,
+  targetRepo?: string,
+) {
   const storedKeys = readStoredApiKeys()
   const anthropicKey = storedKeys.ANTHROPIC_API_KEY?.trim() || undefined
   const maxTurns = budgetToClaudeCliMaxTurns(budgetUsd)
@@ -288,6 +303,16 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     type: 'info',
     message: `Runner-Workspace vorbereitet: ${runnerWorkspace.path}`,
   }])
+
+  // Build prompt after worktree is ready so codebase-context reads the actual repo
+  const prompt = typeof promptOrDelegation === 'string'
+    ? promptOrDelegation
+    : buildPrompt(
+        promptOrDelegation.delegation,
+        promptOrDelegation.contextCards,
+        promptOrDelegation.retryContext,
+        runnerWorkspace.path,
+      )
 
   const proc = spawn(
     'claude',
@@ -353,7 +378,41 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       const msg = event.message as { content?: Array<{ type: string; text?: string; name?: string; input?: Record<string, unknown> }> }
       for (const block of msg?.content ?? []) {
         if (block.type === 'text' && block.text?.trim()) {
-          logBuffer.push({ timestamp: new Date().toISOString(), type: 'thought', message: block.text.trim().slice(0, 500) })
+          const text = block.text.trim()
+          logBuffer.push({ timestamp: new Date().toISOString(), type: 'thought', message: text.slice(0, 500) })
+
+          // Detect ESCALATION signal — pause delegation and create attention item
+          if (text.includes('ESCALATION:')) {
+            const match = text.match(/ESCALATION:\s*(.+?)(?:\s*\|.*)?$/)
+            const reason = match?.[1]?.trim() ?? text.slice(text.indexOf('ESCALATION:') + 11, text.indexOf('ESCALATION:') + 211)
+            logBuffer.push({ timestamp: new Date().toISOString(), type: 'error', message: `⚠️ ESKALATION: ${reason}` })
+            void (async () => {
+              await appendLogs(id, [...logBuffer], 'pending')
+              logBuffer.length = 0
+              upsertAttentionItem({
+                id: `escalation:${id}:${Date.now()}`,
+                type: 'escalation',
+                severity: 'warning',
+                title: `⚠️ Agent braucht Entscheidung`,
+                body: reason.slice(0, 300),
+                delegationId: id,
+                actionUrl: `/delegations/${id}`,
+                escalationContext: {
+                  problem: reason,
+                  options: text.includes('OPTIONS:')
+                    ? text.split('|').filter(p => !p.includes('ESCALATION:') && !p.includes('RECOMMEND:')).map(p => p.replace(/OPTIONS?:/, '').trim()).filter(Boolean)
+                    : undefined,
+                  recommendation: text.match(/RECOMMEND:\s*(\w)/)?.[1],
+                },
+                createdAt: new Date().toISOString(),
+              })
+            })()
+          }
+
+          // Detect PROGRESS signal
+          if (text.startsWith('PROGRESS:')) {
+            logBuffer.push({ timestamp: new Date().toISOString(), type: 'success', message: `📊 ${text.slice(0, 200)}` })
+          }
         } else if (block.type === 'tool_use' && block.name) {
           const summary = summariseTool(block.name, block.input ?? {})
           logBuffer.push({ timestamp: new Date().toISOString(), type: 'command', message: summary })
@@ -1165,7 +1224,15 @@ export async function POST(
   }
 
   if (mode === 'claude-cli') {
-    runWithClaudeCLI(id, prompt, startTime, delegation.contract.maxBudgetUsd, delegation.contract.riskClass, delegation.targetRepo)
+    // Pass delegation object so prompt is built after worktree creation with real codebase context
+    runWithClaudeCLI(
+      id,
+      { delegation, contextCards: contextCards ?? [], retryContext: retryContext || undefined },
+      startTime,
+      delegation.contract.maxBudgetUsd,
+      delegation.contract.riskClass,
+      delegation.targetRepo,
+    )
     return NextResponse.json({ started: true, mode: 'claude-cli', delegationId: id })
   }
 
