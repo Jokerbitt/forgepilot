@@ -76,6 +76,17 @@ vi.mock('@/lib/writeback/summary', () => ({
   })),
 }))
 
+vi.mock('@/lib/repositories/delegationRepository', () => ({
+  SINGLE_TENANT_USER_ID: 'default-user',
+  createDelegationRepository: vi.fn(() => ({
+    create: vi.fn(async (d: Record<string, unknown>) => ({ ...d, id: d.id ?? 'del-pilot-test' })),
+    findById: vi.fn(),
+    findAll: vi.fn(() => []),
+    update: vi.fn(),
+    delete: vi.fn(),
+  })),
+}))
+
 // Mock AI plan generation to prevent real API calls (avoids 5s timeout)
 vi.mock('@/lib/pilot/ai-plan', () => ({
   generateExecutionPlan: vi.fn(() =>
@@ -100,6 +111,9 @@ vi.mock('@/lib/pilot/ai-plan', () => ({
   })),
 }))
 
+// Stub global fetch to prevent fire-and-forget execute from hitting real network
+vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true })))
+
 import { runPilot } from './orchestrator'
 
 beforeEach(() => { vi.clearAllMocks() })
@@ -112,7 +126,7 @@ describe('runPilot', () => {
       goal: 'Implement feature X',
     })
     expect(result.status).toBe('completed')
-    expect(result.steps).toHaveLength(5)
+    expect(result.steps).toHaveLength(6)
     expect(result.steps.every(s => s.status !== 'error')).toBe(true)
   })
 
@@ -139,6 +153,7 @@ describe('runPilot', () => {
     expect(stepNames).toContain('agent-selection')
     expect(stepNames).toContain('agent-run-create')
     expect(stepNames).toContain('writeback')
+    expect(stepNames).toContain('delegation-create')
   })
 
   it('fails when policy denies the contract', async () => {
@@ -175,6 +190,20 @@ describe('runPilot', () => {
     expect(result.totalDurationMs).toBeGreaterThanOrEqual(0)
     expect(result.startedAt).toBeTruthy()
     expect(result.completedAt).toBeTruthy()
+  })
+
+  it('result includes delegationId and executionStarted after delegation-create step', async () => {
+    const result = await runPilot({ workItemId: 'wi-8', title: 'Delegation Test', goal: 'Create and execute delegation' })
+    expect(result.delegationId).toBeTruthy()
+    expect(result.executionStarted).toBe(true)
+  })
+
+  it('fires execute fetch for the created delegation', async () => {
+    await runPilot({ workItemId: 'wi-9', title: 'Fire Execute', goal: 'Should trigger execute fetch' })
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/delegations/'),
+      expect.objectContaining({ method: 'POST' }),
+    )
   })
 
   it('propagates privacyMode to routing step', async () => {

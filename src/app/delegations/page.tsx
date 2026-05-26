@@ -319,6 +319,7 @@ function DelegationsContent() {
     if (!delegation) return
 
     const updateData: Delegation = { ...delegation, status: newStatus as Delegation['status'] }
+
     applyUpdate(updateData)
     await fetch('/api/delegations', {
       method: 'POST',
