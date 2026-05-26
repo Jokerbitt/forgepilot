@@ -12,12 +12,14 @@ import type {
   ResearchPrivacyMode,
   SourceRecord,
 } from '@/lib/models/project-brief'
+import { persistencePromptGuidance, platformPromptGuidance } from '@/lib/project-planning-recommendations'
 
 const PROJECT_BRIEFS_FILE = path.join(process.cwd(), 'config', 'project-briefs.json')
 
 const BRIEF_SCOPES: BriefScope[] = ['minimal', 'standard', 'full']
 const RESEARCH_MODES: ResearchMode[] = ['quick', 'standard', 'deep']
 const PRIVACY_MODES: ResearchPrivacyMode[] = ['local', 'hybrid', 'cloud']
+
 export const PROJECT_BRIEF_LIMITS = {
   titleMax: 120,
   rawIdeaMax: 2000,
@@ -80,9 +82,9 @@ export function buildProjectBrief(input: IdeaIntakeInput, now = new Date(), id =
     planningMode: input.planningMode ?? 'beginner',
     targetPlatform: input.targetPlatform ?? 'undecided',
     customPlatformNote: input.customPlatformNote?.trim() || undefined,
-    platformGuidance: buildPlatformGuidance(input.targetPlatform ?? 'undecided', input.customPlatformNote),
+    platformGuidance: platformPromptGuidance(input.targetPlatform ?? 'undecided', input.customPlatformNote),
     persistenceStrategy: input.persistenceStrategy ?? 'recommend',
-    persistenceGuidance: buildPersistenceGuidance(input.persistenceStrategy ?? 'recommend'),
+    persistenceGuidance: persistencePromptGuidance(input.persistenceStrategy ?? 'recommend'),
     constraints: input.constraints.map(item => item.trim()).filter(Boolean),
     scope: input.scope,
     researchMode: input.researchMode,
@@ -112,44 +114,6 @@ export function buildProjectBrief(input: IdeaIntakeInput, now = new Date(), id =
       ],
     },
   }
-}
-
-function buildPlatformGuidance(platform: IdeaIntakeInput['targetPlatform'] = 'undecided', customNote?: string): string {
-  if (customNote?.trim()) {
-    return `Nutzerdefinierte Produktform beachten: ${customNote.trim()}. ForgePilot soll daraus geeignete Architektur- und UX-Empfehlungen ableiten.`
-  }
-  if (platform === 'webapp') {
-    return 'Primaer als Webapp planen: schneller MVP, responsives UI, Browser-first Deployment und spaeter optionale Desktop/Mobile Wrapper.'
-  }
-  if (platform === 'desktop') {
-    return 'Primaer als Desktop App planen: lokale Dateien, Systemintegration, Offline-Faehigkeit und klare Update-Strategie beruecksichtigen.'
-  }
-  if (platform === 'mobile') {
-    return 'Primaer als Mobile App fuer iOS und Android planen: Touch-Flows, Push/Offline, App-Store-Verteilung und kleine Screens zuerst beruecksichtigen.'
-  }
-  if (platform === 'cross_platform') {
-    return 'Cross-platform planen: gemeinsamen Kern definieren, Web als Steuerzentrale und native/desktop Oberflaechen bewusst priorisieren.'
-  }
-  return 'ForgePilot soll die Produktform empfehlen: zuerst Nutzerkontext, Nutzungshaeufigkeit, Geraet, Offline-Bedarf und Integrationsbedarf klaeren.'
-}
-
-function buildPersistenceGuidance(strategy: IdeaIntakeInput['persistenceStrategy'] = 'recommend'): string {
-  if (strategy === 'postgres') {
-    return 'PostgreSQL planen: beste Standardwahl fuer produktive Apps mit Transaktionen, Suche, parallelen Agenten, Audit-Logs und spaeterem SaaS-Ausbau.'
-  }
-  if (strategy === 'sqlite') {
-    return 'SQLite planen: gute Wahl fuer lokale Single-User/Desktop-Apps, Offline-Modus und einfache Verteilung ohne Server.'
-  }
-  if (strategy === 'json_file') {
-    return 'JSON-Dateien nur als fruehe lokale Persistenz oder Exportformat planen. Fuer parallele Agenten, Queries und Produktivbetrieb spaeter auf eine Datenbank migrieren.'
-  }
-  if (strategy === 'supabase') {
-    return 'Supabase/Managed Postgres planen: schnelle Webapp/SaaS-Entwicklung mit Auth, Realtime, Storage und weniger Infrastrukturaufwand.'
-  }
-  if (strategy === 'none') {
-    return 'Keine dauerhafte Datenhaltung planen: geeignet fuer reine Rechner, Demos oder ephemere Tools. Export/Import trotzdem pruefen.'
-  }
-  return 'ForgePilot soll die Datenhaltung empfehlen. Default: Postgres fuer produktive Apps; SQLite fuer lokale Desktop/Offline-Apps; JSON nur fuer Prototypen oder Export.'
 }
 
 export function buildResearchBriefFromProjectBrief(

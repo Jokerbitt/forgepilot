@@ -167,43 +167,6 @@ describe('POST /api/pilot/idea-to-production', () => {
     expect(data.workItemCount).toBe(1)
   })
 
-  it('passes resolved beginner architecture choices into the brief builder', async () => {
-    mockGenerateText
-      .mockResolvedValueOnce({
-        text: JSON.stringify({
-          title: 'Team Dashboard',
-          rawIdea: 'Build a browser dashboard for team reports',
-          problemStatement: 'Teams need report visibility',
-          targetAudience: 'Product teams',
-          desiredOutcome: 'A shared dashboard',
-          constraints: [],
-          scope: 'minimal',
-          researchMode: 'quick',
-          privacyMode: 'local',
-        }),
-        provider: 'anthropic',
-        model: 'claude-haiku-4-5',
-      })
-      .mockResolvedValueOnce({
-        text: JSON.stringify([
-          { title: 'Create dashboard shell', type: 'ticket', priority: 1, estimatedMinutes: 45, risk: 'A' },
-        ]),
-        provider: 'anthropic',
-        model: 'claude-haiku-4-5',
-      })
-
-    const { POST } = await import('./route')
-    const res = await POST(makeRequest({ idea: 'Build a browser dashboard for team reports', planningMode: 'beginner' }))
-
-    expect(res.status).toBe(201)
-    expect(mockBuildProjectBrief).toHaveBeenCalledOnce()
-    expect(mockBuildProjectBrief.mock.calls[0][0]).toMatchObject({
-      planningMode: 'beginner',
-      targetPlatform: 'webapp',
-      persistenceStrategy: 'postgres',
-    })
-  })
-
   it('full pipeline returns all expected fields', async () => {
     mockGenerateText
       .mockResolvedValueOnce({
@@ -253,7 +216,7 @@ describe('POST /api/pilot/idea-to-production', () => {
     expect(data.taskCount).toBe(1) // MOCK_TASKS has 1 task
   })
 
-  it('resolves concrete architecture choices in beginner mode', async () => {
+  it('passes resolved beginner architecture choices into the brief builder', async () => {
     mockGenerateText
       .mockResolvedValueOnce({
         text: JSON.stringify({
@@ -261,7 +224,7 @@ describe('POST /api/pilot/idea-to-production', () => {
           rawIdea: 'Build a browser dashboard for team reports',
           problemStatement: 'Teams need report visibility',
           targetAudience: 'Product teams',
-          desiredOutcome: 'A shared web dashboard',
+          desiredOutcome: 'A shared dashboard',
           constraints: [],
           scope: 'minimal',
           researchMode: 'quick',

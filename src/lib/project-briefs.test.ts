@@ -74,7 +74,7 @@ describe('buildProjectBrief', () => {
     expect(brief.researchBriefDraft.preferredSourceTypes).toContain('github')
   })
 
-  it('keeps explicit expert architecture choices on the brief', () => {
+  it('keeps expert architecture choices on the project brief', () => {
     const brief = buildProjectBrief({
       ...validInput,
       planningMode: 'expert',
