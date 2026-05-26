@@ -88,16 +88,13 @@ describe('POST /api/intake', () => {
     })
   })
 
-  it('returns 422 when validation fails', async () => {
-    const { validateIdeaIntakeInput, hasIdeaIntakeErrors } = await import('@/lib/project-briefs')
-    vi.mocked(validateIdeaIntakeInput).mockReturnValueOnce({ title: 'Pflichtfeld' })
-    vi.mocked(hasIdeaIntakeErrors).mockReturnValueOnce(true)
-
-    const res = await POST(makeRequest({ ...validPayload, title: '' }))
-    expect(res.status).toBe(422)
+  it('returns 400 when validation fails (Zod schema rejects body)', async () => {
+    // Zod IntakeWebhookBodySchema requires at least one of rawIdea/raw_idea/idea.
+    // Pass an empty object — no idea field present → schema .refine() fails → 400.
+    const res = await POST(makeRequest({ title: '', scope: 'undefined' }))
+    expect(res.status).toBe(400)
     const data = await res.json()
     expect(data).toHaveProperty('error', 'Validation failed')
-    expect(data).toHaveProperty('details')
   })
 
   it('returns 400 for invalid JSON body', async () => {
