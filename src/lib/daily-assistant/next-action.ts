@@ -22,6 +22,25 @@ export interface DailyAssistantAction {
   tone: AssistantTone
 }
 
+export type DailyAssistantStepState = 'now' | 'next' | 'later' | 'blocked'
+
+export interface DailyAssistantStep {
+  id: string
+  title: string
+  detail: string
+  href: string
+  label: string
+  state: DailyAssistantStepState
+}
+
+export interface DailyAssistantBlocker {
+  id: string
+  title: string
+  detail: string
+  href: string
+  severity: 'critical' | 'warning'
+}
+
 export interface DailyAssistantQueueItem {
   id: string
   title: string
@@ -125,6 +144,229 @@ export function describeAutonomy(input: Pick<DailyAssistantInput, 'approvalMode'
   }
 
   return 'Assistant Mode: ForgePilot führt dich Schritt für Schritt zur nächsten nützlichen Aktion.'
+}
+
+export function buildDailyAssistantSteps(input: DailyAssistantInput): DailyAssistantStep[] {
+  const action = buildDailyAssistantAction(input)
+
+  if (action.id === 'fix-failed-delegations') {
+    return [
+      {
+        id: 'inspect-failures',
+        title: 'Fehler verstehen',
+        detail: 'Öffne die fehlgeschlagenen Delegationen und lies Fehler, letzte Logs und Retry-Hinweise.',
+        href: '/delegations?urgent=true',
+        label: 'Fehler öffnen',
+        state: 'now',
+      },
+      {
+        id: 'retry-or-scope-down',
+        title: 'Retry oder Scope verkleinern',
+        detail: 'Starte nur neu, wenn Ursache und nächster Versuch klar sind. Bei Unsicherheit erst Plan Mode nutzen.',
+        href: '/delegations',
+        label: 'Retry prüfen',
+        state: 'next',
+      },
+      {
+        id: 'resume-autonomy',
+        title: 'Autonomie danach wieder freigeben',
+        detail: 'Neue automatische Runs erst starten, wenn keine kritischen Fehler offen sind.',
+        href: '/live',
+        label: 'Live prüfen',
+        state: 'later',
+      },
+    ]
+  }
+
+  if (action.id === 'watch-running-agents') {
+    return [
+      {
+        id: 'watch-live',
+        title: 'Live verfolgen',
+        detail: 'Prüfe, ob Agenten Code ändern, Tests ausführen und einen PR vorbereiten.',
+        href: '/live',
+        label: 'Live View',
+        state: 'now',
+      },
+      {
+        id: 'verify-evidence',
+        title: 'Evidence prüfen',
+        detail: 'Achte auf geänderte Dateien, Testresultate, Critic-Ergebnis und PR-Link.',
+        href: '/delegations',
+        label: 'Delegationen',
+        state: 'next',
+      },
+      {
+        id: 'review-pr',
+        title: 'PR abschließen',
+        detail: 'Wenn CI grün ist: Diff, Checks und Secrets prüfen, dann mergen.',
+        href: '/branches',
+        label: 'PRs prüfen',
+        state: 'later',
+      },
+    ]
+  }
+
+  if (action.id === 'review-open-prs') {
+    return [
+      {
+        id: 'review-diff',
+        title: 'Änderungen ansehen',
+        detail: 'Öffne Branches, prüfe Diff, Tests und ob keine Secrets enthalten sind.',
+        href: '/branches',
+        label: 'Branches',
+        state: 'now',
+      },
+      {
+        id: 'merge-safe-prs',
+        title: 'Sichere PRs mergen',
+        detail: 'Nur mergen, wenn Review-Checkliste und CI grün sind.',
+        href: '/branches',
+        label: 'Merge prüfen',
+        state: 'next',
+      },
+      {
+        id: 'writeback-after-merge',
+        title: 'Wissen sichern',
+        detail: 'Nach dem Merge sollte die Erkenntnis als wiederverwendbares Projektwissen sichtbar sein.',
+        href: '/knowledge',
+        label: 'Knowledge',
+        state: 'later',
+      },
+    ]
+  }
+
+  if (action.id === 'start-approved-work') {
+    return [
+      {
+        id: 'start-safe-work',
+        title: input.approvalMode === 'autopilot' ? 'Autopilot starten lassen' : 'Start bewusst freigeben',
+        detail: 'Beginne mit sicheren Risk-A/B-Delegationen und beobachte danach die Live View.',
+        href: '/delegations',
+        label: 'Start prüfen',
+        state: 'now',
+      },
+      {
+        id: 'watch-execution',
+        title: 'Ausführung beobachten',
+        detail: 'Kontrolliere Logs, geänderte Dateien, Tests und ob ein PR entsteht.',
+        href: '/live',
+        label: 'Live View',
+        state: 'next',
+      },
+      {
+        id: 'review-result',
+        title: 'Ergebnis bewerten',
+        detail: 'Critic Review, Writeback und PR erst akzeptieren, wenn der Nutzen klar ist.',
+        href: '/branches',
+        label: 'Review',
+        state: 'later',
+      },
+    ]
+  }
+
+  if (action.id === 'approve-next-delegation') {
+    return [
+      {
+        id: 'scope-check',
+        title: 'Scope prüfen',
+        detail: 'Ist Ziel, Datei-Scope, Risiko und Definition of Done klar genug?',
+        href: '/delegations',
+        label: 'Freigaben',
+        state: 'now',
+      },
+      {
+        id: 'approve-low-risk',
+        title: 'Niedriges Risiko freigeben',
+        detail: 'Risk A/B kann vorbereitet werden. Risk C bleibt manuell und braucht bewusste Kontrolle.',
+        href: '/delegations',
+        label: 'Freigeben',
+        state: 'next',
+      },
+      {
+        id: 'start-after-approval',
+        title: 'Danach ausführen',
+        detail: 'Nach der Freigabe startet der Agent kontrolliert oder im Autopilot.',
+        href: '/live',
+        label: 'Live',
+        state: 'later',
+      },
+    ]
+  }
+
+  return [
+    {
+      id: 'describe-idea',
+      title: 'Idee beschreiben',
+      detail: 'Schreibe Ziel, Nutzer, Nutzen und was als erstes funktionieren soll in normaler Sprache.',
+      href: '/idea',
+      label: 'Plan Mode',
+      state: 'now',
+    },
+    {
+      id: 'accept-plan',
+      title: 'Plan prüfen',
+      detail: 'ForgePilot empfiehlt App-Typ, Datenhaltung, MVP-Schnitt, Risiken und erste Arbeitspakete.',
+      href: '/idea',
+      label: 'Plan prüfen',
+      state: 'next',
+    },
+    {
+      id: 'delegate-first-slice',
+      title: 'Erste kleine Delegation starten',
+      detail: 'Starte nicht das ganze Produkt, sondern den kleinsten nützlichen vertikalen Schnitt.',
+      href: '/projects',
+      label: 'Projekt öffnen',
+      state: 'later',
+    },
+  ]
+}
+
+export function buildDailyAssistantBlockers(input: DailyAssistantInput, queue: DailyAssistantQueueItem[] = []): DailyAssistantBlocker[] {
+  const blockers: DailyAssistantBlocker[] = []
+
+  if (input.failed > 0) {
+    blockers.push({
+      id: 'failed-delegations',
+      title: 'Fehlgeschlagene Delegationen blockieren Autonomie',
+      detail: `${input.failed} Fehler müssen verstanden werden, bevor neue Arbeit automatisch starten sollte.`,
+      href: '/delegations?urgent=true',
+      severity: 'critical',
+    })
+  }
+
+  const riskC = queue.filter(item => item.riskClass === 'C' && ['pending', 'approved'].includes(item.status)).length
+  if (riskC > 0) {
+    blockers.push({
+      id: 'risk-c-work',
+      title: 'Risk-C-Arbeit bleibt manuell',
+      detail: `${riskC} riskante Aufgabe(n) brauchen bewusste Freigabe und sollten nicht autonom laufen.`,
+      href: '/delegations',
+      severity: 'warning',
+    })
+  }
+
+  if (input.authDisabled) {
+    blockers.push({
+      id: 'auth-disabled',
+      title: 'Login ist deaktiviert',
+      detail: 'Für lokale Tests okay. Vor Launch muss Auth wieder aktiv sein.',
+      href: '/settings',
+      severity: 'warning',
+    })
+  }
+
+  if (input.storageMode === 'json') {
+    blockers.push({
+      id: 'json-storage',
+      title: 'JSON ist noch primärer Speicher',
+      detail: 'Für echte Produktion sollte PostgreSQL der verlässliche Read/Write-Pfad sein.',
+      href: '/settings/deployment',
+      severity: 'warning',
+    })
+  }
+
+  return blockers
 }
 
 export function sortAssistantQueue(items: DailyAssistantQueueItem[]): DailyAssistantQueueItem[] {
