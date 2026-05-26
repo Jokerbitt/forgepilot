@@ -468,6 +468,7 @@ function SystemHealthCard({ stats }: { stats: DashboardStats | null }) {
         <HealthLine label="AI Provider" value={activeProviders > 0 ? `${activeProviders} aktiv` : 'einrichten'} ok={activeProviders > 0} href="/settings/providers" />
         <HealthLine label="Tests" value={testsGreen > 0 ? `${testsGreen} grün` : 'kein Lauf'} ok={testsGreen > 0} href="/analytics" />
         <HealthLine label="KI-Aufrufe heute" value={aiCallsToday} ok href="/governance" />
+        <HealthLine label="Projektfortschritt" value="Report anzeigen" ok href="/reports/progress" />
       </div>
     </section>
   )

@@ -37,19 +37,49 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     saveSnapshot(current, 'Automatisch vor Update')
     const updated = await repo.update(id, patch)
 
-    // M217: Fire-and-forget — create Linear ticket when brief is accepted
+    // M217: Fire-and-forget — create Linear project + ticket when brief is accepted
     if (patch.status === 'accepted' && updated) {
-      import('@/lib/linear/create-ticket').then(({ createLinearTicketForBrief }) =>
-        createLinearTicketForBrief({
-          title: updated.title,
-          description: [
-            `Problem: ${updated.problemStatement}`,
-            `Zielgruppe: ${updated.targetAudience}`,
-            `Outcome: ${updated.desiredOutcome}`,
-          ].join('\n'),
-          briefId: updated.id,
-        }),
-      ).catch(() => { /* non-critical */ })
+      // First create (or find) a Linear project for this brief, then link the ticket
+      void (async () => {
+        try {
+          const { readConnectorConfigs } = await import('@/lib/connectors/config')
+          const { linear: linearConfig } = readConnectorConfigs()
+          const teamId = linearConfig?.teamId?.trim()
+          const apiKey = linearConfig?.apiKey?.trim()
+          if (!teamId || !apiKey) return
+
+          const { findOrCreateLinearProject } = await import('@/lib/connectors/linear')
+          const { updateProjectBrief, saveProjectBrief, readProjectBriefs } = await import('@/lib/project-briefs')
+
+          const project = await findOrCreateLinearProject(linearConfig!, {
+            teamId,
+            name: updated.title,
+            description: [updated.problemStatement, `Outcome: ${updated.desiredOutcome}`].join('\n'),
+          })
+
+          const latest = readProjectBriefs().find(b => b.id === updated.id)
+          if (latest && !latest.linearProjectId) {
+            const patched = updateProjectBrief(latest.id, {
+              linearProjectId: project.id,
+              linearProjectUrl: project.url,
+            })
+            if (patched) saveProjectBrief(patched)
+          }
+
+          // Create the overview ticket linked to the project
+          const { createLinearTicketForBrief } = await import('@/lib/linear/create-ticket')
+          await createLinearTicketForBrief({
+            title: updated.title,
+            description: [
+              `Problem: ${updated.problemStatement}`,
+              `Zielgruppe: ${updated.targetAudience}`,
+              `Outcome: ${updated.desiredOutcome}`,
+            ].join('\n'),
+            briefId: updated.id,
+            projectId: project.id,
+          })
+        } catch { /* non-critical */ }
+      })()
 
       // Auto-create GitHub repo when brief is accepted and GitHub is connected
       if (!updated.githubRepoUrl) {

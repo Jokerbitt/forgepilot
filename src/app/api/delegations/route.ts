@@ -71,6 +71,16 @@ export async function GET(request: NextRequest) {
     )
   }
 
+  // Optional search filter: ?search=keyword → match title or goal
+  const searchParam = request.nextUrl.searchParams.get('search')?.trim().toLowerCase()
+  if (searchParam) {
+    delegations = delegations.filter(d =>
+      (d.title ?? '').toLowerCase().includes(searchParam)
+      || d.contract.goal.toLowerCase().includes(searchParam)
+      || (d.briefTitle ?? '').toLowerCase().includes(searchParam)
+    )
+  }
+
   // Optional urgent filter: ?urgent=true → only delegations needing operator attention
   if (parseBooleanParam(request.nextUrl.searchParams.get('urgent'))) {
     delegations = delegations.filter(isUrgentDelegation)

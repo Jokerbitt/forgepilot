@@ -211,6 +211,10 @@ export interface ProjectBrief {
   githubRepoUrl?: string
   /** GitHub repository full name (owner/repo) */
   githubRepoName?: string
+  /** Linear project ID linked to this brief */
+  linearProjectId?: string
+  /** Linear project URL */
+  linearProjectUrl?: string
 }
 
 export interface IdeaIntakeInput {

@@ -40,6 +40,7 @@ export class LinearClient {
     title: string
     description: string
     teamId?: string
+    projectId?: string
   }): Promise<{ id: string; identifier: string; url: string } | null> {
     const teamId = params.teamId ?? await this.getTeamId()
     if (!teamId) return null
@@ -47,13 +48,13 @@ export class LinearClient {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: this.apiKey },
       body: JSON.stringify({
-        query: `mutation CreateIssue($teamId: String!, $title: String!, $description: String) {
-          issueCreate(input: { teamId: $teamId, title: $title, description: $description }) {
+        query: `mutation CreateIssue($teamId: String!, $title: String!, $description: String, $projectId: String) {
+          issueCreate(input: { teamId: $teamId, title: $title, description: $description, projectId: $projectId }) {
             success
             issue { id identifier url }
           }
         }`,
-        variables: { teamId, title: params.title, description: params.description },
+        variables: { teamId, title: params.title, description: params.description, projectId: params.projectId ?? null },
       }),
     })
     if (!res.ok) return null
