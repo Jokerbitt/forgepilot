@@ -312,6 +312,20 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
   const logBuffer: AgentLog[] = []
   let fullOutput = ''
   let flushTimer: ReturnType<typeof setTimeout> | null = null
+  let startupTimer: ReturnType<typeof setTimeout> | null = null
+  let sawOutput = false
+
+  const startupTimeoutMs = Math.max(
+    30_000,
+    Number(process.env.FORGEPILOT_CLI_STARTUP_TIMEOUT_MS ?? 180_000),
+  )
+
+  const clearStartupTimer = () => {
+    if (startupTimer) {
+      clearTimeout(startupTimer)
+      startupTimer = null
+    }
+  }
 
   const scheduleFlush = () => {
     if (flushTimer) clearTimeout(flushTimer)
@@ -323,7 +337,29 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     }, 2000)
   }
 
+  startupTimer = setTimeout(() => {
+    if (sawOutput) return
+    const timeoutSeconds = Math.round(startupTimeoutMs / 1000)
+    const message = [
+      `Claude CLI hat nach ${timeoutSeconds}s keine Ausgabe geliefert.`,
+      'Moegliche Ursache: CLI-Login/OAuth wartet interaktiv, Netzwerk blockiert oder Headless-Modus haengt.',
+      'Bitte Claude CLI lokal mit `claude -p "ping" --max-turns 1` testen und danach erneut starten.',
+    ].join(' ')
+    void appendLogs(id, [{
+      timestamp: new Date().toISOString(),
+      type: 'error',
+      message,
+    }])
+    try {
+      if (proc.pid) process.kill(-proc.pid, 'SIGTERM')
+    } catch {
+      proc.kill('SIGTERM')
+    }
+  }, startupTimeoutMs)
+
   proc.stdout?.on('data', (chunk: Buffer) => {
+    sawOutput = true
+    clearStartupTimer()
     const text = chunk.toString()
     fullOutput += text
     const lines = text.split('\n').filter(l => l.trim())
@@ -341,6 +377,8 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
   })
 
   proc.stderr?.on('data', (chunk: Buffer) => {
+    sawOutput = true
+    clearStartupTimer()
     const text = chunk.toString()
     fullOutput += text
     const knownError = detectKnownError(text)
@@ -364,6 +402,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
 
   proc.on('close', (code: number | null) => {
     if (flushTimer) clearTimeout(flushTimer)
+    clearStartupTimer()
     unregisterProcess(id)
 
     const success = code === 0
