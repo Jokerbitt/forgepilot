@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { Delegation, ExecutionRoute, OutputMode, TaskContract, TaskType } from '@/lib/models/delegation'
 import type { RiskClass } from '@/lib/models/work-item'
 import { DELEGATION_TEMPLATES, templateToContract } from '@/lib/delegations/templates'
+import type { FeatureSuggestion } from '@/app/api/delegations/suggest-features/route'
 
 interface Props {
   onClose: () => void
@@ -52,6 +53,8 @@ export function NewDelegationDialog({
   const [goalError, setGoalError] = useState(false)
   const [generatingDod, setGeneratingDod] = useState(false)
   const [dodError, setDodError] = useState<string | null>(null)
+  const [features, setFeatures] = useState<FeatureSuggestion[]>([])
+  const [showFeatures, setShowFeatures] = useState(false)
 
   const handleTemplateSelect = (t: typeof TEMPLATES[0]) => {
     setSelectedTemplate(t)
@@ -85,20 +88,31 @@ export function NewDelegationDialog({
     if (!goal.trim()) { setGoalError(true); return }
     setGeneratingDod(true)
     setDodError(null)
+    const payload = { goal: goal.trim(), context: context.trim() }
     try {
-      const res = await fetch('/api/delegations/generate-dod', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal: goal.trim(), context: context.trim() }),
-      })
-      const data = await res.json() as { dod?: string[]; error?: string }
-      if (!res.ok || !data.dod) {
-        setDodError(data.error ?? 'Unbekannter Fehler')
+      // Call DoD + feature suggestions in parallel
+      const [dodRes, featRes] = await Promise.all([
+        fetch('/api/delegations/generate-dod', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        }),
+        fetch('/api/delegations/suggest-features', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        }),
+      ])
+      const dodData = await dodRes.json() as { dod?: string[]; error?: string }
+      const featData = await featRes.json() as { features?: FeatureSuggestion[] }
+
+      if (!dodRes.ok || !dodData.dod) {
+        setDodError(dodData.error ?? 'Unbekannter Fehler')
       } else {
-        setDodItems(data.dod.map(d => d.trim()).filter(d => d.length > 0))
+        setDodItems(dodData.dod.map(d => d.trim()).filter(d => d.length > 0))
+      }
+      if (featData.features?.length) {
+        setFeatures(featData.features)
+        setShowFeatures(true)
       }
     } catch {
-      setDodError('Netzwerkfehler beim Generieren der DoD')
+      setDodError('Netzwerkfehler beim Generieren')
     } finally {
       setGeneratingDod(false)
     }
@@ -278,6 +292,63 @@ export function NewDelegationDialog({
                 </button>
               </div>
             </div>
+
+            {/* Feature Suggestions */}
+            {features.length > 0 && (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowFeatures(v => !v)}
+                  className="flex items-center gap-1.5 text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 hover:text-gray-300 transition-colors w-full"
+                >
+                  <span>{showFeatures ? '▾' : '▸'}</span>
+                  💡 Feature-Ideen ({features.length})
+                </button>
+                {showFeatures && (
+                  <div className="rounded-lg border border-gray-800 bg-gray-900/60 overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-gray-800">
+                          <th className="text-left px-3 py-2 text-gray-600 font-semibold">Feature</th>
+                          <th className="text-left px-3 py-2 text-gray-600 font-semibold">Aufwand</th>
+                          <th className="text-left px-3 py-2 text-gray-600 font-semibold">Wann</th>
+                          <th className="px-3 py-2" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {features.map((f, i) => (
+                          <tr key={i} className="border-b border-gray-800/50 last:border-0 hover:bg-gray-800/30 transition-colors">
+                            <td className="px-3 py-2 text-gray-200 font-medium">{f.name}</td>
+                            <td className="px-3 py-2">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                                f.complexity === 'Klein'  ? 'bg-emerald-950/50 text-emerald-400' :
+                                f.complexity === 'Mittel' ? 'bg-amber-950/50 text-amber-400' :
+                                                            'bg-red-950/50 text-red-400'
+                              }`}>{f.complexity}</span>
+                            </td>
+                            <td className="px-3 py-2 text-gray-500">{f.when}</td>
+                            <td className="px-3 py-2 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setGoal(f.goal)
+                                  setDodItems([''])
+                                  setFeatures([])
+                                  setShowFeatures(false)
+                                }}
+                                className="px-2 py-0.5 rounded border border-gray-700 text-gray-400 hover:border-blue-600 hover:text-blue-400 transition-colors whitespace-nowrap"
+                              >
+                                → Delegieren
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Ticket (optional) */}
             <div>
