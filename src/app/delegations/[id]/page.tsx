@@ -1090,7 +1090,7 @@ export default function DelegationDetailPage() {
           <div className="space-y-4">
             <CollapsibleSection
               title="Technische Details"
-              collapsedHint={`${d.executionRoute} · Risk ${d.contract.riskClass} · $${d.contract.maxBudgetUsd.toFixed(2)}`}
+              collapsedHint={`${d.executionRoute} · Risk ${d.contract.riskClass}${d.contract.maxBudgetUsd != null ? ` · $${d.contract.maxBudgetUsd.toFixed(2)}` : ''}`}
               defaultOpen={false}
             >
               <dl className="space-y-2 text-sm">
@@ -1120,7 +1120,7 @@ export default function DelegationDetailPage() {
                 )}
                 <div className="flex justify-between gap-2">
                   <dt className="text-gray-500">Budget</dt>
-                  <dd className="text-gray-300 font-mono">${d.contract.maxBudgetUsd.toFixed(2)}</dd>
+                  <dd className="text-gray-300 font-mono">{d.contract.maxBudgetUsd != null ? `$${d.contract.maxBudgetUsd.toFixed(2)}` : '–'}</dd>
                 </div>
                 {d.actualCostUsd != null && (
                   <div className="flex justify-between gap-2">
