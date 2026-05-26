@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Activity,
-  AlertTriangle,
   CheckCircle2,
   ChevronRight,
   Circle,
@@ -17,6 +16,8 @@ import {
 import type { AgentLog, Delegation, DelegationStatus } from '@/lib/models/delegation'
 import { cx } from '@/components/ui/primitives'
 import { ElapsedTimer } from '@/components/shared/ElapsedTimer'
+import { AgentPhaseIndicator } from '@/components/delegation/AgentPhaseIndicator'
+import { inferAgentPhase } from '@/lib/delegations/agent-phase'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -92,6 +93,7 @@ function DelegationCard({ delegation }: { delegation: Delegation }) {
   const latestLog = getLatestLog(d.logs)
   const pct = budgetPercent(d.actualCostUsd, d.contract.maxBudgetUsd)
   const traceUrl = buildTraceUrl(d.traceId)
+  const phaseInfo = inferAgentPhase(d)
 
   return (
     <div
@@ -181,12 +183,15 @@ function DelegationCard({ delegation }: { delegation: Delegation }) {
         </div>
       )}
 
-      {/* Latest log */}
-      {latestLog && (
+      {/* Agent phase indicator */}
+      <AgentPhaseIndicator info={phaseInfo} showProgress className="mt-2" />
+
+      {/* Latest log — show raw log when no structured phase signal is present */}
+      {latestLog && phaseInfo.phase === 'exploring' && !phaseInfo.progressSignal && (
         <p
           data-testid={`latest-log-${d.id}`}
           className={cx(
-            'mt-2 truncate font-mono text-[11px]',
+            'mt-1 truncate font-mono text-[11px]',
             latestLog.type === 'error' ? 'text-rose-400' :
             latestLog.type === 'success' ? 'text-emerald-400' :
             latestLog.type === 'command' ? 'text-amber-300' :
@@ -196,14 +201,6 @@ function DelegationCard({ delegation }: { delegation: Delegation }) {
         >
           {latestLog.type === 'command' ? '$ ' : latestLog.type === 'thought' ? '💭 ' : '  '}
           {latestLog.message}
-        </p>
-      )}
-
-      {/* Error message */}
-      {d.status === 'failed' && d.errorMessage && (
-        <p className="mt-2 flex items-start gap-1 text-xs text-rose-400">
-          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-          {d.errorMessage}
         </p>
       )}
     </div>
