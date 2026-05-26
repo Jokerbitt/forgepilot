@@ -137,10 +137,19 @@ export function buildSimulationBudgetLog(delegation: Delegation): Pick<AgentLog,
 }
 
 export function buildRetryContext(delegation: Delegation): string {
+  const parts: string[] = []
+
+  if (delegation.escalationDecision) {
+    parts.push(`\n## Escalation Resolved\nA previous run was paused waiting for a human decision. The user has now decided:\n${delegation.escalationDecision}\nContinue the task with this decision in mind. Do NOT escalate again for the same issue.\n`)
+  }
+
   const errorLogs = (delegation.logs ?? [])
     .filter(l => l.type === 'error')
     .slice(-5)
-  if (errorLogs.length === 0) return ''
-  const lines = errorLogs.map(l => `- ${l.message.slice(0, 200)}`).join('\n')
-  return `\n## Previous Attempt Failed\nThe last execution failed. Avoid these errors in the new attempt:\n${lines}\n`
+  if (errorLogs.length > 0) {
+    const lines = errorLogs.map(l => `- ${l.message.slice(0, 200)}`).join('\n')
+    parts.push(`\n## Previous Attempt Failed\nLast errors to avoid:\n${lines}\n`)
+  }
+
+  return parts.join('')
 }

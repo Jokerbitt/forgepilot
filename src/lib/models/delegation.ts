@@ -193,6 +193,8 @@ export interface Delegation {
   targetRepo?: string
   /** Auto-generated DoD quality check result after execution */
   qualityCheck?: DoDQualityCheck
+  /** Decision provided by user to resume after an ESCALATION (cleared after resume starts) */
+  escalationDecision?: string
   createdAt: string
   updatedAt: string
 }

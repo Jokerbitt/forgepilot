@@ -33,6 +33,7 @@ import { AgentPhaseIndicator } from '@/components/delegation/AgentPhaseIndicator
 import { inferAgentPhase } from '@/lib/delegations/agent-phase'
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection'
 import { AffectedFilesPanel } from '@/components/delegation/AffectedFilesPanel'
+import { EscalationResumePanel } from '@/components/delegation/EscalationResumePanel'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
   switch (status) {
@@ -882,6 +883,18 @@ export default function DelegationDetailPage() {
         {/* ── Structured error recovery (when failed) ─────────────────── */}
         {d.status === 'failed' && d.errorMessage && (
           <DelegationErrorBanner errorMessage={d.errorMessage} />
+        )}
+
+        {/* ── Escalation Resume Panel ──────────────────────────────────── */}
+        {d.status === 'pending' && (d.logs ?? []).some(l => l.message.includes('ESKALATION:') || l.message.includes('ESCALATION:')) && (
+          <EscalationResumePanel
+            delegationId={d.id}
+            logs={d.logs ?? []}
+            onResumed={() => {
+              setDelegation(prev => prev ? { ...prev, status: 'approved', updatedAt: new Date().toISOString() } : prev)
+              setTimeout(loadDelegation, 500)
+            }}
+          />
         )}
 
         {/* ── Next Action Panel ────────────────────────────────────────── */}

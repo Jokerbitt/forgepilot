@@ -1164,7 +1164,11 @@ export async function POST(
   await appendLogs(id, [startLog], 'running')
   {
     const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
-    await repo.update(id, { startedAt: new Date().toISOString() })
+    await repo.update(id, {
+      startedAt: new Date().toISOString(),
+      // Clear escalation decision after it is consumed into retryContext
+      ...(delegation.escalationDecision ? { escalationDecision: undefined } : {}),
+    })
   }
 
   const startTime = new Date()
