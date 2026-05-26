@@ -9,6 +9,8 @@ import {
   SINGLE_TENANT_USER_ID,
 } from '@/lib/repositories/delegationRepository'
 import { reapStaleDelegations } from '@/lib/delegations/watchdog'
+import { getNBAConfig } from '@/lib/nba-engine/nba-config'
+import { apiLogger } from '@/lib/logger'
 
 // Zod schema for creating/updating a delegation via POST
 const DelegationInputSchema = z.object({
@@ -148,6 +150,15 @@ export async function POST(request: NextRequest) {
 
     // Store rotation: cap at 200, dropping oldest terminal-status entries first
     await trimStore(repo)
+
+    // Auto-start: if autoStartApproved is enabled and delegation is approved, trigger execution
+    if (created.status === 'approved' && getNBAConfig().autoStartApproved) {
+      const base = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, '') ?? 'http://localhost:3000'
+      void fetch(`${base}/api/delegations/${created.id}/execute`, { method: 'POST' }).catch((err: unknown) => {
+        apiLogger.warn({ event: 'delegation.auto-start.failed', id: created.id, err }, 'Auto-start trigger failed')
+      })
+      apiLogger.info({ event: 'delegation.auto-start', id: created.id }, `Auto-start triggered for delegation ${created.id}`)
+    }
 
     return NextResponse.json(created)
   } catch (e) {
