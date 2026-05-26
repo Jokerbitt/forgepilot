@@ -4,6 +4,7 @@ import { ConnectorHealthBar } from '@/components/command-center/ConnectorHealthB
 import { ApiKeysBanner } from '@/components/shared/ApiKeysBanner'
 import { NoAIProviderBanner } from '@/components/shared/NoAIProviderBanner'
 import { OnboardingBanner as OnboardingWizardBanner } from '@/components/onboarding/OnboardingBanner'
+import { DailyAssistantPanel } from '@/components/command-center/DailyAssistantPanel'
 import { buttonClassName, cx } from '@/components/ui/primitives'
 
 const mainFlow = [
@@ -56,6 +57,10 @@ export default function Home() {
     <main className="min-h-screen text-white">
       <ConnectorHealthBar />
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mb-5">
+          <DailyAssistantPanel />
+        </div>
+
         <section className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5 shadow-sm shadow-black/20 sm:p-7">
           <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
             <div>

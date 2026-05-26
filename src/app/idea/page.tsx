@@ -380,6 +380,25 @@ export default function IdeaPage() {
         {/* Input Box */}
         {stage === 'idle' || stage === 'error' ? (
           <div className="w-full space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <AssistantStepCard
+                index="1"
+                title="Idee eingeben"
+                body="Ein Satz reicht. ForgePilot fragt bei Bedarf nach und macht daraus Struktur."
+                active
+              />
+              <AssistantStepCard
+                index="2"
+                title="Plan prüfen"
+                body="App-Typ, Datenbank, Nutzen, Risiken und MVP werden automatisch empfohlen."
+              />
+              <AssistantStepCard
+                index="3"
+                title="Delegieren"
+                body="Du entscheidest: autonom starten oder erst jede Aufgabe bewusst freigeben."
+              />
+            </div>
+
             {hasAssistantPrompt && (
               <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-5 py-4 shadow-lg shadow-emerald-950/20">
                 <div className="flex items-start gap-3">
@@ -437,10 +456,20 @@ export default function IdeaPage() {
                 </div>
                 {planningMode === 'beginner' ? (
                   <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.07] p-4">
-                    <p className="text-sm font-semibold text-emerald-100">Automatische Empfehlung aktiv</p>
+                    <p className="text-sm font-semibold text-emerald-100">Anfänger-Modus: automatische Empfehlung aktiv</p>
                     <p className="mt-1 text-xs leading-5 text-emerald-100/70">
                       ForgePilot entscheidet selbst, ob Webapp, Desktop, Mobile oder Cross-platform sinnvoll ist und welche Datenhaltung passt. Die Begründung erscheint im erzeugten Brief.
                     </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-lg border border-emerald-500/15 bg-black/15 px-3 py-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-200/70">App-Typ</p>
+                        <p className="mt-1 text-xs text-emerald-50/80">ForgePilot empfiehlt automatisch</p>
+                      </div>
+                      <div className="rounded-lg border border-emerald-500/15 bg-black/15 px-3 py-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-200/70">Datenbank</p>
+                        <p className="mt-1 text-xs text-emerald-50/80">Produktiv sinnvoll statt JSON-Default</p>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   <div className="mt-4 space-y-4">
@@ -661,6 +690,48 @@ export default function IdeaPage() {
         {/* Result */}
         {stage === 'done' && result && (
           <div className="w-full space-y-4">
+            <div className="rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] p-5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-violet-300">Plan Mode Ergebnis</p>
+              <h2 className="mt-2 text-xl font-bold text-white">So würde ForgePilot jetzt weiterarbeiten</h2>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <RecommendationCard
+                  title="Produktform"
+                  value={TARGET_PLATFORM_LABELS[result.targetPlatform ?? effectiveTargetPlatform]}
+                  body={result.platformGuidance || 'ForgePilot hat die passende Produktform aus deiner Idee abgeleitet.'}
+                />
+                <RecommendationCard
+                  title="Datenhaltung"
+                  value={PERSISTENCE_LABELS[result.persistenceStrategy ?? effectivePersistenceStrategy]}
+                  body={result.persistenceGuidance || 'ForgePilot hat eine passende Persistenzstrategie empfohlen.'}
+                />
+                <RecommendationCard
+                  title="Nächster Schritt"
+                  value={result.topItem.title}
+                  body={`Als erste Delegation vorbereitet. Geschätzt: ${result.topItem.estimatedMinutes} Minuten.`}
+                />
+              </div>
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <Link
+                  href={`/projects/${result.briefId}`}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-violet-500"
+                >
+                  Projekt öffnen
+                </Link>
+                <Link
+                  href="/"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm font-bold text-slate-200 transition-colors hover:border-violet-500/30 hover:bg-violet-500/[0.08]"
+                >
+                  Daily Assistant öffnen
+                </Link>
+                <Link
+                  href="/live"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm font-bold text-slate-200 transition-colors hover:border-violet-500/30 hover:bg-violet-500/[0.08]"
+                >
+                  Live verfolgen
+                </Link>
+              </div>
+            </div>
+
             {/* Success card */}
             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-6">
               <div className="flex items-start gap-4">
@@ -694,10 +765,16 @@ export default function IdeaPage() {
               </div>
               <div className="mt-5 flex flex-wrap gap-3">
                 <Link
-                  href={`/project-briefs/${result.briefId}`}
+                  href={`/projects/${result.briefId}`}
                   className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium bg-violet-600 text-white hover:bg-violet-500 transition-colors"
                 >
-                  <span>📋</span> Brief ansehen
+                  <span>📋</span> Projekt öffnen
+                </Link>
+                <Link
+                  href={`/project-briefs/${result.briefId}`}
+                  className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium border border-white/[0.08] bg-white/[0.02] text-slate-300 hover:border-violet-500/30 hover:text-white transition-colors"
+                >
+                  <span>📄</span> Brief ansehen
                 </Link>
                 <Link
                   href={`/orchestrations`}
@@ -724,14 +801,14 @@ export default function IdeaPage() {
 
             {/* Pipeline summary */}
             <div className="grid grid-cols-3 gap-3">
-              <Link
-                href={`/project-briefs/${result.briefId}`}
-                className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 hover:border-violet-500/30 transition-colors"
-              >
-                <p className="text-2xl mb-2">📋</p>
-                <p className="text-xs text-slate-500 mb-0.5">Project Brief</p>
+                <Link
+                  href={`/projects/${result.briefId}`}
+                  className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 hover:border-violet-500/30 transition-colors"
+                >
+                  <p className="text-2xl mb-2">📋</p>
+                <p className="text-xs text-slate-500 mb-0.5">Projekt</p>
                 <p className="text-sm font-medium text-white group-hover:text-violet-300 transition-colors line-clamp-2">{result.briefTitle}</p>
-                <p className="mt-2 text-xs text-violet-400 group-hover:underline">Brief öffnen →</p>
+                <p className="mt-2 text-xs text-violet-400 group-hover:underline">Projekt öffnen →</p>
               </Link>
 
               <Link
@@ -876,5 +953,51 @@ export default function IdeaPage() {
       />
     )}
   </>
+  )
+}
+
+function AssistantStepCard({
+  index,
+  title,
+  body,
+  active = false,
+}: {
+  index: string
+  title: string
+  body: string
+  active?: boolean
+}) {
+  return (
+    <div className={cx(
+      'rounded-xl border px-4 py-3',
+      active ? 'border-violet-500/30 bg-violet-500/[0.08]' : 'border-white/[0.07] bg-white/[0.025]',
+    )}>
+      <div className="flex items-center gap-2">
+        <span className={cx(
+          'grid h-6 w-6 place-items-center rounded-full text-xs font-bold',
+          active ? 'bg-violet-500 text-white' : 'bg-white/[0.06] text-slate-500',
+        )}>{index}</span>
+        <p className="text-sm font-semibold text-white">{title}</p>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-slate-500">{body}</p>
+    </div>
+  )
+}
+
+function RecommendationCard({
+  title,
+  value,
+  body,
+}: {
+  title: string
+  value: string
+  body: string
+}) {
+  return (
+    <div className="rounded-xl border border-white/[0.07] bg-black/20 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
+      <p className="mt-2 line-clamp-2 text-sm font-semibold text-white">{value}</p>
+      <p className="mt-2 line-clamp-4 text-xs leading-5 text-slate-500">{body}</p>
+    </div>
   )
 }
