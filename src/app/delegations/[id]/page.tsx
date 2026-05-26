@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import type { Delegation, DelegationStatus, DelegationReport } from '@/lib/models/delegation'
+import type { Delegation, DelegationStatus, DelegationReport, DoDQualityCheck } from '@/lib/models/delegation'
 import type { OrchestratedRun } from '@/lib/agents/orchestrated-run'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
 import { ApprovalBadge } from '@/components/shared/ApprovalBadge'
@@ -261,6 +261,12 @@ export default function DelegationDetailPage() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
+  // DoD Quality Check
+  const [qualityCheck, setQualityCheck] = useState<DoDQualityCheck | null>(
+    (delegation as (Delegation & { qualityCheck?: DoDQualityCheck }) | null)?.qualityCheck ?? null
+  )
+  const [qualityCheckLoading, setQualityCheckLoading] = useState(false)
+
   const handleOpenPreview = async () => {
     if (!delegation) return
     setPreviewLoading(true)
@@ -279,6 +285,24 @@ export default function DelegationDetailPage() {
       alert('Vorschau konnte nicht gestartet werden.')
     } finally {
       setPreviewLoading(false)
+    }
+  }
+
+  const handleQualityCheck = async () => {
+    if (!delegation) return
+    setQualityCheckLoading(true)
+    try {
+      const res = await fetch(`/api/delegations/${id}/quality-check`, { method: 'POST' })
+      const data = await res.json() as { qualityCheck?: DoDQualityCheck; error?: string }
+      if (res.ok && data.qualityCheck) {
+        setQualityCheck(data.qualityCheck)
+      } else {
+        alert(`Qualitäts-Check fehlgeschlagen: ${data.error ?? 'Unbekannter Fehler'}`)
+      }
+    } catch {
+      alert('Qualitäts-Check konnte nicht gestartet werden.')
+    } finally {
+      setQualityCheckLoading(false)
     }
   }
 
@@ -1319,6 +1343,106 @@ export default function DelegationDetailPage() {
                 )}
               </button>
             </div>
+          </div>
+        )}
+
+        {/* DoD Quality Check — shown when completed and DoD defined */}
+        {d.status === 'completed' && d.contract.definitionOfDone?.length > 0 && (
+          <div className="rounded-xl border border-slate-700/50 bg-slate-900/30 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-200">DoD Qualitäts-Check</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  KI bewertet ob der Agent alle Kriterien erfüllt hat
+                </p>
+              </div>
+              {!qualityCheck && (
+                <button
+                  onClick={handleQualityCheck}
+                  disabled={qualityCheckLoading}
+                  className="rounded-lg border border-slate-600 bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-slate-500 hover:text-white transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {qualityCheckLoading ? (
+                    <>
+                      <span className="h-2.5 w-2.5 animate-spin rounded-full border border-slate-400 border-t-transparent" />
+                      Prüft…
+                    </>
+                  ) : '✦ Jetzt prüfen'}
+                </button>
+              )}
+              {qualityCheck && (
+                <button
+                  onClick={handleQualityCheck}
+                  disabled={qualityCheckLoading}
+                  className="text-xs text-slate-600 hover:text-slate-400 transition-colors disabled:opacity-50"
+                >
+                  {qualityCheckLoading ? 'Prüft…' : '↺ Neu prüfen'}
+                </button>
+              )}
+            </div>
+
+            {qualityCheck && (
+              <>
+                {/* Verdict banner */}
+                <div className={`rounded-lg px-3 py-2 flex items-center justify-between ${
+                  qualityCheck.verdict === 'passed'
+                    ? 'bg-emerald-950/40 border border-emerald-800/50'
+                    : qualityCheck.verdict === 'partial'
+                    ? 'bg-amber-950/40 border border-amber-800/50'
+                    : 'bg-red-950/40 border border-red-800/50'
+                }`}>
+                  <span className={`text-sm font-bold ${
+                    qualityCheck.verdict === 'passed' ? 'text-emerald-300'
+                    : qualityCheck.verdict === 'partial' ? 'text-amber-300'
+                    : 'text-red-300'
+                  }`}>
+                    {qualityCheck.verdict === 'passed' ? '✅ Bestanden'
+                      : qualityCheck.verdict === 'partial' ? '⚠️ Teilweise erfüllt'
+                      : '❌ Nicht erfüllt'}
+                  </span>
+                  <span className={`text-xs font-mono font-bold ${
+                    qualityCheck.overallScore >= 80 ? 'text-emerald-400'
+                    : qualityCheck.overallScore >= 50 ? 'text-amber-400'
+                    : 'text-red-400'
+                  }`}>
+                    {qualityCheck.overallScore}/100
+                  </span>
+                </div>
+
+                {/* Criteria list */}
+                <div className="space-y-1.5">
+                  {qualityCheck.criteria.map((c, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs">
+                      <span className={`shrink-0 mt-0.5 ${c.met ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {c.met ? '✓' : '✗'}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <span className={c.met ? 'text-slate-300' : 'text-slate-400 line-through'}>{c.item}</span>
+                        {c.notes && (
+                          <p className="text-slate-600 mt-0.5 leading-relaxed">{c.notes}</p>
+                        )}
+                      </div>
+                      <span className={`shrink-0 text-[10px] px-1 rounded ${
+                        c.confidence === 'high' ? 'text-slate-600 bg-slate-800'
+                        : c.confidence === 'medium' ? 'text-amber-700 bg-amber-950/30'
+                        : 'text-red-700 bg-red-950/30'
+                      }`}>
+                        {c.confidence}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Retry suggestion */}
+                {qualityCheck.suggestion && qualityCheck.verdict !== 'passed' && (
+                  <div className="rounded-lg border border-violet-800/40 bg-violet-950/20 px-3 py-2">
+                    <p className="text-xs text-violet-300">
+                      <span className="font-semibold">Verbesserungsvorschlag:</span> {qualityCheck.suggestion}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
 

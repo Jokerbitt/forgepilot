@@ -50,6 +50,8 @@ export function NewDelegationDialog({
   const [showExpert, setShowExpert] = useState(!!pc) // auto-expand expert panel when cloning
   const [saving, setSaving] = useState(false)
   const [goalError, setGoalError] = useState(false)
+  const [generatingDod, setGeneratingDod] = useState(false)
+  const [dodError, setDodError] = useState<string | null>(null)
 
   const handleTemplateSelect = (t: typeof TEMPLATES[0]) => {
     setSelectedTemplate(t)
@@ -77,6 +79,29 @@ export function NewDelegationDialog({
       'refactor-module': TEMPLATES[3], 'write-docs': TEMPLATES[2],
     }
     if (simpleMap[templateId]) setSelectedTemplate(simpleMap[templateId])
+  }
+
+  const handleGenerateDod = async () => {
+    if (!goal.trim()) { setGoalError(true); return }
+    setGeneratingDod(true)
+    setDodError(null)
+    try {
+      const res = await fetch('/api/delegations/generate-dod', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goal: goal.trim(), context: context.trim() }),
+      })
+      const data = await res.json() as { dod?: string[]; error?: string }
+      if (!res.ok || !data.dod) {
+        setDodError(data.error ?? 'Unbekannter Fehler')
+      } else {
+        setDodItems(data.dod.map(d => d.trim()).filter(d => d.length > 0))
+      }
+    } catch {
+      setDodError('Netzwerkfehler beim Generieren der DoD')
+    } finally {
+      setGeneratingDod(false)
+    }
   }
 
   const handleDodChange = (idx: number, value: string) => {
@@ -198,9 +223,30 @@ export function NewDelegationDialog({
 
             {/* Definition of Done */}
             <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">
-                Definition of Done <span className="text-gray-600">(Enter für neue Zeile)</span>
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">
+                  Definition of Done <span className="text-gray-600">(Enter für neue Zeile)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={handleGenerateDod}
+                  disabled={generatingDod || !goal.trim()}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-violet-700/50 bg-violet-950/30 text-violet-300 text-xs font-medium transition-colors hover:border-violet-500 hover:text-violet-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="KI generiert DoD-Kriterien aus dem Ziel"
+                >
+                  {generatingDod ? (
+                    <>
+                      <span className="inline-block w-2.5 h-2.5 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
+                      Generiert…
+                    </>
+                  ) : (
+                    <>✨ KI vorschlagen</>
+                  )}
+                </button>
+              </div>
+              {dodError && (
+                <p className="text-xs text-red-400 mb-1.5">{dodError}</p>
+              )}
               <div className="space-y-1.5">
                 {dodItems.map((item, idx) => (
                   <div key={idx} className="flex items-center gap-2">
