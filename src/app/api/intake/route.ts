@@ -4,12 +4,11 @@ import {
   buildProjectBrief,
   saveProjectBrief,
   updateProjectBrief,
-  validateIdeaIntakeInput,
-  hasIdeaIntakeErrors,
   splitConstraintLines,
 } from '@/lib/project-briefs'
 import type { IdeaIntakeInput } from '@/lib/models/project-brief'
 import { verifyWebhookSignature } from '@/lib/webhooks/hmac'
+import { IntakeWebhookBodySchema } from '@/lib/validation/schemas'
 
 export async function POST(request: NextRequest) {
   const rawBody = await request.text()
@@ -22,17 +21,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
   }
 
-  let body: unknown
+  let rawParsed: unknown
   try {
-    body = JSON.parse(rawBody)
+    rawParsed = JSON.parse(rawBody)
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const typedBody = body as Record<string, unknown>
+  const parsed = IntakeWebhookBodySchema.safeParse(rawParsed)
+  if (!parsed.success) {
+    const fields: Record<string, string> = {}
+    for (const issue of parsed.error.issues) {
+      const key = issue.path.join('.') || '_root'
+      if (!fields[key]) fields[key] = issue.message
+    }
+    return NextResponse.json({ error: 'Validation failed', fields }, { status: 400 })
+  }
+
+  const typedBody = parsed.data
 
   const constraints = Array.isArray(typedBody.constraints)
-    ? (typedBody.constraints as string[]).map(String)
+    ? typedBody.constraints.map(String)
     : typeof typedBody.constraints === 'string'
       ? splitConstraintLines(typedBody.constraints)
       : []
@@ -47,11 +56,6 @@ export async function POST(request: NextRequest) {
     researchMode:     (typedBody.researchMode ?? typedBody.research_mode) as IdeaIntakeInput['researchMode'] ?? 'standard',
     privacyMode:      (typedBody.privacyMode ?? typedBody.privacy_mode) as IdeaIntakeInput['privacyMode'] ?? 'local',
     constraints,
-  }
-
-  const errors = validateIdeaIntakeInput(input)
-  if (hasIdeaIntakeErrors(errors)) {
-    return NextResponse.json({ error: 'Validation failed', details: errors }, { status: 422 })
   }
 
   const brief = buildProjectBrief(input)

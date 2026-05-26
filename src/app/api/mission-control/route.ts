@@ -85,7 +85,19 @@ function isToday(iso: string): boolean {
 function computeHealth(delegations: Delegation[]): { status: 'ok' | 'warn' | 'error'; topIssue: string | null } {
   const issues: string[] = []
 
-  if (!process.env['ANTHROPIC_API_KEY']) {
+  // Check for API key OR Claude Max OAuth session (claude CLI with subscription)
+  const hasApiKey = Boolean(process.env['ANTHROPIC_API_KEY']?.trim())
+  let hasClaudeMaxSession = false
+  if (!hasApiKey) {
+    try {
+      const raw = execSync('claude auth status --json', { timeout: 3000, encoding: 'utf8' })
+      const auth = JSON.parse(raw.trim()) as { loggedIn?: boolean; subscriptionType?: string }
+      hasClaudeMaxSession = auth.loggedIn === true && Boolean(auth.subscriptionType)
+    } catch {
+      // claude CLI not available or not authenticated
+    }
+  }
+  if (!hasApiKey && !hasClaudeMaxSession) {
     issues.push('Anthropic API key missing')
   }
 

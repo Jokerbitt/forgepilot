@@ -83,6 +83,50 @@ export const CreateDelegationSchema = z.object({
 
 export type CreateDelegationInput = z.infer<typeof CreateDelegationSchema>
 
+// ─── Intake Webhook Body ─────────────────────────────────────────────────────
+// Validates the raw n8n / Linear webhook payload sent to /api/intake.
+// Accepts both camelCase and snake_case field aliases — the route maps them
+// after validation. Uses .passthrough() so extra fields are preserved.
+
+export const IntakeWebhookBodySchema = z.object({
+  // Primary fields (camelCase preferred, snake_case aliases also accepted)
+  title:              z.string().min(1, 'title required').max(200).optional(),
+  rawIdea:            z.string().max(5000).optional(),
+  raw_idea:           z.string().max(5000).optional(),
+  idea:               z.string().max(5000).optional(),
+  problemStatement:   z.string().max(5000).optional(),
+  problem_statement:  z.string().max(5000).optional(),
+  problem:            z.string().max(5000).optional(),
+  targetAudience:     z.string().max(500).optional(),
+  target_audience:    z.string().max(500).optional(),
+  audience:           z.string().max(500).optional(),
+  desiredOutcome:     z.string().max(500).optional(),
+  desired_outcome:    z.string().max(500).optional(),
+  outcome:            z.string().max(500).optional(),
+  scope:              z.enum(['minimal', 'standard', 'full']).optional(),
+  researchMode:       z.enum(['quick', 'standard', 'deep']).optional(),
+  research_mode:      z.enum(['quick', 'standard', 'deep']).optional(),
+  privacyMode:        z.enum(['local', 'hybrid', 'cloud']).optional(),
+  privacy_mode:       z.enum(['local', 'hybrid', 'cloud']).optional(),
+  constraints:        z.union([z.array(z.string()), z.string()]).optional(),
+  // Pipeline control flags
+  autoDelegate:       z.boolean().optional(),
+  auto_delegate:      z.boolean().optional(),
+  autoApprove:        z.boolean().optional(),
+  auto_approve:       z.boolean().optional(),
+  autoExecute:        z.boolean().optional(),
+  auto_execute:       z.boolean().optional(),
+}).passthrough()
+  .refine(
+    d => {
+      const hasIdea = Boolean(d.rawIdea ?? d.raw_idea ?? d.idea)
+      return hasIdea
+    },
+    { message: 'At least one of rawIdea, raw_idea, or idea is required' },
+  )
+
+export type IntakeWebhookBody = z.infer<typeof IntakeWebhookBodySchema>
+
 // ─── Idea Intake ──────────────────────────────────────────────────────────────
 
 export const IdeaIntakeSchema = z.object({
