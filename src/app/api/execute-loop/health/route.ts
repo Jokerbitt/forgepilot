@@ -14,12 +14,22 @@ export async function GET() {
     checks.claudeCli = { ok: false, detail: 'claude CLI not found in PATH' }
   }
 
-  // Check 2: Anthropic API key
-  const keys = readStoredApiKeys()
-  const hasKey = Boolean(keys.ANTHROPIC_API_KEY?.trim())
-  checks.anthropicKey = { ok: hasKey, detail: hasKey ? 'configured' : 'ANTHROPIC_API_KEY not set' }
+  // Check 2: Codex CLI available
+  try {
+    const version = execSync('codex --version', { timeout: 3000 }).toString().trim()
+    checks.codexCli = { ok: true, detail: version || 'codex CLI available' }
+  } catch {
+    checks.codexCli = { ok: false, detail: 'codex CLI not found in PATH' }
+  }
 
-  // Check 3: GitHub CLI available
+  // Check 3: Anthropic/OpenAI API keys remain optional fallbacks
+  const keys = readStoredApiKeys()
+  const hasAnthropicKey = Boolean(keys.ANTHROPIC_API_KEY?.trim())
+  const hasOpenAiKey = Boolean(keys.OPENAI_API_KEY?.trim())
+  checks.anthropicKey = { ok: hasAnthropicKey, detail: hasAnthropicKey ? 'configured' : 'ANTHROPIC_API_KEY not set (optional when CLI is ready)' }
+  checks.openAiKey = { ok: hasOpenAiKey, detail: hasOpenAiKey ? 'configured' : 'OPENAI_API_KEY not set (optional when CLI is ready)' }
+
+  // Check 4: GitHub CLI available
   try {
     execSync('gh --version', { stdio: 'ignore', timeout: 3000 })
     checks.githubCli = { ok: true, detail: 'gh CLI available' }
@@ -27,7 +37,7 @@ export async function GET() {
     checks.githubCli = { ok: false, detail: 'gh CLI not found — PR creation will fail' }
   }
 
-  // Check 4: Git available
+  // Check 5: Git available
   try {
     execSync('git --version', { stdio: 'ignore', timeout: 3000 })
     checks.git = { ok: true, detail: 'git available' }
@@ -41,16 +51,23 @@ export async function GET() {
     detail: 'POST /api/intake ready',
   }
 
-  const allOk = Object.values(checks).every(c => c.ok)
+  const hasExecutableAgent = checks.claudeCli.ok || checks.codexCli.ok || hasAnthropicKey || hasOpenAiKey
+  const requiredChecksOk = checks.githubCli.ok && checks.git.ok && checks.intakeWebhook.ok && hasExecutableAgent
   const mode = checks.claudeCli.ok
     ? 'claude-cli (full agentic execution)'
-    : checks.anthropicKey.ok
-      ? 'claude-api (plan only — no code execution)'
-      : 'simulation (no AI configured)'
+    : checks.codexCli.ok
+      ? 'codex-cli (full agentic execution)'
+      : hasAnthropicKey
+        ? 'claude-api (API fallback)'
+        : hasOpenAiKey
+          ? 'openai-api (API fallback)'
+          : 'simulation (no executable agent configured)'
 
   return NextResponse.json({
-    ready: allOk,
+    ready: requiredChecksOk,
     executionMode: mode,
+    zeroKeyReady: checks.claudeCli.ok || checks.codexCli.ok,
+    apiKeysOptional: true,
     checks,
     n8nPayload: {
       description: 'Example n8n payload for /api/intake',

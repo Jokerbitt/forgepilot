@@ -2,12 +2,16 @@
 
 import { useEffect, useState } from 'react'
 
-type ActiveMode = 'claude-cli' | 'claude-api' | 'simulation'
+type ActiveMode = 'claude-cli' | 'codex-cli' | 'claude-api' | 'openai-api' | 'simulation'
 
 interface CliStatus {
   claudeCliAvailable: boolean
   claudeCliVersion: string | null
+  codexCliAvailable?: boolean
+  codexCliVersion?: string | null
   claudeApiKeySet: boolean
+  openAiApiKeySet?: boolean
+  zeroKeyReady?: boolean
   activeMode: ActiveMode
   setupUrl: string
 }
@@ -22,6 +26,18 @@ const MODE_CONFIG: Record<ActiveMode, { label: string; description: string; colo
   'claude-api': {
     label: 'Claude API (Tool-Use)',
     description: 'API-based agent — reads/writes files, runs safe commands, opens PRs via GitHub CLI.',
+    color: 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-200',
+    icon: '◈',
+  },
+  'codex-cli': {
+    label: 'Codex CLI',
+    description: 'Zero-key mode — real code execution via your authenticated Codex CLI.',
+    color: 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-200',
+    icon: '✓',
+  },
+  'openai-api': {
+    label: 'OpenAI API',
+    description: 'API fallback configured. Claude/Codex CLI can still be used later without API keys.',
     color: 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-200',
     icon: '◈',
   },
@@ -45,7 +61,7 @@ export function AgentModeBanner() {
   }, [])
 
   if (!status || dismissed) return null
-  if (status.activeMode === 'claude-cli') return null
+  if (status.activeMode === 'claude-cli' || status.activeMode === 'codex-cli') return null
 
   const config = MODE_CONFIG[status.activeMode]
 
@@ -67,7 +83,7 @@ export function AgentModeBanner() {
             >
               Install Claude CLI
             </a>
-            {' or add an '}
+            {' or install/authenticate Codex CLI. You can also add an '}
             <a href="/settings" className="underline font-medium">API key in Settings</a>
             {' to enable real execution.'}
           </span>
