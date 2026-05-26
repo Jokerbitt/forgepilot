@@ -85,6 +85,137 @@ function StatusPill({
   )
 }
 
+// ─── Workspace Manager ───────────────────────────────────────────────────────
+interface Workspace {
+  id: string
+  name: string
+  path: string
+  type: 'local' | 'github'
+  description?: string
+  defaultBranch?: string
+  detectedStack?: string
+  addedAt: string
+}
+
+function WorkspaceManagerPanel() {
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [loading, setLoading] = useState(true)
+  const [newName, setNewName] = useState('')
+  const [newPath, setNewPath] = useState('')
+  const [newDesc, setNewDesc] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+
+  const load = () => {
+    setLoading(true)
+    fetch('/api/settings/workspaces')
+      .then(r => r.json() as Promise<{ workspaces: Workspace[] }>)
+      .then(d => { setWorkspaces(d.workspaces ?? []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }
+
+  useEffect(() => { load() }, [])
+
+  const handleAdd = async () => {
+    if (!newName.trim() || !newPath.trim()) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/settings/workspaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName.trim(), path: newPath.trim(), type: 'local', description: newDesc.trim() || undefined }),
+      })
+      const data = await res.json() as { workspace?: Workspace; error?: string }
+      if (!res.ok) { setError(data.error ?? 'Fehler beim Speichern'); setSaving(false); return }
+      setNewName(''); setNewPath(''); setNewDesc('')
+      load()
+    } catch { setError('Netzwerkfehler') }
+    setSaving(false)
+  }
+
+  const handleDelete = async (id: string) => {
+    await fetch(`/api/settings/workspaces?id=${id}`, { method: 'DELETE' })
+    setConfirmDelete(null)
+    load()
+  }
+
+  return (
+    <section className="space-y-4">
+      <SectionHeading icon={Server} title="Workspace-Repositories" badge={<StatusPill>{workspaces.length} Repos</StatusPill>} />
+      <div className={cx(panelClassName, 'space-y-4')}>
+        <p className="text-sm text-gray-400">
+          Registrierte lokale Repos — erscheinen als Schnellauswahl im Delegation-Dialog.
+          Agent liest automatisch <code className="text-xs bg-gray-800 px-1 rounded">CLAUDE.md</code> / <code className="text-xs bg-gray-800 px-1 rounded">package.json</code> aus dem Workspace.
+        </p>
+
+        {/* Existing workspaces */}
+        {loading ? (
+          <p className="text-sm text-gray-500">Lade...</p>
+        ) : workspaces.length === 0 ? (
+          <p className="text-sm text-gray-600 italic">Noch keine Workspaces registriert.</p>
+        ) : (
+          <div className="space-y-2">
+            {workspaces.map(ws => (
+              <div key={ws.id} className="flex items-start gap-3 rounded-lg border border-gray-800 bg-gray-900 px-3 py-2.5">
+                <span className="text-lg mt-0.5">📁</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-sm text-white">{ws.name}</span>
+                    {ws.detectedStack && (
+                      <span className="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full">{ws.detectedStack}</span>
+                    )}
+                    {ws.defaultBranch && (
+                      <span className="text-xs text-gray-600 font-mono">→ {ws.defaultBranch}</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 font-mono truncate mt-0.5">{ws.path}</p>
+                  {ws.description && <p className="text-xs text-gray-600 mt-0.5">{ws.description}</p>}
+                </div>
+                {confirmDelete === ws.id ? (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-xs text-red-400">Löschen?</span>
+                    <button onClick={() => void handleDelete(ws.id)} className="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-0.5 rounded font-bold transition-colors">Ja</button>
+                    <button onClick={() => setConfirmDelete(null)} className="text-xs text-gray-500 hover:text-white px-1 transition-colors"><X className="h-3 w-3" /></button>
+                  </div>
+                ) : (
+                  <button onClick={() => setConfirmDelete(ws.id)} className="shrink-0 text-gray-600 hover:text-red-400 transition-colors p-1" title="Entfernen">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add new workspace */}
+        <div className="border-t border-gray-800 pt-4 space-y-3">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Repository hinzufügen</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Name</label>
+              <input type="text" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Mein Projekt" className={inputClassName} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Lokaler Pfad</label>
+              <input type="text" value={newPath} onChange={e => setNewPath(e.target.value)} placeholder="/Users/name/dev/projekt" className={cx(inputClassName, 'font-mono')} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Beschreibung (optional)</label>
+            <input type="text" value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Worum geht es?" className={inputClassName} />
+          </div>
+          {error && <p className="text-xs text-red-400">{error}</p>}
+          <button onClick={() => void handleAdd()} disabled={saving || !newName.trim() || !newPath.trim()} className={cx(primaryButtonClassName, 'flex items-center gap-2')}>
+            {saving ? 'Wird hinzugefügt...' : '+ Workspace hinzufügen'}
+          </button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 // ─── Settings Import/Export ──────────────────────────────────────────────────
 function SettingsImportExport() {
   const [importStatus, setImportStatus] = useState<'idle' | 'importing' | 'success' | 'error'>('idle')
@@ -747,6 +878,9 @@ export default function SettingsPage() {
             )}
           </div>
         </section>
+
+        {/* Workspace Manager */}
+        <WorkspaceManagerPanel />
 
         {/* AI Provider Status Section */}
         <section className="space-y-4">

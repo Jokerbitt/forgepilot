@@ -62,12 +62,17 @@ export function NewDelegationDialog({
   const [customProject, setCustomProject] = useState('')
   const [projectOptions, setProjectOptions] = useState<string[]>([])
   const [targetRepo, setTargetRepo] = useState('')
+  const [workspaces, setWorkspaces] = useState<Array<{ id: string; name: string; path: string; detectedStack?: string }>>([])
 
   useEffect(() => {
     fetch('/api/delegations/projects')
       .then(r => r.json() as Promise<{ projects: string[] }>)
       .then(data => setProjectOptions(data.projects ?? []))
       .catch(() => setProjectOptions([]))
+    fetch('/api/settings/workspaces')
+      .then(r => r.json() as Promise<{ workspaces: Array<{ id: string; name: string; path: string; detectedStack?: string }> }>)
+      .then(data => setWorkspaces(data.workspaces ?? []))
+      .catch(() => setWorkspaces([]))
   }, [])
 
   const handleTemplateSelect = (t: typeof TEMPLATES[0]) => {
@@ -321,6 +326,30 @@ export function NewDelegationDialog({
                 placeholder="/Users/dein-name/dev/mein-projekt  oder  https://github.com/org/repo"
                 className="w-full bg-gray-900 border border-gray-800 rounded-lg p-3 text-white text-sm focus:border-blue-500 focus:outline-none placeholder-gray-600 font-mono"
               />
+              {workspaces.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {workspaces.map(ws => (
+                    <button
+                      key={ws.id}
+                      type="button"
+                      onClick={() => setTargetRepo(ws.path)}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                        targetRepo === ws.path
+                          ? 'bg-blue-600 text-white border border-blue-500'
+                          : 'bg-gray-800 text-gray-300 border border-gray-700 hover:border-gray-600 hover:text-white'
+                      }`}
+                    >
+                      <span>📁</span>
+                      <span>{ws.name}</span>
+                      {ws.detectedStack && (
+                        <span className={`text-xs ${targetRepo === ws.path ? 'text-blue-200' : 'text-gray-500'}`}>
+                          · {ws.detectedStack.split(',')[0].trim()}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
               <p className="mt-1 text-xs text-gray-600">Lokaler Pfad oder GitHub-URL — Agent klont und arbeitet isoliert</p>
             </div>
 
