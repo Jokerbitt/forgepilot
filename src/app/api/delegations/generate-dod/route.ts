@@ -20,7 +20,7 @@ function generateViaCLI(goal: string, context: string): string {
   const prompt = `Task goal: ${goal}${context ? `\nContext: ${context}` : ''}\n\nGenerate 4-6 Definition of Done criteria as a JSON array of strings.`
   const result = execFileSync(
     'claude',
-    ['-p', prompt, '--system', SYSTEM_PROMPT, '--max-turns', '1', '--output-format', 'text'],
+    ['-p', prompt, '--system-prompt', SYSTEM_PROMPT, '--max-turns', '1', '--output-format', 'text'],
     { timeout: 30_000, encoding: 'utf-8' }
   )
   return result.trim()

@@ -97,7 +97,7 @@ async function runCheck(goal: string, dod: string[], diff: string): Promise<stri
     if (!isClaudeAvailable()) throw new Error('no-provider')
     return execFileSync(
       'claude',
-      ['-p', prompt, '--system', SYSTEM_PROMPT, '--max-turns', '1', '--output-format', 'text'],
+      ['-p', prompt, '--system-prompt', SYSTEM_PROMPT, '--max-turns', '1', '--output-format', 'text'],
       { timeout: 30_000, encoding: 'utf-8' }
     ).trim()
   }
