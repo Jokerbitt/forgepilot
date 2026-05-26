@@ -9,6 +9,13 @@ import { BlockedByBadge } from '@/components/work-items/BlockedByBadge'
 import { CSVImport } from '@/components/work-items/CSVImport'
 import { KanbanBoard } from '@/components/work-items/KanbanBoard'
 import { sortWorkItems, type SortDirection, type WorkItemSortKey } from '@/lib/work-items/sort-utils'
+import {
+  countByStatusGroup,
+  filterByStatusGroup,
+  getStatusGroup,
+  STATUS_GROUP_TO_DEFAULT_STATUS,
+  type StatusGroup,
+} from '@/lib/work-items/filter-utils'
 
 // ─── helpers ─────────────────────────────────────────────────────
 
@@ -36,6 +43,25 @@ const WP_PRIORITY_COLOR: Record<string, string> = {
   high: 'text-amber-300',
   medium: 'text-sky-300',
   low: 'text-slate-400',
+}
+
+const STATUS_GROUP_LABEL: Record<StatusGroup, string> = {
+  all: 'Alle',
+  open: 'Offen',
+  in_progress: 'In Arbeit',
+  done: 'Erledigt',
+}
+
+const STATUS_GROUP_ICON: Record<Exclude<StatusGroup, 'all'>, string> = {
+  open: '○',
+  in_progress: '◐',
+  done: '●',
+}
+
+const STATUS_GROUP_TONE: Record<Exclude<StatusGroup, 'all'>, string> = {
+  open: 'text-slate-300',
+  in_progress: 'text-amber-300',
+  done: 'text-emerald-400',
 }
 
 function formatDate(iso: string): string {
@@ -125,6 +151,8 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
   const [errors, setErrors] = useState<string[]>([])
   const [search, setSearch] = useState('')
   const [sourceFilter, setSourceFilter] = useState<WorkItemSource | ''>('')
+  const [statusGroupFilter, setStatusGroupFilter] = useState<StatusGroup>('all')
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null)
   const [creating, setCreating] = useState<string | null>(null)
   const [created, setCreated] = useState<Set<string>>(new Set())
   const [orchestrating, setOrchestrating] = useState<string | null>(null)
@@ -268,25 +296,36 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
   }
 
   const handleStatusChange = async (itemId: string, newStatus: WorkItemStatus) => {
+    const previous = items
+    setUpdatingStatus(itemId)
     setItems(prev => prev.map(i => i.id === itemId ? { ...i, status: newStatus, updatedAt: new Date().toISOString() } : i))
     try {
-      await fetch(`/api/work-items/${itemId}/status`, {
+      const res = await fetch(`/api/work-items/${itemId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       })
+      if (!res.ok) setItems(previous)
     } catch {
-      load()
+      setItems(previous)
+    } finally {
+      setUpdatingStatus(null)
     }
   }
 
+  const handleStatusGroupChange = (itemId: string, group: Exclude<StatusGroup, 'all'>) => {
+    void handleStatusChange(itemId, STATUS_GROUP_TO_DEFAULT_STATUS[group])
+  }
+
   const searchLower = search.toLowerCase()
-  const filtered = sortWorkItems(items
-    .filter(i => !sourceFilter || i.source === sourceFilter)
-    .filter(i => !searchLower || i.title.toLowerCase().includes(searchLower) || i.id.toLowerCase().includes(searchLower)),
+  const filtered = sortWorkItems(
+    filterByStatusGroup(items, statusGroupFilter)
+      .filter(i => !sourceFilter || i.source === sourceFilter)
+      .filter(i => !searchLower || i.title.toLowerCase().includes(searchLower) || i.id.toLowerCase().includes(searchLower)),
     sortKey,
     sortDir,
   )
+  const statusCounts = countByStatusGroup(items)
 
   const sources = Array.from(new Set(items.map(i => i.source))) as WorkItemSource[]
   const exportParams = new URLSearchParams()
@@ -327,6 +366,27 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
               {SOURCE_LABEL[src]}
             </button>
           ))}
+        </div>
+        <div role="group" aria-label="Statusfilter" className="flex gap-1 rounded-lg border border-slate-700 bg-slate-800/60 p-1">
+          {(['all', 'open', 'in_progress', 'done'] as const).map(group => {
+            const active = statusGroupFilter === group
+            const count = group === 'all' ? items.length : statusCounts[group]
+            return (
+              <button
+                key={group}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setStatusGroupFilter(group)}
+                className={cx(
+                  'rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                  active ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300',
+                )}
+              >
+                {STATUS_GROUP_LABEL[group]}
+                <span className="ml-1 text-[10px] text-slate-500">{count}</span>
+              </button>
+            )
+          })}
         </div>
         <div className="ml-auto flex items-center gap-3">
           <div className="flex gap-1 rounded-lg border border-slate-700 bg-slate-800/60 p-1">
@@ -410,6 +470,7 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
                   Ticket{sortKey === 'title' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
                 </th>
                 <th className="hidden px-4 py-3 sm:table-cell">Quelle</th>
+                <th className="px-4 py-3">Status</th>
                 <th
                   className="hidden cursor-pointer select-none px-4 py-3 hover:text-slate-300 md:table-cell"
                   onClick={() => toggleSort('priority')}
@@ -474,6 +535,38 @@ function WorkItemsTab({ projectId }: { projectId: string | null }) {
                   </td>
                   <td className="hidden px-4 py-3 sm:table-cell">
                     <Badge>{SOURCE_LABEL[item.source]}</Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    {(() => {
+                      const group = getStatusGroup(item.status)
+                      return (
+                        <div className="flex items-center gap-1" role="group" aria-label={`Status für ${item.title}`}>
+                          {(['open', 'in_progress', 'done'] as const).map(g => {
+                            const active = group === g
+                            return (
+                              <button
+                                key={g}
+                                type="button"
+                                aria-pressed={active}
+                                aria-label={STATUS_GROUP_LABEL[g]}
+                                title={STATUS_GROUP_LABEL[g]}
+                                disabled={updatingStatus === item.id || active}
+                                onClick={() => handleStatusGroupChange(item.id, g)}
+                                className={cx(
+                                  'rounded-md border px-2 py-1 text-xs font-semibold transition-colors',
+                                  active
+                                    ? cx('border-slate-700 bg-slate-800', STATUS_GROUP_TONE[g])
+                                    : 'border-slate-800 bg-slate-950 text-slate-500 hover:border-slate-700 hover:text-slate-300',
+                                  updatingStatus === item.id && !active && 'opacity-50',
+                                )}
+                              >
+                                <span aria-hidden="true">{STATUS_GROUP_ICON[g]}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )
+                    })()}
                   </td>
                   <td className="hidden px-4 py-3 md:table-cell">
                     <select
