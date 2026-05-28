@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { LiveAgentActivityPanel } from '@/components/live/LiveAgentActivityPanel'
 import { buttonClassName, cx } from '@/components/ui/primitives'
+import { AgentWorkbenchSummary } from '@/components/workbench/AgentWorkbenchSummary'
 
 type Tone = 'ready' | 'attention' | 'blocked' | 'neutral'
 
@@ -528,6 +529,8 @@ export default function LiveViewPage() {
         </section>
 
         <LiveAgentActivityPanel />
+
+        <AgentWorkbenchSummary />
 
         <section className="grid min-h-[720px] gap-5 xl:grid-cols-[380px_1fr]">
           <aside className="space-y-4">

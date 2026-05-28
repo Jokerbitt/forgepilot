@@ -6,6 +6,7 @@ import { ApiKeysBanner } from '@/components/shared/ApiKeysBanner'
 import { NoAIProviderBanner } from '@/components/shared/NoAIProviderBanner'
 import { OnboardingBanner as OnboardingWizardBanner } from '@/components/onboarding/OnboardingBanner'
 import { buttonClassName } from '@/components/ui/primitives'
+import { AgentWorkbenchSummary } from '@/components/workbench/AgentWorkbenchSummary'
 
 const assistantSteps = [
   {
@@ -96,6 +97,7 @@ export default function Home() {
 
           <aside className="space-y-5">
             <DailyAssistantPanel />
+            <AgentWorkbenchSummary compact />
           </aside>
         </section>
 
