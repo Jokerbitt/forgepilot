@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, Circle, Plus, Rocket, Target } from 'lucide-react'
+import { CheckCircle2, Circle, Plus, Rocket, RotateCcw, Target } from 'lucide-react'
 import { Badge, buttonClassName, cx } from '@/components/ui/primitives'
 
 interface TodoItem {
@@ -18,9 +18,37 @@ const initialTodos: TodoItem[] = [
   { id: 'runner', title: 'Echten Runner-PR aus ForgePilot starten', area: 'ForgePilot', done: false },
 ]
 
+const STORAGE_KEY = 'forgepilot.todo-planner-demo.todos.v1'
+
 export default function TodoPlannerDemoPage() {
   const [todos, setTodos] = useState(initialTodos)
   const [newTitle, setNewTitle] = useState('')
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw) as TodoItem[]
+        if (Array.isArray(parsed) && parsed.every(item => item.id && item.title && typeof item.done === 'boolean')) {
+          setTodos(parsed)
+        }
+      }
+    } catch {
+      // Demo should keep working even when localStorage is unavailable.
+    } finally {
+      setLoaded(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!loaded) return
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(todos))
+    } catch {
+      // Non-critical for the demo surface.
+    }
+  }, [loaded, todos])
 
   const doneCount = todos.filter(todo => todo.done).length
   const progress = Math.round((doneCount / todos.length) * 100)
@@ -45,6 +73,16 @@ export default function TodoPlannerDemoPage() {
       { id: crypto.randomUUID(), title, area: 'Heute', done: false },
     ])
     setNewTitle('')
+  }
+
+  function resetTodos() {
+    setTodos(initialTodos)
+    setNewTitle('')
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(initialTodos))
+    } catch {
+      // ignore
+    }
   }
 
   return (
@@ -105,6 +143,10 @@ export default function TodoPlannerDemoPage() {
               <button type="button" onClick={addTodo} className={buttonClassName('primary')}>
                 <Plus className="h-4 w-4" />
                 Hinzufuegen
+              </button>
+              <button type="button" onClick={resetTodos} className={buttonClassName('secondary')}>
+                <RotateCcw className="h-4 w-4" />
+                Demo resetten
               </button>
             </div>
           </div>

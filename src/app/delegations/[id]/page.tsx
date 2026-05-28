@@ -84,6 +84,25 @@ const RISK_COLORS: Record<string, string> = {
   C: 'bg-red-900/30 text-red-400 border-red-800',
 }
 
+type MergeSafetyStatus = 'ready' | 'review' | 'blocked'
+
+interface DelegationMergeSafety {
+  available: boolean
+  reason?: string
+  prNumber?: number
+  preview?: {
+    title: string
+    url: string
+    changedFiles: number
+    additions: number
+    deletions: number
+    checks: { state: 'success' | 'failure' | 'pending' | 'error' | 'unknown' }
+    files: Array<{ filename: string; status: string; changes: number; additions: number; deletions: number }>
+  }
+  manualSafety?: { status: MergeSafetyStatus; reasons: string[] }
+  autoSafety?: { status: MergeSafetyStatus; reasons: string[] }
+}
+
 export default function DelegationDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -251,6 +270,8 @@ export default function DelegationDetailPage() {
     title: string
   } | null>(null)
   const [prStatusLoading, setPrStatusLoading] = useState(false)
+  const [mergeSafety, setMergeSafety] = useState<DelegationMergeSafety | null>(null)
+  const [mergeSafetyLoading, setMergeSafetyLoading] = useState(false)
 
   // M224: preflight checks shown before execute
   const [preflightResult, setPreflightResult] = useState<PreflightResult | null>(null)
@@ -263,6 +284,7 @@ export default function DelegationDetailPage() {
   const [merging, setMerging] = useState(false)
   const [mergeResult, setMergeResult] = useState<{ merged: boolean; mergeCommit?: string; baseBranch?: string; githubRemote?: boolean } | null>(null)
   const [mergeError, setMergeError] = useState<string | null>(null)
+  const [autoMerging, setAutoMerging] = useState(false)
 
   // App Preview
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -329,6 +351,49 @@ export default function DelegationDetailPage() {
       setMergeError('Netzwerkfehler beim Mergen')
     } finally {
       setMerging(false)
+    }
+  }
+
+  const loadMergeSafety = useCallback(async () => {
+    if (!id || !delegation?.summaryReport?.prUrl) {
+      setMergeSafety(null)
+      return
+    }
+    setMergeSafetyLoading(true)
+    try {
+      const res = await fetch(`/api/delegations/${id}/merge-safety`)
+      const data = await res.json() as DelegationMergeSafety & { error?: string }
+      if (res.ok) setMergeSafety(data)
+      else setMergeSafety({ available: false, reason: data.error ?? 'Merge Safety konnte nicht geladen werden.' })
+    } catch {
+      setMergeSafety({ available: false, reason: 'Merge Safety konnte nicht geladen werden.' })
+    } finally {
+      setMergeSafetyLoading(false)
+    }
+  }, [delegation?.summaryReport?.prUrl, id])
+
+  useEffect(() => {
+    void loadMergeSafety()
+  }, [loadMergeSafety])
+
+  const handleAutoMerge = async () => {
+    if (!delegation?.summaryReport?.prUrl) return
+    setAutoMerging(true)
+    setMergeError(null)
+    try {
+      const res = await fetch(`/api/delegations/${id}/merge-safety`, { method: 'POST' })
+      const data = await res.json() as { merged?: boolean; error?: string; delegation?: Delegation }
+      if (!res.ok || !data.merged) {
+        setMergeError(data.error ?? 'Auto-Merge wurde vom Safety Gate blockiert.')
+        await loadMergeSafety()
+        return
+      }
+      if (data.delegation) setDelegation(data.delegation)
+      await loadMergeSafety()
+    } catch {
+      setMergeError('Netzwerkfehler beim Auto-Merge')
+    } finally {
+      setAutoMerging(false)
     }
   }
 
@@ -1040,6 +1105,93 @@ export default function DelegationDetailPage() {
               </ul>
             )}
           </div>
+            )}
+
+            {d.status === 'completed' && (
+              <section className={`rounded-xl border p-4 ${
+                mergeSafety?.autoSafety?.status === 'ready'
+                  ? 'border-emerald-800/50 bg-emerald-950/20'
+                  : mergeSafety?.autoSafety?.status === 'blocked'
+                    ? 'border-red-900/50 bg-red-950/20'
+                    : 'border-amber-900/50 bg-amber-950/20'
+              }`}>
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Auto-Merge Safety Gate</p>
+                    <h2 className="mt-2 text-lg font-semibold text-white">
+                      {mergeSafetyLoading
+                        ? 'Prüfe PR-Sicherheit...'
+                        : mergeSafety?.autoSafety?.status === 'ready'
+                          ? 'Autonomes Mergen ist freigegeben'
+                          : mergeSafety?.autoSafety?.status === 'blocked'
+                            ? 'Autonomes Mergen ist blockiert'
+                            : !d.summaryReport?.prUrl
+                              ? 'PR erstellen, dann Safety Gate prüfen'
+                            : 'Review vor Merge nötig'}
+                    </h2>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-400">
+                      ForgePilot darf nur kleine Risk-A-Änderungen mit grüner CI, approved Critic,
+                      ohne sensible Dateien und ohne Secret-Hinweise autonom übernehmen.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void loadMergeSafety()}
+                      disabled={mergeSafetyLoading || !d.summaryReport?.prUrl}
+                      className="rounded-lg border border-gray-700 px-3 py-2 text-sm font-semibold text-gray-300 transition-colors hover:border-gray-500 disabled:opacity-50"
+                    >
+                      {mergeSafetyLoading ? 'Prüft...' : 'Neu prüfen'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAutoMerge}
+                      disabled={autoMerging || mergeSafety?.autoSafety?.status !== 'ready' || d.summaryReport?.prState === 'merged'}
+                      className="rounded-lg border border-emerald-700/70 bg-emerald-900/40 px-3 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:bg-emerald-800/50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {autoMerging ? 'Mergt sicher...' : d.summaryReport?.prState === 'merged' ? 'Bereits gemergt' : 'Sicher auto-mergen'}
+                    </button>
+                  </div>
+                </div>
+
+                {mergeSafety?.preview && (
+                  <div className="mt-4 grid gap-3 md:grid-cols-4">
+                    <div className="rounded-lg border border-gray-800 bg-gray-950/50 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">CI</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-200">{mergeSafety.preview.checks.state}</p>
+                    </div>
+                    <div className="rounded-lg border border-gray-800 bg-gray-950/50 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Diff</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-200">
+                        {mergeSafety.preview.changedFiles} Dateien · +{mergeSafety.preview.additions}/-{mergeSafety.preview.deletions}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-gray-800 bg-gray-950/50 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Auto</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-200">{mergeSafety.autoSafety?.status ?? 'unbekannt'}</p>
+                    </div>
+                    <div className="rounded-lg border border-gray-800 bg-gray-950/50 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Manual</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-200">{mergeSafety.manualSafety?.status ?? 'unbekannt'}</p>
+                    </div>
+                  </div>
+                )}
+
+                {(mergeSafety?.autoSafety?.reasons?.length || mergeSafety?.reason) && (
+                  <ul className="mt-4 space-y-1 text-sm text-gray-400">
+                    {mergeSafety.reason && <li>- {mergeSafety.reason}</li>}
+                    {mergeSafety.autoSafety?.reasons?.map(reason => (
+                      <li key={reason}>- {reason}</li>
+                    ))}
+                  </ul>
+                )}
+                {!d.summaryReport?.prUrl && (
+                  <p className="mt-4 text-sm text-amber-200/80">
+                    - Es gibt noch keinen Pull Request. Erstelle zuerst den PR; danach zeigt ForgePilot Diff, CI,
+                    Critic und Auto-Merge-Freigabe an.
+                  </p>
+                )}
+              </section>
             )}
 
             {/* ── Grok Critic Review (full card, wenn completed) ─────────────── */}
