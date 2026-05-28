@@ -33,6 +33,7 @@ import { AgentPhaseIndicator } from '@/components/delegation/AgentPhaseIndicator
 import { inferAgentPhase } from '@/lib/delegations/agent-phase'
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection'
 import { AffectedFilesPanel } from '@/components/delegation/AffectedFilesPanel'
+import { WorkbenchTabs, WorkbenchPanel, getDefaultTab, type WorkbenchTab } from '@/components/delegation/DelegationWorkbench'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
   switch (status) {
@@ -236,6 +237,13 @@ export default function DelegationDetailPage() {
       .then((d: { total?: number }) => setWritebackCount(d.total ?? 0))
       .catch(() => undefined)
   }, [id])
+
+  // Evidence Workbench: active tab state — auto-selects based on delegation status on first load
+  const [activeTab, setActiveTab] = useState<WorkbenchTab>('overview')
+  useEffect(() => {
+    if (delegation) setActiveTab(getDefaultTab(delegation))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [delegation?.id]) // Only on initial load, not every status update
 
   const [creatingPR, setCreatingPR] = useState(false)
   const [prError, setPrError] = useState<string | null>(null)
@@ -879,12 +887,7 @@ export default function DelegationDetailPage() {
           )}
         </div>
 
-        {/* ── Structured error recovery (when failed) ─────────────────── */}
-        {d.status === 'failed' && d.errorMessage && (
-          <DelegationErrorBanner errorMessage={d.errorMessage} />
-        )}
-
-        {/* ── Next Action Panel ────────────────────────────────────────── */}
+        {/* ── Next Action Panel — always visible ───────────────────────── */}
         <DelegationNextActionPanel
           delegation={d}
           onApprove={handleApprove}
@@ -895,6 +898,25 @@ export default function DelegationDetailPage() {
           creatingPR={creatingPR}
           lastLogMessage={d.status === 'running' ? (d.logs ?? []).filter(l => l.type !== 'thought').slice(-1)[0]?.message : undefined}
         />
+
+        {/* ── Evidence Workbench Tab Bar ───────────────────────────────── */}
+        <WorkbenchTabs
+          delegation={d}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          hasKnowledge={(writebackCount ?? 0) > 0}
+          hasCritic={!!d.criticScore}
+        />
+
+        {/* ═══════════════════════════════════════════════════════════════
+            LIVE TAB — Agent execution, logs, timeline, sub-tasks
+        ════════════════════════════════════════════════════════════════ */}
+        <WorkbenchPanel tab="live" activeTab={activeTab}>
+
+        {/* ── Structured error recovery (when failed) ─────────────────── */}
+        {d.status === 'failed' && d.errorMessage && (
+          <DelegationErrorBanner errorMessage={d.errorMessage} />
+        )}
 
         {/* ── Agent activity explainer ─────────────────────────────────── */}
         <AgentActivityExplainer delegation={d} />
@@ -1022,6 +1044,13 @@ export default function DelegationDetailPage() {
           </div>
         )}
 
+        </WorkbenchPanel>{/* end live tab */}
+
+        {/* ═══════════════════════════════════════════════════════════════
+            KNOWLEDGE TAB — Context snapshot, writeback, knowledge cards
+        ════════════════════════════════════════════════════════════════ */}
+        <WorkbenchPanel tab="knowledge" activeTab={activeTab}>
+
         {/* ── Context Snapshot (M305) ──────────────────────────────────── */}
         {d.contextSnapshot && d.contextSnapshot.cards.length > 0 && (
           <details className="bg-gray-900 border border-gray-800 rounded-xl p-5 group">
@@ -1067,6 +1096,13 @@ export default function DelegationDetailPage() {
             <KnowledgeCardList delegationId={id} />
           </section>
         )}
+
+        </WorkbenchPanel>{/* end knowledge tab */}
+
+        {/* ═══════════════════════════════════════════════════════════════
+            CHANGES TAB — PR details, diff, merge, app preview
+        ════════════════════════════════════════════════════════════════ */}
+        <WorkbenchPanel tab="changes" activeTab={activeTab}>
 
         {/* ── PR Details (wenn PR vorhanden) ────────────────────────────── */}
         {d.summaryReport?.prUrl && (
@@ -1136,25 +1172,12 @@ export default function DelegationDetailPage() {
           </div>
         )}
 
-        {/* ── Grok Critic Review (full card, wenn completed) ─────────────── */}
-        {d.status === 'completed' && (
-          <GrokCriticCard
-            delegationId={id}
-            agentOutput={
-              d.summaryReport
-                ? [
-                    ...(d.summaryReport.keyPoints ?? []),
-                    ...(d.summaryReport.changes ?? []),
-                  ].join('\n')
-                : d.contract.goal
-            }
-            grokConfigured={typeof process !== 'undefined'
-              ? true  // assume configured client-side; API returns 503 if not
-              : false
-            }
-            initialScore={d.criticScore}
-          />
-        )}
+        </WorkbenchPanel>{/* end changes tab — PR section */}
+
+        {/* ═══════════════════════════════════════════════════════════════
+            OVERVIEW TAB — Contract details, DoD, summary, tags, note, log
+        ════════════════════════════════════════════════════════════════ */}
+        <WorkbenchPanel tab="overview" activeTab={activeTab}>
 
         {/* ── Two-column: Contract + Details ────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1330,6 +1353,11 @@ export default function DelegationDetailPage() {
           </div>
         </div>
 
+        </WorkbenchPanel>{/* end overview tab */}
+
+        {/* ── Changes tab continuation: App Preview + Merge+PR Panel ──── */}
+        <WorkbenchPanel tab="changes" activeTab={activeTab}>
+
         {/* App Preview — shown when completed and targetRepo is set */}
         {d.status === 'completed' && (d as { targetRepo?: string }).targetRepo && (
           <div className="rounded-xl border border-emerald-800/40 bg-emerald-950/10 p-4 flex items-center justify-between gap-4">
@@ -1452,6 +1480,33 @@ export default function DelegationDetailPage() {
           </div>
         )}
 
+        </WorkbenchPanel>{/* end changes tab */}
+
+        {/* ═══════════════════════════════════════════════════════════════
+            QUALITY TAB — Grok Critic, DoD quality check, policy verdict
+        ════════════════════════════════════════════════════════════════ */}
+        <WorkbenchPanel tab="quality" activeTab={activeTab}>
+
+        {/* ── Grok Critic Review (full card, wenn completed) ─────────────── */}
+        {d.status === 'completed' && (
+          <GrokCriticCard
+            delegationId={id}
+            agentOutput={
+              d.summaryReport
+                ? [
+                    ...(d.summaryReport.keyPoints ?? []),
+                    ...(d.summaryReport.changes ?? []),
+                  ].join('\n')
+                : d.contract.goal
+            }
+            grokConfigured={typeof process !== 'undefined'
+              ? true  // assume configured client-side; API returns 503 if not
+              : false
+            }
+            initialScore={d.criticScore}
+          />
+        )}
+
         {/* DoD Quality Check — shown when completed and DoD defined */}
         {d.status === 'completed' && d.contract.definitionOfDone?.length > 0 && (
           <div className="rounded-xl border border-slate-700/50 bg-slate-900/30 p-4 space-y-3">
@@ -1552,6 +1607,13 @@ export default function DelegationDetailPage() {
           </div>
         )}
 
+        </WorkbenchPanel>{/* end quality tab */}
+
+        {/* ═══════════════════════════════════════════════════════════════
+            DETAILS TAB — Tech contract, execution log, tools, replay
+        ════════════════════════════════════════════════════════════════ */}
+        <WorkbenchPanel tab="details" activeTab={activeTab}>
+
         {/* Agent Run Replay */}
         <AgentRunReplayView delegationId={id} />
 
@@ -1574,6 +1636,8 @@ export default function DelegationDetailPage() {
 
         {/* Comment Thread */}
         <DelegationCommentThread delegationId={d.id} />
+
+        </WorkbenchPanel>{/* end details tab */}
 
         {/* Go back */}
         <div className="pb-4">
