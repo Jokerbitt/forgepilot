@@ -243,6 +243,15 @@ function isClaudeAvailable(): boolean {
   }
 }
 
+function isCodexAvailable(): boolean {
+  try {
+    execSync('codex --version', { stdio: 'ignore', timeout: 3000 })
+    return true
+  } catch {
+    return false
+  }
+}
+
 function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd: number, riskClass: string, targetRepo?: string) {
   const storedKeys = readStoredApiKeys()
   const anthropicKey = storedKeys.ANTHROPIC_API_KEY?.trim() || undefined
@@ -1025,6 +1034,264 @@ async function runWithClaudeAPI(id: string, delegation: Delegation, startTime: D
   }
 }
 
+function runWithCodexCLI(id: string, prompt: string, startTime: Date, budgetUsd: number, riskClass: string, targetRepo?: string) {
+  const storedKeys = readStoredApiKeys()
+  const ghToken = storedKeys.GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim() || process.env.GITHUB_TOKEN?.trim()
+  const maxTurns = budgetToClaudeCliMaxTurns(budgetUsd)
+  const { OPENAI_API_KEY: _strippedOpenAI, ...baseEnv } = process.env
+  const childEnv = {
+    ...baseEnv,
+    ...(ghToken ? { GH_TOKEN: ghToken, GITHUB_TOKEN: ghToken } : {}),
+  }
+
+  let runnerWorkspace: RunnerWorkspace
+  try {
+    runnerWorkspace = prepareRunnerWorkspace({ delegationId: id, targetRepo })
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    void appendLogs(id, [{
+      timestamp: new Date().toISOString(),
+      type: 'error',
+      message: `❌ Codex Runner-Workspace konnte nicht vorbereitet werden: ${msg}`,
+    }], 'failed')
+    upsertAttentionItem({
+      id: `completion:${id}`,
+      type: 'delegation_failed',
+      severity: 'critical',
+      title: '❌ Codex Runner-Workspace fehlgeschlagen',
+      body: msg.slice(0, 200),
+      delegationId: id,
+      actionUrl: `/delegations/${id}`,
+      createdAt: new Date().toISOString(),
+    })
+    return
+  }
+
+  void appendLogs(id, [{
+    timestamp: new Date().toISOString(),
+    type: 'info',
+    message: `Codex Runner-Workspace vorbereitet: ${runnerWorkspace.path}`,
+  }, {
+    timestamp: new Date().toISOString(),
+    type: 'info',
+    message: 'Codex CLI startet im Zero-Key-Modus ueber lokale Subscription/OAuth.',
+  }])
+
+  const codexPrompt = `${prompt}
+
+## ForgePilot Codex Runner Contract
+- Work non-interactively and keep changes inside this repository.
+- Use a task branch that starts with "${riskClass === 'A' ? 'feature' : 'fix'}/".
+- Run the smallest meaningful validation before finishing.
+- End with a concise summary containing changed files, validation commands, and branch name.
+- Stop after about ${maxTurns} focused reasoning turns; do not wait for user input.`
+
+  const proc = spawn(
+    'codex',
+    [
+      'exec',
+      '-C',
+      runnerWorkspace.path,
+      '--sandbox',
+      'danger-full-access',
+      '--dangerously-bypass-approvals-and-sandbox',
+      '--json',
+      codexPrompt,
+    ],
+    {
+      cwd: runnerWorkspace.path,
+      detached: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...childEnv,
+        FORGEPILOT_RUNNER_WORKTREE: runnerWorkspace.path,
+      },
+    },
+  )
+  proc.unref()
+
+  if (proc.pid) {
+    registerProcess(id, proc.pid)
+  }
+
+  const logBuffer: AgentLog[] = []
+  let fullOutput = ''
+  let flushTimer: ReturnType<typeof setTimeout> | null = null
+  let startupTimer: ReturnType<typeof setTimeout> | null = null
+  let sawOutput = false
+
+  const startupTimeoutMs = Math.max(
+    30_000,
+    Number(process.env.FORGEPILOT_CLI_STARTUP_TIMEOUT_MS ?? 180_000),
+  )
+
+  const flush = () => {
+    if (flushTimer) clearTimeout(flushTimer)
+    flushTimer = setTimeout(() => {
+      if (logBuffer.length > 0) {
+        appendLogs(id, [...logBuffer]).catch(() => undefined)
+        logBuffer.length = 0
+      }
+    }, 2000)
+  }
+
+  const clearStartupTimer = () => {
+    if (startupTimer) {
+      clearTimeout(startupTimer)
+      startupTimer = null
+    }
+  }
+
+  startupTimer = setTimeout(() => {
+    if (sawOutput) return
+    const timeoutSeconds = Math.round(startupTimeoutMs / 1000)
+    void appendLogs(id, [{
+      timestamp: new Date().toISOString(),
+      type: 'error',
+      message: `Codex CLI hat nach ${timeoutSeconds}s keine Ausgabe geliefert. Bitte Codex CLI lokal mit \`codex exec "ping"\` testen und erneut starten.`,
+    }])
+    try {
+      if (proc.pid) process.kill(-proc.pid, 'SIGTERM')
+    } catch {
+      proc.kill('SIGTERM')
+    }
+  }, startupTimeoutMs)
+
+  const addOutputLog = (type: AgentLog['type'], message: string) => {
+    const cleaned = message.replace(/\s+/g, ' ').trim()
+    if (!cleaned) return
+    logBuffer.push({
+      timestamp: new Date().toISOString(),
+      type,
+      message: cleaned.slice(0, 1000),
+    })
+    flush()
+  }
+
+  proc.stdout?.on('data', (chunk: Buffer) => {
+    sawOutput = true
+    clearStartupTimer()
+    const text = chunk.toString()
+    fullOutput += text
+    for (const line of text.split('\n')) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      try {
+        const event = JSON.parse(trimmed) as Record<string, unknown>
+        const eventType = String(event.type ?? event.msg ?? 'codex')
+        const message = String(event.message ?? event.text ?? event.delta ?? event.event_msg ?? '')
+        addOutputLog(eventType.toLowerCase().includes('error') ? 'error' : 'thought', message || eventType)
+      } catch {
+        addOutputLog('thought', trimmed)
+      }
+    }
+  })
+
+  proc.stderr?.on('data', (chunk: Buffer) => {
+    sawOutput = true
+    clearStartupTimer()
+    const text = chunk.toString()
+    fullOutput += text
+    for (const line of text.split('\n').filter(l => l.trim())) {
+      addOutputLog('error', line)
+    }
+  })
+
+  proc.on('close', (code: number | null) => {
+    if (flushTimer) clearTimeout(flushTimer)
+    clearStartupTimer()
+    unregisterProcess(id)
+
+    const success = code === 0
+    const elapsed = Math.round((Date.now() - startTime.getTime()) / 60000)
+    const prUrl = parsePrUrlFromOutput(fullOutput)
+    const knownError = !success ? detectKnownError(fullOutput) : undefined
+    const finalLog: AgentLog = {
+      timestamp: new Date().toISOString(),
+      type: success ? 'success' : 'error',
+      message: success
+        ? `✅ Codex CLI-Ausführung abgeschlossen (Exit-Code: ${code}${prUrl ? `, PR: ${prUrl}` : ''})`
+        : knownError
+          ? `❌ ${knownError}`
+          : `❌ Codex CLI-Ausführung fehlgeschlagen (Exit-Code: ${code ?? 'unknown'})`,
+    }
+
+    const report: DelegationReport | undefined = success
+      ? {
+          keyPoints: ['Ausführung via Codex CLI abgeschlossen'],
+          changes: [],
+          timeTakenMinutes: elapsed,
+          ...(prUrl ? { prUrl, prState: 'open' as const } : {}),
+        }
+      : undefined
+
+    void (async () => {
+      try {
+        const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+        const current = await repo.findById(id)
+        if (!current || current.status !== 'running') return
+
+        const finalStatus = success ? 'completed' : 'failed'
+        const finishedDelegation = await repo.update(id, {
+          status: finalStatus,
+          completedAt: new Date().toISOString(),
+          ...(!success ? { errorMessage: knownError ?? `Codex CLI failed with exit code ${code ?? 'unknown'}` } : {}),
+          ...(report ? { summaryReport: report } : {}),
+          logs: [...(current.logs ?? []), ...logBuffer, finalLog],
+        })
+        if (!finishedDelegation) return
+
+        recordRuntimeExecuteLoopEvidence(finishedDelegation, {
+          blocker: success ? undefined : knownError ?? `Exit-Code: ${code}`,
+          notes: success
+            ? 'Execution evidence recorded after Codex CLI reached completed state.'
+            : 'Execution evidence recorded after Codex CLI failed.',
+        })
+
+        upsertAttentionItem({
+          id: `completion:${id}`,
+          type: success ? 'delegation_completed' : 'delegation_failed',
+          severity: success ? 'info' : 'critical',
+          title: success ? `✅ Codex fertig: ${finishedDelegation.title ?? finishedDelegation.contract.goal.slice(0, 60)}` : '❌ Codex Runner fehlgeschlagen',
+          body: success ? 'Codex CLI hat die Delegation beendet.' : (knownError ?? 'Codex CLI-Ausfuehrung fehlgeschlagen.').slice(0, 200),
+          delegationId: id,
+          actionUrl: `/delegations/${id}`,
+          createdAt: new Date().toISOString(),
+        })
+
+        if (success) {
+          void createGitHubPRIfNeeded(finishedDelegation, fullOutput).then(async (result) => {
+            if (!result.prUrl) return
+            const prLog: AgentLog = {
+              timestamp: new Date().toISOString(),
+              type: 'success',
+              message: `GitHub PR bereit: ${result.prUrl}`,
+            }
+            const latest = await repo.findById(id)
+            if (!latest) return
+            await repo.update(id, {
+              summaryReport: {
+                ...(latest.summaryReport ?? { keyPoints: [], changes: [], timeTakenMinutes: elapsed }),
+                prUrl: result.prUrl,
+                prState: 'open',
+              },
+              logs: [...(latest.logs ?? []), prLog],
+            })
+          }).catch(() => {})
+        }
+      } finally {
+        if (!shouldKeepRunnerWorktree({ success, env: process.env })) {
+          try {
+            runnerWorkspace.cleanup()
+          } catch {
+            // Best-effort cleanup only.
+          }
+        }
+      }
+    })()
+  })
+}
+
 function runSimulation(id: string, delegation: Delegation) {
   const goal = delegation.contract.goal
   const budgetLog = buildSimulationBudgetLog(delegation)
@@ -1185,9 +1452,11 @@ export async function POST(
     ? 'ollama-agent'
     : isClaudeAvailable()
       ? 'claude-cli'
-      : readStoredApiKeys().ANTHROPIC_API_KEY?.trim()
-        ? 'claude-api'
-        : 'simulation'
+      : isCodexAvailable()
+        ? 'codex-cli'
+        : readStoredApiKeys().ANTHROPIC_API_KEY?.trim()
+          ? 'claude-api'
+          : 'simulation'
 
   void withSpan('delegation.execute', {
     'delegation.id':          id,
@@ -1206,6 +1475,11 @@ export async function POST(
   if (mode === 'claude-cli') {
     runWithClaudeCLI(id, prompt, startTime, delegation.contract.maxBudgetUsd, delegation.contract.riskClass, delegation.targetRepo)
     return NextResponse.json({ started: true, mode: 'claude-cli', delegationId: id })
+  }
+
+  if (mode === 'codex-cli') {
+    runWithCodexCLI(id, prompt, startTime, delegation.contract.maxBudgetUsd, delegation.contract.riskClass, delegation.targetRepo)
+    return NextResponse.json({ started: true, mode: 'codex-cli', delegationId: id })
   }
 
   // Fallback 1: Claude API tool-use loop — real code execution, no CLI required

@@ -7,6 +7,11 @@ import { computeAutopilotScore } from '@/lib/nba-engine/autopilot-score'
 import { pickNextSafe } from '@/lib/delegations/next-safe'
 import { reapStaleDelegations } from '@/lib/delegations/watchdog'
 import {
+  getCachedOrShallowRunnerReadiness,
+  getRunnerReadiness,
+  writeCachedRunnerReadiness,
+} from '@/lib/system/runner-readiness'
+import {
   createDelegationRepository,
   SINGLE_TENANT_USER_ID,
 } from '@/lib/repositories/delegationRepository'
@@ -50,6 +55,51 @@ function candidatePayload(candidate: Delegation | null) {
   }
 }
 
+function assessActionability(candidate: Delegation): { ok: boolean; reason?: string; nextStep?: string } {
+  const goal = candidate.contract.goal.trim()
+  const title = (candidate.title ?? '').trim()
+  const definitionOfDone = candidate.contract.definitionOfDone ?? []
+  const allowedFilePatterns = candidate.contract.allowedFilePatterns ?? []
+  const normalizedGoal = goal.toLowerCase()
+  const genericGoals = [
+    'wartung des servers',
+    'maintenance',
+    'server maintenance',
+    'todo',
+    'test',
+  ]
+  const genericDod = definitionOfDone.every(item => {
+    const normalized = item.toLowerCase()
+    return normalized.includes('is implemented') || normalized === 'tests pass' || normalized === 'no typescript errors'
+  })
+
+  if (genericGoals.includes(normalizedGoal) || goal.length < 20) {
+    return {
+      ok: false,
+      reason: `Ziel ist zu vage: "${title || goal}".`,
+      nextStep: 'Erzeuge zuerst einen konkreten Brief mit Ziel, Scope, betroffenen Dateien und messbarer Definition of Done.',
+    }
+  }
+
+  if (genericDod || definitionOfDone.length < 2) {
+    return {
+      ok: false,
+      reason: 'Definition of Done ist nicht konkret genug fuer einen autonomen Run.',
+      nextStep: 'Lasse den Plan-Modus die Aufgabe in klare Akzeptanzkriterien und sichere Dateigrenzen zerlegen.',
+    }
+  }
+
+  if (allowedFilePatterns.length === 0 && candidate.contract.riskClass !== 'A') {
+    return {
+      ok: false,
+      reason: 'Dateigrenzen fehlen fuer eine nicht-triviale Aufgabe.',
+      nextStep: 'Lege erlaubte Dateipfade oder ein enges Arbeitspaket fest, bevor Autopilot startet.',
+    }
+  }
+
+  return { ok: true }
+}
+
 export async function POST(request: NextRequest) {
   const authError = await requireAuth()
   if (authError) return authError
@@ -58,7 +108,26 @@ export async function POST(request: NextRequest) {
   const config = getNBAConfig()
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
   const timeoutMinutes = Math.max(5, Math.min(240, Number(body.timeoutMinutes ?? 10)))
+  let runnerReadiness = getCachedOrShallowRunnerReadiness()
   let delivery: unknown = null
+
+  if (!body.dryRun && !runnerReadiness.ready) {
+    runnerReadiness = getRunnerReadiness({ deep: true })
+    writeCachedRunnerReadiness(runnerReadiness)
+
+    if (!runnerReadiness.ready) {
+      return NextResponse.json({
+        ok: true,
+        status: 'blocked',
+        message: 'Autonomie bleibt blockiert: kein echter Runner ist headless bereit. Bitte Claude Code oder Codex CLI anmelden oder einen API-Fallback konfigurieren.',
+        runnerReadiness,
+        delivery,
+        counts: null,
+        candidate: null,
+        started: false,
+      })
+    }
+  }
 
   if (!body.dryRun) {
     const deliveryResponse = await fetch(new URL('/api/daily-assistant/delivery-cycle', internalBaseUrl()).toString(), {
@@ -85,19 +154,62 @@ export async function POST(request: NextRequest) {
       message: `${counts.failed} fehlgeschlagene Delegation(en) blockieren Autonomie. Bitte erst Fehler prüfen oder bewusst erneut starten.`,
       reaped,
       delivery,
+      runnerReadiness,
       counts,
       candidate: null,
       started: false,
     })
   }
 
-  const { candidate, runningCount } = pickNextSafe(delegations, {
+  const skippedCandidates: Array<{
+    candidate: ReturnType<typeof candidatePayload>
+    reason: string
+    nextStep?: string
+  }> = []
+  let remainingDelegations = delegations
+  let selection = pickNextSafe(remainingDelegations, {
     autopilotMinScore: config.autopilotMinScore,
     autopilotMaxRiskClass: config.autopilotMaxRiskClass,
     maxConcurrentAgents: config.maxConcurrentAgents,
   })
+  let { candidate, runningCount } = selection
+
+  while (candidate) {
+    const actionability = assessActionability(candidate)
+    if (actionability.ok) break
+    skippedCandidates.push({
+      candidate: candidatePayload(candidate),
+      reason: actionability.reason ?? 'Aufgabe ist nicht konkret genug.',
+      nextStep: actionability.nextStep,
+    })
+    remainingDelegations = remainingDelegations.filter(delegation => delegation.id !== candidate?.id)
+    selection = pickNextSafe(remainingDelegations, {
+      autopilotMinScore: config.autopilotMinScore,
+      autopilotMaxRiskClass: config.autopilotMaxRiskClass,
+      maxConcurrentAgents: config.maxConcurrentAgents,
+    })
+    candidate = selection.candidate
+    runningCount = selection.runningCount
+  }
 
   if (!candidate) {
+    if (skippedCandidates.length > 0) {
+      return NextResponse.json({
+        ok: true,
+        status: 'needs_refinement',
+        message: 'Assistant hat keine konkret ausfuehrbare Delegation gefunden. Vage Aufgaben wurden uebersprungen.',
+        nextStep: 'Nutze den Plan-Modus, um aus der Idee ein enges Arbeitspaket mit Ziel, Scope, Dateigrenzen und Definition of Done zu machen.',
+        reaped,
+        delivery,
+        runnerReadiness,
+        counts,
+        runningCount,
+        skippedCandidates,
+        candidate: null,
+        started: false,
+      })
+    }
+
     return NextResponse.json({
       ok: true,
       status: runningCount >= config.maxConcurrentAgents ? 'waiting' : 'idle',
@@ -106,6 +218,7 @@ export async function POST(request: NextRequest) {
         : 'Keine sichere freigegebene Delegation startbereit. Plane eine neue Idee oder gib die naechste Aufgabe frei.',
       reaped,
       delivery,
+      runnerReadiness,
       counts,
       runningCount,
       candidate: null,
@@ -122,8 +235,10 @@ export async function POST(request: NextRequest) {
         : 'Balanced/Kontrollmodus: sichere Delegation gefunden. Starte sie bewusst mit Assistant uebernehmen.',
       reaped,
       delivery,
+      runnerReadiness,
       counts,
       runningCount,
+      skippedCandidates,
       candidate: candidatePayload(candidate),
       started: false,
     })
@@ -150,7 +265,9 @@ export async function POST(request: NextRequest) {
       error: errorBody.slice(0, 500),
       reaped,
       delivery,
+      runnerReadiness,
       counts,
+      skippedCandidates,
       candidate: candidatePayload(candidate),
       started: false,
     }, { status: 502 })
@@ -164,8 +281,10 @@ export async function POST(request: NextRequest) {
     message: 'Assistant hat die naechste sichere Delegation gestartet und ueberwacht sie jetzt in der Live View.',
     reaped,
     delivery,
+    runnerReadiness,
     counts,
     runningCount: runningCount + 1,
+    skippedCandidates,
     candidate: candidatePayload(candidate),
     started: true,
     execution,

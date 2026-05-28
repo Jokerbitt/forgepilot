@@ -2,7 +2,7 @@
  * CLI-based providers — no API key required.
  *
  * ClaudeCLIProvider: wraps `claude -p "<prompt>"` (Claude Code Max subscription)
- * CodexCLIProvider: wraps `codex "<prompt>"` (Codex Pro subscription)
+ * CodexCLIProvider: wraps `codex exec "<prompt>"` (Codex Pro subscription)
  *
  * Both are detected via `which` and run as child processes.
  * Useful for zero-key local workflows using existing subscription plans.
@@ -98,7 +98,14 @@ export class CodexCLIProvider implements AIProvider {
       ? `${options.system}\n\n${options.prompt}`
       : options.prompt
 
-    const { stdout, stderr } = await execFileAsync('codex', [combinedPrompt], {
+    const { stdout, stderr } = await execFileAsync('codex', [
+      'exec',
+      '-C',
+      process.cwd(),
+      '--sandbox',
+      'read-only',
+      combinedPrompt,
+    ], {
       timeout: 120_000,
       maxBuffer: 8 * 1024 * 1024,
     })
