@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Activity,
   AlertTriangle,
@@ -9,13 +10,20 @@ import {
   Clock3,
   ExternalLink,
   Monitor,
+  Network,
   RefreshCw,
   Route,
   Shield,
 } from 'lucide-react'
 import { LiveAgentActivityPanel } from '@/components/live/LiveAgentActivityPanel'
+import { RunsTab } from '@/components/live/RunsTab'
+import { MonitorTab } from '@/components/live/MonitorTab'
+import { OrchestrationsTab } from '@/components/live/OrchestrationsTab'
 import { cx } from '@/components/ui/primitives'
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type Tab = 'status' | 'orchestrations' | 'runs' | 'monitor'
 type Tone = 'ready' | 'attention' | 'blocked' | 'neutral'
 
 interface EndpointState {
@@ -60,59 +68,21 @@ interface CliStatusResponse {
 }
 
 interface DailyReportResponse {
-  dailyAssistant?: {
-    status?: 'ready' | 'attention' | 'blocked'
-    score?: number
-    nextFocus?: string
-  }
-  firstRealValueLoop?: {
-    progressPct?: number
-    currentStep?: { label?: string; action?: string }
-  }
-  executeLoopEvidence?: {
-    provenRuns?: number
-    targetRuns?: number
-    nextAction?: string
-  }
-  status?: {
-    operations?: {
-      authDisabled?: boolean
-      storageMode?: string
-    }
-  }
+  dailyAssistant?: { status?: 'ready' | 'attention' | 'blocked'; score?: number; nextFocus?: string }
+  firstRealValueLoop?: { progressPct?: number; currentStep?: { label?: string; action?: string } }
+  executeLoopEvidence?: { provenRuns?: number; targetRuns?: number; nextAction?: string }
+  status?: { operations?: { authDisabled?: boolean; storageMode?: string } }
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 const previewPages = [
-  {
-    label: 'Command Center',
-    href: '/',
-    description: 'Startpunkt: Idee eingeben, Plan Mode starten, nächste Empfehlung sehen.',
-  },
-  {
-    label: 'Plan Mode',
-    href: '/idea',
-    description: 'Aus einer Idee wird ein Produktplan mit Arbeitspaketen.',
-  },
-  {
-    label: 'Ausführen',
-    href: '/delegations',
-    description: 'Delegations prüfen, freigeben, starten und Ergebnisse kontrollieren.',
-  },
-  {
-    label: 'Branches',
-    href: '/branches',
-    description: 'Pull Requests prüfen, Änderungen ansehen und sicher in main mergen.',
-  },
-  {
-    label: 'Wissen',
-    href: '/knowledge',
-    description: 'Gespeicherte Erkenntnisse und Writebacks ansehen.',
-  },
-  {
-    label: 'Settings',
-    href: '/settings',
-    description: 'Provider, lokale Modelle, GitHub, Linear und Betrieb prüfen.',
-  },
+  { label: 'Command Center', href: '/', description: 'Startpunkt: Idee eingeben, Plan Mode starten, nächste Empfehlung sehen.' },
+  { label: 'Plan Mode', href: '/idea', description: 'Aus einer Idee wird ein Produktplan mit Arbeitspaketen.' },
+  { label: 'Ausführen', href: '/delegations', description: 'Delegations prüfen, freigeben, starten und Ergebnisse kontrollieren.' },
+  { label: 'Branches', href: '/branches', description: 'Pull Requests prüfen, Änderungen ansehen und sicher in main mergen.' },
+  { label: 'Wissen', href: '/knowledge', description: 'Gespeicherte Erkenntnisse und Writebacks ansehen.' },
+  { label: 'Settings', href: '/settings', description: 'Provider, lokale Modelle, GitHub, Linear und Betrieb prüfen.' },
 ]
 
 function toneClasses(tone: Tone): string {
@@ -140,31 +110,26 @@ async function fetchJson<T>(href: string, timeoutMs = 5000): Promise<{ ok: true;
   const controller = new AbortController()
   let timeoutId: number | null = null
   const timeoutPromise = new Promise<{ ok: false; detail: string }>(resolve => {
-    timeoutId = window.setTimeout(() => {
-      controller.abort()
-      resolve({ ok: false, detail: `Timeout nach ${Math.round(timeoutMs / 1000)}s` })
-    }, timeoutMs)
+    timeoutId = window.setTimeout(() => { controller.abort(); resolve({ ok: false, detail: `Timeout nach ${Math.round(timeoutMs / 1000)}s` }) }, timeoutMs)
   })
-
   const fetchPromise = (async (): Promise<{ ok: true; data: T } | { ok: false; detail: string }> => {
     const res = await fetch(href, { cache: 'no-store', signal: controller.signal })
     if (!res.ok) return { ok: false, detail: `HTTP ${res.status}` }
     return { ok: true, data: await res.json() as T }
   })()
-
   try {
     return await Promise.race([fetchPromise, timeoutPromise])
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      return { ok: false, detail: `Timeout nach ${Math.round(timeoutMs / 1000)}s` }
-    }
+    if (error instanceof DOMException && error.name === 'AbortError') return { ok: false, detail: `Timeout nach ${Math.round(timeoutMs / 1000)}s` }
     return { ok: false, detail: error instanceof Error ? error.message : 'Nicht erreichbar' }
   } finally {
     if (timeoutId !== null) window.clearTimeout(timeoutId)
   }
 }
 
-export default function LiveViewPage() {
+// ─── Status tab ───────────────────────────────────────────────────────────────
+
+function StatusTab() {
   const [selectedPath, setSelectedPath] = useState('/')
   const [loading, setLoading] = useState(true)
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null)
@@ -185,74 +150,28 @@ export default function LiveViewPage() {
       fetchJson<CliStatusResponse>('/api/system/cli-status'),
       fetchJson<DailyReportResponse>('/api/reports/daily', 8000),
     ])
-
     if (statsRes.ok) setDelegations(statsRes.data)
     if (storageRes.ok) setStorage(storageRes.data)
     if (executeRes.ok) setExecuteHealth(executeRes.data)
     if (cliRes.ok) setCliStatus(cliRes.data)
     if (reportRes.ok) setDailyReport(reportRes.data)
-
     setEndpoints([
-      {
-        label: 'App Health',
-        href: '/api/health',
-        status: healthRes.ok && healthRes.data.status === 'ok' ? 'ready' : 'blocked',
-        detail: healthRes.ok ? 'App antwortet.' : healthRes.detail,
-      },
-      {
-        label: 'Delegations',
-        href: '/api/delegations/stats',
-        status: statsRes.ok ? 'ready' : 'blocked',
-        detail: statsRes.ok
-          ? `${statsRes.data.total ?? 0} gesamt, ${statsRes.data.running ?? 0} laufen, ${statsRes.data.failed ?? 0} fehlerhaft.`
-          : statsRes.detail,
-      },
-      {
-        label: 'Storage',
-        href: '/api/storage-status',
-        status: storageRes.ok && storageRes.data.mode !== 'json' ? 'ready' : storageRes.ok ? 'attention' : 'blocked',
-        detail: storageRes.ok ? `Modus: ${storageRes.data.mode ?? storageRes.data.readsFrom ?? 'unbekannt'}` : storageRes.detail,
-      },
-      {
-        label: 'Execute Loop',
-        href: '/api/execute-loop/health',
-        status: executeRes.ok && executeRes.data.ready ? 'ready' : executeRes.ok ? 'attention' : 'blocked',
-        detail: executeRes.ok ? executeRes.data.executionMode ?? 'Status verfügbar.' : executeRes.detail,
-      },
-      {
-        label: 'Zero-Key Agenten',
-        href: '/api/system/cli-status',
-        status: cliRes.ok && cliRes.data.zeroKeyReady ? 'ready' : cliRes.ok ? 'attention' : 'blocked',
-        detail: cliRes.ok ? cliRes.data.recommendation ?? cliRes.data.activeMode ?? 'Status verfügbar.' : cliRes.detail,
-      },
-      {
-        label: 'Daily Report',
-        href: '/api/reports/daily?format=markdown',
-        status: reportRes.ok
-          ? reportRes.data.dailyAssistant?.status === 'ready'
-            ? 'ready'
-            : reportRes.data.dailyAssistant?.status === 'blocked'
-              ? 'blocked'
-              : 'attention'
-          : 'blocked',
-        detail: reportRes.ok
-          ? `${reportRes.data.dailyAssistant?.score ?? 0}/100, Fokus: ${reportRes.data.dailyAssistant?.nextFocus ?? 'unbekannt'}`
-          : reportRes.detail,
-      },
+      { label: 'App Health', href: '/api/health', status: healthRes.ok && healthRes.data.status === 'ok' ? 'ready' : 'blocked', detail: healthRes.ok ? 'App antwortet.' : healthRes.detail },
+      { label: 'Delegations', href: '/api/delegations/stats', status: statsRes.ok ? 'ready' : 'blocked', detail: statsRes.ok ? `${statsRes.data.total ?? 0} gesamt, ${statsRes.data.running ?? 0} laufen, ${statsRes.data.failed ?? 0} fehlerhaft.` : statsRes.detail },
+      { label: 'Storage', href: '/api/storage-status', status: storageRes.ok && storageRes.data.mode !== 'json' ? 'ready' : storageRes.ok ? 'attention' : 'blocked', detail: storageRes.ok ? `Modus: ${storageRes.data.mode ?? storageRes.data.readsFrom ?? 'unbekannt'}` : storageRes.detail },
+      { label: 'Execute Loop', href: '/api/execute-loop/health', status: executeRes.ok && executeRes.data.ready ? 'ready' : executeRes.ok ? 'attention' : 'blocked', detail: executeRes.ok ? executeRes.data.executionMode ?? 'Status verfügbar.' : executeRes.detail },
+      { label: 'Zero-Key Agenten', href: '/api/system/cli-status', status: cliRes.ok && cliRes.data.zeroKeyReady ? 'ready' : cliRes.ok ? 'attention' : 'blocked', detail: cliRes.ok ? cliRes.data.recommendation ?? cliRes.data.activeMode ?? 'Status verfügbar.' : cliRes.detail },
+      { label: 'Daily Report', href: '/api/reports/daily?format=markdown', status: reportRes.ok ? reportRes.data.dailyAssistant?.status === 'ready' ? 'ready' : reportRes.data.dailyAssistant?.status === 'blocked' ? 'blocked' : 'attention' : 'blocked', detail: reportRes.ok ? `${reportRes.data.dailyAssistant?.score ?? 0}/100, Fokus: ${reportRes.data.dailyAssistant?.nextFocus ?? 'unbekannt'}` : reportRes.detail },
     ])
     setLastCheckedAt(new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
     setLoading(false)
   }
 
-  useEffect(() => {
-    void refresh()
-    const interval = setInterval(() => void refresh(), 30000)
-    return () => clearInterval(interval)
-  }, [])
+  useEffect(() => { void refresh(); const i = setInterval(() => void refresh(), 30000); return () => clearInterval(i) }, [])
 
   const overallTone: Tone = useMemo(() => {
-    if (endpoints.some(endpoint => endpoint.status === 'blocked')) return 'blocked'
-    if (endpoints.some(endpoint => endpoint.status === 'attention')) return 'attention'
+    if (endpoints.some(e => e.status === 'blocked')) return 'blocked'
+    if (endpoints.some(e => e.status === 'attention')) return 'attention'
     if (endpoints.length > 0) return 'ready'
     return 'neutral'
   }, [endpoints])
@@ -260,231 +179,123 @@ export default function LiveViewPage() {
   const firstRealValueProgress = dailyReport?.firstRealValueLoop?.progressPct ?? 0
   const provenRuns = dailyReport?.executeLoopEvidence?.provenRuns ?? 0
   const targetRuns = dailyReport?.executeLoopEvidence?.targetRuns ?? 5
-  const previewUrl = selectedPath
-  const zeroKeyLabel = cliStatus?.activeMode === 'claude-cli'
-    ? 'Claude Max bereit'
-    : cliStatus?.activeMode === 'codex-cli'
-      ? 'Codex CLI bereit'
-      : cliStatus?.zeroKeyReady
-        ? 'CLI bereit'
-        : 'CLI prüfen'
+  const zeroKeyLabel = cliStatus?.activeMode === 'claude-cli' ? 'Claude Max bereit' : cliStatus?.activeMode === 'codex-cli' ? 'Codex CLI bereit' : cliStatus?.zeroKeyReady ? 'CLI bereit' : 'CLI prüfen'
 
   return (
-    <main className="min-h-screen bg-[#08080d] px-5 py-6 text-slate-100 lg:px-8">
-      <div className="mx-auto flex max-w-[1500px] flex-col gap-6">
-        <header className="flex flex-col gap-4 rounded-xl border border-white/[0.07] bg-white/[0.035] p-5 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/[0.08] px-3 py-1 text-xs font-semibold text-violet-200">
-              <Monitor className="h-3.5 w-3.5" />
-              Live View
+    <div className="space-y-6">
+      {/* Overall status + refresh */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className={cx('inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold', toneClasses(overallTone))}>
+          {statusIcon(overallTone)}{statusLabel(overallTone)}
+        </span>
+        <button type="button" onClick={() => void refresh()} disabled={loading} className="inline-flex items-center gap-2 rounded-lg border border-white/[0.09] bg-white/[0.04] px-3 py-2 text-sm font-semibold text-slate-200 transition hover:border-violet-500/30 hover:bg-violet-500/10 disabled:opacity-50">
+          <RefreshCw className={cx('h-4 w-4', loading && 'animate-spin')} />
+          Stand abrufen
+        </button>
+      </div>
+
+      {/* KPI cards */}
+      <section className="grid gap-4 lg:grid-cols-4">
+        <StatusCard icon={<Activity className="h-5 w-5" />} label="Delegations" value={`${delegations?.running ?? 0} aktiv`} detail={`${delegations?.pending ?? 0} pending, ${delegations?.approved ?? 0} freigegeben, ${delegations?.failed ?? 0} fehlerhaft`} tone={(delegations?.failed ?? 0) > 0 ? 'attention' : 'ready'} />
+        <StatusCard icon={<Route className="h-5 w-5" />} label="First Real Value Loop" value={`${firstRealValueProgress}%`} detail={dailyReport?.firstRealValueLoop?.currentStep?.label ?? 'Noch kein Report geladen'} tone={firstRealValueProgress >= 100 ? 'ready' : firstRealValueProgress > 0 ? 'attention' : 'blocked'} />
+        <StatusCard icon={<CheckCircle2 className="h-5 w-5" />} label="Execute Evidence" value={`${provenRuns}/${targetRuns}`} detail={dailyReport?.executeLoopEvidence?.nextAction ?? 'Echte Produktivläufe sammeln'} tone={provenRuns >= targetRuns ? 'ready' : provenRuns > 0 ? 'attention' : 'blocked'} />
+        <StatusCard icon={<Shield className="h-5 w-5" />} label="Zero-Key Ausführung" value={zeroKeyLabel} detail={cliStatus?.recommendation ?? 'Claude/Codex CLI prüfen.'} tone={cliStatus?.zeroKeyReady ? 'ready' : 'attention'} />
+      </section>
+
+      {/* CLI status + storage */}
+      <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Ausführungsmodus</p>
+              <h2 className="mt-1 text-xl font-bold text-white">{zeroKeyLabel}</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">ForgePilot bevorzugt authentifizierte lokale CLIs, damit du Claude Max oder Codex ohne API-Key nutzen kannst.</p>
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Aktueller Stand der App
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-              Prüfe in einer Ansicht, ob ForgePilot läuft, welche Kernbereiche testbar sind und wie die App
-              für dich gerade aussieht. Die Vorschau ist bewusst auf den V1-Kern reduziert.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className={cx('inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold', toneClasses(overallTone))}>
-              {statusIcon(overallTone)}
-              {statusLabel(overallTone)}
+            <span className={cx('inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold', toneClasses(cliStatus?.zeroKeyReady ? 'ready' : 'attention'))}>
+              {statusIcon(cliStatus?.zeroKeyReady ? 'ready' : 'attention')}
+              {cliStatus?.activeMode ?? 'lädt'}
             </span>
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              disabled={loading}
-              className="inline-flex items-center gap-2 rounded-lg border border-white/[0.09] bg-white/[0.04] px-3 py-2 text-sm font-semibold text-slate-200 transition hover:border-violet-500/30 hover:bg-violet-500/10 disabled:opacity-50"
-            >
-              <RefreshCw className={cx('h-4 w-4', loading && 'animate-spin')} />
-              Stand abrufen
-            </button>
           </div>
-        </header>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <ToolReadiness label="Claude Code / Max" available={Boolean(cliStatus?.claude?.available)} detail={cliStatus?.claude?.detail ?? 'Status wird geladen.'} version={cliStatus?.claude?.version} />
+            <ToolReadiness label="Codex CLI" available={Boolean(cliStatus?.codex?.available)} detail={cliStatus?.codex?.detail ?? 'Status wird geladen.'} version={cliStatus?.codex?.version} />
+          </div>
+        </div>
+        <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-4">
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Betrieb</p>
+          <p className="mt-1 text-xl font-bold text-white">{storage?.mode ?? dailyReport?.status?.operations?.storageMode ?? 'unbekannt'}</p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">{dailyReport?.status?.operations?.authDisabled ? 'Login ist lokal deaktiviert.' : 'Login ist aktiv.'}</p>
+          <p className="mt-3 text-xs leading-5 text-slate-500">Execute Loop: {executeHealth?.executionMode ?? 'noch nicht geladen'}</p>
+        </div>
+      </section>
 
-        <section className="grid gap-4 lg:grid-cols-4">
-          <StatusCard
-            icon={<Activity className="h-5 w-5" />}
-            label="Delegations"
-            value={`${delegations?.running ?? 0} aktiv`}
-            detail={`${delegations?.pending ?? 0} pending, ${delegations?.approved ?? 0} freigegeben, ${delegations?.failed ?? 0} fehlerhaft`}
-            tone={(delegations?.failed ?? 0) > 0 ? 'attention' : 'ready'}
-          />
-          <StatusCard
-            icon={<Route className="h-5 w-5" />}
-            label="First Real Value Loop"
-            value={`${firstRealValueProgress}%`}
-            detail={dailyReport?.firstRealValueLoop?.currentStep?.label ?? 'Noch kein Report geladen'}
-            tone={firstRealValueProgress >= 100 ? 'ready' : firstRealValueProgress > 0 ? 'attention' : 'blocked'}
-          />
-          <StatusCard
-            icon={<CheckCircle2 className="h-5 w-5" />}
-            label="Execute Evidence"
-            value={`${provenRuns}/${targetRuns}`}
-            detail={dailyReport?.executeLoopEvidence?.nextAction ?? 'Echte Produktivläufe sammeln'}
-            tone={provenRuns >= targetRuns ? 'ready' : provenRuns > 0 ? 'attention' : 'blocked'}
-          />
-          <StatusCard
-            icon={<Shield className="h-5 w-5" />}
-            label="Zero-Key Ausführung"
-            value={zeroKeyLabel}
-            detail={cliStatus?.recommendation ?? 'Claude/Codex CLI prüfen. API-Keys bleiben optional.'}
-            tone={cliStatus?.zeroKeyReady ? 'ready' : 'attention'}
-          />
-        </section>
+      <LiveAgentActivityPanel />
 
-        <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+      {/* Preview + live checks */}
+      <section className="grid min-h-[720px] gap-5 xl:grid-cols-[380px_1fr]">
+        <aside className="space-y-4">
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Ausführungsmodus</p>
-                <h2 className="mt-1 text-xl font-bold text-white">{zeroKeyLabel}</h2>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-                  ForgePilot bevorzugt authentifizierte lokale CLIs, damit du Claude Max oder Codex ohne API-Key
-                  nutzen kannst. API-Keys sind nur ein optionaler Fallback.
-                </p>
-              </div>
-              <span className={cx('inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold', toneClasses(cliStatus?.zeroKeyReady ? 'ready' : 'attention'))}>
-                {statusIcon(cliStatus?.zeroKeyReady ? 'ready' : 'attention')}
-                {cliStatus?.activeMode ?? 'lädt'}
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-white">Testbare Kernseiten</h2>
+              <span className="flex items-center gap-1.5 text-xs text-slate-500">
+                <Clock3 className="h-3.5 w-3.5" />
+                {lastCheckedAt ?? 'lädt'}
               </span>
             </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <ToolReadiness
-                label="Claude Code / Max"
-                available={Boolean(cliStatus?.claude?.available)}
-                detail={cliStatus?.claude?.detail ?? 'Status wird geladen.'}
-                version={cliStatus?.claude?.version}
-              />
-              <ToolReadiness
-                label="Codex CLI"
-                available={Boolean(cliStatus?.codex?.available)}
-                detail={cliStatus?.codex?.detail ?? 'Status wird geladen.'}
-                version={cliStatus?.codex?.version}
-              />
+            <div className="space-y-2">
+              {previewPages.map(page => (
+                <button key={page.href} type="button" onClick={() => setSelectedPath(page.href)} className={cx('w-full rounded-lg border px-3 py-3 text-left transition', selectedPath === page.href ? 'border-violet-500/40 bg-violet-500/[0.12]' : 'border-white/[0.06] bg-white/[0.025] hover:border-white/[0.14] hover:bg-white/[0.045]')}>
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="font-semibold text-slate-100">{page.label}</span>
+                    <ExternalLink className="h-3.5 w-3.5 text-slate-500" />
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-slate-500">{page.description}</span>
+                </button>
+              ))}
             </div>
           </div>
-
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-4">
-            <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Betrieb</p>
-            <p className="mt-1 text-xl font-bold text-white">{storage?.mode ?? dailyReport?.status?.operations?.storageMode ?? 'unbekannt'}</p>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              {dailyReport?.status?.operations?.authDisabled ? 'Login ist lokal deaktiviert, damit du vor Launch schnell testen kannst.' : 'Login ist aktiv.'}
-            </p>
-            <p className="mt-3 text-xs leading-5 text-slate-500">
-              Execute Loop: {executeHealth?.executionMode ?? 'noch nicht geladen'}
-            </p>
+            <h2 className="mb-3 text-sm font-semibold text-white">Live Checks</h2>
+            <div className="space-y-2">
+              {endpoints.map(endpoint => (
+                <a key={endpoint.href} href={endpoint.href} target="_blank" rel="noreferrer" className="flex items-start gap-3 rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-3 transition hover:border-white/[0.14]">
+                  <span className={cx('mt-0.5 inline-flex rounded-full border p-1', toneClasses(endpoint.status))}>{statusIcon(endpoint.status)}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-slate-100">{endpoint.label}</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-slate-500">{endpoint.detail}</span>
+                  </span>
+                </a>
+              ))}
+            </div>
           </div>
-        </section>
-
-        <LiveAgentActivityPanel />
-
-        <section className="grid min-h-[720px] gap-5 xl:grid-cols-[380px_1fr]">
-          <aside className="space-y-4">
-            <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold text-white">Testbare Kernseiten</h2>
-                <span className="flex items-center gap-1.5 text-xs text-slate-500">
-                  <Clock3 className="h-3.5 w-3.5" />
-                  {lastCheckedAt ?? 'lädt'}
-                </span>
-              </div>
-              <div className="space-y-2">
-                {previewPages.map(page => (
-                  <button
-                    key={page.href}
-                    type="button"
-                    onClick={() => setSelectedPath(page.href)}
-                    className={cx(
-                      'w-full rounded-lg border px-3 py-3 text-left transition',
-                      selectedPath === page.href
-                        ? 'border-violet-500/40 bg-violet-500/[0.12]'
-                        : 'border-white/[0.06] bg-white/[0.025] hover:border-white/[0.14] hover:bg-white/[0.045]'
-                    )}
-                  >
-                    <span className="flex items-center justify-between gap-3">
-                      <span className="font-semibold text-slate-100">{page.label}</span>
-                      <ExternalLink className="h-3.5 w-3.5 text-slate-500" />
-                    </span>
-                    <span className="mt-1 block text-xs leading-5 text-slate-500">{page.description}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-4">
-              <h2 className="mb-3 text-sm font-semibold text-white">Live Checks</h2>
-              <div className="space-y-2">
-                {endpoints.map(endpoint => (
-                  <a
-                    key={endpoint.href}
-                    href={endpoint.href}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-start gap-3 rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-3 transition hover:border-white/[0.14]"
-                  >
-                    <span className={cx('mt-0.5 inline-flex rounded-full border p-1', toneClasses(endpoint.status))}>
-                      {statusIcon(endpoint.status)}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold text-slate-100">{endpoint.label}</span>
-                      <span className="mt-0.5 block text-xs leading-5 text-slate-500">{endpoint.detail}</span>
-                    </span>
-                  </a>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.07] p-4">
-              <h2 className="text-sm font-semibold text-violet-100">So testest du sinnvoll</h2>
-              <ol className="mt-3 space-y-2 text-sm leading-6 text-violet-100/75">
-                <li>1. Command Center öffnen und prüfen, ob der nächste Schritt klar ist.</li>
-                <li>2. Plan Mode starten und eine echte Idee eingeben.</li>
-                <li>3. Ergebnis prüfen: Nutzen, MVP, Risiken, Arbeitspakete.</li>
-                <li>4. Erst danach Ausführung starten und Delegation Detail beobachten.</li>
-              </ol>
-            </div>
-          </aside>
-
-          <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#050509] shadow-2xl shadow-black/40">
-            <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] bg-white/[0.035] px-4 py-3">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Vorschau</p>
-                <p className="truncate text-sm font-semibold text-white">{previewUrl}</p>
-              </div>
-              <Link
-                href={previewUrl}
-                className="inline-flex items-center gap-2 rounded-lg border border-white/[0.09] bg-white/[0.04] px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-violet-500/30 hover:bg-violet-500/10"
-              >
-                Seite öffnen
-                <ExternalLink className="h-3.5 w-3.5" />
-              </Link>
-            </div>
-            <iframe
-              key={previewUrl}
-              title="ForgePilot Live Preview"
-              src={previewUrl}
-              className="h-[720px] w-full bg-[#08080d]"
-            />
+          <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.07] p-4">
+            <h2 className="text-sm font-semibold text-violet-100">So testest du sinnvoll</h2>
+            <ol className="mt-3 space-y-2 text-sm leading-6 text-violet-100/75">
+              <li>1. Command Center öffnen und prüfen, ob der nächste Schritt klar ist.</li>
+              <li>2. Plan Mode starten und eine echte Idee eingeben.</li>
+              <li>3. Ergebnis prüfen: Nutzen, MVP, Risiken, Arbeitspakete.</li>
+              <li>4. Erst danach Ausführung starten und Delegation Detail beobachten.</li>
+            </ol>
           </div>
-        </section>
-      </div>
-    </main>
+        </aside>
+        <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#050509] shadow-2xl shadow-black/40">
+          <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] bg-white/[0.035] px-4 py-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Vorschau</p>
+              <p className="truncate text-sm font-semibold text-white">{selectedPath}</p>
+            </div>
+            <Link href={selectedPath} className="inline-flex items-center gap-2 rounded-lg border border-white/[0.09] bg-white/[0.04] px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-violet-500/30 hover:bg-violet-500/10">
+              Seite öffnen<ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+          <iframe key={selectedPath} title="ForgePilot Live Preview" src={selectedPath} className="h-[720px] w-full bg-[#08080d]" />
+        </div>
+      </section>
+    </div>
   )
 }
 
-function ToolReadiness({
-  label,
-  available,
-  detail,
-  version,
-}: {
-  label: string
-  available: boolean
-  detail: string
-  version?: string | null
-}) {
+function ToolReadiness({ label, available, detail, version }: { label: string; available: boolean; detail: string; version?: string | null }) {
   const tone: Tone = available ? 'ready' : 'attention'
   return (
     <div className="rounded-lg border border-white/[0.06] bg-white/[0.025] p-3">
@@ -502,30 +313,99 @@ function ToolReadiness({
   )
 }
 
-function StatusCard({
-  icon,
-  label,
-  value,
-  detail,
-  tone,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string
-  detail: string
-  tone: Tone
-}) {
+function StatusCard({ icon, label, value, detail, tone }: { icon: React.ReactNode; label: string; value: string; detail: string; tone: Tone }) {
   return (
     <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-4">
       <div className="mb-4 flex items-center justify-between">
         <span className={cx('inline-flex rounded-lg border p-2', toneClasses(tone))}>{icon}</span>
-        <span className={cx('rounded-full border px-2 py-1 text-[11px] font-semibold', toneClasses(tone))}>
-          {statusLabel(tone)}
-        </span>
+        <span className={cx('rounded-full border px-2 py-1 text-[11px] font-semibold', toneClasses(tone))}>{statusLabel(tone)}</span>
       </div>
       <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">{label}</p>
       <p className="mt-1 text-2xl font-bold text-white">{value}</p>
       <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">{detail}</p>
     </div>
+  )
+}
+
+// ─── Tab definitions ──────────────────────────────────────────────────────────
+
+const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
+  { key: 'status',         label: 'System Status',    icon: Monitor },
+  { key: 'orchestrations', label: 'Orchestrierungen', icon: Network },
+  { key: 'runs',           label: 'Agent Runs',       icon: Activity },
+  { key: 'monitor',        label: 'Provider Monitor', icon: Shield },
+]
+
+// ─── Page shell ───────────────────────────────────────────────────────────────
+
+function LivePageInner() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const tabParam = searchParams.get('tab') as Tab | null
+  const activeTab: Tab = TABS.some(t => t.key === tabParam) ? (tabParam as Tab) : 'status'
+
+  const setTab = (tab: Tab) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (tab === 'status') params.delete('tab')
+    else params.set('tab', tab)
+    router.replace(`/live${params.size > 0 ? `?${params.toString()}` : ''}`)
+  }
+
+  return (
+    <main className="min-h-screen bg-[#08080d] px-5 py-6 text-slate-100 lg:px-8">
+      <div className="mx-auto flex max-w-[1500px] flex-col gap-6">
+        {/* Header */}
+        <header className="flex flex-col gap-4 rounded-xl border border-white/[0.07] bg-white/[0.035] p-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/[0.08] px-3 py-1 text-xs font-semibold text-violet-200">
+              <Monitor className="h-3.5 w-3.5" />
+              Ausführungs-Hub
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">Live & Betrieb</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+              System-Status, Orchestrierungen, Agent-Runs und Provider-Monitoring — alles in einer Ansicht.
+            </p>
+          </div>
+        </header>
+
+        {/* Tab bar */}
+        <div className="flex gap-1 rounded-xl border border-white/[0.06] bg-white/[0.03] p-1">
+          {TABS.map(tab => {
+            const Icon = tab.icon
+            const isActive = activeTab === tab.key
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setTab(tab.key)}
+                className={cx(
+                  'flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all',
+                  isActive
+                    ? 'bg-violet-500/15 text-violet-200 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-300 hover:bg-white/[0.04]'
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">{tab.label}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Tab content */}
+        {activeTab === 'status'         && <StatusTab />}
+        {activeTab === 'orchestrations' && <OrchestrationsTab />}
+        {activeTab === 'runs'           && <RunsTab />}
+        {activeTab === 'monitor'        && <MonitorTab />}
+      </div>
+    </main>
+  )
+}
+
+export default function LivePage() {
+  return (
+    <Suspense>
+      <LivePageInner />
+    </Suspense>
   )
 }

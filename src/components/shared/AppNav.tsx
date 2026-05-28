@@ -9,32 +9,18 @@ import {
   Inbox,
   FileText,
   CheckSquare,
-  Kanban,
-  Activity,
   ListChecks,
-  History,
   Bot,
   BookOpen,
-  Package,
   GitBranch,
-  Shield,
-  FlaskConical,
   Settings,
   Command,
   ChevronRight,
   Zap,
   BarChart3,
-  Search,
-  Brain,
-  Network,
   Lightbulb,
   FolderOpen,
-  Bell,
-  Radio,
   Monitor,
-  GraduationCap,
-  ClipboardList,
-  MapPin,
   AlertTriangle,
 } from 'lucide-react'
 import type { DelegationStats } from '@/app/api/delegations/stats/route'
@@ -65,34 +51,28 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  // ── Core workflow (5 items — the daily-use loop) ─────────────────────────
-  { href: '/',              key: 'commandCenter',   icon: LayoutDashboard, group: 'core' },
-  { href: '/idea',          key: 'ideaToProduction', icon: Lightbulb,      group: 'core', isNew: true },
-  { href: '/delegations',   key: 'execute',          icon: ListChecks,     group: 'core' },
-  { href: '/knowledge-cards', key: 'delegationLessons', icon: GraduationCap, group: 'core' },
-  { href: '/settings',      key: 'settings',         icon: Settings,       group: 'core' },
+  // ── Core workflow (4 items — the daily-use loop) ─────────────────────────
+  { href: '/',            key: 'commandCenter',    icon: LayoutDashboard, group: 'core' },
+  { href: '/idea',        key: 'ideaToProduction', icon: Lightbulb,       group: 'core', isNew: true },
+  { href: '/delegations', key: 'execute',          icon: ListChecks,      group: 'core' },
+  { href: '/settings',    key: 'settings',         icon: Settings,        group: 'core' },
 
-  // ── Workflow tools (3 items — visible but secondary) ─────────────────────
-  { href: '/live',          key: 'liveView',         icon: Monitor,        group: 'workflow' },
-  { href: '/projects',      key: 'plan',             icon: FolderOpen,     group: 'workflow' },
-  { href: '/inbox',         key: 'inbox',            icon: Inbox,          group: 'workflow' },
+  // ── Workflow tools (4 items — visible but secondary) ─────────────────────
+  { href: '/live',      key: 'liveView',  icon: Monitor,    group: 'workflow' },
+  { href: '/projects',  key: 'plan',      icon: FolderOpen, group: 'workflow' },
+  { href: '/inbox',     key: 'inbox',     icon: Inbox,      group: 'workflow' },
+  { href: '/knowledge', key: 'knowledge', icon: BookOpen,   group: 'workflow' },
 
-  // ── Expert tools (all others — collapsed by default) ─────────────────────
-  { href: '/analytics',       key: 'costAnalytics',   icon: BarChart3,    group: 'expert' },
-  { href: '/knowledge',       key: 'knowledge',        icon: BookOpen,     group: 'expert' },
-  { href: '/project-briefs',  key: 'projectBriefs',    icon: FileText,     group: 'expert' },
-  { href: '/work-items',      key: 'workItems',        icon: CheckSquare,  group: 'expert' },
-  { href: '/agent-runs',      key: 'agentRuns',        icon: History,      group: 'expert' },
-  { href: '/agents',          key: 'agentControl',     icon: Bot,          group: 'expert' },
-  { href: '/orchestrations',  key: 'orchestrations',   icon: Network,      group: 'expert' },
-  { href: '/monitor',         key: 'agentMonitor',     icon: Radio,        group: 'expert' },
-  { href: '/pm-agent',        key: 'pmAgent',          icon: Brain,        group: 'expert' },
-  { href: '/branches',        key: 'system',           icon: GitBranch,    group: 'expert' },
-  { href: '/planning',        key: 'planningAudit',    icon: MapPin,       group: 'expert' },
-  { href: '/pilot',           key: 'e2ePilot',         icon: FlaskConical, group: 'expert' },
-  { href: '/digest',          key: 'activityDigest',   icon: Bell,         group: 'expert' },
+  // ── Expert tools (rarely needed — collapsed by default) ──────────────────
+  { href: '/analytics',      key: 'costAnalytics', icon: BarChart3,   group: 'expert' },
+  { href: '/project-briefs', key: 'projectBriefs', icon: FileText,    group: 'expert' },
+  { href: '/work-items',     key: 'workItems',      icon: CheckSquare, group: 'expert' },
+  { href: '/agents',         key: 'agentControl',   icon: Bot,         group: 'expert' },
+  { href: '/branches',       key: 'system',         icon: GitBranch,   group: 'expert' },
   // Removed: /board→/delegations  /active→/live  /notifications→/inbox  /briefing→/digest
   // Removed: /model-router→/settings  /governance→/settings
+  // Removed: /knowledge-cards→/knowledge  /monitor→/live  /agent-runs→/live  /orchestrations→/live
+  // Removed: /pm-agent  /pilot  /planning  /digest
 ]
 
 const coreNavItems     = navItems.filter(item => item.group === 'core')
