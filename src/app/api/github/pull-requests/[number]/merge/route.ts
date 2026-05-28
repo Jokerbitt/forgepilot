@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { readConnectorConfigs } from '@/lib/connectors/config'
 import { getGitHubPullRequestPreview, mergeGitHubPullRequest } from '@/lib/connectors/github'
+import { evaluateMergeSafety } from '@/lib/github/merge-safety'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,6 +11,7 @@ interface Params {
 
 interface MergeRequestBody {
   confirm?: boolean
+  auto?: boolean
   sha?: string
   review?: {
     filesReviewed?: boolean
@@ -26,11 +28,13 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   const body = await request.json().catch(() => ({})) as MergeRequestBody
-  if (body.confirm !== true) {
+  const isAutoMerge = body.auto === true
+
+  if (!isAutoMerge && body.confirm !== true) {
     return NextResponse.json({ error: 'Merge confirmation is required' }, { status: 400 })
   }
 
-  if (!body.review?.filesReviewed || !body.review?.checksReviewed || !body.review?.noSecrets) {
+  if (!isAutoMerge && (!body.review?.filesReviewed || !body.review?.checksReviewed || !body.review?.noSecrets)) {
     return NextResponse.json({
       error: 'Review checklist is required before merging',
     }, { status: 400 })
@@ -40,6 +44,7 @@ export async function POST(request: Request, { params }: Params) {
     const configs = readConnectorConfigs()
     const config = configs.github ?? {}
     const preview = await getGitHubPullRequestPreview(config, number)
+    const safety = evaluateMergeSafety(preview, { mode: isAutoMerge ? 'auto' : 'manual' })
 
     if (preview.draft || preview.state !== 'open' || preview.mergeable === false) {
       return NextResponse.json({
@@ -54,10 +59,11 @@ export async function POST(request: Request, { params }: Params) {
       }, { status: 409 })
     }
 
-    if (preview.mergeRecommendation.status !== 'ready') {
+    if (safety.status !== 'ready') {
       return NextResponse.json({
         error: 'Pull request is not merge-ready',
         recommendation: preview.mergeRecommendation,
+        safety,
       }, { status: 409 })
     }
 
@@ -68,7 +74,7 @@ export async function POST(request: Request, { params }: Params) {
       message: 'Merged from ForgePilot Branch Review after user confirmation.',
     })
 
-    return NextResponse.json({ ok: true, result })
+    return NextResponse.json({ ok: true, result, safety })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'GitHub pull request could not be merged'
     return NextResponse.json({ error: message }, { status: 500 })

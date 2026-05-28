@@ -7,9 +7,11 @@ import { checkRateLimit, buildRateLimitHeaders } from '@/lib/rate-limit'
 import { spawn, execSync } from 'child_process'
 import type { Delegation, AgentLog, DelegationReport } from '@/lib/models/delegation'
 import { registerProcess, unregisterProcess } from '@/lib/process-registry'
-import { readStoredApiKeys } from '@/lib/connectors/config'
+import { readConnectorConfigs, readStoredApiKeys } from '@/lib/connectors/config'
+import { getGitHubPullRequestPreview, mergeGitHubPullRequest } from '@/lib/connectors/github'
 import { postLinearCompletionComment } from '@/lib/connectors/linear-writeback'
 import { createGitHubPRIfNeeded } from '@/lib/github/pr-creator'
+import { evaluateMergeSafety } from '@/lib/github/merge-safety'
 import { upsertAttentionItem } from '@/lib/attention/store'
 import {
   buildExecutionStartLog,
@@ -221,16 +223,57 @@ function tryCreatePrFromGitChanges(options: {
  * Risk B = modifies existing → manual review needed.
  * Risk C = blocked upstream at approval step.
  */
-function autoMergePRIfEligible(prUrl: string, riskClass: string, delegationId: string): void {
-  if (riskClass !== 'A') return
+async function autoMergePRIfEligible(prUrl: string, delegation: Delegation): Promise<void> {
+  if (delegation.contract.riskClass !== 'A') return
   try {
     const match = /\/pull\/(\d+)/.exec(prUrl)
     if (!match) return
-    const prNumber = match[1]
-    execSync(`gh pr merge ${prNumber} --auto --squash`, { timeout: 15000, stdio: 'ignore' })
-    delegationLogger.info({ event: 'pr.auto_merge.enabled', prUrl, delegationId }, 'Auto-merge enabled for Risk A PR')
+    const prNumber = Number(match[1])
+    if (!Number.isInteger(prNumber) || prNumber <= 0) return
+
+    const configs = readConnectorConfigs()
+    const config = configs.github ?? {}
+    const preview = await getGitHubPullRequestPreview(config, prNumber)
+    const safety = evaluateMergeSafety(preview, { delegation, mode: 'auto' })
+
+    if (safety.status !== 'ready') {
+      delegationLogger.info(
+        { event: 'pr.auto_merge.skipped', prUrl, delegationId: delegation.id, reasons: safety.reasons },
+        'Auto-merge skipped by safety gate',
+      )
+      return
+    }
+
+    const result = await mergeGitHubPullRequest(config, {
+      number: prNumber,
+      sha: preview.headSha,
+      title: preview.title,
+      message: 'Auto-merged by ForgePilot after Risk A safety gate passed.',
+    })
+
+    if (result.merged) {
+      const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+      const latest = await repo.findById(delegation.id)
+      if (latest) {
+        await repo.update(delegation.id, {
+          summaryReport: {
+            ...(latest.summaryReport ?? { keyPoints: [], changes: [], timeTakenMinutes: 0 }),
+            prUrl,
+            prState: 'merged',
+            prMergedAt: new Date().toISOString(),
+          },
+        })
+      }
+      delegationLogger.info(
+        { event: 'pr.auto_merge.merged', prUrl, delegationId: delegation.id, sha: result.sha },
+        'Auto-merge completed after safety gate passed',
+      )
+    }
   } catch (err) {
-    delegationLogger.warn({ event: 'pr.auto_merge.failed', error: String(err), prUrl, delegationId }, 'Auto-merge setup failed')
+    delegationLogger.warn(
+      { event: 'pr.auto_merge.failed', error: String(err), prUrl, delegationId: delegation.id },
+      'Auto-merge failed after safety gate',
+    )
   }
 }
 
@@ -471,14 +514,9 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     const prUrl = parsePrUrlFromOutput(fullOutput)
     const knownError = !success ? detectKnownError(fullOutput) : undefined
 
-    // M217: Auto-merge for Risk A
-    if (success && prUrl) {
-      autoMergePRIfEligible(prUrl, riskClass, id)
-    }
-
     const autoMergeNote = success && prUrl
       ? riskClass === 'A'
-        ? ' · Auto-Merge aktiviert (Risk A)'
+        ? ' · Auto-Merge wird per Safety-Gate geprüft (Risk A)'
         : riskClass === 'B'
           ? ' · PR bereit — Review erforderlich (Risk B)'
           : ''
@@ -651,6 +689,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
                 pr: true,
                 notes: 'PR evidence recorded after automatic PR creation.',
               })
+              void autoMergePRIfEligible(result.prUrl, updated)
             }
           }
         })
@@ -1276,6 +1315,8 @@ function runWithCodexCLI(id: string, prompt: string, startTime: Date, budgetUsd:
                 prState: 'open',
               },
               logs: [...(latest.logs ?? []), prLog],
+            }).then(updated => {
+              if (updated) void autoMergePRIfEligible(result.prUrl!, updated)
             })
           }).catch(() => {})
         }
