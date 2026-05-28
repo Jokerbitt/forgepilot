@@ -82,23 +82,19 @@ const navItems: NavItem[] = [
   { href: '/knowledge',       key: 'knowledge',        icon: BookOpen,     group: 'expert' },
   { href: '/project-briefs',  key: 'projectBriefs',    icon: FileText,     group: 'expert' },
   { href: '/work-items',      key: 'workItems',        icon: CheckSquare,  group: 'expert' },
-  { href: '/board',           key: 'agentBoard',       icon: Kanban,       group: 'expert' },
-  { href: '/active',          key: 'activeRuns',       icon: Activity,     group: 'expert' },
   { href: '/agent-runs',      key: 'agentRuns',        icon: History,      group: 'expert' },
   { href: '/agents',          key: 'agentControl',     icon: Bot,          group: 'expert' },
   { href: '/orchestrations',  key: 'orchestrations',   icon: Network,      group: 'expert' },
   { href: '/monitor',         key: 'agentMonitor',     icon: Radio,        group: 'expert' },
   { href: '/pm-agent',        key: 'pmAgent',          icon: Brain,        group: 'expert' },
-  { href: '/briefing',        key: 'briefing',         icon: ClipboardList, group: 'expert' },
   { href: '/branches',        key: 'system',           icon: GitBranch,    group: 'expert' },
   { href: '/model-router',    key: 'system',           icon: GitBranch,    group: 'expert' },
   { href: '/context-packages', key: 'contextPackages', icon: Package,     group: 'expert' },
   { href: '/planning',        key: 'planningAudit',    icon: MapPin,       group: 'expert' },
   { href: '/governance',      key: 'governanceHub',    icon: Shield,       group: 'expert' },
   { href: '/pilot',           key: 'e2ePilot',         icon: FlaskConical, group: 'expert' },
-  { href: '/notifications',   key: 'notifications',    icon: Bell,         group: 'expert' },
   { href: '/digest',          key: 'activityDigest',   icon: Bell,         group: 'expert' },
-  // Note: /knowledge/research removed — page does not exist (404)
+  // Note: /board → /delegations  /active → /live  /notifications → /inbox  /briefing → /digest
 ]
 
 const coreNavItems     = navItems.filter(item => item.group === 'core')
@@ -233,7 +229,9 @@ export function AppNav() {
             {workflowNavItems.map(item => {
               const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
               const count =
-                item.href === '/inbox' ? attentionCount : undefined
+                item.href === '/inbox' ? (attentionCount + unreadNotificationCount) || undefined
+                  : item.href === '/live' ? (running > 0 ? running : undefined)
+                  : undefined
               return (
                 <SidebarLink
                   key={item.href}
@@ -266,11 +264,8 @@ export function AppNav() {
             <div className="pb-2">
               {expertNavItems.map(item => {
                 const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
-                const count =
-                  item.href === '/active' ? running
-                    : item.href === '/notifications' ? unreadNotificationCount
-                    : undefined
-                const isLive = item.href === '/active' && running > 0
+                const count = undefined
+                const isLive = false
                 const isAutonomousSettings = item.href === '/settings' && autonomousModeActive
                 return (
                   <SidebarLink
