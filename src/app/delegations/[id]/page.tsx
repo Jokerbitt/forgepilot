@@ -185,6 +185,23 @@ const PHASE_TONES = {
   amber: 'border-amber-800/50 bg-amber-950/20',
 }
 
+function getChangedFileCount(delegation: Delegation): number {
+  const report = delegation.summaryReport
+  const structuredFiles =
+    (report?.filesAdded?.length ?? 0) +
+    (report?.filesModified?.length ?? 0) +
+    (report?.filesDeleted?.length ?? 0)
+  if (structuredFiles > 0) return structuredFiles
+
+  return report?.changes?.length ?? 0
+}
+
+function getCriticAverage(delegation: Delegation): number | null {
+  if (!delegation.criticScore) return null
+  const { correctness, efficiency, drift } = delegation.criticScore
+  return Math.round((correctness + efficiency + drift) / 3)
+}
+
 const DETAIL_VIEWS: Array<{
   id: DetailView
   label: string
@@ -192,8 +209,8 @@ const DETAIL_VIEWS: Array<{
 }> = [
   {
     id: 'action',
-    label: 'Aktion',
-    description: 'Naechster Schritt, Live-Status, Fehler und Startfreigabe.',
+    label: 'Verlauf',
+    description: 'Live-Status, Timeline, Fehler und Agenten-Aktivität.',
   },
   {
     id: 'result',
@@ -202,7 +219,7 @@ const DETAIL_VIEWS: Array<{
   },
   {
     id: 'details',
-    label: 'Details',
+    label: 'Technik',
     description: 'Technik, Logs, Vertrag, Tools und Kommentare.',
   },
 ]
@@ -627,6 +644,8 @@ export default function DelegationDetailPage() {
   const activeStepIndex = phaseStepIndex(d.status)
   const lastVisibleLog = (d.logs ?? []).filter(l => l.type !== 'thought').slice(-1)[0]?.message
   const phaseProgress = Math.max(8, Math.min(100, ((activeStepIndex + 1) / PHASE_STEPS.length) * 100))
+  const changedFileCount = getChangedFileCount(d)
+  const criticAverage = getCriticAverage(d)
 
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6 md:p-8">
@@ -933,10 +952,79 @@ export default function DelegationDetailPage() {
                 </div>
               )}
 
+              {d.status === 'pending' && (
+                <div className="mt-5 rounded-lg border border-amber-900/40 bg-gray-950/50 p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-400">Vor Freigabe prüfen</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-3">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-300">Ziel</p>
+                      <p className="mt-1 line-clamp-3 text-xs leading-5 text-gray-500">{d.contract.goal}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-300">Scope</p>
+                      <p className="mt-1 text-xs leading-5 text-gray-500">
+                        {d.contract.writeScope?.slice(0, 3).join(', ') || 'Noch kein Scope definiert'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-300">Done</p>
+                      <p className="mt-1 text-xs leading-5 text-gray-500">
+                        {d.contract.definitionOfDone?.length
+                          ? `${d.contract.definitionOfDone.length} Kriterien hinterlegt`
+                          : 'Definition of Done fehlt noch'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {d.status === 'approved' && (
+                <div className="mt-5 grid gap-3 md:grid-cols-2">
+                  <div className="rounded-lg border border-blue-900/40 bg-gray-950/50 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-400">Ausführungsroute</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-200">{ROUTE_LABELS[d.executionRoute] ?? d.executionRoute}</p>
+                    <p className="mt-1 text-xs text-gray-500">Budget ${d.contract.maxBudgetUsd.toFixed(2)} · Risk {d.contract.riskClass}</p>
+                  </div>
+                  <div className="rounded-lg border border-blue-900/40 bg-gray-950/50 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-400">Startcheck</p>
+                    <p className="mt-1 text-sm text-gray-300">
+                      {preflightResult
+                        ? `${preflightResult.checks.filter(check => check.passed).length}/${preflightResult.checks.length} Checks bestanden`
+                        : 'Preflight wird beim Start sichtbar geprüft'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {d.status === 'completed' && (
+                <div className="mt-5 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-lg border border-emerald-900/40 bg-gray-950/50 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-500">Änderungen</p>
+                    <p className="mt-1 text-lg font-bold text-emerald-300">{changedFileCount}</p>
+                    <p className="text-xs text-gray-500">Dateien erkannt</p>
+                  </div>
+                  <div className="rounded-lg border border-emerald-900/40 bg-gray-950/50 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-500">Critic</p>
+                    <p className="mt-1 text-lg font-bold text-emerald-300">{criticAverage ?? 'Offen'}</p>
+                    <p className="text-xs text-gray-500">{d.criticScore?.verdict ?? 'Noch nicht bewertet'}</p>
+                  </div>
+                  <div className="rounded-lg border border-emerald-900/40 bg-gray-950/50 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-500">Übernahme</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-200">{d.summaryReport?.prUrl ? 'PR vorhanden' : 'PR fehlt'}</p>
+                    <p className="text-xs text-gray-500">{d.summaryReport?.prState ?? 'Nächster Schritt: PR erstellen'}</p>
+                  </div>
+                </div>
+              )}
+
               {d.status === 'failed' && d.errorMessage && (
                 <div className="mt-5 rounded-lg border border-red-900/50 bg-red-950/20 p-3">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-red-400">Fehlerursache</p>
                   <p className="mt-1 text-sm text-red-200/80">{d.errorMessage}</p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-red-200/70">
+                    <span className="rounded border border-red-900/50 px-2 py-1">Retry mit gleichem Scope</span>
+                    <span className="rounded border border-red-900/50 px-2 py-1">Scope kleiner schneiden</span>
+                    <span className="rounded border border-red-900/50 px-2 py-1">Auf besseren Agent eskalieren</span>
+                  </div>
                 </div>
               )}
             </div>
@@ -1021,8 +1109,17 @@ export default function DelegationDetailPage() {
           </div>
         </section>
 
-        {/* ── Structured error recovery (when failed) ─────────────────── */}
-        <section className="rounded-xl border border-gray-800 bg-gray-900/60 p-2">
+        {/* ── Secondary workspaces ──────────────────────────────────────── */}
+        <section className="rounded-xl border border-gray-800 bg-gray-900/60 p-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Weitere Bereiche</p>
+              <p className="mt-1 text-xs text-gray-600">Die Hauptentscheidung passiert oben. Diese Bereiche sind für Verlauf, Ergebnis und technische Prüfung.</p>
+            </div>
+            <span className="hidden rounded-full border border-gray-800 px-2 py-1 text-[10px] text-gray-600 sm:inline">
+              Status-First
+            </span>
+          </div>
           <div className="grid gap-2 md:grid-cols-3">
             {DETAIL_VIEWS.map(view => (
               <button
