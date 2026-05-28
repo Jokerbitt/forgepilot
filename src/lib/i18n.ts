@@ -36,6 +36,7 @@ type NavKey =
   | 'liveView'
   | 'e2ePilot'
   | 'activityDigest'
+  | 'planMode'
   | 'settings'
 
 type UiKey =
@@ -142,6 +143,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
       liveView: { label: 'Live View', short: 'Live' },
       e2ePilot: { label: 'E2E Pilot', short: 'Pilot' },
       activityDigest: { label: 'Aktivitäts-Digest', short: 'Digest' },
+      planMode: { label: 'Plan Mode', short: 'Plan' },
       settings: { label: 'Settings', short: 'Settings' },
     },
     ui: {
@@ -243,6 +245,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
       liveView: { label: 'Live View', short: 'Live' },
       e2ePilot: { label: 'E2E Pilot', short: 'Pilot' },
       activityDigest: { label: 'Activity Digest', short: 'Digest' },
+      planMode: { label: 'Plan Mode', short: 'Plan' },
       settings: { label: 'Settings', short: 'Settings' },
     },
     ui: {

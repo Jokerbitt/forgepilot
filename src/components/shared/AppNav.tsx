@@ -60,6 +60,7 @@ const navItems: NavItem[] = [
   { href: '/projects', key: 'plan', icon: FolderOpen, section: 'Main' },
   { href: '/live', key: 'liveView', icon: Monitor, section: 'Main' },
   { href: '/delegations', key: 'execute', icon: ListChecks, section: 'More' },
+  { href: '/delegations/plan', key: 'planMode', icon: MapPin, section: 'More', isNew: true },
   { href: '/knowledge', key: 'knowledge', icon: BookOpen, section: 'More' },
   { href: '/branches', key: 'system', icon: GitBranch, section: 'More' },
   { href: '/settings', key: 'settings', icon: Settings, section: 'More' },
