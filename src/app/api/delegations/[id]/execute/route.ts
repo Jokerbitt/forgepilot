@@ -19,6 +19,8 @@ import {
   buildSkillBlock,
   buildRetryContext,
 } from '@/lib/delegation-execution'
+import { buildKnowledgeBlock } from '@/lib/delegations/knowledge-packages'
+import { buildCodebaseContextBlock } from '@/lib/delegations/codebase-scout'
 import { OllamaAgentRunner, isOllamaReachable } from '@/lib/agent-runner/ollama-runner'
 import { budgetToClaudeCliMaxTurns, budgetToMaxTurns } from '@/lib/budget-utils'
 import { scoreWork } from '@/lib/agents/work-quality'
@@ -50,7 +52,7 @@ async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Dele
   })
 }
 
-function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryContext?: string): string {
+function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryContext?: string, targetRepo?: string): string {
   const c = delegation.contract
   const slug = (c.workItemId ?? delegation.id).replace(/[^a-z0-9-]/gi, '-').toLowerCase()
   const branch = `${c.branchStrategy ?? 'feature'}/${slug}-task`
@@ -73,6 +75,10 @@ function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryC
     : `${contextCardsBlock}${retryContext ?? ''}`
 
   const skillBlock = buildSkillBlock(c.skillCategory, c.allowedFilePatterns)
+  const knowledgeBlock = buildKnowledgeBlock(c.goal, c.context ?? '', c.skillCategory)
+  const codebaseBlock = targetRepo
+    ? buildCodebaseContextBlock(c.goal, c.context ?? '', targetRepo)
+    : ''
 
   return `You are an autonomous software engineering agent working on **ForgePilot** — a local-first AI Workflow OS built with Next.js 14, TypeScript strict, Tailwind CSS, and Vitest.
 
@@ -118,7 +124,8 @@ ${dod}
 - Tests must cover the new behavior — not just type-check.
 - Never commit directly to main. Never force-push.
 - If a step fails, diagnose root cause before retrying.
-${skillBlock}
+${skillBlock}${knowledgeBlock}${codebaseBlock}
+
 Start now.`
 }
 
@@ -835,7 +842,7 @@ async function runWithClaudeAPI(id: string, delegation: Delegation, startTime: D
   const retryContext = buildRetryContext(delegation)
   const prompt = delegation.contract.orchestratedRunId
     ? buildSubTaskPrompt(delegation)
-    : buildPrompt(delegation, contextCards, retryContext || undefined)
+    : buildPrompt(delegation, contextCards, retryContext || undefined, delegation.targetRepo)
 
   try {
     const result = await runWithToolUse(prompt, {
@@ -1139,7 +1146,7 @@ export async function POST(
   const retryContext = buildRetryContext(delegation)
   const prompt = delegation.contract.orchestratedRunId
     ? buildSubTaskPrompt(delegation)
-    : buildPrompt(delegation, contextCards, retryContext || undefined)
+    : buildPrompt(delegation, contextCards, retryContext || undefined, delegation.targetRepo)
 
   // OTel: trace execution start + routing decision
   const mode = delegation.executionRoute === 'ollama-agent'
