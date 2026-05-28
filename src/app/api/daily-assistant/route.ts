@@ -10,6 +10,8 @@ import {
   type DailyAssistantInput,
   type DailyAssistantQueueItem,
 } from '@/lib/daily-assistant/next-action'
+import { buildAppBuilderCapability } from '@/lib/daily-assistant/app-builder'
+import { getAutopilotReadiness } from '@/lib/autopilot/readiness'
 import type { Delegation } from '@/lib/models/delegation'
 import { getNBAConfig } from '@/lib/nba-engine/nba-config'
 import {
@@ -91,6 +93,8 @@ export async function GET() {
   const action = buildDailyAssistantAction(input)
   const steps = buildDailyAssistantSteps(input)
   const blockers = buildDailyAssistantBlockers(input, queue)
+  const autopilot = getAutopilotReadiness()
+  const appBuilder = buildAppBuilderCapability({ assistant: input, queue, autopilot })
 
   return NextResponse.json({
     generatedAt: new Date().toISOString(),
@@ -98,6 +102,8 @@ export async function GET() {
     readinessScore: computeReadiness(input),
     action,
     autonomyText: describeAutonomy(input),
+    appBuilder,
+    autopilot,
     steps,
     blockers,
     queue,

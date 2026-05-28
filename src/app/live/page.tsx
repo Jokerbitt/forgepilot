@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Activity,
   AlertTriangle,
+  Bot,
   CheckCircle2,
   Clock3,
   ExternalLink,
@@ -126,6 +127,57 @@ interface AutopilotReadinessResponse {
   checkedAt?: string
 }
 
+interface AppBuilderCapability {
+  level?: 'blocked' | 'small-app' | 'multi-slice-mvp' | 'large-app-assisted'
+  score?: number
+  title?: string
+  summary?: string
+  canBuildSmallApp?: boolean
+  canBuildMultiSliceMvp?: boolean
+  canRunFullyAutonomous?: boolean
+  safeNextAction?: {
+    label: string
+    href: string
+    mode: 'plan' | 'execute' | 'review' | 'repair'
+  }
+  gates?: Array<{
+    id: string
+    label: string
+    ready: boolean
+    detail: string
+  }>
+  workflow?: Array<{
+    id: string
+    title: string
+    detail: string
+    state: 'now' | 'next' | 'later' | 'blocked'
+  }>
+}
+
+interface DailyAssistantSnapshotResponse {
+  status?: Tone
+  readinessScore?: number
+  autonomyText?: string
+  appBuilder?: AppBuilderCapability
+  stats?: {
+    pending?: number
+    approved?: number
+    running?: number
+    failed?: number
+    prOpen?: number
+    prMerged?: number
+  }
+}
+
+interface AssistantCycleResponse {
+  ok?: boolean
+  status?: string
+  message?: string
+  started?: boolean
+  candidate?: { id: string; title: string; href: string } | null
+  error?: string
+}
+
 const previewPages = [
   {
     label: 'Command Center',
@@ -222,8 +274,11 @@ export default function LiveViewPage() {
   const [executeHealth, setExecuteHealth] = useState<ExecuteHealthResponse | null>(null)
   const [cliStatus, setCliStatus] = useState<CliStatusResponse | null>(null)
   const [dailyReport, setDailyReport] = useState<DailyReportResponse | null>(null)
+  const [dailyAssistant, setDailyAssistant] = useState<DailyAssistantSnapshotResponse | null>(null)
   const [autopilotReadiness, setAutopilotReadiness] = useState<AutopilotReadinessResponse | null>(null)
   const [readinessLoading, setReadinessLoading] = useState(false)
+  const [assistantCycleLoading, setAssistantCycleLoading] = useState(false)
+  const [assistantCycleResult, setAssistantCycleResult] = useState<AssistantCycleResponse | null>(null)
   const [demoRun, setDemoRun] = useState<DemoRunResponse | null>(null)
   const [demoRunLoading, setDemoRunLoading] = useState(false)
   const [runnerPr, setRunnerPr] = useState<RunnerPrResponse | null>(null)
@@ -232,7 +287,7 @@ export default function LiveViewPage() {
 
   const refresh = async () => {
     setLoading(true)
-    const [healthRes, statsRes, storageRes, executeRes, cliRes, reportRes, autopilotRes] = await Promise.all([
+    const [healthRes, statsRes, storageRes, executeRes, cliRes, reportRes, autopilotRes, assistantRes] = await Promise.all([
       fetchJson<{ status?: string }>('/api/health'),
       fetchJson<DelegationStatsResponse>('/api/delegations/stats'),
       fetchJson<StorageStatusResponse>('/api/storage-status'),
@@ -240,6 +295,7 @@ export default function LiveViewPage() {
       fetchJson<CliStatusResponse>('/api/system/cli-status'),
       fetchJson<DailyReportResponse>('/api/reports/daily', 8000),
       fetchJson<AutopilotReadinessResponse>('/api/autopilot/readiness', 8000),
+      fetchJson<DailyAssistantSnapshotResponse>('/api/daily-assistant', 8000),
     ])
 
     if (statsRes.ok) setDelegations(statsRes.data)
@@ -248,6 +304,7 @@ export default function LiveViewPage() {
     if (cliRes.ok) setCliStatus(cliRes.data)
     if (reportRes.ok) setDailyReport(reportRes.data)
     if (autopilotRes.ok) setAutopilotReadiness(autopilotRes.data)
+    if (assistantRes.ok) setDailyAssistant(assistantRes.data)
 
     setEndpoints([
       {
@@ -304,6 +361,14 @@ export default function LiveViewPage() {
           ? `${autopilotRes.data.score ?? 0}/100, Modus: ${autopilotRes.data.mode ?? 'unbekannt'}`
           : autopilotRes.detail,
       },
+      {
+        label: 'Daily Assistant',
+        href: '/api/daily-assistant',
+        status: assistantRes.ok ? assistantRes.data.status ?? 'attention' : 'blocked',
+        detail: assistantRes.ok
+          ? `${assistantRes.data.appBuilder?.score ?? assistantRes.data.readinessScore ?? 0}/100, ${assistantRes.data.appBuilder?.title ?? 'Assistant geladen'}`
+          : assistantRes.detail,
+      },
     ])
     setLastCheckedAt(new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
     setLoading(false)
@@ -335,6 +400,14 @@ export default function LiveViewPage() {
         : 'CLI prüfen'
   const autopilotTone = autopilotReadiness?.status ?? 'attention'
   const runnerPrBlocked = autopilotReadiness ? !autopilotReadiness.canExecuteCode : false
+  const appBuilder = dailyAssistant?.appBuilder
+  const appBuilderTone: Tone = appBuilder?.level === 'blocked'
+    ? 'blocked'
+    : appBuilder?.canRunFullyAutonomous
+      ? 'ready'
+      : appBuilder?.canBuildSmallApp
+        ? 'attention'
+        : 'blocked'
 
   return (
     <main className="min-h-screen bg-[#08080d] px-5 py-6 text-slate-100 lg:px-8">
@@ -502,6 +575,117 @@ export default function LiveViewPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-sky-500/20 bg-sky-500/[0.055] p-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-4xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-sky-100/70">
+                  <Bot className="h-3.5 w-3.5" />
+                  Daily App Builder
+                </p>
+                <span className={cx('inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold', toneClasses(appBuilderTone))}>
+                  {statusIcon(appBuilderTone)}
+                  {appBuilder?.score ?? 0}/100
+                </span>
+              </div>
+              <h2 className="mt-2 text-xl font-bold text-white">
+                {appBuilder?.title ?? 'Assistant bewertet größere App-Runs'}
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-sky-50/75">
+                {appBuilder?.summary ?? 'ForgePilot kombiniert Readiness, Queue, PR-Flow und Fehlerlage, um den nächsten sicheren App-Build-Schritt zu wählen.'}
+              </p>
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <CapabilityPill label="Kleine App" ready={Boolean(appBuilder?.canBuildSmallApp)} />
+                <CapabilityPill label="Multi-Slice MVP" ready={Boolean(appBuilder?.canBuildMultiSliceMvp)} />
+                <CapabilityPill label="Vollautonomer Zyklus" ready={Boolean(appBuilder?.canRunFullyAutonomous)} />
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-col gap-2 sm:flex-row xl:flex-col">
+              {appBuilder?.safeNextAction && (
+                <Link
+                  href={appBuilder.safeNextAction.href}
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-sky-400/50 bg-sky-500/15 px-3.5 py-2 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/25"
+                >
+                  {appBuilder.safeNextAction.label}
+                  <ExternalLink className="h-4 w-4" />
+                </Link>
+              )}
+              <button
+                type="button"
+                disabled={assistantCycleLoading}
+                onClick={async () => {
+                  setAssistantCycleLoading(true)
+                  setAssistantCycleResult(null)
+                  try {
+                    const response = await fetch('/api/daily-assistant/autonomy-cycle', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ force: true }),
+                    })
+                    const data = await response.json() as AssistantCycleResponse
+                    setAssistantCycleResult(response.ok ? data : { ok: false, error: data.error ?? data.message ?? `HTTP ${response.status}` })
+                    await refresh()
+                  } catch (error) {
+                    setAssistantCycleResult({ ok: false, error: error instanceof Error ? error.message : 'Assistant-Zyklus konnte nicht gestartet werden.' })
+                  } finally {
+                    setAssistantCycleLoading(false)
+                  }
+                }}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-white/[0.09] bg-white/[0.04] px-3.5 py-2 text-sm font-semibold text-slate-200 transition hover:border-sky-400/40 hover:bg-sky-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <PlayCircle className="h-4 w-4" />
+                {assistantCycleLoading ? 'Assistant arbeitet...' : 'Assistant übernehmen lassen'}
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
+            <div className="rounded-lg border border-white/[0.07] bg-black/15 p-3">
+              <p className="text-sm font-semibold text-white">Gates für größere Apps</p>
+              <div className="mt-3 space-y-2">
+                {(appBuilder?.gates ?? []).map(gate => (
+                  <div key={gate.id} className="flex items-start gap-2 rounded-md border border-white/[0.06] bg-white/[0.025] px-2.5 py-2">
+                    <span className={cx('mt-0.5 inline-flex rounded-full border p-1', toneClasses(gate.ready ? 'ready' : 'blocked'))}>
+                      {statusIcon(gate.ready ? 'ready' : 'blocked')}
+                    </span>
+                    <span>
+                      <span className="block text-xs font-semibold text-slate-100">{gate.label}</span>
+                      <span className="mt-0.5 block text-xs leading-5 text-sky-50/55">{gate.detail}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-lg border border-white/[0.07] bg-black/15 p-3">
+              <p className="text-sm font-semibold text-white">Autonomer App-Workflow</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {(appBuilder?.workflow ?? []).map(step => (
+                  <div key={step.id} className={cx(
+                    'rounded-md border px-2.5 py-2',
+                    step.state === 'now' ? 'border-sky-400/30 bg-sky-500/10' : step.state === 'blocked' ? 'border-red-500/20 bg-red-500/10' : 'border-white/[0.06] bg-white/[0.025]',
+                  )}>
+                    <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">
+                      {step.state === 'now' ? 'Jetzt' : step.state === 'next' ? 'Danach' : step.state === 'blocked' ? 'Blockiert' : 'Später'}
+                    </span>
+                    <p className="mt-1 text-xs font-semibold text-white">{step.title}</p>
+                    <p className="mt-1 text-xs leading-5 text-sky-50/55">{step.detail}</p>
+                  </div>
+                ))}
+              </div>
+              {assistantCycleResult && (
+                <div className={cx(
+                  'mt-3 rounded-md border px-3 py-2 text-xs leading-5',
+                  assistantCycleResult.ok === false
+                    ? 'border-rose-500/25 bg-rose-500/10 text-rose-200'
+                    : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100',
+                )}>
+                  {assistantCycleResult.error ?? assistantCycleResult.message ?? 'Assistant-Zyklus geprüft.'}
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
