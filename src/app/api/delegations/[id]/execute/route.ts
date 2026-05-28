@@ -601,23 +601,26 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
         })
         recordOutcome('claude-code', skillCategory, result)
 
-        // M-Token: Record context profile metrics for skill optimization
+        // Record outcomes for all global skills — feeds the self-improving optimizer
         try {
-          const contextProfileTag = finishedDelegation.contract.contextProfile
-          if (contextProfileTag) {
-            const { recordSkillOutcome, listSkills } = await import('@/lib/skills/prompt-skill-registry')
-            type ListSkillsOpts = Parameters<typeof listSkills>[0]
-            const opts: ListSkillsOpts = { scope: contextProfileTag as NonNullable<ListSkillsOpts>['scope'], status: 'active' }
-            const profileSkills = listSkills(opts)
-            for (const skill of profileSkills) {
-              recordSkillOutcome({
-                skillId: skill.id,
-                qualityScore: result.qualityScore,
-                tokensSaved: skill.metrics.avgTokensSaved, // Approximate
-                success,
-                recordedAt: new Date().toISOString(),
-              })
-            }
+          const { recordSkillOutcome, listSkills, seedBuiltinSkills } = await import('@/lib/skills/prompt-skill-registry')
+          seedBuiltinSkills()
+          const globalSkills = listSkills({ scope: 'global', status: 'active' })
+          const now = new Date().toISOString()
+          for (const skill of globalSkills) {
+            recordSkillOutcome({
+              skillId: skill.id,
+              qualityScore: result.qualityScore,
+              tokensSaved: 0,
+              success,
+              recordedAt: now,
+            })
+          }
+          // Auto-optimize every 10 completed runs
+          const totalRuns = globalSkills.reduce((sum, s) => sum + s.metrics.runsCount, 0)
+          if (globalSkills.length > 0 && totalRuns > 0 && totalRuns % 10 === 0) {
+            const { applyAutoOptimizations } = await import('@/lib/skills/skill-optimizer')
+            applyAutoOptimizations(85)
           }
         } catch {
           // Non-critical telemetry — never break execution
@@ -660,6 +663,11 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
                 pr: true,
                 notes: 'PR evidence recorded after automatic PR creation.',
               })
+              // Auto-review: assess DoD satisfaction against the git diff
+              const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+              fetch(`${baseUrl}/api/delegations/${finishedDelegation.id}/quality-check`, {
+                method: 'POST',
+              }).catch(() => {})
             }
           }
         })

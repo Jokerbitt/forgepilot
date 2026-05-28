@@ -423,11 +423,11 @@ function ExecuteStep({
 
         <div className="flex items-center gap-3">
           <Link
-            href={`/delegations/${result.firstDelegationId}`}
+            href={`/delegations/plan/${plan.id}`}
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-violet-600 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-500"
           >
             <Play className="h-4 w-4" />
-            Phase 1 starten
+            Plan-Dashboard öffnen
           </Link>
           <Link
             href="/delegations"
