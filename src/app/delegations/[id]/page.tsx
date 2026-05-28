@@ -34,6 +34,7 @@ import { inferAgentPhase } from '@/lib/delegations/agent-phase'
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection'
 import { AffectedFilesPanel } from '@/components/delegation/AffectedFilesPanel'
 import { WorkbenchTabs, WorkbenchPanel, getDefaultTab, type WorkbenchTab } from '@/components/delegation/DelegationWorkbench'
+import { DelegationFocusCard } from '@/components/delegation/DelegationFocusCard'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
   switch (status) {
@@ -591,201 +592,62 @@ export default function DelegationDetailPage() {
               )}
             </div>
 
-            {/* Action buttons */}
+            {/* Utility buttons — primary actions moved to FocusCard below */}
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              {canApprove && (
-                <button onClick={handleApprove}
-                  className="px-3 py-1.5 text-sm bg-green-900/50 text-green-300 hover:bg-green-900 border border-green-800 rounded-lg transition-colors">
-                  ✔ Freigeben
-                </button>
-              )}
-              {canReject && (
-                <button onClick={handleReject}
-                  className="px-3 py-1.5 text-sm bg-red-950/50 text-red-400 hover:bg-red-950 border border-red-900/60 rounded-lg transition-colors">
-                  ✕ Ablehnen
-                </button>
-              )}
+              {/* Auto-orchestrate toggle — only relevant at start */}
               {canStart && (
-                <div className="flex items-center gap-1">
-                  <button onClick={handleStart}
-                    className="px-3 py-1.5 text-sm bg-blue-900/50 text-blue-300 hover:bg-blue-900 border border-blue-800 rounded-lg transition-colors font-medium">
-                    ▶ Starten
-                  </button>
-                  <button
-                    onClick={async () => {
-                      if (!delegation) return
-                      const updated = { ...delegation, autoOrchestrate: !delegation.autoOrchestrate }
-                      setDelegation(updated)
-                      await fetch('/api/delegations', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(updated),
-                      })
-                    }}
-                    title="Auto-Orchestrierung: Task automatisch in Sub-Tasks aufteilen"
-                    className={`px-2 py-1.5 text-xs rounded-lg border transition-colors ${
-                      delegation?.autoOrchestrate
-                        ? 'bg-violet-900/60 text-violet-300 border-violet-700'
-                        : 'text-slate-600 border-slate-800 hover:text-violet-400 hover:border-violet-900'
-                    }`}
-                  >
-                    ⚙ Auto
-                  </button>
-                </div>
-              )}
-              {canStop && (
-                <button onClick={() => updateStatus('cancelled')}
-                  className="px-3 py-1.5 text-sm bg-red-900/50 text-red-400 hover:bg-red-900 border border-red-900 rounded-lg transition-colors">
-                  ⛔ Stoppen
-                </button>
-              )}
-              {canCancel && (
-                <button onClick={() => updateStatus('cancelled')}
-                  className="px-3 py-1.5 text-sm text-gray-500 hover:text-yellow-400 border border-gray-800 hover:border-yellow-900/50 rounded-lg transition-colors">
-                  ✕ Abbrechen
-                </button>
-              )}
-              {canRetry && (
-                <button onClick={() => updateStatus('pending')}
-                  className="px-3 py-1.5 text-sm bg-blue-900/40 text-blue-400 hover:bg-blue-900 border border-blue-900/60 rounded-lg transition-colors">
-                  🔄 Wiederholen
-                </button>
-              )}
-              {canCreatePR && (
                 <button
-                  onClick={handleCreatePR}
-                  disabled={creatingPR}
-                  className="px-3 py-1.5 text-xs bg-emerald-900/40 text-emerald-300 hover:bg-emerald-900/70 border border-emerald-800/60 rounded-lg transition-colors disabled:opacity-40"
-                  title="GitHub Pull Request für diese abgeschlossene Delegation erstellen">
-                  {creatingPR ? '⏳ PR wird erstellt…' : '⎇ GitHub PR erstellen'}
+                  onClick={async () => {
+                    if (!delegation) return
+                    const updated = { ...delegation, autoOrchestrate: !delegation.autoOrchestrate }
+                    setDelegation(updated)
+                    await fetch('/api/delegations', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(updated),
+                    })
+                  }}
+                  title="Auto-Orchestrierung: Task automatisch in Sub-Tasks aufteilen"
+                  className={`px-2 py-1.5 text-xs rounded-lg border transition-colors ${
+                    delegation?.autoOrchestrate
+                      ? 'bg-violet-900/60 text-violet-300 border-violet-700'
+                      : 'text-slate-600 border-slate-800 hover:text-violet-400 hover:border-violet-900'
+                  }`}
+                >
+                  ⚙ Auto
                 </button>
               )}
               {canClone && (
                 <button
                   onClick={handleClone}
                   disabled={cloningDelegation}
-                  className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-700 rounded-lg transition-colors disabled:opacity-40"
+                  className="px-2 py-1.5 text-xs text-gray-600 hover:text-gray-300 border border-gray-800 hover:border-gray-700 rounded-lg transition-colors disabled:opacity-40"
                   title="Delegation als neuen Entwurf duplizieren">
-                  {cloningDelegation ? '⏳ …' : '⧉ Klonen'}
+                  {cloningDelegation ? '⏳' : '⧉ Klonen'}
                 </button>
-              )}
-              {d.summaryReport?.prUrl && (
-                <div className="flex items-center gap-1.5">
-                  <a
-                    href={d.summaryReport.prUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-3 py-1.5 text-xs bg-emerald-950/40 text-emerald-400 hover:text-emerald-300 border border-emerald-900/60 rounded-lg transition-colors"
-                    title="Pull Request auf GitHub öffnen">
-                    ⎇ PR #{d.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? ''}
-                  </a>
-                  {d.summaryReport.prState === 'merged' && (
-                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-950/50 text-violet-300 border border-violet-800/40" title={d.summaryReport.prMergedAt ? `Gemergt: ${new Date(d.summaryReport.prMergedAt).toLocaleString('de-DE')}` : 'Gemergt'}>
-                      Merged
-                    </span>
-                  )}
-                  {d.summaryReport.prState === 'closed' && (
-                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-950/50 text-red-400 border border-red-800/40">
-                      Closed
-                    </span>
-                  )}
-                  {(d.summaryReport.prState === 'open' || !d.summaryReport.prState) && (
-                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-950/50 text-emerald-400 border border-emerald-800/40">
-                      Open
-                    </span>
-                  )}
-                </div>
-              )}
-              {prError && (
-                <span className="text-xs text-red-400 border border-red-900/40 bg-red-950/20 rounded-lg px-2 py-1.5 max-w-xs truncate" title={prError}>
-                  ⚠ {prError}
-                </span>
               )}
               <button
                 onClick={handleOrchestrate}
                 disabled={orchestrating}
-                className="px-3 py-1.5 text-xs bg-violet-900/40 text-violet-300 hover:bg-violet-900/70 border border-violet-800/60 rounded-lg transition-colors disabled:opacity-40"
-                title="Task in atomare Sub-Tasks zerlegen und den besten Agenten zuweisen">
-                {orchestrating ? '⚙ Zerlege…' : '⚙ Orchestrieren'}
+                className="px-2 py-1.5 text-xs text-violet-600 hover:text-violet-300 border border-gray-800 hover:border-violet-800 rounded-lg transition-colors disabled:opacity-40"
+                title="Task in atomare Sub-Tasks zerlegen">
+                {orchestrating ? '⚙…' : '⚙ Orchestrieren'}
               </button>
               <button onClick={handleCopy}
-                className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${copied ? 'text-green-400 border-green-800' : 'text-gray-500 border-gray-800 hover:text-gray-300'}`}
+                className={`px-2 py-1.5 text-xs border rounded-lg transition-colors ${copied ? 'text-green-400 border-green-800' : 'text-gray-600 border-gray-800 hover:text-gray-300'}`}
                 title="Permalink kopieren">
-                {copied ? '✓ Kopiert' : '🔗 Link'}
+                {copied ? '✓' : '🔗'}
               </button>
               {(d.logs ?? []).length > 0 && (
                 <button
                   onClick={() => downloadLogsAsText(d)}
-                  className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-600 rounded-lg transition-colors"
-                  title="Logs als Textdatei herunterladen">
-                  ⬇ Logs
+                  className="px-2 py-1.5 text-xs text-gray-600 hover:text-gray-300 border border-gray-800 hover:border-gray-600 rounded-lg transition-colors"
+                  title="Logs herunterladen">
+                  ⬇
                 </button>
               )}
             </div>
           </div>
-
-          {/* ── Compact status strip ──────────────────────────────────── */}
-          <div className="mt-4 pt-4 border-t border-gray-800 flex flex-wrap items-center justify-between gap-3">
-            {/* Left: key facts */}
-            <div className="flex flex-wrap items-center gap-3 text-xs">
-              <span className={`font-semibold ${STATUS_COLORS[d.status]?.split(' ')[1] ?? 'text-gray-400'}`}>
-                {STATUS_LABELS[d.status] || d.status}
-              </span>
-              <span className="text-gray-700">·</span>
-              <span className="text-gray-500">Risk {d.contract.riskClass}</span>
-              <span className="text-gray-700">·</span>
-              {d.status === 'running' && (
-                <ElapsedTimer startedAt={d.startedAt ?? d.updatedAt ?? d.createdAt} className="text-green-400 font-mono" />
-              )}
-              {isDone && d.startedAt && d.completedAt && (
-                <span className="text-gray-500 font-mono">{formatCompletedDuration(d.startedAt, d.completedAt)}</span>
-              )}
-              <CostMeter
-                actualCostUsd={d.actualCostUsd}
-                estimateCostUsd={d.costEstimateUsd}
-                maxBudgetUsd={d.contract.maxBudgetUsd}
-              />
-              {(d.retryCount ?? 0) > 0 && (
-                <span className="text-amber-400 font-mono">↺ {d.retryCount}×</span>
-              )}
-            </div>
-            {/* Right: PR link + critic score */}
-            <div className="flex items-center gap-2">
-              {d.criticScore && (
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${
-                  d.criticScore.verdict === 'approved' ? 'text-emerald-400 border-emerald-800 bg-emerald-950/30' :
-                  d.criticScore.verdict === 'needs-revision' ? 'text-yellow-400 border-yellow-800 bg-yellow-950/30' :
-                  'text-red-400 border-red-800 bg-red-950/30'
-                }`}>
-                  🎯 {Math.round((d.criticScore.correctness + d.criticScore.efficiency + d.criticScore.drift) / 3)}pts
-                </span>
-              )}
-              {writebackCount !== null && writebackCount > 0 && (
-                <a href="/knowledge-cards" className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors">
-                  🧠 {writebackCount} Karten
-                </a>
-              )}
-              {d.summaryReport?.prUrl && (
-                <a href={d.summaryReport.prUrl} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded border border-emerald-800 bg-emerald-950/30 text-emerald-400 hover:text-emerald-300 transition-colors">
-                  ⎇ PR #{d.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? ''}
-                  {prStatus?.ciState === 'success' && <span className="text-green-400">· CI ✓</span>}
-                  {prStatus?.ciState === 'failure' && <span className="text-red-400">· CI ✗</span>}
-                </a>
-              )}
-            </div>
-          </div>
-
-          {/* ── Simulation-mode info ─────────────────────────────────── */}
-          {(d.executionRoute === 'direct-chat' || d.executionRoute === 'n8n') && d.status === 'pending' && (
-            <div className="mt-3 flex items-start gap-2 rounded-lg border border-blue-900/40 bg-blue-950/20 px-3 py-2.5 text-xs text-blue-300/80">
-              <span className="shrink-0 mt-0.5">ℹ</span>
-              <span>
-                Diese Delegation läuft im <strong>Simulations-Modus</strong> (Route: {d.executionRoute}).
-                Für echte Ausführung Claude CLI oder einen lokalen Agenten konfigurieren.
-              </span>
-            </div>
-          )}
 
           {/* ── Duration Timeline Bar ─────────────────────────────────── */}
           <DurationBar
@@ -794,12 +656,6 @@ export default function DelegationDetailPage() {
             completedAt={d.completedAt}
             status={d.status}
           />
-
-          {/* ── Timing ───────────────────────────────────────────────── */}
-          <div className="mt-3 flex flex-wrap gap-4 text-[10px] text-gray-700">
-            <span>Erstellt: {new Date(d.createdAt).toLocaleString('de-DE')}</span>
-            <span>Aktualisiert: {new Date(d.updatedAt).toLocaleString('de-DE')}</span>
-          </div>
 
           {/* ── M230: Chain links ────────────────────────────────────── */}
           {(d.chainedDelegationId || d.chainedFromId) && (
@@ -826,16 +682,23 @@ export default function DelegationDetailPage() {
           )}
         </div>
 
-        {/* ── Next Action Panel — always visible ───────────────────────── */}
-        <DelegationNextActionPanel
+        {/* ── Concept A: Status-driven focus card ──────────────────────── */}
+        <DelegationFocusCard
           delegation={d}
           onApprove={handleApprove}
+          onReject={handleReject}
           onStart={handleStart}
+          onStop={() => updateStatus('cancelled')}
           onRetry={() => updateStatus('pending')}
           onRetryEscalate={handleRetryEscalate}
           onCreatePR={handleCreatePR}
+          onMerge={handleMerge}
           creatingPR={creatingPR}
-          lastLogMessage={d.status === 'running' ? (d.logs ?? []).filter(l => l.type !== 'thought').slice(-1)[0]?.message : undefined}
+          merging={merging}
+          mergeResult={mergeResult}
+          mergeError={mergeError}
+          prStatus={prStatus}
+          writebackCount={writebackCount}
         />
 
         {/* ── Evidence Workbench Tab Bar ───────────────────────────────── */}
