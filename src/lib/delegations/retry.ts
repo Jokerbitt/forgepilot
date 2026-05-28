@@ -1,4 +1,5 @@
 import type { Delegation } from '@/lib/models/delegation'
+import type { AgentLog } from '@/lib/models/delegation'
 
 export type FailureCause =
   | 'cancelled'
@@ -27,6 +28,8 @@ export interface RetryPlan {
   improvedGoal: string
   backoffMs: number
 }
+
+export type RetryDelegationPatch = Partial<Omit<Delegation, 'id' | 'createdAt'>>
 
 const MAX_RETRIES = 3
 
@@ -136,5 +139,33 @@ export function buildRetryPlan(delegation: Delegation): RetryPlan {
     additionalContext: buildImprovedContext(failureCause, delegation),
     improvedGoal: delegation.contract.goal,
     backoffMs: computeBackoffMs(retryCount),
+  }
+}
+
+export function buildRetryDelegationPatch(
+  delegation: Delegation,
+  plan: RetryPlan,
+  now = new Date(),
+): RetryDelegationPatch {
+  const timestamp = now.toISOString()
+  const retryLog: AgentLog = {
+    timestamp,
+    type: 'info',
+    message: `Erneut eingereicht (Retry #${plan.retryCount + 1}) - ${plan.diagnosticMessage}`,
+  }
+
+  return {
+    status: 'pending',
+    startedAt: undefined,
+    completedAt: undefined,
+    errorMessage: undefined,
+    summaryReport: undefined,
+    criticScore: undefined,
+    actualCostUsd: undefined,
+    contract: {
+      ...delegation.contract,
+      context: plan.additionalContext,
+    },
+    logs: [...(delegation.logs ?? []), retryLog],
   }
 }
