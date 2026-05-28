@@ -46,54 +46,69 @@ import { NotificationBell } from '@/components/shared/NotificationBell'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { type Locale, useI18n } from '@/lib/i18n'
 
+/**
+ * group controls where an item appears in the sidebar:
+ *   'core'     — always visible, prominent (the daily-use workflow)
+ *   'workflow' — always visible, slightly smaller (contextual tools)
+ *   'expert'   — collapsed under "Mehr" (power-user / rarely needed)
+ */
+type NavGroup = 'core' | 'workflow' | 'expert'
+
 interface NavItem {
   href: string
   key: keyof ReturnType<typeof useI18n>['nav']
   icon: React.ElementType
-  section: string
+  /** @deprecated use group instead — kept for backward compat */
+  section?: string
+  group: NavGroup
   isNew?: boolean
 }
 
 const navItems: NavItem[] = [
-  { href: '/', key: 'commandCenter', icon: LayoutDashboard, section: 'Main' },
-  { href: '/idea', key: 'ideaToProduction', icon: Lightbulb, section: 'Main', isNew: true },
-  { href: '/projects', key: 'plan', icon: FolderOpen, section: 'Main' },
-  { href: '/live', key: 'liveView', icon: Monitor, section: 'Main' },
-  { href: '/delegations', key: 'execute', icon: ListChecks, section: 'More' },
-  { href: '/knowledge', key: 'knowledge', icon: BookOpen, section: 'More' },
-  { href: '/branches', key: 'system', icon: GitBranch, section: 'More' },
-  { href: '/settings', key: 'settings', icon: Settings, section: 'More' },
-  { href: '/knowledge-cards', key: 'delegationLessons', icon: GraduationCap, section: 'More' },
-  { href: '/briefing', key: 'briefing', icon: ClipboardList, section: 'More' },
-  { href: '/model-router', key: 'system', icon: GitBranch, section: 'More' },
-  { href: '/inbox', key: 'inbox', icon: Inbox, section: 'More' },
-  { href: '/notifications', key: 'notifications', icon: Bell, section: 'More' },
-  { href: '/project-briefs', key: 'projectBriefs', icon: FileText, section: 'More' },
-  { href: '/work-items', key: 'workItems', icon: CheckSquare, section: 'More' },
-  { href: '/board', key: 'agentBoard', icon: Kanban, section: 'More' },
-  { href: '/active', key: 'activeRuns', icon: Activity, section: 'More' },
-  { href: '/agent-runs', key: 'agentRuns', icon: History, section: 'More' },
-  { href: '/agents', key: 'agentControl', icon: Bot, section: 'More' },
-  { href: '/orchestrations', key: 'orchestrations', icon: Network, section: 'More' },
-  { href: '/monitor', key: 'agentMonitor', icon: Radio, section: 'More' },
-  { href: '/pm-agent', key: 'pmAgent', icon: Brain, section: 'More' },
-  { href: '/knowledge/research', key: 'researchPlatform', icon: Search, section: 'More' },
-  { href: '/context-packages', key: 'contextPackages', icon: Package, section: 'More' },
-  { href: '/planning', key: 'planningAudit', icon: MapPin, section: 'More' },
-  { href: '/governance', key: 'governanceHub', icon: Shield, section: 'More' },
-  { href: '/analytics', key: 'costAnalytics', icon: BarChart3, section: 'More' },
-  { href: '/pilot', key: 'e2ePilot', icon: FlaskConical, section: 'More' },
-  { href: '/digest', key: 'activityDigest', icon: Bell, section: 'Utility' },
+  // ── Core workflow (5 items — the daily-use loop) ─────────────────────────
+  { href: '/',              key: 'commandCenter',   icon: LayoutDashboard, group: 'core' },
+  { href: '/idea',          key: 'ideaToProduction', icon: Lightbulb,      group: 'core', isNew: true },
+  { href: '/delegations',   key: 'execute',          icon: ListChecks,     group: 'core' },
+  { href: '/knowledge-cards', key: 'delegationLessons', icon: GraduationCap, group: 'core' },
+  { href: '/settings',      key: 'settings',         icon: Settings,       group: 'core' },
+
+  // ── Workflow tools (3 items — visible but secondary) ─────────────────────
+  { href: '/live',          key: 'liveView',         icon: Monitor,        group: 'workflow' },
+  { href: '/projects',      key: 'plan',             icon: FolderOpen,     group: 'workflow' },
+  { href: '/inbox',         key: 'inbox',            icon: Inbox,          group: 'workflow' },
+
+  // ── Expert tools (all others — collapsed by default) ─────────────────────
+  { href: '/analytics',       key: 'costAnalytics',   icon: BarChart3,    group: 'expert' },
+  { href: '/knowledge',       key: 'knowledge',        icon: BookOpen,     group: 'expert' },
+  { href: '/project-briefs',  key: 'projectBriefs',    icon: FileText,     group: 'expert' },
+  { href: '/work-items',      key: 'workItems',        icon: CheckSquare,  group: 'expert' },
+  { href: '/board',           key: 'agentBoard',       icon: Kanban,       group: 'expert' },
+  { href: '/active',          key: 'activeRuns',       icon: Activity,     group: 'expert' },
+  { href: '/agent-runs',      key: 'agentRuns',        icon: History,      group: 'expert' },
+  { href: '/agents',          key: 'agentControl',     icon: Bot,          group: 'expert' },
+  { href: '/orchestrations',  key: 'orchestrations',   icon: Network,      group: 'expert' },
+  { href: '/monitor',         key: 'agentMonitor',     icon: Radio,        group: 'expert' },
+  { href: '/pm-agent',        key: 'pmAgent',          icon: Brain,        group: 'expert' },
+  { href: '/briefing',        key: 'briefing',         icon: ClipboardList, group: 'expert' },
+  { href: '/branches',        key: 'system',           icon: GitBranch,    group: 'expert' },
+  { href: '/model-router',    key: 'system',           icon: GitBranch,    group: 'expert' },
+  { href: '/context-packages', key: 'contextPackages', icon: Package,     group: 'expert' },
+  { href: '/planning',        key: 'planningAudit',    icon: MapPin,       group: 'expert' },
+  { href: '/governance',      key: 'governanceHub',    icon: Shield,       group: 'expert' },
+  { href: '/pilot',           key: 'e2ePilot',         icon: FlaskConical, group: 'expert' },
+  { href: '/notifications',   key: 'notifications',    icon: Bell,         group: 'expert' },
+  { href: '/digest',          key: 'activityDigest',   icon: Bell,         group: 'expert' },
+  // Note: /knowledge/research removed — page does not exist (404)
 ]
 
-const sectionColors: Record<string, string> = {
-  Main: 'text-violet-400',
-  More: 'text-slate-500',
-}
+const coreNavItems     = navItems.filter(item => item.group === 'core')
+const workflowNavItems = navItems.filter(item => item.group === 'workflow')
+const expertNavItems   = navItems.filter(item => item.group === 'expert')
 
-const primaryNavItems = navItems.filter(item => item.section === 'Main')
-const moreNavItems = navItems.filter(item => item.section === 'More')
-const utilityNavItems = navItems.filter(item => item.section === 'Utility')
+// Backward-compat aliases (some render helpers still reference these)
+const primaryNavItems  = coreNavItems
+const moreNavItems     = expertNavItems
+const utilityNavItems: NavItem[] = []
 
 export function AppNav() {
   const { locale, setLocale, nav, ui } = useI18n()
@@ -197,6 +212,7 @@ export function AppNav() {
 
         {/* Nav sections */}
         <div className="flex-1 overflow-y-auto py-3 scrollbar-hide">
+          {/* ── Core workflow ──────────────────────────────────────────── */}
           <NavSection
             title={ui.workspace}
             items={primaryNavItems}
@@ -206,25 +222,52 @@ export function AppNav() {
             attentionCount={attentionCount}
             unreadNotificationCount={unreadNotificationCount}
             autonomousModeActive={autonomousModeActive}
-            titleClassName={sectionColors.Main}
+            titleClassName="text-violet-400"
             nav={nav}
             ui={ui}
           />
-          <details open={isMoreActive} className="mx-2 mt-3 rounded-lg border border-white/[0.06] bg-white/[0.02]">
+
+          {/* ── Workflow tools (secondary, always visible) ─────────────── */}
+          <div className="mt-1 px-2">
+            <p className="mb-1 px-2 text-[9px] font-bold uppercase tracking-widest text-slate-600">Tools</p>
+            {workflowNavItems.map(item => {
+              const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
+              const count =
+                item.href === '/inbox' ? attentionCount : undefined
+              return (
+                <SidebarLink
+                  key={item.href}
+                  href={item.href}
+                  label={nav[item.key].label}
+                  icon={item.icon}
+                  isActive={isActive}
+                  count={count}
+                  isNew={item.isNew}
+                  compact
+                />
+              )
+            })}
+          </div>
+
+          {/* ── Expert tools (collapsed by default) ────────────────────── */}
+          <details
+            open={expertNavItems.some(item => item.href === '/' ? pathname === '/' : pathname.startsWith(item.href))}
+            className="mx-2 mt-3 rounded-lg border border-white/[0.06] bg-white/[0.02]"
+          >
             <summary
               className={cx(
                 'cursor-pointer list-none px-3 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors hover:text-slate-300',
-                isMoreActive ? 'text-violet-300' : 'text-slate-500'
+                expertNavItems.some(item => item.href === '/' ? pathname === '/' : pathname.startsWith(item.href))
+                  ? 'text-violet-300' : 'text-slate-500'
               )}
             >
-              Expert Tools
+              ⋯ Mehr
             </summary>
             <div className="pb-2">
-              {moreNavItems.map(item => {
+              {expertNavItems.map(item => {
                 const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
                 const count =
                   item.href === '/active' ? running
-                    : item.href === '/inbox' ? attentionCount
                     : item.href === '/notifications' ? unreadNotificationCount
                     : undefined
                 const isLive = item.href === '/active' && running > 0
