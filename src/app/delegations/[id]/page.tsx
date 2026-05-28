@@ -80,10 +80,109 @@ const RISK_COLORS: Record<string, string> = {
 }
 
 type DetailView = 'action' | 'result' | 'details'
+type PhaseStep = 'created' | 'approved' | 'running' | 'completed'
 
 function defaultDetailView(status: DelegationStatus): DetailView {
   if (status === 'completed') return 'result'
   return 'action'
+}
+
+function phaseStepIndex(status: DelegationStatus): number {
+  if (status === 'completed') return 3
+  if (status === 'running') return 2
+  if (status === 'approved') return 1
+  return 0
+}
+
+function getStatusFirstCopy(delegation: Delegation): {
+  eyebrow: string
+  title: string
+  body: string
+  tone: 'neutral' | 'blue' | 'violet' | 'emerald' | 'red' | 'amber'
+  defaultView: DetailView
+} {
+  switch (delegation.status) {
+    case 'pending':
+      return {
+        eyebrow: 'Bereit zur Entscheidung',
+        title: delegation.contract.requiresApproval ? 'Freigabe prüfen' : 'Delegation wartet auf Startfreigabe',
+        body: 'Prüfe Ziel, Scope und Definition of Done. Danach kann der Agent kontrolliert loslegen.',
+        tone: 'amber',
+        defaultView: 'action',
+      }
+    case 'approved':
+      return {
+        eyebrow: 'Startbereit',
+        title: 'Agent kann jetzt ausführen',
+        body: 'Preflight und Policy sind die nächsten Sicherheitsnetze. Starte erst, wenn Route, Budget und Scope passen.',
+        tone: 'blue',
+        defaultView: 'action',
+      }
+    case 'running':
+      return {
+        eyebrow: 'Agent arbeitet',
+        title: 'Ausführung läuft',
+        body: 'Beobachte Live-Logs, Kosten und aktuelle Agenten-Aktion. Stoppe nur, wenn der Scope sichtbar abdriftet.',
+        tone: 'violet',
+        defaultView: 'action',
+      }
+    case 'completed':
+      return {
+        eyebrow: 'Bereit zur Übernahme',
+        title: delegation.summaryReport?.prUrl ? 'Ergebnis prüfen und PR übernehmen' : 'Ergebnis prüfen und PR erstellen',
+        body: 'Prüfe Änderungen, Critic-Bewertung und Knowledge Writeback. Danach kann der PR erstellt oder gemergt werden.',
+        tone: 'emerald',
+        defaultView: 'result',
+      }
+    case 'failed':
+      return {
+        eyebrow: 'Eingriff nötig',
+        title: 'Fehler verstehen und kontrolliert retryen',
+        body: 'Die App soll erklären, was passiert ist, und einen sicheren Retry oder eine Eskalation anbieten.',
+        tone: 'red',
+        defaultView: 'action',
+      }
+    case 'cancelled':
+      return {
+        eyebrow: 'Angehalten',
+        title: 'Run wurde abgebrochen',
+        body: 'Du kannst die Delegation prüfen, klonen oder mit klarerem Scope erneut starten.',
+        tone: 'neutral',
+        defaultView: 'action',
+      }
+    case 'rejected':
+      return {
+        eyebrow: 'Abgelehnt',
+        title: 'Delegation bleibt gestoppt',
+        body: 'Passe Scope, Risiko oder Budget an und erstelle bei Bedarf eine neue, kleinere Delegation.',
+        tone: 'red',
+        defaultView: 'details',
+      }
+    default:
+      return {
+        eyebrow: 'Status',
+        title: 'Delegation prüfen',
+        body: 'Prüfe den aktuellen Stand und entscheide den nächsten kontrollierten Schritt.',
+        tone: 'neutral',
+        defaultView: 'action',
+      }
+  }
+}
+
+const PHASE_STEPS: Array<{ id: PhaseStep; label: string }> = [
+  { id: 'created', label: 'Erstellt' },
+  { id: 'approved', label: 'Freigegeben' },
+  { id: 'running', label: 'Läuft' },
+  { id: 'completed', label: 'Fertig' },
+]
+
+const PHASE_TONES = {
+  neutral: 'border-gray-800 bg-gray-900/70',
+  blue: 'border-blue-800/50 bg-blue-950/20',
+  violet: 'border-violet-800/50 bg-violet-950/20',
+  emerald: 'border-emerald-800/50 bg-emerald-950/20',
+  red: 'border-red-800/50 bg-red-950/20',
+  amber: 'border-amber-800/50 bg-amber-950/20',
 }
 
 const DETAIL_VIEWS: Array<{
@@ -524,6 +623,10 @@ export default function DelegationDetailPage() {
   const isDone      = d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled'
   const canCreatePR = d.status === 'completed' && !d.summaryReport?.prUrl
   const canClone    = isDone
+  const phaseCopy = getStatusFirstCopy(d)
+  const activeStepIndex = phaseStepIndex(d.status)
+  const lastVisibleLog = (d.logs ?? []).filter(l => l.type !== 'thought').slice(-1)[0]?.message
+  const phaseProgress = Math.max(8, Math.min(100, ((activeStepIndex + 1) / PHASE_STEPS.length) * 100))
 
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6 md:p-8">
@@ -609,75 +712,8 @@ export default function DelegationDetailPage() {
               )}
             </div>
 
-            {/* Action buttons */}
+            {/* Secondary actions */}
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              {canApprove && (
-                <button onClick={handleApprove}
-                  className="px-3 py-1.5 text-sm bg-green-900/50 text-green-300 hover:bg-green-900 border border-green-800 rounded-lg transition-colors">
-                  ✔ Freigeben
-                </button>
-              )}
-              {canReject && (
-                <button onClick={handleReject}
-                  className="px-3 py-1.5 text-sm bg-red-950/50 text-red-400 hover:bg-red-950 border border-red-900/60 rounded-lg transition-colors">
-                  ✕ Ablehnen
-                </button>
-              )}
-              {canStart && (
-                <div className="flex items-center gap-1">
-                  <button onClick={handleStart}
-                    className="px-3 py-1.5 text-sm bg-blue-900/50 text-blue-300 hover:bg-blue-900 border border-blue-800 rounded-lg transition-colors font-medium">
-                    ▶ Starten
-                  </button>
-                  <button
-                    onClick={async () => {
-                      if (!delegation) return
-                      const updated = { ...delegation, autoOrchestrate: !delegation.autoOrchestrate }
-                      setDelegation(updated)
-                      await fetch('/api/delegations', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(updated),
-                      })
-                    }}
-                    title="Auto-Orchestrierung: Task automatisch in Sub-Tasks aufteilen"
-                    className={`px-2 py-1.5 text-xs rounded-lg border transition-colors ${
-                      delegation?.autoOrchestrate
-                        ? 'bg-violet-900/60 text-violet-300 border-violet-700'
-                        : 'text-slate-600 border-slate-800 hover:text-violet-400 hover:border-violet-900'
-                    }`}
-                  >
-                    ⚙ Auto
-                  </button>
-                </div>
-              )}
-              {canStop && (
-                <button onClick={() => updateStatus('cancelled')}
-                  className="px-3 py-1.5 text-sm bg-red-900/50 text-red-400 hover:bg-red-900 border border-red-900 rounded-lg transition-colors">
-                  ⛔ Stoppen
-                </button>
-              )}
-              {canCancel && (
-                <button onClick={() => updateStatus('cancelled')}
-                  className="px-3 py-1.5 text-sm text-gray-500 hover:text-yellow-400 border border-gray-800 hover:border-yellow-900/50 rounded-lg transition-colors">
-                  ✕ Abbrechen
-                </button>
-              )}
-              {canRetry && (
-                <button onClick={() => updateStatus('pending')}
-                  className="px-3 py-1.5 text-sm bg-blue-900/40 text-blue-400 hover:bg-blue-900 border border-blue-900/60 rounded-lg transition-colors">
-                  🔄 Wiederholen
-                </button>
-              )}
-              {canCreatePR && (
-                <button
-                  onClick={handleCreatePR}
-                  disabled={creatingPR}
-                  className="px-3 py-1.5 text-xs bg-emerald-900/40 text-emerald-300 hover:bg-emerald-900/70 border border-emerald-800/60 rounded-lg transition-colors disabled:opacity-40"
-                  title="GitHub Pull Request für diese abgeschlossene Delegation erstellen">
-                  {creatingPR ? '⏳ PR wird erstellt…' : '⎇ GitHub PR erstellen'}
-                </button>
-              )}
               {canClone && (
                 <button
                   onClick={handleClone}
@@ -850,6 +886,140 @@ export default function DelegationDetailPage() {
             </div>
           )}
         </div>
+
+        {/* ── Status-first phase card ───────────────────────────────────── */}
+        <section className={`rounded-xl border p-5 ${PHASE_TONES[phaseCopy.tone]}`}>
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">{phaseCopy.eyebrow}</p>
+              <h2 className="mt-2 text-lg font-semibold text-white">{phaseCopy.title}</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-400">{phaseCopy.body}</p>
+
+              <div className="mt-5">
+                <div className="h-1.5 overflow-hidden rounded-full bg-gray-950/70">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      phaseCopy.tone === 'emerald' ? 'bg-emerald-500' :
+                      phaseCopy.tone === 'red' ? 'bg-red-500' :
+                      phaseCopy.tone === 'violet' ? 'bg-violet-500' :
+                      phaseCopy.tone === 'blue' ? 'bg-blue-500' :
+                      phaseCopy.tone === 'amber' ? 'bg-amber-500' : 'bg-gray-500'
+                    }`}
+                    style={{ width: `${phaseProgress}%` }}
+                  />
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-500 sm:grid-cols-4">
+                  {PHASE_STEPS.map((step, index) => (
+                    <div key={step.id} className={index <= activeStepIndex ? 'text-gray-200' : 'text-gray-600'}>
+                      <span className={`mr-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${
+                        index < activeStepIndex || d.status === 'completed'
+                          ? 'bg-emerald-900/60 text-emerald-300'
+                          : index === activeStepIndex
+                            ? 'bg-violet-900/60 text-violet-200'
+                            : 'bg-gray-900 text-gray-600'
+                      }`}>
+                        {index < activeStepIndex || d.status === 'completed' ? '✓' : index + 1}
+                      </span>
+                      {step.label}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {d.status === 'running' && lastVisibleLog && (
+                <div className="mt-5 rounded-lg border border-violet-800/40 bg-gray-950/60 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-400">Agent macht gerade</p>
+                  <p className="mt-1 text-sm text-gray-300">{lastVisibleLog}</p>
+                </div>
+              )}
+
+              {d.status === 'failed' && d.errorMessage && (
+                <div className="mt-5 rounded-lg border border-red-900/50 bg-red-950/20 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-red-400">Fehlerursache</p>
+                  <p className="mt-1 text-sm text-red-200/80">{d.errorMessage}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[220px]">
+              {canApprove && (
+                <button onClick={handleApprove}
+                  className="rounded-lg border border-green-800 bg-green-900/50 px-4 py-2 text-sm font-semibold text-green-200 transition-colors hover:bg-green-900">
+                  Freigeben
+                </button>
+              )}
+              {canStart && (
+                <button onClick={handleStart}
+                  className="rounded-lg border border-blue-800 bg-blue-900/50 px-4 py-2 text-sm font-semibold text-blue-100 transition-colors hover:bg-blue-900">
+                  Ausführung starten
+                </button>
+              )}
+              {canStop && (
+                <button onClick={() => updateStatus('cancelled')}
+                  className="rounded-lg border border-red-900 bg-red-900/50 px-4 py-2 text-sm font-semibold text-red-200 transition-colors hover:bg-red-900">
+                  Stoppen
+                </button>
+              )}
+              {canCreatePR && (
+                <button
+                  onClick={handleCreatePR}
+                  disabled={creatingPR}
+                  className="rounded-lg border border-emerald-800 bg-emerald-900/50 px-4 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:bg-emerald-900 disabled:opacity-40"
+                >
+                  {creatingPR ? 'PR wird erstellt…' : 'GitHub PR erstellen'}
+                </button>
+              )}
+              {canRetry && (
+                <button onClick={() => updateStatus('pending')}
+                  className="rounded-lg border border-blue-900/60 bg-blue-900/30 px-4 py-2 text-sm font-semibold text-blue-300 transition-colors hover:bg-blue-900/50">
+                  Wiederholen
+                </button>
+              )}
+              {canReject && (
+                <button onClick={handleReject}
+                  className="rounded-lg border border-gray-800 px-4 py-2 text-sm font-semibold text-gray-500 transition-colors hover:border-red-900/60 hover:text-red-300">
+                  Ablehnen
+                </button>
+              )}
+              {canCancel && (
+                <button onClick={() => updateStatus('cancelled')}
+                  className="rounded-lg border border-gray-800 px-4 py-2 text-sm font-semibold text-gray-500 transition-colors hover:border-yellow-900/60 hover:text-yellow-300">
+                  Abbrechen
+                </button>
+              )}
+              {canStart && (
+                <button
+                  onClick={async () => {
+                    if (!delegation) return
+                    const updated = { ...delegation, autoOrchestrate: !delegation.autoOrchestrate }
+                    setDelegation(updated)
+                    await fetch('/api/delegations', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(updated),
+                    })
+                  }}
+                  className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-colors ${
+                    delegation?.autoOrchestrate
+                      ? 'border-violet-700 bg-violet-900/50 text-violet-200'
+                      : 'border-gray-800 text-gray-500 hover:border-violet-900 hover:text-violet-300'
+                  }`}
+                >
+                  Auto-Orchestrierung {delegation?.autoOrchestrate ? 'an' : 'aus'}
+                </button>
+              )}
+              {activeView !== phaseCopy.defaultView && (
+                <button
+                  type="button"
+                  onClick={() => setActiveView(phaseCopy.defaultView)}
+                  className="rounded-lg border border-gray-800 px-4 py-2 text-sm font-semibold text-gray-400 transition-colors hover:border-gray-700 hover:text-gray-200"
+                >
+                  Zur empfohlenen Ansicht
+                </button>
+              )}
+            </div>
+          </div>
+        </section>
 
         {/* ── Structured error recovery (when failed) ─────────────────── */}
         <section className="rounded-xl border border-gray-800 bg-gray-900/60 p-2">
