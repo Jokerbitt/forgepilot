@@ -88,7 +88,6 @@ const navItems: NavItem[] = [
   { href: '/monitor',         key: 'agentMonitor',     icon: Radio,        group: 'expert' },
   { href: '/pm-agent',        key: 'pmAgent',          icon: Brain,        group: 'expert' },
   { href: '/branches',        key: 'system',           icon: GitBranch,    group: 'expert' },
-  { href: '/context-packages', key: 'contextPackages', icon: Package,     group: 'expert' },
   { href: '/planning',        key: 'planningAudit',    icon: MapPin,       group: 'expert' },
   { href: '/pilot',           key: 'e2ePilot',         icon: FlaskConical, group: 'expert' },
   { href: '/digest',          key: 'activityDigest',   icon: Bell,         group: 'expert' },
