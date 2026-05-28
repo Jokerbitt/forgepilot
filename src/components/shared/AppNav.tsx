@@ -8,11 +8,9 @@ import {
   LayoutDashboard,
   Inbox,
   FileText,
-  CheckSquare,
   ListChecks,
   Bot,
   BookOpen,
-  GitBranch,
   Settings,
   Command,
   ChevronRight,
@@ -58,23 +56,20 @@ const navItems: NavItem[] = [
   { href: '/delegations', key: 'execute',          icon: ListChecks,      group: 'core' },
   { href: '/settings',    key: 'settings',         icon: Settings,        group: 'core' },
 
-  // ── Workflow tools (4 items — visible but secondary) ─────────────────────
-  { href: '/live',      key: 'liveView',  icon: Monitor,    group: 'workflow' },
-  { href: '/projects',  key: 'plan',      icon: FolderOpen, group: 'workflow' },
-  { href: '/inbox',     key: 'inbox',     icon: Inbox,      group: 'workflow' },
-  { href: '/knowledge', key: 'knowledge', icon: BookOpen,   group: 'workflow' },
+  // ── Workflow tools (visible but secondary) ──────────────────────────────
+  { href: '/live',      key: 'liveView',     icon: Monitor,    group: 'workflow' },
+  { href: '/projects',  key: 'plan',         icon: FolderOpen, group: 'workflow' },
+  { href: '/inbox',     key: 'inbox',        icon: Inbox,      group: 'workflow' },
+  { href: '/knowledge', key: 'knowledge',    icon: BookOpen,   group: 'workflow' },
+  { href: '/agents',    key: 'agentControl', icon: Bot,        group: 'workflow' },
 
-  // ── Expert tools (rarely needed — collapsed by default) ──────────────────
-  { href: '/analytics',      key: 'costAnalytics', icon: BarChart3,   group: 'expert' },
-  { href: '/project-briefs', key: 'projectBriefs', icon: FileText,    group: 'expert' },
-  { href: '/work-items',     key: 'workItems',      icon: CheckSquare, group: 'expert' },
-  { href: '/agents',         key: 'agentControl',   icon: Bot,         group: 'expert' },
-  { href: '/branches',       key: 'system',         icon: GitBranch,   group: 'expert' },
-  { href: '/skills',         key: 'skills',         icon: Sparkles,    group: 'expert' },
-  // Removed: /board→/delegations  /active→/live  /notifications→/inbox  /briefing→/digest
-  // Removed: /model-router→/settings  /governance→/settings
-  // Removed: /knowledge-cards→/knowledge  /monitor→/live  /agent-runs→/live  /orchestrations→/live
-  // Removed: /pm-agent  /pilot  /planning  /digest
+  // ── Expert tools (power-user, rarely needed — collapsed by default) ──────
+  { href: '/analytics',      key: 'costAnalytics', icon: BarChart3, group: 'expert' },
+  { href: '/project-briefs', key: 'projectBriefs', icon: FileText,  group: 'expert' },
+  { href: '/skills',         key: 'skills',        icon: Sparkles,  group: 'expert' },
+  // Removed from nav (still accessible by URL):
+  //   /branches  — git ops happen in terminal
+  //   /work-items — redundant with /projects
 ]
 
 const coreNavItems     = navItems.filter(item => item.group === 'core')
