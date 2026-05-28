@@ -7,6 +7,8 @@ export type AgentRole =
   | 'qa-reviewer'
   | 'devops-automation'
   | 'knowledge-curator'
+  | 'critic-reviewer'
+  | 'external-coding-agent'
 
 export type AgentAvailability = 'available' | 'busy' | 'offline' | 'disabled'
 export type AgentAutonomyLevel = 'read-only' | 'propose-only' | 'supervised-write' | 'autopilot'

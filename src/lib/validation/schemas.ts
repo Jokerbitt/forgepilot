@@ -551,7 +551,7 @@ export const AgentOptimizeSchema = z.object({
     description:        z.string(),
     acceptanceCriteria: z.array(z.string()),
     skillCategory:      z.enum(['api-route', 'ui-component', 'data-model', 'test', 'refactor', 'infrastructure', 'documentation']),
-    assignedAgentType:  z.enum(['claude-code', 'codex', 'antigravity', 'general']),
+    assignedAgentType:  z.enum(['claude-code', 'codex', 'antigravity', 'hermes', 'openclaw', 'general']),
     filePatterns:       z.array(z.string()),
     effort:             z.enum(['S', 'M', 'L']),
     dependsOn:          z.array(z.string()),

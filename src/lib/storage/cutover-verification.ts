@@ -36,6 +36,14 @@ export interface StoreComparison {
   readyForPostgresPrimary: boolean
 }
 
+export interface StoreComparisonOptions {
+  /**
+   * Postgres may legitimately contain rows created after the last JSON export
+   * or historical rows already migrated from another environment.
+   */
+  allowPostgresSuperset?: boolean
+}
+
 function byId<T extends { id: string }>(items: T[]): Map<string, T> {
   return new Map(items.map((item) => [item.id, item]))
 }
@@ -43,21 +51,25 @@ function byId<T extends { id: string }>(items: T[]): Map<string, T> {
 export function compareDelegationStores(
   jsonDelegations: JsonDelegationSnapshot[],
   postgresDelegations: PostgresDelegationSnapshot[],
+  options: StoreComparisonOptions = {},
 ): StoreComparison {
-  return compareStores(jsonDelegations, postgresDelegations)
+  return compareStores(jsonDelegations, postgresDelegations, options)
 }
 
 export function compareProjectBriefStores(
   jsonProjectBriefs: JsonProjectBriefSnapshot[],
   postgresProjectBriefs: PostgresProjectBriefSnapshot[],
+  options: StoreComparisonOptions = {},
 ): StoreComparison {
-  return compareStores(jsonProjectBriefs, postgresProjectBriefs)
+  return compareStores(jsonProjectBriefs, postgresProjectBriefs, options)
 }
 
 function compareStores(
   jsonItems: JsonDelegationSnapshot[] | JsonProjectBriefSnapshot[],
   postgresItems: PostgresDelegationSnapshot[] | PostgresProjectBriefSnapshot[],
+  options: StoreComparisonOptions,
 ): StoreComparison {
+  const allowPostgresSuperset = options.allowPostgresSuperset ?? true
   const jsonById = byId(jsonItems)
   const postgresById = byId(postgresItems)
 
@@ -102,7 +114,7 @@ function compareStores(
     mismatched,
     readyForPostgresPrimary:
       missingInPostgres.length === 0 &&
-      missingInJson.length === 0 &&
+      (allowPostgresSuperset || missingInJson.length === 0) &&
       mismatched.length === 0,
   }
 }
