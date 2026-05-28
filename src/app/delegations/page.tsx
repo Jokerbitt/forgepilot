@@ -196,6 +196,7 @@ function DelegationsContent() {
   const [hideTerminal, setHideTerminal] = useState(searchParams.get('hideTerminal') === '1')
   const [tagFilter, setTagFilter] = useState<string>(searchParams.get('tag') ?? 'Alle')
   const [groupByBrief, setGroupByBrief] = useState(searchParams.get('groupByBrief') === '1')
+  const [groupByStatus, setGroupByStatus] = useState(searchParams.get('groupByStatus') === '1')
   const [showAllRows, setShowAllRows] = useState(false)
   const currentSearch = searchParams.toString()
 
@@ -210,13 +211,14 @@ function DelegationsContent() {
     if (hideTerminal)              params.set('hideTerminal', '1')
     if (tagFilter !== 'Alle')      params.set('tag',      tagFilter)
     if (groupByBrief)              params.set('groupByBrief', '1')
+    if (groupByStatus)             params.set('groupByStatus', '1')
     const qs = params.toString()
     const nextUrl = qs ? `${pathname}?${qs}` : pathname
     if (currentSearch !== qs) {
       router.replace(nextUrl, { scroll: false })
     }
     setShowAllRows(false)
-  }, [statusFilter, projectFilter, approvalFilter, searchQuery, todayOnly, hideTerminal, tagFilter, groupByBrief, pathname, router, currentSearch])
+  }, [statusFilter, projectFilter, approvalFilter, searchQuery, todayOnly, hideTerminal, tagFilter, groupByBrief, groupByStatus, pathname, router, currentSearch])
 
   // Sort
   type SortKey = 'goal' | 'status' | 'time' | 'cost' | 'priority'
@@ -667,7 +669,15 @@ function DelegationsContent() {
     running: 0, approved: 1, pending: 2, completed: 3, failed: 4, cancelled: 5,
   }
 
-  const sortedDelegations = sortKey
+  const sortedDelegations = groupByStatus
+    ? [...filteredDelegations].sort((a, b) => {
+        const ga = STATUS_GROUP_ORDER[a.status] ?? 9
+        const gb = STATUS_GROUP_ORDER[b.status] ?? 9
+        if (ga !== gb) return ga - gb
+        // Within same status: newest first
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      })
+    : sortKey
     ? [...filteredDelegations].sort((a, b) => {
         let cmp = 0
         if (sortKey === 'goal') {
@@ -713,6 +723,20 @@ function DelegationsContent() {
       return a.label.localeCompare(b.label)
     })
   }, [groupByBrief, visibleDelegations])
+
+  // Status-grouped sort: when groupByStatus is active, override sortKey and always
+  // order by status priority so section headers line up naturally.
+  const STATUS_GROUP_ORDER: Record<string, number> = {
+    running: 0, approved: 1, pending: 2, failed: 3, completed: 4, cancelled: 5,
+  }
+  const STATUS_GROUP_CONFIG: Record<string, { label: string; icon: string; headerClass: string }> = {
+    running:   { label: 'Läuft',       icon: '🔴', headerClass: 'border-violet-900/50 bg-violet-950/20 text-violet-300' },
+    approved:  { label: 'Genehmigt',   icon: '✓',  headerClass: 'border-blue-900/50 bg-blue-950/20 text-blue-300' },
+    pending:   { label: 'Ausstehend',  icon: '⏳',  headerClass: 'border-gray-700/50 bg-gray-900/40 text-gray-400' },
+    failed:    { label: 'Fehler',      icon: '⚠️',  headerClass: 'border-red-900/50 bg-red-950/20 text-red-400' },
+    completed: { label: 'Fertig',      icon: '✓',  headerClass: 'border-emerald-900/50 bg-emerald-950/20 text-emerald-400' },
+    cancelled: { label: 'Abgebrochen', icon: '✕',  headerClass: 'border-gray-800/50 bg-gray-950/20 text-gray-600' },
+  }
 
   const runningCount = delegations.filter(d => d.status === 'running').length
   const pendingCount = delegations.filter(d => d.status === 'pending').length
@@ -1084,6 +1108,17 @@ function DelegationsContent() {
                 >
                   ◇ Nach Brief
                 </button>
+                <button
+                  onClick={() => setGroupByStatus(v => !v)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    groupByStatus
+                      ? 'bg-violet-700 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700'
+                  }`}
+                  title="Delegationen nach Status gruppieren"
+                >
+                  ≡ Nach Status
+                </button>
               </div>
 
               {/* Search input */}
@@ -1262,6 +1297,12 @@ function DelegationsContent() {
                         index === 0 ||
                         (prevDel?.briefId ?? null) !== (del.briefId ?? null)
                       )
+                      const isNewStatusGroup = groupByStatus && (
+                        index === 0 || prevDel?.status !== del.status
+                      )
+                      const statusGroupCount = groupByStatus
+                        ? visibleDelegations.filter(d => d.status === del.status).length
+                        : 0
                       const groupCount = groupByBrief
                         ? briefGroups.find(g => g.briefId === (del.briefId ?? null))?.items.length ?? 0
                         : 0
@@ -1299,6 +1340,22 @@ function DelegationsContent() {
                               </td>
                             </tr>
                           )}
+                          {isNewStatusGroup && (() => {
+                            const cfg = STATUS_GROUP_CONFIG[del.status] ?? { label: del.status, icon: '·', headerClass: 'border-gray-700 bg-gray-900/50 text-gray-400' }
+                            return (
+                              <tr key={`status-hdr-${del.status}`} className={`border-t-2 ${cfg.headerClass}`}>
+                                <td colSpan={7} className="px-4 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs">{cfg.icon}</span>
+                                    <span className="text-xs font-semibold uppercase tracking-wide">{cfg.label}</span>
+                                    <span className="text-[10px] bg-gray-800 border border-gray-700 rounded-full px-2 py-0.5 text-gray-500">
+                                      {statusGroupCount}
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })()}
                         <tr
                           key={del.id}
                           className={`hover:bg-gray-800/40 transition-colors group cursor-pointer ${
