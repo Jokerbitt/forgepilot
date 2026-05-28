@@ -5,6 +5,7 @@ import type { Delegation, ExecutionRoute, OutputMode, TaskContract, TaskType } f
 import type { RiskClass } from '@/lib/models/work-item'
 import { DELEGATION_TEMPLATES, templateToContract } from '@/lib/delegations/templates'
 import type { FeatureSuggestion } from '@/app/api/delegations/suggest-features/route'
+import { budgetForComplexity, getComplexityTier, COMPLEXITY_LABELS } from '@/lib/budget-utils'
 
 interface Props {
   onClose: () => void
@@ -638,6 +639,28 @@ export function NewDelegationDialog({
                     onChange={e => setMaxBudgetUsd(Number(e.target.value))}
                     className="w-full bg-gray-950 border border-gray-800 rounded p-2 text-white text-xs focus:border-blue-500 focus:outline-none"
                   />
+                  {/* M110: Complexity indicator */}
+                  {(() => {
+                    const tier = getComplexityTier(dodItems, goal)
+                    const info = COMPLEXITY_LABELS[tier]
+                    const suggested = budgetForComplexity(dodItems, goal)
+                    return (
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <span className={`text-xs font-medium ${info.color}`}>
+                          {info.label} · {info.turns}
+                        </span>
+                        {suggested !== maxBudgetUsd && (
+                          <button
+                            type="button"
+                            onClick={() => setMaxBudgetUsd(suggested)}
+                            className="text-xs text-blue-400 hover:text-blue-300 underline"
+                          >
+                            ${suggested.toFixed(0)} empfohlen
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Risk Class</label>
