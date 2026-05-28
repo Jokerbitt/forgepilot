@@ -118,3 +118,40 @@ export const knowledgeCards = pgTable('knowledge_cards', {
 
 export type DbKnowledgeCard = typeof knowledgeCards.$inferSelect
 export type NewDbKnowledgeCard = typeof knowledgeCards.$inferInsert
+
+// ─── DSGVO Processing Ledger ─────────────────────────────────────────────────
+
+export const legalBasisEnum = pgEnum('legal_basis', [
+  'legitimate-interest',
+  'contract',
+  'legal-obligation',
+  'consent',
+])
+
+export const dataResidencyEnum = pgEnum('data_residency', ['eu', 'us', 'local', 'unknown'])
+
+export const processingLedger = pgTable('processing_ledger', {
+  id: uuid('id').primaryKey(),
+  purpose: text('purpose').notNull(),
+  dataTypes: jsonb('data_types').$type<string[]>().notNull().default([]),
+  processor: text('processor').notNull(),
+  legalBasis: legalBasisEnum('legal_basis').notNull().default('legitimate-interest'),
+  dataSubjectId: text('data_subject_id'),
+  piiDetected: boolean('pii_detected').notNull().default(false),
+  piiCategories: jsonb('pii_categories').$type<string[]>().notNull().default([]),
+  piiRedacted: boolean('pii_redacted').notNull().default(false),
+  piiCount: integer('pii_count').notNull().default(0),
+  dataResidency: dataResidencyEnum('data_residency').notNull().default('unknown'),
+  providerId: text('provider_id'),
+  modelId: text('model_id'),
+  inputTokens: integer('input_tokens'),
+  retentionDays: integer('retention_days').notNull().default(1825),
+  processedAt: timestamp('processed_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('processing_ledger_processed_at_idx').on(t.processedAt),
+  index('processing_ledger_subject_idx').on(t.dataSubjectId),
+  index('processing_ledger_processor_idx').on(t.processor),
+])
+
+export type DbProcessingLedger = typeof processingLedger.$inferSelect
+export type NewDbProcessingLedger = typeof processingLedger.$inferInsert

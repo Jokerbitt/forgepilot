@@ -84,9 +84,9 @@ const CATALOG: Omit<StoreEntry, 'mode'>[] = [
     key: 'processing-ledger',
     label: 'DSGVO Processing Ledger',
     filePath: 'config/processing-ledger.json',
-    productionRisk: 'high',
-    postgresReady: false,
-    note: 'DSGVO Art. 30 — Verarbeitungsverzeichnis. Verlust ist Compliance-Risiko.',
+    productionRisk: 'none',
+    postgresReady: true,
+    note: 'Postgres-Repository aktiv wenn DATABASE_URL gesetzt. JSON bleibt Fallback/Importquelle.',
   },
   {
     key: 'audit-log',
