@@ -96,6 +96,8 @@ export interface TaskContract {
   autoChain?: boolean
   /** G2: If true, automatically queue a retry delegation when critic score < 70 */
   autoRetryOnCriticFail?: boolean
+  /** Context profile used for this delegation (from context-router.ts) */
+  contextProfile?: string
   createdAt: string
   // Expert Mode Policy Fields (#19)
   llmProvider?: string

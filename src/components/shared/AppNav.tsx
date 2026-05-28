@@ -22,6 +22,7 @@ import {
   FolderOpen,
   Monitor,
   AlertTriangle,
+  Sparkles,
 } from 'lucide-react'
 import type { DelegationStats } from '@/app/api/delegations/stats/route'
 import type { AttentionItem } from '@/lib/models/attention'
@@ -69,6 +70,7 @@ const navItems: NavItem[] = [
   { href: '/work-items',     key: 'workItems',      icon: CheckSquare, group: 'expert' },
   { href: '/agents',         key: 'agentControl',   icon: Bot,         group: 'expert' },
   { href: '/branches',       key: 'system',         icon: GitBranch,   group: 'expert' },
+  { href: '/skills',         key: 'skills',         icon: Sparkles,    group: 'expert' },
   // Removed: /board→/delegations  /active→/live  /notifications→/inbox  /briefing→/digest
   // Removed: /model-router→/settings  /governance→/settings
   // Removed: /knowledge-cards→/knowledge  /monitor→/live  /agent-runs→/live  /orchestrations→/live

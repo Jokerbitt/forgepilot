@@ -600,6 +600,28 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
           durationMinutes,
         })
         recordOutcome('claude-code', skillCategory, result)
+
+        // M-Token: Record context profile metrics for skill optimization
+        try {
+          const contextProfileTag = finishedDelegation.contract.contextProfile
+          if (contextProfileTag) {
+            const { recordSkillOutcome, listSkills } = await import('@/lib/skills/prompt-skill-registry')
+            type ListSkillsOpts = Parameters<typeof listSkills>[0]
+            const opts: ListSkillsOpts = { scope: contextProfileTag as NonNullable<ListSkillsOpts>['scope'], status: 'active' }
+            const profileSkills = listSkills(opts)
+            for (const skill of profileSkills) {
+              recordSkillOutcome({
+                skillId: skill.id,
+                qualityScore: result.qualityScore,
+                tokensSaved: skill.metrics.avgTokensSaved, // Approximate
+                success,
+                recordedAt: new Date().toISOString(),
+              })
+            }
+          }
+        } catch {
+          // Non-critical telemetry — never break execution
+        }
       } catch {
         // Non-critical — never break execution due to telemetry
       }

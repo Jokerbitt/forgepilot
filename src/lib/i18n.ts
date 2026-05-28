@@ -37,6 +37,7 @@ type NavKey =
   | 'e2ePilot'
   | 'activityDigest'
   | 'settings'
+  | 'skills'
 
 type UiKey =
   | 'workspace'
@@ -143,6 +144,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
       e2ePilot: { label: 'E2E Pilot', short: 'Pilot' },
       activityDigest: { label: 'Aktivitäts-Digest', short: 'Digest' },
       settings: { label: 'Settings', short: 'Settings' },
+      skills: { label: 'Skills', short: 'Skills' },
     },
     ui: {
       workspace: 'Workspace',
@@ -244,6 +246,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
       e2ePilot: { label: 'E2E Pilot', short: 'Pilot' },
       activityDigest: { label: 'Activity Digest', short: 'Digest' },
       settings: { label: 'Settings', short: 'Settings' },
+      skills: { label: 'Skills', short: 'Skills' },
     },
     ui: {
       workspace: 'Workspace',
