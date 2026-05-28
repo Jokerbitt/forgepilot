@@ -3,23 +3,22 @@
 /**
  * DelegationWorkbench — Evidence-Workbench Tab Navigation
  *
- * Wraps the delegation detail page sections into 6 logical tabs:
- *   Übersicht | Live | Änderungen | Qualität | Wissen | Details
+ * Wraps the delegation detail page sections into 3 logical tabs:
+ *   Aktion | Ergebnis | Details
  *
  * Uses a "wrap and reveal" pattern: no existing code is modified.
  * Parent passes activeTab + setActiveTab; child sections are rendered
  * only when their tab is active (display toggle, not unmount).
  *
  * Tabs auto-select based on delegation status:
- *   running   → Live tab
- *   completed → Übersicht tab
- *   failed    → Details tab (to see error logs)
+ *   pending/approved/running/failed/cancelled → action tab
+ *   completed                                 → results tab
  */
 
 import { useEffect } from 'react'
 import type { Delegation } from '@/lib/models/delegation'
 
-export type WorkbenchTab = 'overview' | 'live' | 'changes' | 'quality' | 'knowledge' | 'details'
+export type WorkbenchTab = 'action' | 'results' | 'details'
 
 interface TabConfig {
   id: WorkbenchTab
@@ -42,42 +41,23 @@ function getTabsForDelegation(d: Delegation, hasKnowledge: boolean, hasCritic: b
 
   return [
     {
-      id: 'overview',
-      label: 'Übersicht',
-      icon: '📋',
-    },
-    {
-      id: 'live',
-      label: isRunning ? 'Live' : 'Verlauf',
-      icon: isRunning ? '🔴' : '📡',
+      id: 'action',
+      label: 'Aktion',
+      icon: isRunning ? '🔴' : (d.status === 'failed' || d.status === 'cancelled') ? '⚠️' : '▶',
       badge: isRunning,
       badgeColor: 'bg-red-500',
     },
     {
-      id: 'changes',
-      label: 'Änderungen',
-      icon: '🔍',
-      badge: hasChanges && isDone,
-      badgeColor: 'bg-blue-500',
-    },
-    {
-      id: 'quality',
-      label: 'Qualität',
-      icon: '🎯',
-      badge: hasCritic,
-      badgeColor: 'bg-violet-500',
-    },
-    {
-      id: 'knowledge',
-      label: 'Wissen',
-      icon: '🧠',
-      badge: hasKnowledge,
-      badgeColor: 'bg-emerald-500',
+      id: 'results',
+      label: 'Ergebnis',
+      icon: '📊',
+      badge: (hasChanges && isDone) || hasCritic,
+      badgeColor: hasCritic ? 'bg-violet-500' : 'bg-blue-500',
     },
     {
       id: 'details',
       label: 'Details',
-      icon: '🔧',
+      icon: '⚙',
     },
   ]
 }
@@ -133,10 +113,8 @@ export function WorkbenchTabs({
 
 /** Smart default tab based on delegation status */
 export function getDefaultTab(d: Delegation): WorkbenchTab {
-  if (d.status === 'running') return 'live'
-  if (d.status === 'failed') return 'live'   // see what went wrong
-  if (d.status === 'completed') return 'overview'
-  return 'overview'
+  if (d.status === 'completed') return 'results'
+  return 'action'
 }
 
 /** Wrapper div that shows/hides content based on active tab.

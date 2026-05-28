@@ -239,7 +239,7 @@ export default function DelegationDetailPage() {
   }, [id])
 
   // Evidence Workbench: active tab state — auto-selects based on delegation status on first load
-  const [activeTab, setActiveTab] = useState<WorkbenchTab>('overview')
+  const [activeTab, setActiveTab] = useState<WorkbenchTab>('action')
   useEffect(() => {
     if (delegation) setActiveTab(getDefaultTab(delegation))
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -724,117 +724,56 @@ export default function DelegationDetailPage() {
             </div>
           </div>
 
-          {/* ── Metrics Tiles (above-the-fold trust layer) ──────────── */}
-          <div className="mt-4 pt-4 border-t border-gray-800 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" style={(d.retryCount ?? 0) > 0 ? { gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' } : undefined}>
-
-            {/* Status tile */}
-            <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Status</span>
-              <span className={`text-xs font-bold ${STATUS_COLORS[d.status]?.split(' ')[1] ?? 'text-gray-400'}`}>
+          {/* ── Compact status strip ──────────────────────────────────── */}
+          <div className="mt-4 pt-4 border-t border-gray-800 flex flex-wrap items-center justify-between gap-3">
+            {/* Left: key facts */}
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              <span className={`font-semibold ${STATUS_COLORS[d.status]?.split(' ')[1] ?? 'text-gray-400'}`}>
                 {STATUS_LABELS[d.status] || d.status}
               </span>
+              <span className="text-gray-700">·</span>
+              <span className="text-gray-500">Risk {d.contract.riskClass}</span>
+              <span className="text-gray-700">·</span>
               {d.status === 'running' && (
-                <ElapsedTimer startedAt={d.startedAt ?? d.updatedAt ?? d.createdAt} className="text-[10px] text-green-400 font-mono" />
+                <ElapsedTimer startedAt={d.startedAt ?? d.updatedAt ?? d.createdAt} className="text-green-400 font-mono" />
               )}
               {isDone && d.startedAt && d.completedAt && (
-                <span className="text-[10px] text-gray-600 font-mono">{formatCompletedDuration(d.startedAt, d.completedAt)}</span>
+                <span className="text-gray-500 font-mono">{formatCompletedDuration(d.startedAt, d.completedAt)}</span>
               )}
-              {isDone && (!d.startedAt || !d.completedAt) && d.summaryReport && (
-                <span className="text-[10px] text-gray-600 font-mono">{formatCompletedDuration(d.createdAt, d.updatedAt)}</span>
-              )}
-            </div>
-
-            {/* Risk tile */}
-            <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Risiko</span>
-              <span className={`text-xs font-bold ${RISK_COLORS[d.contract.riskClass]?.split(' ')[1] ?? 'text-gray-400'}`}>
-                Risk {d.contract.riskClass}
-              </span>
-              <span className="text-[10px] text-gray-600">{ROUTE_LABELS[d.executionRoute] ?? d.executionRoute}</span>
-            </div>
-
-            {/* Cost tile */}
-            <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Kosten</span>
               <CostMeter
                 actualCostUsd={d.actualCostUsd}
                 estimateCostUsd={d.costEstimateUsd}
                 maxBudgetUsd={d.contract.maxBudgetUsd}
               />
-            </div>
-
-            {/* PR tile */}
-            <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">PR</span>
-              {d.summaryReport?.prUrl ? (
-                <a
-                  href={d.summaryReport.prUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1"
-                >
-                  ⎇ #{d.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? ''}
-                </a>
-              ) : (
-                <span className="text-xs text-gray-600">Kein PR</span>
+              {(d.retryCount ?? 0) > 0 && (
+                <span className="text-amber-400 font-mono">↺ {d.retryCount}×</span>
               )}
-              {prStatus && (
-                <span className={`text-[10px] font-medium ${
-                  prStatus.state === 'merged' ? 'text-violet-400' :
-                  prStatus.state === 'closed' ? 'text-gray-500' :
-                  'text-emerald-500'
+            </div>
+            {/* Right: PR link + critic score */}
+            <div className="flex items-center gap-2">
+              {d.criticScore && (
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${
+                  d.criticScore.verdict === 'approved' ? 'text-emerald-400 border-emerald-800 bg-emerald-950/30' :
+                  d.criticScore.verdict === 'needs-revision' ? 'text-yellow-400 border-yellow-800 bg-yellow-950/30' :
+                  'text-red-400 border-red-800 bg-red-950/30'
                 }`}>
-                  {prStatus.state === 'merged' ? 'Merged' : prStatus.state === 'closed' ? 'Closed' : 'Open'}
-                  {prStatus.ciState === 'success' ? ' · CI ✓' : prStatus.ciState === 'failure' ? ' · CI ✗' : ''}
+                  🎯 {Math.round((d.criticScore.correctness + d.criticScore.efficiency + d.criticScore.drift) / 3)}pts
                 </span>
               )}
-            </div>
-
-            {/* Grok Critic tile */}
-            <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Critic</span>
-              {d.criticScore ? (
-                <>
-                  <span className={`text-xs font-bold ${
-                    d.criticScore.verdict === 'approved' ? 'text-emerald-400' :
-                    d.criticScore.verdict === 'needs-revision' ? 'text-yellow-400' :
-                    'text-red-400'
-                  }`}>
-                    {d.criticScore.verdict === 'approved' ? '✓ OK' :
-                     d.criticScore.verdict === 'needs-revision' ? '⚠ Revision' : '✗ Abgelehnt'}
-                  </span>
-                  <span className="text-[10px] text-gray-600">
-                    {Math.round((d.criticScore.correctness + d.criticScore.efficiency + d.criticScore.drift) / 3)}pts
-                  </span>
-                </>
-              ) : d.status === 'completed' ? (
-                <span className="text-xs text-gray-600 italic">Ausstehend</span>
-              ) : (
-                <span className="text-xs text-gray-700">–</span>
-              )}
-            </div>
-            {/* Writeback tile */}
-            <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Writeback</span>
-              {writebackCount === null ? (
-                <span className="text-xs text-gray-700">–</span>
-              ) : writebackCount > 0 ? (
-                <a href="/knowledge-cards" className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors">
-                  {writebackCount} Karten
+              {writebackCount !== null && writebackCount > 0 && (
+                <a href="/knowledge-cards" className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors">
+                  🧠 {writebackCount} Karten
                 </a>
-              ) : (
-                <span className="text-xs text-gray-600">Keine</span>
+              )}
+              {d.summaryReport?.prUrl && (
+                <a href={d.summaryReport.prUrl} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded border border-emerald-800 bg-emerald-950/30 text-emerald-400 hover:text-emerald-300 transition-colors">
+                  ⎇ PR #{d.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? ''}
+                  {prStatus?.ciState === 'success' && <span className="text-green-400">· CI ✓</span>}
+                  {prStatus?.ciState === 'failure' && <span className="text-red-400">· CI ✗</span>}
+                </a>
               )}
             </div>
-
-            {/* Retry tile — only shown when retryCount > 0 */}
-            {(d.retryCount ?? 0) > 0 && (
-              <div className="bg-amber-950/30 border border-amber-800/40 rounded-lg px-3 py-2 flex flex-col gap-0.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Retries</span>
-                <span className="text-sm font-bold text-amber-400">↺ {d.retryCount}</span>
-                <span className="text-[10px] text-amber-700/70">Versuche</span>
-              </div>
-            )}
           </div>
 
           {/* ── Simulation-mode info ─────────────────────────────────── */}
@@ -909,9 +848,9 @@ export default function DelegationDetailPage() {
         />
 
         {/* ═══════════════════════════════════════════════════════════════
-            LIVE TAB — Agent execution, logs, timeline, sub-tasks
+            ACTION TAB — Agent execution, logs, timeline, sub-tasks
         ════════════════════════════════════════════════════════════════ */}
-        <WorkbenchPanel tab="live" activeTab={activeTab}>
+        <WorkbenchPanel tab="action" activeTab={activeTab}>
 
         {/* ── Structured error recovery (when failed) ─────────────────── */}
         {d.status === 'failed' && d.errorMessage && (
@@ -1044,65 +983,12 @@ export default function DelegationDetailPage() {
           </div>
         )}
 
-        </WorkbenchPanel>{/* end live tab */}
+        </WorkbenchPanel>{/* end action tab */}
 
         {/* ═══════════════════════════════════════════════════════════════
-            KNOWLEDGE TAB — Context snapshot, writeback, knowledge cards
+            RESULTS TAB — PR details, merge, quality, writeback, knowledge
         ════════════════════════════════════════════════════════════════ */}
-        <WorkbenchPanel tab="knowledge" activeTab={activeTab}>
-
-        {/* ── Context Snapshot (M305) ──────────────────────────────────── */}
-        {d.contextSnapshot && d.contextSnapshot.cards.length > 0 && (
-          <details className="bg-gray-900 border border-gray-800 rounded-xl p-5 group">
-            <summary className="flex items-center justify-between cursor-pointer list-none">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                Kontext bei Ausführung ({d.contextSnapshot.cards.length} Karten · ~{d.contextSnapshot.tokenEstimate} Tokens)
-              </h2>
-              <span className="text-gray-600 text-xs group-open:rotate-180 transition-transform">▼</span>
-            </summary>
-            <ul className="mt-3 space-y-1">
-              {d.contextSnapshot.cards.map(card => (
-                <li key={card.id} className="flex items-start gap-2 text-xs text-gray-400">
-                  <span className="mt-0.5 px-1.5 py-0.5 rounded bg-gray-800 text-gray-500 font-mono shrink-0">{card.type}</span>
-                  <span>{card.title}</span>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-2 text-xs text-gray-600">
-              Erstellt: {new Date(d.contextSnapshot.builtAt).toLocaleString('de-DE')}
-            </p>
-          </details>
-        )}
-
-        {/* ── Knowledge Writeback ───────────────────────────────────────── */}
-        {(d.status === 'completed' || d.status === 'failed') && (
-          <KnowledgeWritebackPanel delegationId={id} delegation={d} />
-        )}
-
-        {/* ── Gelerntes Wissen (full KnowledgeCardList with delegation link) ── */}
-        {d.status === 'completed' && (
-          <section className="bg-gray-900 border border-emerald-900/30 rounded-xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">
-                Gelerntes Wissen
-              </h2>
-              <a
-                href="/knowledge-cards"
-                className="text-xs text-emerald-600 hover:text-emerald-400 transition-colors"
-              >
-                Alle Wissenskarten →
-              </a>
-            </div>
-            <KnowledgeCardList delegationId={id} />
-          </section>
-        )}
-
-        </WorkbenchPanel>{/* end knowledge tab */}
-
-        {/* ═══════════════════════════════════════════════════════════════
-            CHANGES TAB — PR details, diff, merge, app preview
-        ════════════════════════════════════════════════════════════════ */}
-        <WorkbenchPanel tab="changes" activeTab={activeTab}>
+        <WorkbenchPanel tab="results" activeTab={activeTab}>
 
         {/* ── PR Details (wenn PR vorhanden) ────────────────────────────── */}
         {d.summaryReport?.prUrl && (
@@ -1171,192 +1057,6 @@ export default function DelegationDetailPage() {
             )}
           </div>
         )}
-
-        </WorkbenchPanel>{/* end changes tab — PR section */}
-
-        {/* ═══════════════════════════════════════════════════════════════
-            OVERVIEW TAB — Contract details, DoD, summary, tags, note, log
-        ════════════════════════════════════════════════════════════════ */}
-        <WorkbenchPanel tab="overview" activeTab={activeTab}>
-
-        {/* ── Two-column: Contract + Details ────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-          {/* Contract Details */}
-          <div className="space-y-4">
-            <CollapsibleSection
-              title="Technische Details"
-              collapsedHint={`${d.executionRoute} · Risk ${d.contract.riskClass}${d.contract.maxBudgetUsd != null ? ` · $${d.contract.maxBudgetUsd.toFixed(2)}` : ''}`}
-              defaultOpen={false}
-            >
-              <dl className="space-y-2 text-sm">
-                <div className="flex justify-between gap-2">
-                  <dt className="text-gray-500">Route</dt>
-                  <dd className="text-gray-300 font-mono text-xs">{d.executionRoute}</dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt className="text-gray-500">Branch</dt>
-                  <dd className="text-gray-300 font-mono text-xs">{d.contract.branchStrategy}</dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt className="text-gray-500">Privacy</dt>
-                  <dd className="text-gray-300 text-xs">{d.contract.privacyMode}</dd>
-                </div>
-                {d.contract.llmModel && (
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-gray-500">Modell</dt>
-                    <dd className="text-gray-300 font-mono text-xs">{d.contract.llmModel}</dd>
-                  </div>
-                )}
-                {d.contract.outputMode && (
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-gray-500">Output</dt>
-                    <dd className="text-gray-300 text-xs">{d.contract.outputMode}</dd>
-                  </div>
-                )}
-                <div className="flex justify-between gap-2">
-                  <dt className="text-gray-500">Budget</dt>
-                  <dd className="text-gray-300 font-mono">{d.contract.maxBudgetUsd != null ? `$${d.contract.maxBudgetUsd.toFixed(2)}` : '–'}</dd>
-                </div>
-                {d.actualCostUsd != null && (
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-gray-500">Tatsächlich</dt>
-                    <dd className="text-yellow-400 font-mono">${d.actualCostUsd.toFixed(4)}</dd>
-                  </div>
-                )}
-              </dl>
-            </CollapsibleSection>
-
-            <AutopilotReadinessBadge contract={d.contract} showReasons />
-
-            <PolicyVerdictPanel contract={d.contract} />
-
-            <PipelineRunner
-              workItemId={d.contract.workItemId ?? d.id}
-              title={d.title || d.contract.goal.slice(0, 80)}
-              goal={d.contract.goal}
-              privacyMode={
-                d.contract.privacyMode === 'local' ? 'local-only'
-                : d.contract.privacyMode === 'private-cloud' ? 'hybrid'
-                : 'hybrid'
-              }
-              riskClass={d.contract.riskClass}
-              maxBudgetUsd={d.contract.maxBudgetUsd}
-              delegationId={id}
-            />
-
-            {/* Definition of Done */}
-            {d.contract.definitionOfDone?.length > 0 && (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Definition of Done</h2>
-                <ul className="space-y-1.5">
-                  {d.contract.definitionOfDone.map((item, i) => {
-                    const style = getTaskStatusStyle(d.status)
-                    return (
-                      <li key={i} className="flex items-start gap-2 text-sm">
-                        <span className={`mt-0.5 text-xs ${style.iconClass}`}>
-                          {style.icon}
-                        </span>
-                        <span className={style.textClass || 'text-gray-300'}>{item}</span>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </div>
-            )}
-
-            {/* Summary Report keyPoints — only if no prUrl (prUrl case handled above) */}
-            {d.summaryReport && !d.summaryReport.prUrl && d.summaryReport.keyPoints && (
-              <div className="bg-gray-900 border border-green-900/40 rounded-xl p-4">
-                <h2 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Ergebnis</h2>
-                <ul className="space-y-1">
-                  {d.summaryReport.keyPoints.map((pt, i) => (
-                    <li key={i} className="text-sm text-green-400/80 flex items-start gap-1.5">
-                      <span className="text-green-700 mt-0.5">•</span> {pt}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Tags */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Tags</h2>
-              <DelegationTagEditor
-                delegationId={d.id}
-                initialTags={d.tags ?? []}
-                onSaved={(tags) => setDelegation(prev => prev ? { ...prev, tags } : prev)}
-              />
-            </div>
-
-            {/* Note — inline editable */}
-            <div className="bg-gray-900 border border-yellow-900/40 rounded-xl p-4">
-              <h2 className="text-xs font-semibold text-yellow-600 uppercase tracking-wider mb-2">Notiz</h2>
-              <InlineNoteEditor
-                delegationId={d.id}
-                initialText={d.note?.text}
-                onSaved={(text) =>
-                  setDelegation(prev => prev ? {
-                    ...prev,
-                    note: text ? { text, updatedAt: new Date().toISOString() } : undefined,
-                  } : prev)
-                }
-              />
-            </div>
-          </div>
-
-          {/* Right column: Logs (collapsed by default) */}
-          <div className="space-y-4">
-            {/* ── Execution Log (collapsed by default) ─────────────── */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setLogsExpanded(prev => !prev)}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800/50 transition-colors"
-              >
-                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                  <span className={`h-1.5 w-1.5 rounded-full ${d.status === 'running' ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`} />
-                  Ausführungsprotokoll
-                  {d.logs && d.logs.length > 0 && (
-                    <span className="ml-1 text-[10px] text-gray-700 font-mono normal-case">{d.logs.length} Einträge</span>
-                  )}
-                </h2>
-                <span className="text-xs text-gray-600">{logsExpanded ? '▲ Einklappen' : '▼ Protokoll anzeigen'}</span>
-              </button>
-              {logsExpanded && (
-                <div className="px-4 pb-4">
-                  <LiveLogViewer
-                    delegationId={id}
-                    initialLogs={d.logs ?? []}
-                    initialStatus={d.status}
-                    initialCostEstimate={d.contract.maxBudgetUsd}
-                    onStatusChange={handleLiveStatusChange}
-                  />
-                </div>
-              )}
-              {!logsExpanded && d.status === 'running' && (
-                <div className="px-4 pb-3">
-                  {/* Always render LiveLogViewer when running so status changes are received */}
-                  <div className="hidden">
-                    <LiveLogViewer
-                      delegationId={id}
-                      initialLogs={d.logs ?? []}
-                      initialStatus={d.status}
-                      initialCostEstimate={d.contract.maxBudgetUsd}
-                      onStatusChange={handleLiveStatusChange}
-                    />
-                  </div>
-                  <p className="text-xs text-green-400/60 italic">Agent läuft — Protokoll anzeigen um Details zu sehen.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        </WorkbenchPanel>{/* end overview tab */}
-
-        {/* ── Changes tab continuation: App Preview + Merge+PR Panel ──── */}
-        <WorkbenchPanel tab="changes" activeTab={activeTab}>
 
         {/* App Preview — shown when completed and targetRepo is set */}
         {d.status === 'completed' && (d as { targetRepo?: string }).targetRepo && (
@@ -1480,13 +1180,6 @@ export default function DelegationDetailPage() {
           </div>
         )}
 
-        </WorkbenchPanel>{/* end changes tab */}
-
-        {/* ═══════════════════════════════════════════════════════════════
-            QUALITY TAB — Grok Critic, DoD quality check, policy verdict
-        ════════════════════════════════════════════════════════════════ */}
-        <WorkbenchPanel tab="quality" activeTab={activeTab}>
-
         {/* ── Grok Critic Review (full card, wenn completed) ─────────────── */}
         {d.status === 'completed' && (
           <GrokCriticCard
@@ -1607,12 +1300,232 @@ export default function DelegationDetailPage() {
           </div>
         )}
 
-        </WorkbenchPanel>{/* end quality tab */}
+        {/* ── Knowledge Writeback ───────────────────────────────────────── */}
+        {(d.status === 'completed' || d.status === 'failed') && (
+          <KnowledgeWritebackPanel delegationId={id} delegation={d} />
+        )}
+
+        {/* ── Gelerntes Wissen (full KnowledgeCardList with delegation link) ── */}
+        {d.status === 'completed' && (
+          <section className="bg-gray-900 border border-emerald-900/30 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">
+                Gelerntes Wissen
+              </h2>
+              <a
+                href="/knowledge-cards"
+                className="text-xs text-emerald-600 hover:text-emerald-400 transition-colors"
+              >
+                Alle Wissenskarten →
+              </a>
+            </div>
+            <KnowledgeCardList delegationId={id} />
+          </section>
+        )}
+
+        {/* ── Context Snapshot (M305) ──────────────────────────────────── */}
+        {d.contextSnapshot && d.contextSnapshot.cards.length > 0 && (
+          <details className="bg-gray-900 border border-gray-800 rounded-xl p-5 group">
+            <summary className="flex items-center justify-between cursor-pointer list-none">
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                Kontext bei Ausführung ({d.contextSnapshot.cards.length} Karten · ~{d.contextSnapshot.tokenEstimate} Tokens)
+              </h2>
+              <span className="text-gray-600 text-xs group-open:rotate-180 transition-transform">▼</span>
+            </summary>
+            <ul className="mt-3 space-y-1">
+              {d.contextSnapshot.cards.map(card => (
+                <li key={card.id} className="flex items-start gap-2 text-xs text-gray-400">
+                  <span className="mt-0.5 px-1.5 py-0.5 rounded bg-gray-800 text-gray-500 font-mono shrink-0">{card.type}</span>
+                  <span>{card.title}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-gray-600">
+              Erstellt: {new Date(d.contextSnapshot.builtAt).toLocaleString('de-DE')}
+            </p>
+          </details>
+        )}
+
+        </WorkbenchPanel>{/* end results tab */}
 
         {/* ═══════════════════════════════════════════════════════════════
-            DETAILS TAB — Tech contract, execution log, tools, replay
+            DETAILS TAB — Tech contract, execution log, tools, replay, comments
         ════════════════════════════════════════════════════════════════ */}
         <WorkbenchPanel tab="details" activeTab={activeTab}>
+
+        {/* ── Two-column: Contract + Details ────────────────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          {/* Contract Details */}
+          <div className="space-y-4">
+            <CollapsibleSection
+              title="Technische Details"
+              collapsedHint={`${d.executionRoute} · Risk ${d.contract.riskClass}${d.contract.maxBudgetUsd != null ? ` · $${d.contract.maxBudgetUsd.toFixed(2)}` : ''}`}
+              defaultOpen={false}
+            >
+              <dl className="space-y-2 text-sm">
+                <div className="flex justify-between gap-2">
+                  <dt className="text-gray-500">Route</dt>
+                  <dd className="text-gray-300 font-mono text-xs">{d.executionRoute}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-gray-500">Branch</dt>
+                  <dd className="text-gray-300 font-mono text-xs">{d.contract.branchStrategy}</dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-gray-500">Privacy</dt>
+                  <dd className="text-gray-300 text-xs">{d.contract.privacyMode}</dd>
+                </div>
+                {d.contract.llmModel && (
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-gray-500">Modell</dt>
+                    <dd className="text-gray-300 font-mono text-xs">{d.contract.llmModel}</dd>
+                  </div>
+                )}
+                {d.contract.outputMode && (
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-gray-500">Output</dt>
+                    <dd className="text-gray-300 text-xs">{d.contract.outputMode}</dd>
+                  </div>
+                )}
+                <div className="flex justify-between gap-2">
+                  <dt className="text-gray-500">Budget</dt>
+                  <dd className="text-gray-300 font-mono">{d.contract.maxBudgetUsd != null ? `$${d.contract.maxBudgetUsd.toFixed(2)}` : '–'}</dd>
+                </div>
+                {d.actualCostUsd != null && (
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-gray-500">Tatsächlich</dt>
+                    <dd className="text-yellow-400 font-mono">${d.actualCostUsd.toFixed(4)}</dd>
+                  </div>
+                )}
+              </dl>
+            </CollapsibleSection>
+
+            <AutopilotReadinessBadge contract={d.contract} showReasons />
+
+            <PolicyVerdictPanel contract={d.contract} />
+
+            <PipelineRunner
+              workItemId={d.contract.workItemId ?? d.id}
+              title={d.title || d.contract.goal.slice(0, 80)}
+              goal={d.contract.goal}
+              privacyMode={
+                d.contract.privacyMode === 'local' ? 'local-only'
+                : d.contract.privacyMode === 'private-cloud' ? 'hybrid'
+                : 'hybrid'
+              }
+              riskClass={d.contract.riskClass}
+              maxBudgetUsd={d.contract.maxBudgetUsd}
+              delegationId={id}
+            />
+
+            {/* Definition of Done */}
+            {d.contract.definitionOfDone?.length > 0 && (
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Definition of Done</h2>
+                <ul className="space-y-1.5">
+                  {d.contract.definitionOfDone.map((item, i) => {
+                    const style = getTaskStatusStyle(d.status)
+                    return (
+                      <li key={i} className="flex items-start gap-2 text-sm">
+                        <span className={`mt-0.5 text-xs ${style.iconClass}`}>
+                          {style.icon}
+                        </span>
+                        <span className={style.textClass || 'text-gray-300'}>{item}</span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            )}
+
+            {/* Summary Report keyPoints — only if no prUrl (prUrl case handled in results tab) */}
+            {d.summaryReport && !d.summaryReport.prUrl && d.summaryReport.keyPoints && (
+              <div className="bg-gray-900 border border-green-900/40 rounded-xl p-4">
+                <h2 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Ergebnis</h2>
+                <ul className="space-y-1">
+                  {d.summaryReport.keyPoints.map((pt, i) => (
+                    <li key={i} className="text-sm text-green-400/80 flex items-start gap-1.5">
+                      <span className="text-green-700 mt-0.5">•</span> {pt}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Tags */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <h2 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Tags</h2>
+              <DelegationTagEditor
+                delegationId={d.id}
+                initialTags={d.tags ?? []}
+                onSaved={(tags) => setDelegation(prev => prev ? { ...prev, tags } : prev)}
+              />
+            </div>
+
+            {/* Note — inline editable */}
+            <div className="bg-gray-900 border border-yellow-900/40 rounded-xl p-4">
+              <h2 className="text-xs font-semibold text-yellow-600 uppercase tracking-wider mb-2">Notiz</h2>
+              <InlineNoteEditor
+                delegationId={d.id}
+                initialText={d.note?.text}
+                onSaved={(text) =>
+                  setDelegation(prev => prev ? {
+                    ...prev,
+                    note: text ? { text, updatedAt: new Date().toISOString() } : undefined,
+                  } : prev)
+                }
+              />
+            </div>
+          </div>
+
+          {/* Right column: Logs (collapsed by default) */}
+          <div className="space-y-4">
+            {/* ── Execution Log (collapsed by default) ─────────────── */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setLogsExpanded(prev => !prev)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800/50 transition-colors"
+              >
+                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                  <span className={`h-1.5 w-1.5 rounded-full ${d.status === 'running' ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`} />
+                  Ausführungsprotokoll
+                  {d.logs && d.logs.length > 0 && (
+                    <span className="ml-1 text-[10px] text-gray-700 font-mono normal-case">{d.logs.length} Einträge</span>
+                  )}
+                </h2>
+                <span className="text-xs text-gray-600">{logsExpanded ? '▲ Einklappen' : '▼ Protokoll anzeigen'}</span>
+              </button>
+              {logsExpanded && (
+                <div className="px-4 pb-4">
+                  <LiveLogViewer
+                    delegationId={id}
+                    initialLogs={d.logs ?? []}
+                    initialStatus={d.status}
+                    initialCostEstimate={d.contract.maxBudgetUsd}
+                    onStatusChange={handleLiveStatusChange}
+                  />
+                </div>
+              )}
+              {!logsExpanded && d.status === 'running' && (
+                <div className="px-4 pb-3">
+                  {/* Always render LiveLogViewer when running so status changes are received */}
+                  <div className="hidden">
+                    <LiveLogViewer
+                      delegationId={id}
+                      initialLogs={d.logs ?? []}
+                      initialStatus={d.status}
+                      initialCostEstimate={d.contract.maxBudgetUsd}
+                      onStatusChange={handleLiveStatusChange}
+                    />
+                  </div>
+                  <p className="text-xs text-green-400/60 italic">Agent läuft — Protokoll anzeigen um Details zu sehen.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* Agent Run Replay */}
         <AgentRunReplayView delegationId={id} />
