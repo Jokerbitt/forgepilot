@@ -16,9 +16,19 @@ describe('getDelegationStorageMode', () => {
     expect(
       getDelegationStorageMode({
         DATABASE_URL: 'postgresql://localhost/forgepilot',
-        FORGEPILOT_DELEGATION_STORAGE: 'dual',
+        STORAGE_MODE: 'dual',
       })
     ).toBe('dual')
+  })
+
+  it('allows a delegation-specific override over STORAGE_MODE', () => {
+    expect(
+      getDelegationStorageMode({
+        DATABASE_URL: 'postgresql://localhost/forgepilot',
+        STORAGE_MODE: 'postgres',
+        FORGEPILOT_DELEGATION_STORAGE: 'json',
+      })
+    ).toBe('json')
   })
 
   it('ignores unknown storage modes and derives mode from DATABASE_URL', () => {

@@ -7,6 +7,11 @@ import { computeAutopilotScore } from '@/lib/nba-engine/autopilot-score'
 import { pickNextSafe } from '@/lib/delegations/next-safe'
 import { reapStaleDelegations } from '@/lib/delegations/watchdog'
 import {
+  assessDelegationActionability,
+  buildAutonomyRefinementPatch,
+  isAutonomyRefined,
+} from '@/lib/delegations/autonomy-refinement'
+import {
   getCachedOrShallowRunnerReadiness,
   getRunnerReadiness,
   writeCachedRunnerReadiness,
@@ -53,51 +58,6 @@ function candidatePayload(candidate: Delegation | null) {
     reasons: score.reasons,
     href: `/delegations/${candidate.id}`,
   }
-}
-
-function assessActionability(candidate: Delegation): { ok: boolean; reason?: string; nextStep?: string } {
-  const goal = candidate.contract.goal.trim()
-  const title = (candidate.title ?? '').trim()
-  const definitionOfDone = candidate.contract.definitionOfDone ?? []
-  const allowedFilePatterns = candidate.contract.allowedFilePatterns ?? []
-  const normalizedGoal = goal.toLowerCase()
-  const genericGoals = [
-    'wartung des servers',
-    'maintenance',
-    'server maintenance',
-    'todo',
-    'test',
-  ]
-  const genericDod = definitionOfDone.every(item => {
-    const normalized = item.toLowerCase()
-    return normalized.includes('is implemented') || normalized === 'tests pass' || normalized === 'no typescript errors'
-  })
-
-  if (genericGoals.includes(normalizedGoal) || goal.length < 20) {
-    return {
-      ok: false,
-      reason: `Ziel ist zu vage: "${title || goal}".`,
-      nextStep: 'Erzeuge zuerst einen konkreten Brief mit Ziel, Scope, betroffenen Dateien und messbarer Definition of Done.',
-    }
-  }
-
-  if (genericDod || definitionOfDone.length < 2) {
-    return {
-      ok: false,
-      reason: 'Definition of Done ist nicht konkret genug fuer einen autonomen Run.',
-      nextStep: 'Lasse den Plan-Modus die Aufgabe in klare Akzeptanzkriterien und sichere Dateigrenzen zerlegen.',
-    }
-  }
-
-  if (allowedFilePatterns.length === 0 && candidate.contract.riskClass !== 'A') {
-    return {
-      ok: false,
-      reason: 'Dateigrenzen fehlen fuer eine nicht-triviale Aufgabe.',
-      nextStep: 'Lege erlaubte Dateipfade oder ein enges Arbeitspaket fest, bevor Autopilot startet.',
-    }
-  }
-
-  return { ok: true }
 }
 
 export async function POST(request: NextRequest) {
@@ -165,6 +125,12 @@ export async function POST(request: NextRequest) {
     candidate: ReturnType<typeof candidatePayload>
     reason: string
     nextStep?: string
+    refined?: boolean
+  }> = []
+  const refinedCandidates: Array<{
+    id: string
+    title: string
+    reason: string
   }> = []
   let remainingDelegations = delegations
   let selection = pickNextSafe(remainingDelegations, {
@@ -175,12 +141,29 @@ export async function POST(request: NextRequest) {
   let { candidate, runningCount } = selection
 
   while (candidate) {
-    const actionability = assessActionability(candidate)
+    const actionability = assessDelegationActionability(candidate)
     if (actionability.ok) break
+
+    if (!body.dryRun && !isAutonomyRefined(candidate)) {
+      const refinement = buildAutonomyRefinementPatch(candidate)
+      const refined = await repo.update(candidate.id, refinement.patch)
+      if (refined) {
+        refinedCandidates.push({
+          id: refined.id,
+          title: refined.title,
+          reason: refinement.reason,
+        })
+        candidate = refined
+        const refinedActionability = assessDelegationActionability(candidate)
+        if (refinedActionability.ok) break
+      }
+    }
+
     skippedCandidates.push({
       candidate: candidatePayload(candidate),
       reason: actionability.reason ?? 'Aufgabe ist nicht konkret genug.',
       nextStep: actionability.nextStep,
+      refined: false,
     })
     remainingDelegations = remainingDelegations.filter(delegation => delegation.id !== candidate?.id)
     selection = pickNextSafe(remainingDelegations, {
@@ -205,6 +188,7 @@ export async function POST(request: NextRequest) {
         counts,
         runningCount,
         skippedCandidates,
+        refinedCandidates,
         candidate: null,
         started: false,
       })
@@ -239,6 +223,7 @@ export async function POST(request: NextRequest) {
       counts,
       runningCount,
       skippedCandidates,
+      refinedCandidates,
       candidate: candidatePayload(candidate),
       started: false,
     })
@@ -268,6 +253,7 @@ export async function POST(request: NextRequest) {
       runnerReadiness,
       counts,
       skippedCandidates,
+      refinedCandidates,
       candidate: candidatePayload(candidate),
       started: false,
     }, { status: 502 })
@@ -285,6 +271,7 @@ export async function POST(request: NextRequest) {
     counts,
     runningCount: runningCount + 1,
     skippedCandidates,
+    refinedCandidates,
     candidate: candidatePayload(candidate),
     started: true,
     execution,

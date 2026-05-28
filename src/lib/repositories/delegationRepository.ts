@@ -397,7 +397,7 @@ class JsonDelegationRepository implements DelegationRepository {
 export function getDelegationStorageMode(
   env: Record<string, string | undefined> = process.env as Record<string, string | undefined>
 ): DelegationStorageMode {
-  const configured = String(env[STORAGE_MODE_ENV] ?? '').trim().toLowerCase()
+  const configured = String(env[STORAGE_MODE_ENV] ?? env.STORAGE_MODE ?? '').trim().toLowerCase()
   if (configured === 'json' || configured === 'postgres' || configured === 'dual') {
     return configured
   }
