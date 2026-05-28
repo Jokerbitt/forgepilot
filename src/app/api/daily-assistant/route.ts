@@ -45,6 +45,22 @@ function countByStatus(delegations: Delegation[]) {
   }
 }
 
+function computeTodayStats(delegations: Delegation[]) {
+  const today = new Date().toISOString().slice(0, 10)
+  const completedToday = delegations.filter(
+    d => d.status === 'completed' && d.completedAt?.startsWith(today),
+  ).length
+  const prToday = delegations.filter(
+    d => d.summaryReport?.prUrl && d.completedAt?.startsWith(today),
+  ).length
+  const checksWithVerdict = delegations.filter(d => d.qualityCheck?.verdict)
+  const passed = checksWithVerdict.filter(d => d.qualityCheck?.verdict === 'passed').length
+  const qualityPassRate = checksWithVerdict.length > 0
+    ? Math.round((passed / checksWithVerdict.length) * 100)
+    : null
+  return { completedToday, prToday, qualityPassRate, checksTotal: checksWithVerdict.length }
+}
+
 function toQueueItem(delegation: Delegation): DailyAssistantQueueItem {
   return {
     id: delegation.id,
@@ -94,6 +110,7 @@ export async function GET() {
   const steps = buildDailyAssistantSteps(input)
   const blockers = buildDailyAssistantBlockers(input, queue)
   const appBuilderCapability = buildAppBuilderCapability(input)
+  const todayStats = computeTodayStats(delegations)
 
   return NextResponse.json({
     generatedAt: new Date().toISOString(),
@@ -105,6 +122,7 @@ export async function GET() {
     blockers,
     queue,
     stats,
+    todayStats,
     appBuilderCapability,
     settings: {
       approvalMode: config.approvalMode,

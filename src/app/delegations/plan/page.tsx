@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -504,6 +504,61 @@ function ExecuteStep({
 
 // ─── Wizard ───────────────────────────────────────────────────────────────────
 
+interface RecentPlan {
+  id: string
+  goal: string
+  status: 'draft' | 'executing' | 'executed'
+  phases: { id: string }[]
+  createdAt: string
+}
+
+function RecentPlansBar() {
+  const [plans, setPlans] = useState<RecentPlan[]>([])
+
+  useEffect(() => {
+    fetch('/api/delegations/plan')
+      .then(r => r.ok ? r.json() as Promise<RecentPlan[]> : Promise.resolve([]))
+      .then(data => setPlans(Array.isArray(data) ? data.slice(0, 5) : []))
+      .catch(() => {})
+  }, [])
+
+  if (plans.length === 0) return null
+
+  const STATUS_LABEL: Record<RecentPlan['status'], string> = {
+    draft: 'Entwurf',
+    executing: 'Läuft',
+    executed: 'Fertig',
+  }
+  const STATUS_COLOR: Record<RecentPlan['status'], string> = {
+    draft: 'text-slate-500 bg-slate-800',
+    executing: 'text-violet-300 bg-violet-500/15',
+    executed: 'text-emerald-300 bg-emerald-500/15',
+  }
+
+  return (
+    <div className="mb-6 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+      <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-widest text-slate-600">Letzte Pläne</p>
+      <div className="space-y-1">
+        {plans.map(plan => (
+          <Link
+            key={plan.id}
+            href={plan.status !== 'draft' ? `/delegations/plan/${plan.id}` : '#'}
+            className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm transition hover:bg-white/[0.04]"
+          >
+            <span className={cx('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold', STATUS_COLOR[plan.status])}>
+              {STATUS_LABEL[plan.status]}
+            </span>
+            <span className="flex-1 min-w-0 truncate text-slate-300">{plan.goal}</span>
+            <span className="shrink-0 text-[11px] text-slate-600">
+              {plan.phases.length} Phase{plan.phases.length !== 1 ? 'n' : ''}
+            </span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function PlanWizardInner() {
   const router = useRouter()
   const [step, setStep] = useState<Step>('goal')
@@ -584,6 +639,9 @@ function PlanWizardInner() {
             </div>
           </div>
         </div>
+
+        {/* Recent plans */}
+        <RecentPlansBar />
 
         {/* Step indicator */}
         <div className="mb-8 flex items-center gap-2">

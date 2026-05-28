@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ArrowRight, Bot, FolderOpen, Radio, Settings, Sparkles } from 'lucide-react'
 import { ConnectorHealthBar } from '@/components/command-center/ConnectorHealthBar'
 import { DailyAssistantPanel } from '@/components/command-center/DailyAssistantPanel'
+import { TodayStatsBar } from '@/components/command-center/TodayStatsBar'
 import { ApiKeysBanner } from '@/components/shared/ApiKeysBanner'
 import { NoAIProviderBanner } from '@/components/shared/NoAIProviderBanner'
 import { OnboardingBanner as OnboardingWizardBanner } from '@/components/onboarding/OnboardingBanner'
@@ -97,6 +98,11 @@ export default function Home() {
           <aside className="space-y-5">
             <DailyAssistantPanel />
           </aside>
+        </section>
+
+        {/* Today's activity — live stats bar */}
+        <section className="mt-5">
+          <TodayStatsBar />
         </section>
 
         <section className="mt-5 grid gap-3 md:grid-cols-3">

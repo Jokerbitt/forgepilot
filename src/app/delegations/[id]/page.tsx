@@ -280,6 +280,25 @@ export default function DelegationDetailPage() {
     (delegation as (Delegation & { qualityCheck?: DoDQualityCheck }) | null)?.qualityCheck ?? null
   )
   const [qualityCheckLoading, setQualityCheckLoading] = useState(false)
+  const [reviewRetryLoading, setReviewRetryLoading] = useState(false)
+
+  const handleReviewRetry = async () => {
+    if (!delegation) return
+    setReviewRetryLoading(true)
+    try {
+      const res = await fetch(`/api/delegations/${id}/review-retry`, { method: 'POST' })
+      const data = await res.json() as { delegationId?: string; error?: string }
+      if (!res.ok || !data.delegationId) {
+        alert(`Fehler: ${data.error ?? 'Unbekannter Fehler'}`)
+        return
+      }
+      router.push(`/delegations/${data.delegationId}`)
+    } catch {
+      alert('Review-Retry konnte nicht gestartet werden.')
+    } finally {
+      setReviewRetryLoading(false)
+    }
+  }
 
   const handleOpenPreview = async () => {
     if (!delegation) return
@@ -1094,6 +1113,20 @@ export default function DelegationDetailPage() {
                       <span className="font-semibold">Verbesserungsvorschlag:</span> {qualityCheck.suggestion}
                     </p>
                   </div>
+                )}
+
+                {/* Fix-it loop: retry with review feedback injected as context */}
+                {qualityCheck.verdict !== 'passed' && (
+                  <button
+                    type="button"
+                    onClick={handleReviewRetry}
+                    disabled={reviewRetryLoading}
+                    className="w-full rounded-lg border border-violet-600/40 bg-violet-600/10 px-3 py-2 text-xs font-semibold text-violet-300 transition hover:bg-violet-600/20 disabled:opacity-50"
+                  >
+                    {reviewRetryLoading
+                      ? '⏳ Erstelle Fix-Delegation…'
+                      : '🔁 Fix-Delegation erstellen (Review-Feedback als Kontext)'}
+                  </button>
                 )}
               </>
             )}

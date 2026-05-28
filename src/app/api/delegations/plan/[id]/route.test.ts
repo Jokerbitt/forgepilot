@@ -84,7 +84,7 @@ describe('GET /api/delegations/plan/[id]', () => {
       summaryReport: { prUrl: 'https://github.com/test/repo/pull/1' },
       retryCount: 0,
     })
-    mockCreateRepo.mockReturnValue({ findById: mockFindById } as ReturnType<typeof createDelegationRepository>)
+    mockCreateRepo.mockReturnValue({ findById: mockFindById } as unknown as ReturnType<typeof createDelegationRepository>)
 
     const res = await GET(makeRequest(), makeParams('plan-1'))
     expect(res.status).toBe(200)
@@ -102,7 +102,7 @@ describe('GET /api/delegations/plan/[id]', () => {
       status: 'running',
       summaryReport: {},
     })
-    mockCreateRepo.mockReturnValue({ findById: mockFindById } as ReturnType<typeof createDelegationRepository>)
+    mockCreateRepo.mockReturnValue({ findById: mockFindById } as unknown as ReturnType<typeof createDelegationRepository>)
 
     const res = await GET(makeRequest(), makeParams('plan-1'))
     const body = await res.json()
@@ -117,7 +117,7 @@ describe('GET /api/delegations/plan/[id]', () => {
       status: 'completed',
       summaryReport: {},
     })
-    mockCreateRepo.mockReturnValue({ findById: mockFindById } as ReturnType<typeof createDelegationRepository>)
+    mockCreateRepo.mockReturnValue({ findById: mockFindById } as unknown as ReturnType<typeof createDelegationRepository>)
 
     const res = await GET(makeRequest(), makeParams('plan-1'))
     const body = await res.json()
@@ -135,7 +135,7 @@ describe('GET /api/delegations/plan/[id]', () => {
         status: 'completed',
         summaryReport: { prUrl: 'https://github.com/test/repo/pull/42' },
       }),
-    } as ReturnType<typeof createDelegationRepository>)
+    } as unknown as ReturnType<typeof createDelegationRepository>)
 
     const res = await GET(makeRequest(), makeParams('plan-1'))
     const body = await res.json()
@@ -150,7 +150,7 @@ describe('GET /api/delegations/plan/[id]', () => {
     mockGetPlan.mockReturnValue(runningPlan)
     mockCreateRepo.mockReturnValue({
       findById: vi.fn().mockResolvedValue({ id: 'del-running', status: 'running', summaryReport: {} }),
-    } as ReturnType<typeof createDelegationRepository>)
+    } as unknown as ReturnType<typeof createDelegationRepository>)
 
     const res = await GET(makeRequest(), makeParams('plan-1'))
     const body = await res.json()
