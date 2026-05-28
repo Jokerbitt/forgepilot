@@ -2,10 +2,11 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { ArrowRight, Bot, CheckCircle2, Clock3, Loader2, Play, RefreshCw, ShieldAlert, Sparkles } from 'lucide-react'
+import { ArrowRight, Bot, CheckCircle2, Clock3, Layers, Loader2, Play, RefreshCw, ShieldAlert, Sparkles, Zap } from 'lucide-react'
 import { buttonClassName, cx } from '@/components/ui/primitives'
 import {
   canStartAutonomously,
+  type AppBuilderCapability,
   type DailyAssistantAction,
   type DailyAssistantBlocker,
   type DailyAssistantQueueItem,
@@ -39,6 +40,7 @@ interface AssistantSnapshot {
   stats: DelegationStats
   settings: SettingsResponse
   queue: DailyAssistantQueueItem[]
+  appBuilderCapability?: AppBuilderCapability
 }
 
 function toneClasses(tone: 'ready' | 'attention' | 'blocked') {
@@ -235,6 +237,10 @@ export function DailyAssistantPanel() {
           ))}
         </div>
       </div>
+
+      {snapshot?.appBuilderCapability && (
+        <AppBuilderBlock capability={snapshot.appBuilderCapability} />
+      )}
 
       <div className="mt-5 rounded-xl border border-white/[0.07] bg-black/20 p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -464,6 +470,69 @@ function PolicyCard({
     <div className={cx('rounded-lg border px-3 py-3', classes)}>
       <p className="text-sm font-semibold text-white">{title}</p>
       <p className="mt-1 text-xs leading-5 text-slate-400">{body}</p>
+    </div>
+  )
+}
+
+const LEVEL_COLORS: Record<string, string> = {
+  'single-task': 'border-slate-500/25 bg-slate-500/10 text-slate-300',
+  'multi-slice-mvp': 'border-blue-500/25 bg-blue-500/10 text-blue-200',
+  'large-feature': 'border-violet-500/25 bg-violet-500/10 text-violet-200',
+  'full-app': 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200',
+}
+
+function AppBuilderBlock({ capability }: { capability: AppBuilderCapability }) {
+  const colorClass = LEVEL_COLORS[capability.level] ?? LEVEL_COLORS['single-task']!
+  return (
+    <div className="mt-5 rounded-xl border border-white/[0.07] bg-black/20 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-white">App Builder Fähigkeit</h3>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">
+            Wie groß kann ForgePilot heute autonom bauen? Basiert auf abgeschlossenen Runs und Autopilot-Status.
+          </p>
+        </div>
+        <span className={cx('shrink-0 rounded-full border px-3 py-1 text-xs font-semibold', colorClass)}>
+          {capability.label}
+        </span>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className="rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-3">
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+            <Layers className="h-3.5 w-3.5" />
+            Max. Phasen
+          </div>
+          <p className="mt-1 text-2xl font-semibold text-white">{capability.maxPhases}</p>
+          <p className="mt-1 text-xs text-slate-500">{capability.detail}</p>
+        </div>
+        <div className={cx('rounded-lg border px-3 py-3', capability.planModeReady ? 'border-violet-500/20 bg-violet-500/[0.08]' : 'border-white/[0.06] bg-white/[0.025]')}>
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+            <Zap className="h-3.5 w-3.5" />
+            Plan Mode
+          </div>
+          {capability.planModeReady ? (
+            <>
+              <p className="mt-1 text-sm font-semibold text-white">Bereit — großes Feature starten</p>
+              <Link
+                href="/delegations/plan"
+                className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-violet-200 hover:text-violet-100"
+              >
+                Plan Mode öffnen
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className="mt-1 text-sm font-semibold text-white">Noch nicht freigeschaltet</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {capability.recommendedAction === 'fix-blockers'
+                  ? 'Behebe zuerst fehlgeschlagene Delegationen.'
+                  : 'Schließe mehr Runs erfolgreich ab.'}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

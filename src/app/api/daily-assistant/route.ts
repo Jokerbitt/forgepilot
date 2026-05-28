@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
 import {
+  buildAppBuilderCapability,
   buildDailyAssistantAction,
   buildDailyAssistantBlockers,
   buildDailyAssistantSteps,
@@ -86,11 +87,13 @@ export async function GET() {
     authDisabled: process.env.FORGEPILOT_AUTH_DISABLED === 'true',
     storageMode: getDelegationStorageMode(process.env),
     approvalMode: config.approvalMode,
+    completedCount: stats.completed,
   }
 
   const action = buildDailyAssistantAction(input)
   const steps = buildDailyAssistantSteps(input)
   const blockers = buildDailyAssistantBlockers(input, queue)
+  const appBuilderCapability = buildAppBuilderCapability(input)
 
   return NextResponse.json({
     generatedAt: new Date().toISOString(),
@@ -102,6 +105,7 @@ export async function GET() {
     blockers,
     queue,
     stats,
+    appBuilderCapability,
     settings: {
       approvalMode: config.approvalMode,
       autopilotMinScore: config.autopilotMinScore,
