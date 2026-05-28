@@ -28,7 +28,7 @@ import { recordOutcome } from '@/lib/agents/skill-evolver'
 import { runWithToolUse } from '@/lib/agents/tool-use-runner'
 import { extractKnowledge } from '@/lib/knowledge/extraction'
 import { persistGrokCriticForDelegation } from '@/lib/eval/auto-grok-critic'
-import { writebackExecutionInsights, writebackDelegationKnowledge } from '@/lib/knowledge/writeback'
+import { writebackExecutionInsights, writebackDelegationKnowledge, writeFailureLessonCard } from '@/lib/knowledge/writeback'
 import { notifyExecutionResult, notifyBudgetWarning } from '@/lib/notifications'
 import { checkBudget, wouldExceedBudget } from '@/lib/budget/guard'
 import { triggerChain } from '@/lib/delegations/chaining'
@@ -634,6 +634,11 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
             }
           })
           .catch(() => {})
+      }
+
+      // M108b: Failure Lesson Writeback — closes the intelligence loop for failed runs
+      if (!success) {
+        void writeFailureLessonCard(finishedDelegation).catch(() => {})
       }
 
       if (success && report) {

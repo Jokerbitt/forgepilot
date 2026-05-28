@@ -14,6 +14,7 @@
 import { execSync } from 'child_process'
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
+import { readKnowledgeCards } from '@/lib/knowledge/knowledge-card'
 
 export interface RelevantFile {
   path: string
@@ -199,6 +200,41 @@ export function readProjectConfig(repoPath: string): ConfigSnapshot {
 }
 
 /**
+ * Return failure-lesson knowledge cards relevant to the given repo and goal.
+ * Used by buildCodebaseContextBlock to inject past failure lessons into the agent prompt.
+ */
+export function findFailureLessons(
+  repoPath: string,
+  goal: string,
+  maxLessons = 3,
+): Array<{ title: string; content: string }> {
+  try {
+    const allCards = readKnowledgeCards()
+    const lessons = allCards.filter(c => c.tags.includes('failure-lesson'))
+    if (lessons.length === 0) return []
+
+    const goalKeywords = extractKeywords(goal)
+
+    return lessons
+      .map(card => {
+        let score = 0
+        // Prefer cards for the same repo
+        if (card.tags.includes(repoPath)) score += 10
+        // Score by keyword overlap with current goal
+        for (const kw of goalKeywords) {
+          if (card.content.toLowerCase().includes(kw) || card.title.toLowerCase().includes(kw)) score += 1
+        }
+        return { card, score }
+      })
+      .sort((a, b) => b.score !== a.score ? b.score - a.score : b.card.createdAt.localeCompare(a.card.createdAt))
+      .slice(0, maxLessons)
+      .map(({ card }) => ({ title: card.title, content: card.content.slice(0, 400) }))
+  } catch {
+    return []
+  }
+}
+
+/**
  * Build the "## Codebase Context" block for injection into the agent prompt.
  */
 export function buildCodebaseContextBlock(
@@ -234,6 +270,13 @@ export function buildCodebaseContextBlock(
       `### ${f.path}\n\`\`\`ts\n${f.snippet}\n\`\`\``
     ).join('\n\n')
     lines.push(`## Relevant Source Files (read before writing any code)\n${fileBlocks}`)
+  }
+
+  // Failure lessons from past runs — agent memory for avoiding known pitfalls
+  const lessons = findFailureLessons(repoPath, goal)
+  if (lessons.length > 0) {
+    const lessonBlocks = lessons.map(l => `### ${l.title}\n${l.content}`).join('\n\n')
+    lines.push(`## Lessons from Previous Failed Runs (avoid these pitfalls)\n${lessonBlocks}`)
   }
 
   if (lines.length === 0) return ''
