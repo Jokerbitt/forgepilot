@@ -1,15 +1,15 @@
-/** Map budget USD → max turns for claude CLI. $1 → 15 turns, $5 → 40 turns, capped at 60. */
+/** Map budget USD → max turns for internal tooling. $1 → 15 turns, $5 → 40 turns, capped at 60. */
 export function budgetToMaxTurns(budgetUsd: number): number {
   return Math.min(60, Math.max(5, Math.round(budgetUsd * 15)))
 }
 
 /**
- * Claude Code needs enough turns to explore, edit, verify, commit, and create a PR.
- * Very small budgets are still enforced by the budget guard, but the CLI needs enough
- * room to explore, edit, verify, commit and create a PR for one narrow real task.
+ * M110: Realistic turn budget for Claude CLI. Feature phases need 40–200 turns.
+ * Scale: ~40 turns per $1, minimum 40, no hard cap.
+ * $1→40, $2→80, $3→120, $5→200, $10→400
  */
 export function budgetToClaudeCliMaxTurns(budgetUsd: number): number {
-  return Math.max(35, budgetToMaxTurns(budgetUsd))
+  return Math.max(40, Math.round(budgetUsd * 40))
 }
 
 // ─── M110: Complexity-aware budget ────────────────────────────────────────────

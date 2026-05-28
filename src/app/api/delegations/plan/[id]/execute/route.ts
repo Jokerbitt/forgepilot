@@ -69,7 +69,7 @@ export async function POST(
         taskType: 'feature',
         definitionOfDone: dodList,
         riskClass: phase.riskClass,
-        maxBudgetUsd: phase.estimatedTurns <= 40 ? 1 : phase.estimatedTurns <= 80 ? 2 : 3,
+        maxBudgetUsd: phase.estimatedTurns <= 40 ? 2 : phase.estimatedTurns <= 80 ? 3 : 5,
         allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
         branchStrategy: 'feature',
         requiresApproval: phase.riskClass === 'C',
@@ -79,7 +79,7 @@ export async function POST(
       },
       status: i === 0 ? 'approved' : 'pending',
       executionRoute: 'local-agent',
-      costEstimateUsd: phase.estimatedTurns <= 40 ? 1 : phase.estimatedTurns <= 80 ? 2 : 3,
+      costEstimateUsd: phase.estimatedTurns <= 40 ? 2 : phase.estimatedTurns <= 80 ? 3 : 5,
       chainNextId: nextId ?? undefined,
       chainPosition: i + 1,
       chainTotal: plan.phases.length,
@@ -98,6 +98,14 @@ export async function POST(
   plan.status = 'executing'
   plan.updatedAt = new Date().toISOString()
   savePlan(plan)
+
+  // Auto-start Phase 1
+  const firstId = createdIds[0]
+  if (firstId) {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+    // Fire-and-forget — never block the response
+    fetch(`${baseUrl}/api/delegations/${firstId}/execute`, { method: 'POST' }).catch(() => {})
+  }
 
   return NextResponse.json({
     planId: plan.id,

@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/auth/require-auth'
 import { delegationLogger } from '@/lib/logger'
 import { withSpan } from '@/lib/tracing/tracer'
 import { checkRateLimit, buildRateLimitHeaders } from '@/lib/rate-limit'
-import { spawn, execSync } from 'child_process'
+import { spawn, execSync, spawnSync } from 'child_process'
 import type { Delegation, AgentLog, DelegationReport } from '@/lib/models/delegation'
 import { registerProcess, unregisterProcess } from '@/lib/process-registry'
 import { readStoredApiKeys } from '@/lib/connectors/config'
@@ -250,7 +250,7 @@ function isClaudeAvailable(): boolean {
   }
 }
 
-function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd: number, riskClass: string, targetRepo?: string) {
+function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd: number, riskClass: string, targetRepo?: string, existingWorkspace?: RunnerWorkspace) {
   const storedKeys = readStoredApiKeys()
   const anthropicKey = storedKeys.ANTHROPIC_API_KEY?.trim() || undefined
   const maxTurns = budgetToClaudeCliMaxTurns(budgetUsd)
@@ -269,7 +269,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
 
   let runnerWorkspace: RunnerWorkspace
   try {
-    runnerWorkspace = prepareRunnerWorkspace({ delegationId: id, targetRepo })
+    runnerWorkspace = prepareRunnerWorkspace({ delegationId: id, targetRepo, existingWorkspace })
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
     void appendLogs(id, [{
@@ -382,6 +382,21 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       // Extract final cost from the result event
       const cost = event.total_cost_usd as number | undefined
       if (cost != null) fullOutput += `\nCost: $${cost.toFixed(4)}`
+    }
+  }
+
+  // M107: Run tests in the workspace and return pass/fail + truncated output
+  function runPostExecutionTests(workspacePath: string): { passed: boolean; output: string } {
+    try {
+      const result = spawnSync(
+        'npm',
+        ['run', 'test:run', '--', '--reporter=verbose'],
+        { cwd: workspacePath, timeout: 90_000, encoding: 'utf-8' },
+      )
+      const raw = `${result.stdout ?? ''}\n${result.stderr ?? ''}`.trim()
+      return { passed: result.status === 0, output: raw.slice(-3000) }
+    } catch {
+      return { passed: false, output: 'Test runner timed out or crashed' }
     }
   }
 
@@ -499,6 +514,24 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
       const current = await repo.findById(id)
       if (!current || current.status !== 'running') return
+
+      // M107: Post-execution test verification + auto-retry (max 3 attempts)
+      const autoRetryEnabled = true
+      const currentRetryCount = current.retryCount ?? 0
+      if (success && autoRetryEnabled && currentRetryCount < 3) {
+        const testResult = runPostExecutionTests(runnerWorkspace.path)
+        if (!testResult.passed) {
+          void appendLogs(id, [{
+            timestamp: new Date().toISOString(),
+            type: 'error',
+            message: `🔄 Auto-Retry ${currentRetryCount + 1}/3 — Tests fehlgeschlagen:\n${testResult.output.slice(0, 600)}`,
+          }])
+          await repo.update(id, { retryCount: currentRetryCount + 1 })
+          const retryPrompt = `${prompt}\n\n## M107 Auto-Retry ${currentRetryCount + 1}/3\nFix failing tests (do not break passing tests):\n\`\`\`\n${testResult.output.slice(-2000)}\n\`\`\``
+          runWithClaudeCLI(id, retryPrompt, startTime, budgetUsd, riskClass, targetRepo, runnerWorkspace)
+          return // Don't cleanup the workspace — the retry run will handle it
+        }
+      }
 
       const finalStatus = success ? 'completed' : 'failed'
       const finishedDelegation = await repo.update(id, {

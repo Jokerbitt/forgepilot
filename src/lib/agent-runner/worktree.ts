@@ -74,7 +74,10 @@ export function prepareRunnerWorkspace(options: {
   env?: Record<string, string | undefined>
   /** Override target repo URL (takes precedence over env var) */
   targetRepo?: string
+  /** If provided, skip workspace creation and reuse this existing workspace (M107 retry) */
+  existingWorkspace?: RunnerWorkspace
 }): RunnerWorkspace {
+  if (options.existingWorkspace) return options.existingWorkspace
   const sourceCwd = options.sourceCwd ?? process.cwd()
   const env = options.env ?? process.env
   const root = getRunnerWorktreeRoot(env)

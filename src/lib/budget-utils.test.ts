@@ -27,19 +27,20 @@ describe('budgetToMaxTurns', () => {
 })
 
 describe('budgetToClaudeCliMaxTurns', () => {
-  it('returns at least 35 turns for small budgets', () => {
-    expect(budgetToClaudeCliMaxTurns(0)).toBe(35)
-    expect(budgetToClaudeCliMaxTurns(0.5)).toBe(35)
-    expect(budgetToClaudeCliMaxTurns(1)).toBe(35)
+  it('returns at least 40 turns for small budgets (M110)', () => {
+    expect(budgetToClaudeCliMaxTurns(0)).toBe(40)
+    expect(budgetToClaudeCliMaxTurns(0.5)).toBe(40)
+    expect(budgetToClaudeCliMaxTurns(1)).toBe(40)
   })
 
-  it('returns higher value when budget is large enough', () => {
-    expect(budgetToClaudeCliMaxTurns(3)).toBe(45)
+  it('scales at ~40 turns per dollar for larger budgets', () => {
+    expect(budgetToClaudeCliMaxTurns(2)).toBe(80)
+    expect(budgetToClaudeCliMaxTurns(3)).toBe(120)
+    expect(budgetToClaudeCliMaxTurns(5)).toBe(200)
   })
 
-  it('caps at 60 for large budgets (same as budgetToMaxTurns)', () => {
-    expect(budgetToClaudeCliMaxTurns(5)).toBe(60)
-    expect(budgetToClaudeCliMaxTurns(100)).toBe(60)
+  it('has no hard cap — large budgets get more turns', () => {
+    expect(budgetToClaudeCliMaxTurns(10)).toBe(400)
   })
 
   it('is always >= budgetToMaxTurns', () => {
