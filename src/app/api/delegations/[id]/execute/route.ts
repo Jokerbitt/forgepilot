@@ -434,6 +434,36 @@ function runWithClaudeCLI(
           if (text.startsWith('PROGRESS:')) {
             logBuffer.push({ timestamp: new Date().toISOString(), type: 'success', message: `📊 ${text.slice(0, 200)}` })
           }
+
+          // M109: Detect CHECKPOINT signal — run tests, save lastGoodCommit or rollback
+          if (text.startsWith('CHECKPOINT:')) {
+            const phase = text.slice('CHECKPOINT:'.length).trim()
+            void (async () => {
+              const testResult = runPostExecutionTests(runnerWorkspace.path)
+              const timestamp = new Date().toISOString()
+              if (testResult.passed) {
+                // Save last known-good commit hash
+                let commitHash = ''
+                try { commitHash = execSync('git rev-parse HEAD', { cwd: runnerWorkspace.path, encoding: 'utf8' }).trim() } catch { /* ignore */ }
+                await appendLogs(id, [
+                  { timestamp, type: 'success', message: `✅ CHECKPOINT: ${phase} PASSED${commitHash ? ` (${commitHash.slice(0, 7)})` : ''}` },
+                ])
+                const cpRepo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+                const cpCurrent = await cpRepo.findById(id)
+                if (cpCurrent) {
+                  await cpRepo.update(id, {
+                    lastGoodCommit: commitHash || cpCurrent.lastGoodCommit,
+                    checkpointsPassed: (cpCurrent.checkpointsPassed ?? 0) + 1,
+                  })
+                }
+              } else {
+                // Tests failed — log failure (agent will see next turn output)
+                await appendLogs(id, [
+                  { timestamp, type: 'error', message: `❌ CHECKPOINT: ${phase} FAILED — Tests fehlgeschlagen. Fixes erforderlich vor nächster Phase.` },
+                ])
+              }
+            })()
+          }
         } else if (block.type === 'tool_use' && block.name) {
           const summary = summariseTool(block.name, block.input ?? {})
           logBuffer.push({ timestamp: new Date().toISOString(), type: 'command', message: summary })
