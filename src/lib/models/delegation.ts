@@ -195,6 +195,14 @@ export interface Delegation {
   qualityCheck?: DoDQualityCheck
   /** Decision provided by user to resume after an ESCALATION (cleared after resume starts) */
   escalationDecision?: string
+  /** M107: Output from the last failing test run (injected as retry context) */
+  testFailureOutput?: string
+  /** M107: Number of automatic test-failure retries performed */
+  autoRetryCount?: number
+  /** M109: Hash of the last commit that passed the checkpoint test run */
+  lastGoodCommit?: string
+  /** M109: Number of checkpoints that have passed */
+  checkpointsPassed?: number
   createdAt: string
   updatedAt: string
 }

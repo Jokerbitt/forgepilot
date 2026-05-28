@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/auth/require-auth'
 import { delegationLogger } from '@/lib/logger'
 import { withSpan } from '@/lib/tracing/tracer'
 import { checkRateLimit, buildRateLimitHeaders } from '@/lib/rate-limit'
-import { spawn, execSync } from 'child_process'
+import { spawn, execSync, spawnSync } from 'child_process'
 import type { Delegation, AgentLog, DelegationReport } from '@/lib/models/delegation'
 import { registerProcess, unregisterProcess } from '@/lib/process-registry'
 import { readStoredApiKeys } from '@/lib/connectors/config'
@@ -38,7 +38,7 @@ import { checkParallelCompletion } from '@/lib/delegation-parallel'
 import { triggerCriticRetry } from '@/lib/delegations/critic-retry'
 import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-runtime-evidence'
 import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, type RunnerWorkspace } from '@/lib/agent-runner/worktree'
-import { buildCodebaseContext, buildDynamicSystemPrompt } from '@/lib/agent/codebase-context'
+import { buildCodebaseContext, buildDynamicSystemPrompt, detectTestCommand } from '@/lib/agent/codebase-context'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
@@ -49,6 +49,27 @@ async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Dele
     ...(report ? { summaryReport: report } : {}),
     logs: [...(current.logs ?? []), ...newLogs],
   })
+}
+
+/** M107: Run the project test suite and return whether it passed + its output. */
+function runPostExecutionTests(worktreePath: string): { passed: boolean; output: string } {
+  try {
+    const ctx = buildCodebaseContext(worktreePath)
+    const testCmd = detectTestCommand(ctx.scripts, worktreePath)
+    const [bin, ...args] = testCmd.split(' ')
+    const result = spawnSync(bin, args, {
+      cwd: worktreePath,
+      encoding: 'utf8',
+      timeout: 120_000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, CI: '1' },
+    })
+    const passed = result.status === 0
+    const output = [result.stdout ?? '', result.stderr ?? ''].join('\n').slice(0, 4000)
+    return { passed, output }
+  } catch {
+    return { passed: true, output: '' } // Non-critical — don't block on unexpected errors
+  }
 }
 
 function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryContext?: string, worktreePath?: string): string {
@@ -551,6 +572,42 @@ function runWithClaudeCLI(
       const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
       const current = await repo.findById(id)
       if (!current || current.status !== 'running') return
+
+      // M107: Auto-retry on test failure (only for local-agent, max 3 attempts)
+      const MAX_AUTO_RETRIES = 3
+      if (success && current.executionRoute === 'local-agent') {
+        const autoRetryCount = current.autoRetryCount ?? 0
+        if (autoRetryCount < MAX_AUTO_RETRIES) {
+          const testResult = runPostExecutionTests(runnerWorkspace.path)
+          if (!testResult.passed) {
+            const retryAttempt = autoRetryCount + 1
+            await appendLogs(id, [{
+              timestamp: new Date().toISOString(),
+              type: 'error',
+              message: `⚠️ Tests fehlgeschlagen nach Agent-Run — Auto-Retry ${retryAttempt}/${MAX_AUTO_RETRIES}`,
+            }])
+            await repo.update(id, {
+              autoRetryCount: retryAttempt,
+              testFailureOutput: testResult.output,
+              logs: [...(current.logs ?? []), ...logBuffer, finalLog],
+            })
+            // Re-run agent with test failure context
+            const updatedDelegation = await repo.findById(id)
+            if (updatedDelegation) {
+              runWithClaudeCLI(
+                id,
+                { delegation: updatedDelegation, contextCards: [] },
+                new Date(),
+                updatedDelegation.contract.maxBudgetUsd,
+                updatedDelegation.contract.riskClass,
+                updatedDelegation.targetRepo,
+              )
+            }
+            return // Don't finalize — retry is running
+          }
+          // Tests passed after agent run → proceed with success finalization
+        }
+      }
 
       const finalStatus = success ? 'completed' : 'failed'
       const finishedDelegation = await repo.update(id, {

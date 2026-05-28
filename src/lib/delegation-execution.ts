@@ -143,6 +143,12 @@ export function buildRetryContext(delegation: Delegation): string {
     parts.push(`\n## Escalation Resolved\nA previous run was paused waiting for a human decision. The user has now decided:\n${delegation.escalationDecision}\nContinue the task with this decision in mind. Do NOT escalate again for the same issue.\n`)
   }
 
+  // M107: Inject test failure output so agent knows exactly what to fix
+  if (delegation.testFailureOutput) {
+    const attempt = delegation.autoRetryCount ?? 1
+    parts.push(`\n## Auto-Retry (Attempt ${attempt}/3)\nThe previous run finished but tests failed. Fix these failures before committing:\n\`\`\`\n${delegation.testFailureOutput.slice(0, 3000)}\n\`\`\`\n`)
+  }
+
   const errorLogs = (delegation.logs ?? [])
     .filter(l => l.type === 'error')
     .slice(-5)
