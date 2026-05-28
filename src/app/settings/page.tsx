@@ -1839,6 +1839,45 @@ export default function SettingsPage() {
           </div>
         </section>
 
+        {/* Erweiterte Tools — Schnellzugriff auf Spezial-Seiten */}
+        <section className="space-y-4 pt-4 border-t border-white/[0.06]">
+          <SectionHeading icon={SettingsIcon} title="Erweiterte Konfiguration" badge={<StatusPill>Spezial-Tools</StatusPill>} />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <a href="/model-router"
+              className="flex items-start gap-3 rounded-lg border border-white/[0.07] bg-white/[0.02] p-4 transition-colors hover:border-violet-500/30 hover:bg-violet-500/[0.04]">
+              <Zap className="mt-0.5 h-5 w-5 shrink-0 text-violet-400" />
+              <div>
+                <p className="text-sm font-semibold text-slate-200">Model Router</p>
+                <p className="mt-0.5 text-xs text-slate-500">Routing-Regeln, Provider-Auswahl, Cost-vs-Performance</p>
+              </div>
+            </a>
+            <a href="/governance"
+              className="flex items-start gap-3 rounded-lg border border-white/[0.07] bg-white/[0.02] p-4 transition-colors hover:border-violet-500/30 hover:bg-violet-500/[0.04]">
+              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-violet-400" />
+              <div>
+                <p className="text-sm font-semibold text-slate-200">Governance Hub</p>
+                <p className="mt-0.5 text-xs text-slate-500">Risk-Klassen, Approval-Policies, Audit Trail</p>
+              </div>
+            </a>
+            <a href="/dev/health"
+              className="flex items-start gap-3 rounded-lg border border-white/[0.07] bg-white/[0.02] p-4 transition-colors hover:border-violet-500/30 hover:bg-violet-500/[0.04]">
+              <Activity className="mt-0.5 h-5 w-5 shrink-0 text-violet-400" />
+              <div>
+                <p className="text-sm font-semibold text-slate-200">System Health</p>
+                <p className="mt-0.5 text-xs text-slate-500">Execute-Loop-Status, n8n Webhook, Diagnose-Checks</p>
+              </div>
+            </a>
+            <a href="/readiness"
+              className="flex items-start gap-3 rounded-lg border border-white/[0.07] bg-white/[0.02] p-4 transition-colors hover:border-violet-500/30 hover:bg-violet-500/[0.04]">
+              <Rocket className="mt-0.5 h-5 w-5 shrink-0 text-violet-400" />
+              <div>
+                <p className="text-sm font-semibold text-slate-200">SaaS Readiness</p>
+                <p className="mt-0.5 text-xs text-slate-500">Readiness-Score, Gap-Analyse, Solo vs. SaaS</p>
+              </div>
+            </a>
+          </div>
+        </section>
+
         <div className="pt-4 border-t border-gray-800">
           <button
             onClick={handleSave}

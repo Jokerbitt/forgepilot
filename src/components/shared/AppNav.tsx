@@ -88,13 +88,12 @@ const navItems: NavItem[] = [
   { href: '/monitor',         key: 'agentMonitor',     icon: Radio,        group: 'expert' },
   { href: '/pm-agent',        key: 'pmAgent',          icon: Brain,        group: 'expert' },
   { href: '/branches',        key: 'system',           icon: GitBranch,    group: 'expert' },
-  { href: '/model-router',    key: 'system',           icon: GitBranch,    group: 'expert' },
   { href: '/context-packages', key: 'contextPackages', icon: Package,     group: 'expert' },
   { href: '/planning',        key: 'planningAudit',    icon: MapPin,       group: 'expert' },
-  { href: '/governance',      key: 'governanceHub',    icon: Shield,       group: 'expert' },
   { href: '/pilot',           key: 'e2ePilot',         icon: FlaskConical, group: 'expert' },
   { href: '/digest',          key: 'activityDigest',   icon: Bell,         group: 'expert' },
-  // Note: /board → /delegations  /active → /live  /notifications → /inbox  /briefing → /digest
+  // Removed: /board→/delegations  /active→/live  /notifications→/inbox  /briefing→/digest
+  // Removed: /model-router→/settings  /governance→/settings
 ]
 
 const coreNavItems     = navItems.filter(item => item.group === 'core')
