@@ -105,6 +105,27 @@ interface RunnerPrResponse {
   error?: string
 }
 
+interface AutopilotReadinessCheck {
+  id: string
+  label: string
+  status: Tone
+  detail: string
+  action?: string
+}
+
+interface AutopilotReadinessResponse {
+  status?: Tone
+  score?: number
+  mode?: string
+  canStartDemoRun?: boolean
+  canExecuteCode?: boolean
+  canCreatePr?: boolean
+  canAutoMerge?: boolean
+  recommendation?: string
+  checks?: AutopilotReadinessCheck[]
+  checkedAt?: string
+}
+
 const previewPages = [
   {
     label: 'Command Center',
@@ -201,6 +222,8 @@ export default function LiveViewPage() {
   const [executeHealth, setExecuteHealth] = useState<ExecuteHealthResponse | null>(null)
   const [cliStatus, setCliStatus] = useState<CliStatusResponse | null>(null)
   const [dailyReport, setDailyReport] = useState<DailyReportResponse | null>(null)
+  const [autopilotReadiness, setAutopilotReadiness] = useState<AutopilotReadinessResponse | null>(null)
+  const [readinessLoading, setReadinessLoading] = useState(false)
   const [demoRun, setDemoRun] = useState<DemoRunResponse | null>(null)
   const [demoRunLoading, setDemoRunLoading] = useState(false)
   const [runnerPr, setRunnerPr] = useState<RunnerPrResponse | null>(null)
@@ -209,13 +232,14 @@ export default function LiveViewPage() {
 
   const refresh = async () => {
     setLoading(true)
-    const [healthRes, statsRes, storageRes, executeRes, cliRes, reportRes] = await Promise.all([
+    const [healthRes, statsRes, storageRes, executeRes, cliRes, reportRes, autopilotRes] = await Promise.all([
       fetchJson<{ status?: string }>('/api/health'),
       fetchJson<DelegationStatsResponse>('/api/delegations/stats'),
       fetchJson<StorageStatusResponse>('/api/storage-status'),
       fetchJson<ExecuteHealthResponse>('/api/execute-loop/health'),
       fetchJson<CliStatusResponse>('/api/system/cli-status'),
       fetchJson<DailyReportResponse>('/api/reports/daily', 8000),
+      fetchJson<AutopilotReadinessResponse>('/api/autopilot/readiness', 8000),
     ])
 
     if (statsRes.ok) setDelegations(statsRes.data)
@@ -223,6 +247,7 @@ export default function LiveViewPage() {
     if (executeRes.ok) setExecuteHealth(executeRes.data)
     if (cliRes.ok) setCliStatus(cliRes.data)
     if (reportRes.ok) setDailyReport(reportRes.data)
+    if (autopilotRes.ok) setAutopilotReadiness(autopilotRes.data)
 
     setEndpoints([
       {
@@ -271,6 +296,14 @@ export default function LiveViewPage() {
           ? `${reportRes.data.dailyAssistant?.score ?? 0}/100, Fokus: ${reportRes.data.dailyAssistant?.nextFocus ?? 'unbekannt'}`
           : reportRes.detail,
       },
+      {
+        label: 'Autopilot',
+        href: '/api/autopilot/readiness',
+        status: autopilotRes.ok ? autopilotRes.data.status ?? 'attention' : 'blocked',
+        detail: autopilotRes.ok
+          ? `${autopilotRes.data.score ?? 0}/100, Modus: ${autopilotRes.data.mode ?? 'unbekannt'}`
+          : autopilotRes.detail,
+      },
     ])
     setLastCheckedAt(new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
     setLoading(false)
@@ -300,6 +333,8 @@ export default function LiveViewPage() {
       : cliStatus?.zeroKeyReady
         ? 'CLI bereit'
         : 'CLI prüfen'
+  const autopilotTone = autopilotReadiness?.status ?? 'attention'
+  const runnerPrBlocked = autopilotReadiness ? !autopilotReadiness.canExecuteCode : false
 
   return (
     <main className="min-h-screen bg-[#08080d] px-5 py-6 text-slate-100 lg:px-8">
@@ -410,6 +445,66 @@ export default function LiveViewPage() {
           </div>
         </section>
 
+        <section className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-4xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-semibold uppercase tracking-widest text-emerald-100/70">
+                  Autopilot Readiness
+                </p>
+                <span className={cx('inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold', toneClasses(autopilotTone))}>
+                  {statusIcon(autopilotTone)}
+                  {autopilotReadiness?.score ?? 0}/100
+                </span>
+              </div>
+              <h2 className="mt-2 text-xl font-bold text-white">Bereit für autonomen App-Run?</h2>
+              <p className="mt-2 text-sm leading-6 text-emerald-50/75">
+                {autopilotReadiness?.recommendation ?? 'ForgePilot prüft gerade, ob echter Runner, GitHub-PR-Flow, Git-Status und Validierung bereit sind.'}
+              </p>
+              <div className="mt-4 grid gap-2 sm:grid-cols-4">
+                <CapabilityPill label="Code ausführen" ready={Boolean(autopilotReadiness?.canExecuteCode)} />
+                <CapabilityPill label="Demo starten" ready={Boolean(autopilotReadiness?.canStartDemoRun)} />
+                <CapabilityPill label="PR erstellen" ready={Boolean(autopilotReadiness?.canCreatePr)} />
+                <CapabilityPill label="Auto-Merge" ready={Boolean(autopilotReadiness?.canAutoMerge)} />
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={readinessLoading}
+              onClick={async () => {
+                setReadinessLoading(true)
+                try {
+                  await fetch('/api/system/runner-readiness', { method: 'POST' })
+                  await refresh()
+                } finally {
+                  setReadinessLoading(false)
+                }
+              }}
+              className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-3.5 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RefreshCw className={cx('h-4 w-4', readinessLoading && 'animate-spin')} />
+              {readinessLoading ? 'Prüfe Runner...' : 'Deep Readiness prüfen'}
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {(autopilotReadiness?.checks ?? []).slice(0, 6).map(check => (
+              <div key={check.id} className="rounded-lg border border-white/[0.07] bg-black/15 p-3">
+                <div className="flex items-start gap-3">
+                  <span className={cx('mt-0.5 inline-flex rounded-full border p-1', toneClasses(check.status))}>
+                    {statusIcon(check.status)}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white">{check.label}</p>
+                    <p className="mt-1 text-xs leading-5 text-emerald-50/65">{check.detail}</p>
+                    {check.action && <p className="mt-1 text-xs leading-5 text-amber-100/75">{check.action}</p>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
         <section className="rounded-xl border border-violet-500/20 bg-violet-500/[0.07] p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -479,7 +574,7 @@ export default function LiveViewPage() {
               </div>
               <button
                 type="button"
-                disabled={runnerPrLoading}
+                disabled={runnerPrLoading || runnerPrBlocked}
                 onClick={async () => {
                   setRunnerPrLoading(true)
                   setRunnerPr(null)
@@ -492,6 +587,9 @@ export default function LiveViewPage() {
                     const data = await res.json() as RunnerPrResponse
                     setRunnerPr(res.ok ? data : { error: data.error ?? `HTTP ${res.status}` })
                     await refresh()
+                    if (res.ok && data.delegationHref) {
+                      window.location.assign(data.delegationHref)
+                    }
                   } catch (error) {
                     setRunnerPr({ error: error instanceof Error ? error.message : 'Runner-PR konnte nicht gestartet werden.' })
                   } finally {
@@ -501,9 +599,14 @@ export default function LiveViewPage() {
                 className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-amber-400/50 bg-amber-500/15 px-3.5 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <PlayCircle className="h-4 w-4" />
-                {runnerPrLoading ? 'Runner startet...' : 'Echten Runner-PR starten'}
+                {runnerPrLoading ? 'Runner startet...' : runnerPrBlocked ? 'Runner noch blockiert' : 'Echten Runner-PR starten'}
               </button>
             </div>
+            {runnerPrBlocked && (
+              <p className="mt-3 text-xs leading-5 text-amber-100/75">
+                Erst Claude Code/Codex CLI anmelden oder einen optionalen API-Fallback aktivieren. Danach Deep Readiness prüfen.
+              </p>
+            )}
             {runnerPr && (
               <div className={cx(
                 'mt-3 rounded-md border px-3 py-2 text-sm',
@@ -651,6 +754,22 @@ function ToolReadiness({
       </div>
       {version && <p className="mt-2 truncate text-[11px] text-slate-600">{version}</p>}
     </div>
+  )
+}
+
+function CapabilityPill({
+  label,
+  ready,
+}: {
+  label: string
+  ready: boolean
+}) {
+  const tone: Tone = ready ? 'ready' : 'attention'
+  return (
+    <span className={cx('inline-flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs font-semibold', toneClasses(tone))}>
+      <span>{label}</span>
+      {ready ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+    </span>
   )
 }
 
