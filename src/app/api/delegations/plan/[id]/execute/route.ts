@@ -58,6 +58,9 @@ export async function POST(
       phase.filesToModify.length > 0 ? `Zu ändernde Dateien: ${phase.filesToModify.join(', ')}` : '',
     ].filter(Boolean).join('\n')
 
+    // Phase can start immediately if it has no dependencies
+    const canStartImmediately = phase.dependsOn.length === 0
+
     const delegation = await repo.create({
       id,
       title: `[Plan ${i + 1}/${plan.phases.length}] ${phase.title}`,
@@ -77,14 +80,14 @@ export async function POST(
         autoChain: nextId !== null,
         createdAt: now,
       },
-      status: i === 0 ? 'approved' : 'pending',
+      status: canStartImmediately ? 'approved' : 'pending',
       executionRoute: 'local-agent',
       costEstimateUsd: phase.estimatedTurns <= 40 ? 2 : phase.estimatedTurns <= 80 ? 3 : 5,
       chainNextId: nextId ?? undefined,
       chainPosition: i + 1,
       chainTotal: plan.phases.length,
       targetRepo: plan.targetRepo,
-      tags: [`plan:${plan.id}`, `phase:${i + 1}`],
+      tags: [`plan:${plan.id}`, `phase:${i + 1}`, ...phase.dependsOn.map(d => `depends:${d}`)],
       createdAt: now,
       updatedAt: now,
     })
@@ -99,19 +102,22 @@ export async function POST(
   plan.updatedAt = new Date().toISOString()
   savePlan(plan)
 
-  // Auto-start Phase 1
-  const firstId = createdIds[0]
-  if (firstId) {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
-    // Fire-and-forget — never block the response
-    fetch(`${baseUrl}/api/delegations/${firstId}/execute`, { method: 'POST' }).catch(() => {})
+  // Auto-start all phases that can run immediately (no dependencies)
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+  for (const [i, delegId] of createdIds.entries()) {
+    const phase = plan.phases[i]!
+    if (phase.dependsOn.length === 0) {
+      // Fire-and-forget — never block the response
+      fetch(`${baseUrl}/api/delegations/${delegId}/execute`, { method: 'POST' }).catch(() => {})
+    }
   }
 
+  const immediateCount = plan.phases.filter(p => p.dependsOn.length === 0).length
   return NextResponse.json({
     planId: plan.id,
     delegationIds: createdIds,
     firstDelegationId: createdIds[0],
     phaseCount: plan.phases.length,
-    message: `${plan.phases.length} Delegationen erstellt. Phase 1 ist bereit zum Start.`,
+    message: `${plan.phases.length} Delegationen erstellt. ${immediateCount} Phase(n) sofort gestartet.`,
   }, { status: 201 })
 }

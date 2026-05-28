@@ -16,11 +16,9 @@ import {
   buildSimulationBudgetLog,
   getExecutionStartBlocker,
   buildSubTaskPrompt,
-  buildSkillBlock,
   buildRetryContext,
 } from '@/lib/delegation-execution'
-import { buildKnowledgeBlock } from '@/lib/delegations/knowledge-packages'
-import { buildCodebaseContextBlock } from '@/lib/delegations/codebase-scout'
+import { buildSelectiveContext } from '@/lib/delegations/context-router'
 import { OllamaAgentRunner, isOllamaReachable } from '@/lib/agent-runner/ollama-runner'
 import { budgetToClaudeCliMaxTurns, budgetToMaxTurns } from '@/lib/budget-utils'
 import { scoreWork } from '@/lib/agents/work-quality'
@@ -74,11 +72,7 @@ function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryC
     ? `\n## Context\n${c.context.trim()}\n${contextCardsBlock}${retryContext ?? ''}`
     : `${contextCardsBlock}${retryContext ?? ''}`
 
-  const skillBlock = buildSkillBlock(c.skillCategory, c.allowedFilePatterns)
-  const knowledgeBlock = buildKnowledgeBlock(c.goal, c.context ?? '', c.skillCategory)
-  const codebaseBlock = targetRepo
-    ? buildCodebaseContextBlock(c.goal, c.context ?? '', targetRepo)
-    : ''
+  const { skillBlock, knowledgeBlock, codebaseBlock, profile } = buildSelectiveContext(c, targetRepo)
 
   return `You are an autonomous software engineering agent working on **ForgePilot** — a local-first AI Workflow OS built with Next.js 14, TypeScript strict, Tailwind CSS, and Vitest.
 
@@ -93,6 +87,7 @@ ${dod}
 - Branch: \`${branch}\`
 - Max budget: $${c.maxBudgetUsd} (~${maxTurns} turns)
 - Work item: ${c.workItemId}
+- Context profile: **${profile}** (token-optimized for ${profile} tasks)
 
 ## Execution protocol (follow exactly, in order)
 \`\`\`
@@ -129,7 +124,7 @@ ${skillBlock}${knowledgeBlock}${codebaseBlock}
 Start now.`
 }
 
-// buildSubTaskPrompt and buildSkillBlock are imported from @/lib/delegation-execution
+// buildSubTaskPrompt is imported from @/lib/delegation-execution
 
 type SkillCategory = NonNullable<import('@/lib/models/delegation').TaskContract['skillCategory']>
 

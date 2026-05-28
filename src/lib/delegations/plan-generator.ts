@@ -25,6 +25,8 @@ export interface PlanPhase {
   dodItems: string[]
   riskClass: RiskClass
   estimatedTurns: number
+  /** Array of phase IDs that must complete before this phase can start. Empty = can start immediately. */
+  dependsOn: string[]
   /** Filled after execute() — links to the created delegation */
   delegationId?: string
 }
@@ -104,10 +106,13 @@ Respond with ONLY valid JSON matching this schema (no markdown, no commentary):
       "filesToModify": ["path/to/existing/file.ts"],
       "dodItems": ["Specific verifiable done criterion", "Tests pass", "TypeScript 0 errors"],
       "riskClass": "A" | "B" | "C",
-      "estimatedTurns": 30
+      "estimatedTurns": 30,
+      "dependsOn": ["p1"]
     }
   ]
-}`
+}
+
+Identify phases that can run in parallel. Phases with no dependencies (dependsOn: []) can start immediately. List actual phase IDs in dependsOn, not phase numbers.`
 
 interface RawPlanPhase {
   id?: string
@@ -118,6 +123,7 @@ interface RawPlanPhase {
   dodItems?: unknown[]
   riskClass?: string
   estimatedTurns?: number
+  dependsOn?: unknown[]
 }
 
 interface RawPlan {
@@ -160,6 +166,7 @@ function parsePlanResponse(raw: string, goal: string, context: string, targetRep
     dodItems: (p.dodItems ?? []).map(String),
     riskClass: (['A', 'B', 'C'].includes(String(p.riskClass)) ? p.riskClass : 'B') as RiskClass,
     estimatedTurns: typeof p.estimatedTurns === 'number' ? p.estimatedTurns : 40,
+    dependsOn: Array.isArray(p.dependsOn) ? (p.dependsOn as unknown[]).map(String) : [],
   }))
 
   const now = new Date().toISOString()
