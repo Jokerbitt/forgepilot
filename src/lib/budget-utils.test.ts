@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { budgetToMaxTurns, budgetToClaudeCliMaxTurns } from './budget-utils'
+import { budgetToMaxTurns, budgetToClaudeCliMaxTurns, estimateComplexity, budgetToClaudeCliMaxTurnsByComplexity } from './budget-utils'
 
 describe('budgetToMaxTurns', () => {
   it('returns minimum of 5 turns for very small budgets', () => {
@@ -46,5 +46,73 @@ describe('budgetToClaudeCliMaxTurns', () => {
     for (const budget of [0, 0.5, 1, 2, 3, 4, 5]) {
       expect(budgetToClaudeCliMaxTurns(budget)).toBeGreaterThanOrEqual(budgetToMaxTurns(budget))
     }
+  })
+})
+
+describe('estimateComplexity', () => {
+  it('returns small for 1-2 DoD items and short goal', () => {
+    const result = estimateComplexity(['Add button'], 'Add a submit button', undefined)
+    expect(result.complexity).toBe('small')
+    expect(result.recommendedBudgetUsd).toBe(1)
+    expect(result.recommendedTurns).toBe(35)
+  })
+
+  it('returns medium for 3-5 DoD items', () => {
+    const result = estimateComplexity(
+      ['Item 1', 'Item 2', 'Item 3'],
+      'Build a small feature',
+      undefined,
+    )
+    expect(result.complexity).toBe('medium')
+    expect(result.recommendedBudgetUsd).toBe(3)
+  })
+
+  it('returns large for 6+ DoD items', () => {
+    const items = ['A', 'B', 'C', 'D', 'E', 'F']
+    const result = estimateComplexity(items, 'Build feature', undefined)
+    expect(result.complexity).toBe('large')
+    expect(result.recommendedTurns).toBe(140)
+  })
+
+  it('returns large for long goal text (>120 chars)', () => {
+    const longGoal = 'Build a comprehensive authentication system with OAuth, session management, role-based access control, MFA, and full audit logging'
+    const result = estimateComplexity([], longGoal, undefined)
+    expect(result.complexity).toBe('large')
+  })
+
+  it('returns large for large-feature taskType regardless of DoD count', () => {
+    const result = estimateComplexity(['single item'], 'Short goal', 'large-feature')
+    expect(result.complexity).toBe('large')
+  })
+
+  it('ignores blank DoD items when counting', () => {
+    const result = estimateComplexity(['', '  ', 'real item'], 'Short goal', undefined)
+    expect(result.complexity).toBe('small')
+  })
+
+  it('returns a non-empty label and reason', () => {
+    const result = estimateComplexity(['A', 'B', 'C', 'D'], 'Some goal', undefined)
+    expect(result.label.length).toBeGreaterThan(0)
+    expect(result.reason.length).toBeGreaterThan(0)
+  })
+})
+
+describe('budgetToClaudeCliMaxTurnsByComplexity', () => {
+  it('returns at least base turns for the complexity band', () => {
+    expect(budgetToClaudeCliMaxTurnsByComplexity(1, 'small')).toBeGreaterThanOrEqual(35)
+    expect(budgetToClaudeCliMaxTurnsByComplexity(3, 'medium')).toBeGreaterThanOrEqual(70)
+    expect(budgetToClaudeCliMaxTurnsByComplexity(8, 'large')).toBeGreaterThanOrEqual(140)
+  })
+
+  it('large complexity can exceed the old 60-turn cap', () => {
+    expect(budgetToClaudeCliMaxTurnsByComplexity(8, 'large')).toBeGreaterThan(60)
+  })
+
+  it('caps large at 200 turns', () => {
+    expect(budgetToClaudeCliMaxTurnsByComplexity(1000, 'large')).toBeLessThanOrEqual(200)
+  })
+
+  it('caps medium at 100 turns', () => {
+    expect(budgetToClaudeCliMaxTurnsByComplexity(1000, 'medium')).toBeLessThanOrEqual(100)
   })
 })
