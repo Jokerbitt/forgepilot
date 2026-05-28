@@ -7,7 +7,7 @@
 
 import { buildKnowledgeBlock } from './knowledge-packages'
 import { buildCodebaseContextBlock } from './codebase-scout'
-import { buildSkillBlock } from '@/lib/delegation-execution'
+import { assembleSkillBlock, seedBuiltinSkills } from '@/lib/skills/prompt-skill-registry'
 import type { TaskContract } from '@/lib/models/delegation'
 
 export type ContextProfile = 'feature' | 'bug-fix' | 'test' | 'ui-component' | 'review' | 'refactor' | 'docs' | 'infra'
@@ -74,8 +74,11 @@ export function buildSelectiveContext(
   const profile = resolveContextProfile(contract)
   const cfg = PROFILE_CONFIG[profile]
 
+  if (cfg.skill) seedBuiltinSkills()
   const skillBlock = cfg.skill
-    ? buildSkillBlock(contract.skillCategory, contract.allowedFilePatterns)
+    ? (contract.allowedFilePatterns?.length
+        ? `\n## Allowed file patterns (scope constraint)\nOnly touch files matching: ${contract.allowedFilePatterns.join(', ')}\nAny changes outside these patterns = scope drift → ESCALATE.\n`
+        : '') + assembleSkillBlock('global')
     : ''
 
   const knowledgeBlock = cfg.knowledge

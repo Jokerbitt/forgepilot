@@ -57,15 +57,15 @@ const navItems: NavItem[] = [
   { href: '/settings',    key: 'settings',         icon: Settings,        group: 'core' },
 
   // ── Workflow tools (visible but secondary) ──────────────────────────────
-  { href: '/live',      key: 'liveView',     icon: Monitor,    group: 'workflow' },
-  { href: '/projects',  key: 'plan',         icon: FolderOpen, group: 'workflow' },
-  { href: '/inbox',     key: 'inbox',        icon: Inbox,      group: 'workflow' },
-  { href: '/knowledge', key: 'knowledge',    icon: BookOpen,   group: 'workflow' },
-  { href: '/agents',    key: 'agentControl', icon: Bot,        group: 'workflow' },
+  { href: '/live',      key: 'liveView',  icon: Monitor,    group: 'workflow' },
+  { href: '/projects',  key: 'plan',      icon: FolderOpen, group: 'workflow' },
+  { href: '/inbox',     key: 'inbox',     icon: Inbox,      group: 'workflow' },
+  { href: '/knowledge', key: 'knowledge', icon: BookOpen,   group: 'workflow' },
 
   // ── Expert tools (power-user, rarely needed — collapsed by default) ──────
   { href: '/analytics',      key: 'costAnalytics', icon: BarChart3, group: 'expert' },
   { href: '/project-briefs', key: 'projectBriefs', icon: FileText,  group: 'expert' },
+  { href: '/agents',         key: 'agentControl',  icon: Bot,       group: 'expert' },
   { href: '/skills',         key: 'skills',        icon: Sparkles,  group: 'expert' },
   // Removed from nav (still accessible by URL):
   //   /branches  — git ops happen in terminal
