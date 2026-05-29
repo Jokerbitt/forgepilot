@@ -52,6 +52,17 @@ function repairPayload(repair: Awaited<ReturnType<typeof ensureRepairDelegation>
   }
 }
 
+function isRunnerAuthFailure(message: string | undefined): boolean {
+  if (!message) return false
+  const lower = message.toLowerCase()
+  return lower.includes('api key')
+    || lower.includes('anthropic')
+    || lower.includes('authentication')
+    || lower.includes('unauthorized')
+    || lower.includes('rate limit')
+    || lower.includes('rate-limit')
+}
+
 async function postInternal(path: string, request: NextRequest, body?: unknown, timeoutMs = 90_000) {
   const url = new URL(path, internalBaseUrl())
   return fetch(url.toString(), {
@@ -181,6 +192,74 @@ export async function POST(request: NextRequest) {
             : 'Vorhandene Repair-Delegation wurde gestartet.',
           action: actionPayload(action),
           repairDelegation: payload,
+          result: executeResult,
+          executed: true,
+        })
+      }
+
+      if (repair.delegation.status === 'failed' && isRunnerAuthFailure(repair.delegation.errorMessage)) {
+        const resumed = await repo.update(repair.delegation.id, {
+          status: 'approved',
+          errorMessage: undefined,
+          startedAt: undefined,
+          completedAt: undefined,
+          logs: [
+            ...(repair.delegation.logs ?? []),
+            {
+              timestamp: new Date().toISOString(),
+              type: 'info',
+              message: 'Delivery-Cycle nimmt fehlgeschlagenen Runner/Auth-Repair wieder auf. Execute-Route nutzt Codex-Fallback, falls Claude erneut blockiert.',
+            },
+          ],
+        })
+
+        if (!resumed) {
+          return NextResponse.json({
+            ok: false,
+            status: 'repair_resume_failed',
+            message: 'Repair-Delegation konnte nicht fuer den erneuten Runner-Versuch vorbereitet werden.',
+            action: actionPayload(action),
+            repairDelegation: payload,
+            executed: false,
+          }, { status: 502 })
+        }
+
+        const executeResponse = await postInternal(
+          `/api/delegations/${encodeURIComponent(resumed.id)}/execute`,
+          request,
+        )
+        const executeResult = await responseJson(executeResponse)
+
+        if (!executeResponse.ok) {
+          return NextResponse.json({
+            ok: false,
+            status: 'repair_resume_start_failed',
+            message: 'Repair-Delegation wurde vorbereitet, konnte aber nicht erneut gestartet werden.',
+            action: actionPayload(action),
+            repairDelegation: {
+              id: resumed.id,
+              title: resumed.title || resumed.contract.goal,
+              href: `/delegations/${resumed.id}`,
+              status: resumed.status,
+              riskClass: resumed.contract.riskClass,
+            },
+            result: executeResult,
+            executed: false,
+          }, { status: 502 })
+        }
+
+        return NextResponse.json({
+          ok: true,
+          status: 'repair_resumed',
+          message: 'Fehlgeschlagene Repair-Delegation wurde erneut gestartet; Runner-Fallback ist aktiv.',
+          action: actionPayload(action),
+          repairDelegation: {
+            id: resumed.id,
+            title: resumed.title || resumed.contract.goal,
+            href: `/delegations/${resumed.id}`,
+            status: resumed.status,
+            riskClass: resumed.contract.riskClass,
+          },
           result: executeResult,
           executed: true,
         })
