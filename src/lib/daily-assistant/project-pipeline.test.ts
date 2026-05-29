@@ -103,6 +103,55 @@ describe('buildProjectPipelineSummary', () => {
     expect(summary.nextCandidate?.id).toBe('wp-2')
   })
 
+  it('keeps dependent slices blocked until dependency PR is merged', () => {
+    const summary = buildProjectPipelineSummary({
+      briefs: [brief],
+      workPackages: [
+        wp({ id: 'wp-1', title: 'Foundation', status: 'ready' }),
+        wp({ id: 'wp-2', title: 'Persistence', dependsOn: ['Foundation'], priority: 'high' }),
+      ],
+      delegations: [
+        delegation({
+          contract: { ...delegation({}).contract, workItemId: 'wp-1' },
+          summaryReport: {
+            keyPoints: ['done'],
+            changes: [],
+            timeTakenMinutes: 1,
+            prUrl: 'https://github.com/org/repo/pull/1',
+            prState: 'open',
+          },
+        }),
+      ],
+    })
+
+    expect(summary.nextCandidate).toBeNull()
+    expect(summary.blockedByDependencyCount).toBe(1)
+  })
+
+  it('unlocks dependent slices after dependency PR is merged', () => {
+    const summary = buildProjectPipelineSummary({
+      briefs: [brief],
+      workPackages: [
+        wp({ id: 'wp-1', title: 'Foundation', status: 'ready' }),
+        wp({ id: 'wp-2', title: 'Persistence', dependsOn: ['Foundation'], priority: 'high' }),
+      ],
+      delegations: [
+        delegation({
+          contract: { ...delegation({}).contract, workItemId: 'wp-1' },
+          summaryReport: {
+            keyPoints: ['done'],
+            changes: [],
+            timeTakenMinutes: 1,
+            prUrl: 'https://github.com/org/repo/pull/1',
+            prState: 'merged',
+          },
+        }),
+      ],
+    })
+
+    expect(summary.nextCandidate?.id).toBe('wp-2')
+  })
+
   it('ignores risk C packages for autonomous larger app work', () => {
     const summary = buildProjectPipelineSummary({
       briefs: [brief],

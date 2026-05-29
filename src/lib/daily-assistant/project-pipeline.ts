@@ -29,6 +29,7 @@ function delegationPassed(delegation: Delegation | undefined): boolean {
   if (!delegation || delegation.status !== 'completed') return false
   if (delegation.qualityCheck && delegation.qualityCheck.verdict !== 'passed') return false
   if (delegation.criticScore && delegation.criticScore.verdict !== 'approved') return false
+  if (delegation.summaryReport?.prUrl && delegation.summaryReport.prState !== 'merged') return false
   return true
 }
 

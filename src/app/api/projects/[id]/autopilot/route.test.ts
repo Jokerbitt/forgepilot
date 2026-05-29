@@ -240,6 +240,7 @@ describe('POST /api/projects/[id]/autopilot', () => {
           contract: { workItemId: 'wp-1' },
           qualityCheck: { verdict: 'passed' },
           criticScore: { verdict: 'approved' },
+          summaryReport: { prUrl: 'https://github.com/org/repo/pull/1', prState: 'merged' },
         } as Delegation,
       ]),
       findById: vi.fn(),
@@ -253,6 +254,44 @@ describe('POST /api/projects/[id]/autopilot', () => {
 
     expect(body.delegationId).toBeDefined()
     expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ title: 'Persistence' }))
+  })
+
+  it('does not create dependent slice while dependency PR is still open', async () => {
+    const { findProjectBriefById } = await import('@/lib/project-briefs')
+    const { getMilestonesByBriefId, getWorkPackagesByBriefId } = await import('@/lib/knowledge/milestone-store')
+    const { createDelegationRepository } = await import('@/lib/repositories/delegationRepository')
+    const dependentPackages = [
+      { ...mockWorkPackages[0], id: 'wp-1', title: 'Foundation' },
+      { ...mockWorkPackages[1], id: 'wp-2', title: 'Persistence', dependsOn: ['Foundation'] },
+    ]
+
+    vi.mocked(findProjectBriefById).mockReturnValue(mockBrief as ReturnType<typeof findProjectBriefById>)
+    vi.mocked(getMilestonesByBriefId).mockReturnValue(mockMilestones as ReturnType<typeof getMilestonesByBriefId>)
+    vi.mocked(getWorkPackagesByBriefId).mockReturnValue(dependentPackages)
+    vi.mocked(createDelegationRepository).mockReturnValueOnce({
+      create: mockCreate,
+      listByStatus: vi.fn(async () => [
+        {
+          id: 'del-1',
+          briefId: 'brief-1',
+          status: 'completed',
+          contract: { workItemId: 'wp-1' },
+          qualityCheck: { verdict: 'passed' },
+          criticScore: { verdict: 'approved' },
+          summaryReport: { prUrl: 'https://github.com/org/repo/pull/1', prState: 'open' },
+        } as Delegation,
+      ]),
+      findById: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    } as unknown as ReturnType<typeof createDelegationRepository>)
+
+    const { POST } = await import('./route')
+    const res = await POST({} as Request, { params: Promise.resolve({ id: 'brief-1' }) })
+    const body = await res.json() as { delegationId?: string; actions: string[] }
+
+    expect(body.delegationId).toBeUndefined()
+    expect(body.actions.some(a => a.toLowerCase().includes('warten auf gemergte prs'))).toBe(true)
   })
 
   it('returns project milestone and work package counts', async () => {

@@ -19,6 +19,7 @@ function delegationPassed(delegation: Delegation | undefined): boolean {
   if (!delegation || delegation.status !== 'completed') return false
   if (delegation.qualityCheck && delegation.qualityCheck.verdict !== 'passed') return false
   if (delegation.criticScore && delegation.criticScore.verdict !== 'approved') return false
+  if (delegation.summaryReport?.prUrl && delegation.summaryReport.prState !== 'merged') return false
   return true
 }
 
@@ -35,6 +36,17 @@ function dependenciesSatisfied(workPackage: WorkPackage, workPackages: WorkPacka
     if (!dependencyPackage) return false
     return linkedDelegations(dependencyPackage, delegations).some(delegationPassed)
   })
+}
+
+function waitingOnDependencies(workPackages: WorkPackage[], delegations: Delegation[]): WorkPackage[] {
+  const linkedWorkItemIds = new Set(delegations.map(delegation => delegation.contract.workItemId))
+  return workPackages.filter(wp =>
+    !linkedWorkItemIds.has(wp.id) &&
+    (wp.status === 'ready' || wp.status === 'backlog') &&
+    wp.riskClass !== 'C' &&
+    wp.dependsOn.length > 0 &&
+    !dependenciesSatisfied(wp, workPackages, delegations),
+  )
 }
 
 export async function POST(_request: Request, { params }: RouteParams) {
@@ -71,6 +83,8 @@ export async function POST(_request: Request, { params }: RouteParams) {
     const created = await createDelegationFromWorkPackage(nextWorkPackage)
     delegationId = created.id
     actions.push(`Delegation "${created.title}" vorbereitet`)
+  } else if (waitingOnDependencies(workPackages, delegations).length > 0) {
+    actions.push('Naechste Arbeitspakete warten auf gemergte PRs oder abgeschlossene Abhaengigkeiten')
   } else if (delegations.length > 0) {
     actions.push('Bestehende Delegation gefunden - kein Duplikat erstellt')
   } else {
