@@ -6,6 +6,7 @@ import { CheckCircle2, Circle, ListChecks, PlayCircle, Plus, Sparkles, Trash2 } 
 import { Badge, EmptyState, buttonClassName, cx } from '@/components/ui/primitives'
 import {
   buildSampleTodos,
+  countByFilter,
   countOpenTodos,
   createTodo,
   filterTodos,
@@ -23,6 +24,12 @@ const PRIORITY_TONE: Record<TodoPriority, 'danger' | 'warning' | 'neutral'> = {
   high: 'danger',
   medium: 'warning',
   low: 'neutral',
+}
+
+const PRIORITY_BAR: Record<TodoPriority, string> = {
+  high: 'bg-rose-400',
+  medium: 'bg-amber-400',
+  low: 'bg-slate-600',
 }
 
 const STATUS_TONE: Record<TodoStatus, 'info' | 'warning' | 'success'> = {
@@ -49,6 +56,7 @@ export default function TodoPage() {
 
   const sorted = useMemo(() => sortTodos(todos), [todos])
   const visible = useMemo(() => filterTodos(sorted, filter), [sorted, filter])
+  const counts = useMemo(() => countByFilter(todos), [todos])
   const openCount = countOpenTodos(todos)
   const sampleMode = isSampleSet(todos)
   const isEmpty = todos.length === 0
@@ -158,20 +166,38 @@ export default function TodoPage() {
               <h2 className="text-sm font-semibold text-white">Aufgaben</h2>
               <span className="text-xs text-slate-500">{openCount} offen / {todos.length} gesamt</span>
             </div>
-            <div className="inline-flex rounded-lg border border-white/[0.08] bg-black/30 p-1">
-              {FILTERS.map(option => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setFilter(option.value)}
-                  className={cx(
-                    'rounded-md px-3 py-1.5 text-xs font-semibold transition-colors',
-                    filter === option.value ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200',
-                  )}
-                >
-                  {option.label}
-                </button>
-              ))}
+            <div
+              role="tablist"
+              aria-label="Aufgaben filtern"
+              className="inline-flex rounded-lg border border-white/[0.08] bg-black/30 p-1"
+            >
+              {FILTERS.map(option => {
+                const isActive = filter === option.value
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={() => setFilter(option.value)}
+                    data-testid={`todo-filter-${option.value}`}
+                    className={cx(
+                      'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors',
+                      isActive ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200',
+                    )}
+                  >
+                    <span>{option.label}</span>
+                    <span
+                      className={cx(
+                        'inline-flex min-w-[1.25rem] justify-center rounded-full px-1.5 text-[10px] font-bold tabular-nums',
+                        isActive ? 'bg-white/20 text-white' : 'bg-white/[0.06] text-slate-400',
+                      )}
+                    >
+                      {counts[option.value]}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -268,6 +294,24 @@ function SelectField({
   )
 }
 
+const STATUS_BUTTONS: Array<{ value: TodoStatus; icon: typeof Circle; activeClass: string }> = [
+  {
+    value: 'open',
+    icon: Circle,
+    activeClass: 'border-amber-500/40 bg-amber-500/15 text-amber-200',
+  },
+  {
+    value: 'in_progress',
+    icon: PlayCircle,
+    activeClass: 'border-violet-500/40 bg-violet-500/15 text-violet-200',
+  },
+  {
+    value: 'done',
+    icon: CheckCircle2,
+    activeClass: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200',
+  },
+]
+
 function TodoRow({
   todo,
   onStatusChange,
@@ -277,32 +321,14 @@ function TodoRow({
   onStatusChange: (id: string, next: TodoStatus) => void
   onRemove: (id: string) => void
 }) {
-  const Icon = todo.status === 'done' ? CheckCircle2 : todo.status === 'in_progress' ? PlayCircle : Circle
-
-  function cycleStatus() {
-    const next: TodoStatus =
-      todo.status === 'open' ? 'in_progress' : todo.status === 'in_progress' ? 'done' : 'open'
-    onStatusChange(todo.id, next)
-  }
-
   return (
-    <li className="flex items-start gap-3 py-3">
-      <button
-        type="button"
-        onClick={cycleStatus}
-        aria-label={`Status wechseln (aktuell: ${STATUS_LABELS[todo.status]})`}
-        className={cx(
-          'mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors',
-          todo.status === 'done'
-            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-            : todo.status === 'in_progress'
-            ? 'border-violet-500/30 bg-violet-500/10 text-violet-300'
-            : 'border-white/[0.1] bg-white/[0.04] text-slate-400 hover:text-slate-200',
-        )}
-      >
-        <Icon className="h-4 w-4" />
-      </button>
-      <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <li className="flex items-stretch gap-3 py-3" data-testid={`todo-row-${todo.id}`} data-status={todo.status}>
+      <span
+        aria-hidden="true"
+        title={`Prioritaet: ${PRIORITY_LABELS[todo.priority]}`}
+        className={cx('w-1 shrink-0 rounded-full', PRIORITY_BAR[todo.priority])}
+      />
+      <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <p
             className={cx(
@@ -318,15 +344,44 @@ function TodoRow({
             {todo.isSample && <Badge tone="info">Beispiel</Badge>}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => onRemove(todo.id)}
-          className="inline-flex items-center gap-1 self-start rounded-lg border border-white/[0.06] bg-transparent px-2.5 py-1.5 text-xs text-slate-500 transition-colors hover:border-rose-500/30 hover:text-rose-300 sm:self-center"
-          aria-label="Aufgabe entfernen"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-          Entfernen
-        </button>
+        <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+          <div
+            role="group"
+            aria-label={`Status fuer ${todo.title}`}
+            className="inline-flex overflow-hidden rounded-lg border border-white/[0.08] bg-black/30"
+          >
+            {STATUS_BUTTONS.map(button => {
+              const Icon = button.icon
+              const isActive = todo.status === button.value
+              return (
+                <button
+                  key={button.value}
+                  type="button"
+                  onClick={() => onStatusChange(todo.id, button.value)}
+                  aria-pressed={isActive}
+                  aria-label={`Auf ${STATUS_LABELS[button.value]} setzen`}
+                  title={STATUS_LABELS[button.value]}
+                  data-testid={`todo-status-${todo.id}-${button.value}`}
+                  className={cx(
+                    'inline-flex h-8 w-8 items-center justify-center border-l border-white/[0.05] first:border-l-0 transition-colors',
+                    isActive ? button.activeClass : 'text-slate-500 hover:bg-white/[0.05] hover:text-slate-200',
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                </button>
+              )
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() => onRemove(todo.id)}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.06] bg-transparent text-slate-500 transition-colors hover:border-rose-500/30 hover:text-rose-300"
+            aria-label={`Aufgabe ${todo.title} entfernen`}
+            title="Aufgabe entfernen"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </li>
   )
