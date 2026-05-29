@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Bot, FolderOpen, Radio, Settings, Sparkles } from 'lucide-react'
+import { ArrowRight, Bot, FolderOpen, Map, Radio, Settings, Sparkles } from 'lucide-react'
 import { ConnectorHealthBar } from '@/components/command-center/ConnectorHealthBar'
 import { DailyAssistantPanel } from '@/components/command-center/DailyAssistantPanel'
 import { TodayStatsBar } from '@/components/command-center/TodayStatsBar'
@@ -24,6 +24,12 @@ const assistantSteps = [
 ]
 
 const quickLinks = [
+  {
+    href: '/delegations/plan',
+    title: 'Plan Mode',
+    body: 'Große Features in Phasen aufteilen und autonom ausführen.',
+    icon: Map,
+  },
   {
     href: '/projects',
     title: 'Projekte',
@@ -107,7 +113,7 @@ export default function Home() {
           <TodayStatsBar />
         </section>
 
-        <section className="mt-5 grid gap-3 md:grid-cols-3">
+        <section className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
           {quickLinks.map(item => {
             const Icon = item.icon
             return (
