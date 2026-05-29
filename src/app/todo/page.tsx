@@ -1,0 +1,333 @@
+'use client'
+
+import { useMemo, useState } from 'react'
+import Link from 'next/link'
+import { CheckCircle2, Circle, ListChecks, PlayCircle, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { Badge, EmptyState, buttonClassName, cx } from '@/components/ui/primitives'
+import {
+  buildSampleTodos,
+  countOpenTodos,
+  createTodo,
+  filterTodos,
+  isSampleSet,
+  PRIORITY_LABELS,
+  sortTodos,
+  STATUS_LABELS,
+  type Todo,
+  type TodoFilter,
+  type TodoPriority,
+  type TodoStatus,
+} from '@/lib/todo/todo-store'
+
+const PRIORITY_TONE: Record<TodoPriority, 'danger' | 'warning' | 'neutral'> = {
+  high: 'danger',
+  medium: 'warning',
+  low: 'neutral',
+}
+
+const STATUS_TONE: Record<TodoStatus, 'info' | 'warning' | 'success'> = {
+  open: 'warning',
+  in_progress: 'info',
+  done: 'success',
+}
+
+const FILTERS: Array<{ value: TodoFilter; label: string }> = [
+  { value: 'all', label: 'Alle' },
+  { value: 'open', label: 'Offen' },
+  { value: 'done', label: 'Erledigt' },
+]
+
+const PRIORITY_OPTIONS: TodoPriority[] = ['high', 'medium', 'low']
+const STATUS_OPTIONS: TodoStatus[] = ['open', 'in_progress', 'done']
+
+export default function TodoPage() {
+  const [todos, setTodos] = useState<Todo[]>([])
+  const [title, setTitle] = useState('')
+  const [priority, setPriority] = useState<TodoPriority>('medium')
+  const [status, setStatus] = useState<TodoStatus>('open')
+  const [filter, setFilter] = useState<TodoFilter>('all')
+
+  const sorted = useMemo(() => sortTodos(todos), [todos])
+  const visible = useMemo(() => filterTodos(sorted, filter), [sorted, filter])
+  const openCount = countOpenTodos(todos)
+  const sampleMode = isSampleSet(todos)
+  const isEmpty = todos.length === 0
+
+  function handleAdd() {
+    const created = createTodo({ title, priority, status })
+    if (!created) return
+    setTodos(current => {
+      const purged = current.filter(todo => !todo.isSample)
+      return [...purged, created]
+    })
+    setTitle('')
+  }
+
+  function handleStatusChange(id: string, next: TodoStatus) {
+    setTodos(current => current.map(todo => (todo.id === id ? { ...todo, status: next } : todo)))
+  }
+
+  function handleRemove(id: string) {
+    setTodos(current => current.filter(todo => todo.id !== id))
+  }
+
+  function handleLoadSample() {
+    setTodos(buildSampleTodos())
+  }
+
+  function handleClearSample() {
+    setTodos([])
+  }
+
+  return (
+    <main className="min-h-screen text-white">
+      <div className="border-b border-white/[0.06] px-6 py-4 flex items-center gap-3">
+        <Link href="/" className="text-slate-500 hover:text-slate-300 text-sm transition-colors">← Command Center</Link>
+        <span className="text-slate-700">/</span>
+        <span className="text-sm text-slate-400">Todo-App</span>
+      </div>
+
+      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+        <header className="mb-6">
+          <p className="page-eyebrow">Todo-App</p>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+            Deine fokussierte Aufgabenliste
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
+            Lege Aufgaben mit Prioritaet und Status an und behalte den Ueberblick zwischen Offen, In Arbeit und Erledigt.
+          </p>
+        </header>
+
+        <section
+          aria-label="Neue Aufgabe anlegen"
+          className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5 shadow-sm shadow-black/20 sm:p-6"
+        >
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <Plus className="h-3.5 w-3.5" />
+            Neue Aufgabe
+          </div>
+          <div className="mt-4 space-y-3">
+            <label htmlFor="todo-title" className="sr-only">Titel</label>
+            <input
+              id="todo-title"
+              value={title}
+              onChange={event => setTitle(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  handleAdd()
+                }
+              }}
+              placeholder="z.B. Projekt-Brief fuer Neuer Kunde vorbereiten"
+              className="w-full rounded-xl border border-white/[0.08] bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none transition-colors placeholder:text-slate-600 focus:border-violet-400/60"
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <SelectField
+                id="todo-priority"
+                label="Prioritaet"
+                value={priority}
+                onChange={value => setPriority(value as TodoPriority)}
+                options={PRIORITY_OPTIONS.map(value => ({ value, label: PRIORITY_LABELS[value] }))}
+              />
+              <SelectField
+                id="todo-status"
+                label="Status"
+                value={status}
+                onChange={value => setStatus(value as TodoStatus)}
+                options={STATUS_OPTIONS.map(value => ({ value, label: STATUS_LABELS[value] }))}
+              />
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-slate-500">Enter speichert die Aufgabe sofort.</p>
+              <button
+                type="button"
+                onClick={handleAdd}
+                disabled={!title.trim()}
+                className={buttonClassName('primary', 'min-h-10 sm:w-auto')}
+              >
+                Aufgabe speichern
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-6 rounded-2xl border border-white/[0.08] bg-white/[0.025] p-5 sm:p-6" aria-label="Aufgabenliste">
+          <div className="flex flex-col gap-3 border-b border-white/[0.06] pb-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <ListChecks className="h-4 w-4 text-violet-300" />
+              <h2 className="text-sm font-semibold text-white">Aufgaben</h2>
+              <span className="text-xs text-slate-500">{openCount} offen / {todos.length} gesamt</span>
+            </div>
+            <div className="inline-flex rounded-lg border border-white/[0.08] bg-black/30 p-1">
+              {FILTERS.map(option => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setFilter(option.value)}
+                  className={cx(
+                    'rounded-md px-3 py-1.5 text-xs font-semibold transition-colors',
+                    filter === option.value ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200',
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {sampleMode && (
+            <div className="mt-4 flex flex-col gap-3 rounded-xl border border-sky-500/25 bg-sky-500/[0.07] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-sky-300" />
+                <div>
+                  <p className="text-sm font-semibold text-sky-100">Beispielmodus</p>
+                  <p className="mt-1 text-xs leading-5 text-sky-100/80">
+                    Diese Aufgaben sind nur ein Beispiel. Sobald du eine eigene Aufgabe anlegst, ersetzen wir die Beispiele.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleClearSample}
+                className={buttonClassName('secondary', 'min-h-9 shrink-0')}
+              >
+                Beispiele entfernen
+              </button>
+            </div>
+          )}
+
+          <div className="mt-4">
+            {isEmpty ? (
+              <EmptyState
+                icon={<ListChecks className="h-5 w-5" />}
+                title="Noch keine Aufgaben"
+                description="Lege oben deine erste Aufgabe an oder starte mit ein paar Beispielen, um die Oberflaeche kennenzulernen."
+                action={
+                  <button type="button" onClick={handleLoadSample} className={buttonClassName('secondary', 'min-h-10')}>
+                    <Sparkles className="h-4 w-4" />
+                    Beispielaufgaben laden
+                  </button>
+                }
+              />
+            ) : visible.length === 0 ? (
+              <EmptyState
+                icon={<CheckCircle2 className="h-5 w-5" />}
+                title="Keine Aufgaben in diesem Filter"
+                description="Setze den Filter auf 'Alle', um wieder alles zu sehen."
+              />
+            ) : (
+              <ul className="divide-y divide-white/[0.05]" data-testid="todo-list">
+                {visible.map(todo => (
+                  <TodoRow
+                    key={todo.id}
+                    todo={todo}
+                    onStatusChange={handleStatusChange}
+                    onRemove={handleRemove}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      </div>
+    </main>
+  )
+}
+
+function SelectField({
+  id,
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  id: string
+  label: string
+  value: string
+  onChange: (next: string) => void
+  options: Array<{ value: string; label: string }>
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        className="mt-2 w-full rounded-xl border border-white/[0.08] bg-black/30 px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-violet-400/60"
+      >
+        {options.map(option => (
+          <option key={option.value} value={option.value} className="bg-slate-900 text-white">
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+function TodoRow({
+  todo,
+  onStatusChange,
+  onRemove,
+}: {
+  todo: Todo
+  onStatusChange: (id: string, next: TodoStatus) => void
+  onRemove: (id: string) => void
+}) {
+  const Icon = todo.status === 'done' ? CheckCircle2 : todo.status === 'in_progress' ? PlayCircle : Circle
+
+  function cycleStatus() {
+    const next: TodoStatus =
+      todo.status === 'open' ? 'in_progress' : todo.status === 'in_progress' ? 'done' : 'open'
+    onStatusChange(todo.id, next)
+  }
+
+  return (
+    <li className="flex items-start gap-3 py-3">
+      <button
+        type="button"
+        onClick={cycleStatus}
+        aria-label={`Status wechseln (aktuell: ${STATUS_LABELS[todo.status]})`}
+        className={cx(
+          'mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors',
+          todo.status === 'done'
+            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+            : todo.status === 'in_progress'
+            ? 'border-violet-500/30 bg-violet-500/10 text-violet-300'
+            : 'border-white/[0.1] bg-white/[0.04] text-slate-400 hover:text-slate-200',
+        )}
+      >
+        <Icon className="h-4 w-4" />
+      </button>
+      <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p
+            className={cx(
+              'truncate text-sm font-medium',
+              todo.status === 'done' ? 'text-slate-500 line-through' : 'text-white',
+            )}
+          >
+            {todo.title}
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <Badge tone={PRIORITY_TONE[todo.priority]}>Prio: {PRIORITY_LABELS[todo.priority]}</Badge>
+            <Badge tone={STATUS_TONE[todo.status]}>{STATUS_LABELS[todo.status]}</Badge>
+            {todo.isSample && <Badge tone="info">Beispiel</Badge>}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => onRemove(todo.id)}
+          className="inline-flex items-center gap-1 self-start rounded-lg border border-white/[0.06] bg-transparent px-2.5 py-1.5 text-xs text-slate-500 transition-colors hover:border-rose-500/30 hover:text-rose-300 sm:self-center"
+          aria-label="Aufgabe entfernen"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Entfernen
+        </button>
+      </div>
+    </li>
+  )
+}
