@@ -22,8 +22,6 @@ import {
 import { pickNextSafe } from '@/lib/delegations/pick-next-safe'
 import type { NextSafeResult } from '@/lib/delegations/pick-next-safe'
 import type { Delegation } from '@/lib/models/delegation'
-export type { NextSafeResult } from '@/lib/delegations/pick-next-safe'
-export { pickNextSafe } from '@/lib/delegations/pick-next-safe'
 
 export async function GET() {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
