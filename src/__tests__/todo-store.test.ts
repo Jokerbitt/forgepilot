@@ -4,6 +4,7 @@ import {
   sortTodos,
   filterTodos,
   countOpenTodos,
+  countByFilter,
   isSampleSet,
   buildSampleTodos,
   type Todo,
@@ -106,6 +107,22 @@ describe('countOpenTodos', () => {
 
   it('returns 0 for empty list', () => {
     expect(countOpenTodos([])).toBe(0)
+  })
+})
+
+describe('countByFilter', () => {
+  it('returns zero counts for empty list', () => {
+    expect(countByFilter([])).toEqual({ all: 0, open: 0, done: 0 })
+  })
+
+  it('counts open (non-done) and done separately and totals all', () => {
+    const todos: Todo[] = [
+      { id: '1', title: 'A', priority: 'high', status: 'open', createdAt: '2026-01-01' },
+      { id: '2', title: 'B', priority: 'high', status: 'in_progress', createdAt: '2026-01-01' },
+      { id: '3', title: 'C', priority: 'high', status: 'done', createdAt: '2026-01-01' },
+      { id: '4', title: 'D', priority: 'low', status: 'done', createdAt: '2026-01-01' },
+    ]
+    expect(countByFilter(todos)).toEqual({ all: 4, open: 2, done: 2 })
   })
 })
 

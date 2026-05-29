@@ -79,6 +79,22 @@ export function countOpenTodos(todos: readonly Todo[]): number {
   return todos.filter(todo => todo.status !== 'done').length
 }
 
+export interface FilterCounts {
+  all: number
+  open: number
+  done: number
+}
+
+export function countByFilter(todos: readonly Todo[]): FilterCounts {
+  let open = 0
+  let done = 0
+  for (const todo of todos) {
+    if (todo.status === 'done') done += 1
+    else open += 1
+  }
+  return { all: todos.length, open, done }
+}
+
 export function isSampleSet(todos: readonly Todo[]): boolean {
   return todos.length > 0 && todos.every(todo => todo.isSample === true)
 }
