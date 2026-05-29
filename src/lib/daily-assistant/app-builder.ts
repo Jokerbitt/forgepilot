@@ -1,5 +1,6 @@
 import type { AutopilotReadinessResponse } from '@/lib/autopilot/readiness'
 import type { DailyAssistantInput, DailyAssistantQueueItem } from './next-action'
+import type { ProjectPipelineSummary } from './project-pipeline'
 
 export type AppBuilderLevel = 'blocked' | 'small-app' | 'multi-slice-mvp' | 'large-app-assisted'
 
@@ -18,6 +19,7 @@ export interface AppBuilderCapability {
   canBuildSmallApp: boolean
   canBuildMultiSliceMvp: boolean
   canRunFullyAutonomous: boolean
+  projectPipeline?: ProjectPipelineSummary
   safeNextAction: {
     label: string
     href: string
@@ -36,6 +38,7 @@ interface BuildAppBuilderCapabilityInput {
   assistant: DailyAssistantInput
   queue: DailyAssistantQueueItem[]
   autopilot: AutopilotReadinessResponse
+  projectPipeline?: ProjectPipelineSummary
 }
 
 function countSafeQueue(queue: DailyAssistantQueueItem[]): number {
@@ -48,7 +51,13 @@ function clampScore(score: number): number {
 
 export function buildAppBuilderCapability(input: BuildAppBuilderCapabilityInput): AppBuilderCapability {
   const safeQueue = countSafeQueue(input.queue)
-  const hasPlanableWork = input.assistant.pending > 0 || input.assistant.approved > 0 || input.queue.length > 0
+  const projectPipeline = input.projectPipeline
+  const safeProjectSlices = projectPipeline?.safeSliceCount ?? 0
+  const hasPlanableWork = input.assistant.pending > 0
+    || input.assistant.approved > 0
+    || input.queue.length > 0
+    || safeProjectSlices > 0
+    || (projectPipeline?.workPackageCount ?? 0) > 0
   const gates = [
     {
       id: 'runner',
@@ -77,8 +86,14 @@ export function buildAppBuilderCapability(input: BuildAppBuilderCapabilityInput)
       label: 'Arbeitsqueue',
       ready: hasPlanableWork,
       detail: hasPlanableWork
-        ? `${input.assistant.pending + input.assistant.approved} Aufgabe(n) sind geplant oder startbereit.`
+        ? `${input.assistant.pending + input.assistant.approved} Delegation(en), ${safeProjectSlices} sichere Projekt-Slice(s) startbereit.`
         : 'Noch keine Arbeitspakete. Starte im Plan Mode mit einer Produktidee.',
+    },
+    {
+      id: 'project-pipeline',
+      label: 'Projekt-Slices',
+      ready: safeProjectSlices > 0 || (projectPipeline?.completedSliceCount ?? 0) > 0,
+      detail: projectPipeline?.recommendation ?? 'Noch kein Multi-Slice-Projektplan vorhanden.',
     },
     {
       id: 'no-critical-failures',
@@ -93,14 +108,22 @@ export function buildAppBuilderCapability(input: BuildAppBuilderCapabilityInput)
   let score = input.autopilot.score * 0.55
   score += gates.filter(gate => gate.ready).length * 8
   score += Math.min(safeQueue * 4, 12)
+  score += Math.min(safeProjectSlices * 5, 15)
   score -= Math.min(input.assistant.failed * 18, 36)
   score -= Math.min(input.assistant.running * 4, 8)
   const normalizedScore = clampScore(score)
 
   const blocked = gates.some(gate => !gate.ready && ['runner', 'pr-flow', 'validation', 'no-critical-failures'].includes(gate.id))
   const canBuildSmallApp = !blocked && input.autopilot.canExecuteCode && input.autopilot.canCreatePr
-  const canBuildMultiSliceMvp = canBuildSmallApp && normalizedScore >= 85 && (safeQueue >= 1 || input.assistant.pending >= 2 || input.assistant.approved >= 1)
-  const canRunFullyAutonomous = canBuildMultiSliceMvp && input.autopilot.canAutoMerge && input.assistant.failed === 0 && safeQueue >= 1
+  const hasMultiSlicePlan = (projectPipeline?.workPackageCount ?? 0) >= 3 || safeProjectSlices >= 2
+  const canBuildMultiSliceMvp = canBuildSmallApp
+    && normalizedScore >= 85
+    && (safeQueue >= 1 || safeProjectSlices >= 1 || input.assistant.pending >= 2 || input.assistant.approved >= 1)
+    && hasMultiSlicePlan
+  const canRunFullyAutonomous = canBuildMultiSliceMvp
+    && input.autopilot.canAutoMerge
+    && input.assistant.failed === 0
+    && (safeQueue >= 1 || safeProjectSlices >= 1)
   const level: AppBuilderLevel = blocked
     ? 'blocked'
     : canRunFullyAutonomous
@@ -115,8 +138,10 @@ export function buildAppBuilderCapability(input: BuildAppBuilderCapabilityInput)
       ? { label: 'Agenten live beobachten', href: '/live', mode: 'review' as const }
       : safeQueue > 0
         ? { label: 'Nächsten sicheren Slice starten', href: '/delegations', mode: 'execute' as const }
+        : projectPipeline?.nextCandidate
+          ? { label: 'Projekt-Slice vorbereiten', href: projectPipeline.nextCandidate.href, mode: 'execute' as const }
         : hasPlanableWork
-          ? { label: 'Freigaben prüfen', href: '/delegations', mode: 'review' as const }
+          ? { label: 'Projektplan prüfen', href: projectPipeline?.nextCandidate?.href ?? '/projects', mode: 'review' as const }
           : { label: 'App-Idee planen', href: '/idea', mode: 'plan' as const }
 
   return {
@@ -139,6 +164,7 @@ export function buildAppBuilderCapability(input: BuildAppBuilderCapabilityInput)
     canBuildSmallApp,
     canBuildMultiSliceMvp,
     canRunFullyAutonomous,
+    projectPipeline,
     safeNextAction,
     gates,
     workflow: [

@@ -135,6 +135,7 @@ interface AppBuilderCapability {
   canBuildSmallApp?: boolean
   canBuildMultiSliceMvp?: boolean
   canRunFullyAutonomous?: boolean
+  projectPipeline?: ProjectPipelineSummary
   safeNextAction?: {
     label: string
     href: string
@@ -152,6 +153,27 @@ interface AppBuilderCapability {
     detail: string
     state: 'now' | 'next' | 'later' | 'blocked'
   }>
+}
+
+interface ProjectPipelineSummary {
+  projectCount?: number
+  workPackageCount?: number
+  safeSliceCount?: number
+  blockedByDependencyCount?: number
+  inFlightSliceCount?: number
+  completedSliceCount?: number
+  recommendation?: string
+  nextCandidate?: {
+    id: string
+    projectId: string
+    projectTitle: string
+    title: string
+    riskClass: string
+    priority: string
+    status: string
+    href: string
+    reason: string
+  } | null
 }
 
 interface AssistantRoadmap {
@@ -185,6 +207,7 @@ interface DailyAssistantSnapshotResponse {
   readinessScore?: number
   autonomyText?: string
   appBuilder?: AppBuilderCapability
+  projectPipeline?: ProjectPipelineSummary
   roadmap?: AssistantRoadmap
   stats?: {
     pending?: number
@@ -767,6 +790,61 @@ export default function LiveViewPage() {
                 </div>
               )}
             </div>
+          </div>
+
+          <div className="mt-4 rounded-lg border border-white/[0.07] bg-black/15 p-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-white">Projekt-Pipeline</p>
+                <p className="mt-1 max-w-3xl text-xs leading-5 text-sky-50/60">
+                  {dailyAssistant?.projectPipeline?.recommendation
+                    ?? appBuilder?.projectPipeline?.recommendation
+                    ?? 'ForgePilot sammelt Projektpläne und zeigt den nächsten sicheren Slice für größere Apps.'}
+                </p>
+                {(dailyAssistant?.projectPipeline?.nextCandidate ?? appBuilder?.projectPipeline?.nextCandidate) && (
+                  <p className="mt-1 text-[11px] leading-5 text-sky-100/70">
+                    Nächster Slice: {(dailyAssistant?.projectPipeline?.nextCandidate ?? appBuilder?.projectPipeline?.nextCandidate)?.title}
+                  </p>
+                )}
+              </div>
+              <div className="grid grid-cols-4 gap-2 text-center text-xs sm:min-w-[420px]">
+                <span className="rounded-md border border-white/[0.07] bg-white/[0.035] px-2 py-2">
+                  <span className="block font-bold text-white">{dailyAssistant?.projectPipeline?.projectCount ?? appBuilder?.projectPipeline?.projectCount ?? 0}</span>
+                  <span className="text-slate-500">Projekte</span>
+                </span>
+                <span className="rounded-md border border-white/[0.07] bg-white/[0.035] px-2 py-2">
+                  <span className="block font-bold text-white">{dailyAssistant?.projectPipeline?.workPackageCount ?? appBuilder?.projectPipeline?.workPackageCount ?? 0}</span>
+                  <span className="text-slate-500">Pakete</span>
+                </span>
+                <span className="rounded-md border border-white/[0.07] bg-white/[0.035] px-2 py-2">
+                  <span className="block font-bold text-white">{dailyAssistant?.projectPipeline?.safeSliceCount ?? appBuilder?.projectPipeline?.safeSliceCount ?? 0}</span>
+                  <span className="text-slate-500">startbereit</span>
+                </span>
+                <span className="rounded-md border border-white/[0.07] bg-white/[0.035] px-2 py-2">
+                  <span className="block font-bold text-white">{dailyAssistant?.projectPipeline?.blockedByDependencyCount ?? appBuilder?.projectPipeline?.blockedByDependencyCount ?? 0}</span>
+                  <span className="text-slate-500">wartend</span>
+                </span>
+              </div>
+            </div>
+            {(dailyAssistant?.projectPipeline?.nextCandidate ?? appBuilder?.projectPipeline?.nextCandidate) && (
+              <div className="mt-3 flex flex-col gap-2 rounded-md border border-sky-400/20 bg-sky-500/10 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-sky-50">
+                    {(dailyAssistant?.projectPipeline?.nextCandidate ?? appBuilder?.projectPipeline?.nextCandidate)?.projectTitle}
+                  </p>
+                  <p className="mt-1 text-[11px] leading-5 text-sky-50/65">
+                    {(dailyAssistant?.projectPipeline?.nextCandidate ?? appBuilder?.projectPipeline?.nextCandidate)?.reason}
+                  </p>
+                </div>
+                <Link
+                  href={(dailyAssistant?.projectPipeline?.nextCandidate ?? appBuilder?.projectPipeline?.nextCandidate)?.href ?? '/projects'}
+                  className="inline-flex min-h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-sky-400/40 bg-sky-500/15 px-3 py-1.5 text-xs font-semibold text-sky-100 transition hover:bg-sky-500/25"
+                >
+                  Projekt öffnen
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+            )}
           </div>
 
           <div className="mt-4 rounded-lg border border-white/[0.07] bg-black/15 p-3">

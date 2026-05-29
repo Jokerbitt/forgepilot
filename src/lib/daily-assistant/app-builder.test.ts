@@ -45,6 +45,16 @@ describe('buildAppBuilderCapability', () => {
       assistant: baseAssistant,
       queue: [safeQueueItem],
       autopilot: readyAutopilot,
+      projectPipeline: {
+        projectCount: 1,
+        workPackageCount: 4,
+        safeSliceCount: 1,
+        blockedByDependencyCount: 0,
+        inFlightSliceCount: 0,
+        completedSliceCount: 0,
+        recommendation: 'Naechster sicherer App-Slice: Build first app slice.',
+        nextCandidate: null,
+      },
     })
 
     expect(capability.level).toBe('large-app-assisted')
@@ -98,5 +108,38 @@ describe('buildAppBuilderCapability', () => {
     expect(capability.level).toBe('small-app')
     expect(capability.safeNextAction.mode).toBe('plan')
     expect(capability.safeNextAction.href).toBe('/idea')
+  })
+
+  it('uses safe project slices for multi-slice MVP readiness even before delegations exist', () => {
+    const capability = buildAppBuilderCapability({
+      assistant: { ...baseAssistant, approved: 0 },
+      queue: [],
+      autopilot: readyAutopilot,
+      projectPipeline: {
+        projectCount: 1,
+        workPackageCount: 5,
+        safeSliceCount: 2,
+        blockedByDependencyCount: 1,
+        inFlightSliceCount: 0,
+        completedSliceCount: 0,
+        recommendation: 'Naechster sicherer App-Slice: Foundation.',
+        nextCandidate: {
+          id: 'wp-1',
+          projectId: 'brief-1',
+          projectTitle: 'TaskFlow',
+          title: 'Foundation',
+          riskClass: 'A',
+          priority: 'critical',
+          status: 'ready',
+          href: '/projects/brief-1',
+          reason: 'Kleiner sicherer Start-Slice ohne offene Abhaengigkeiten.',
+        },
+      },
+    })
+
+    expect(capability.canBuildMultiSliceMvp).toBe(true)
+    expect(capability.safeNextAction.label).toBe('Projekt-Slice vorbereiten')
+    expect(capability.safeNextAction.href).toBe('/projects/brief-1')
+    expect(capability.gates.find(gate => gate.id === 'project-pipeline')?.ready).toBe(true)
   })
 })

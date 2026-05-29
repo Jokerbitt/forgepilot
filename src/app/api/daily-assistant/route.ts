@@ -13,11 +13,14 @@ import {
 import { buildAppBuilderCapability } from '@/lib/daily-assistant/app-builder'
 import { buildAssistantRoadmap } from '@/lib/daily-assistant/roadmap'
 import { buildQueueHygieneSummary } from '@/lib/daily-assistant/queue-hygiene'
+import { buildProjectPipelineSummary } from '@/lib/daily-assistant/project-pipeline'
 import { describeDeliveryAction, pickNextDeliveryAction, type DeliveryCycleAction } from '@/lib/daily-assistant/delivery-cycle'
 import { findExistingRepairDelegation } from '@/lib/daily-assistant/repair-delegation'
 import { getAutopilotReadiness } from '@/lib/autopilot/readiness'
 import type { Delegation } from '@/lib/models/delegation'
 import { getNBAConfig } from '@/lib/nba-engine/nba-config'
+import { readProjectBriefs } from '@/lib/project-briefs'
+import { readWorkPackages } from '@/lib/knowledge/milestone-store'
 import {
   createDelegationRepository,
   getDelegationStorageMode,
@@ -116,7 +119,12 @@ export async function GET() {
   const steps = buildDailyAssistantSteps(input)
   const blockers = buildDailyAssistantBlockers(input, queue)
   const autopilot = getAutopilotReadiness()
-  const appBuilder = buildAppBuilderCapability({ assistant: input, queue, autopilot })
+  const projectPipeline = buildProjectPipelineSummary({
+    briefs: readProjectBriefs(),
+    workPackages: readWorkPackages(),
+    delegations,
+  })
+  const appBuilder = buildAppBuilderCapability({ assistant: input, queue, autopilot, projectPipeline })
   const roadmap = buildAssistantRoadmap({ assistant: input, queue, autopilot, appBuilder })
   const deliveryAction = pickNextDeliveryAction(delegations)
   const repairDelegation = deliveryAction?.type === 'repair_required'
@@ -136,6 +144,7 @@ export async function GET() {
     blockers,
     queue,
     queueHygiene,
+    projectPipeline,
     deliveryGate: {
       status: deliveryAction?.type === 'repair_required'
         ? 'blocked'
