@@ -62,6 +62,7 @@ describe('CommandPalette', () => {
       { id: 'nav-projects', label: 'Projects', group: 'Navigation' },
       { id: 'nav-delegations', label: 'Execute', group: 'Navigation' },
       { id: 'nav-live', label: 'Live View', group: 'Navigation' },
+      { id: 'nav-tools', label: 'Werkzeuge', group: 'Tools' },
       { id: 'nav-branches', label: 'Branches', group: 'Tools' },
       { id: 'nav-knowledge', label: 'Knowledge', group: 'Tools' },
       { id: 'nav-settings', label: 'Settings', group: 'Tools' },
@@ -73,7 +74,7 @@ describe('CommandPalette', () => {
     const actionItems = commands.filter(c => c.group === 'Actions')
 
     expect(navItems).toHaveLength(5)
-    expect(toolItems).toHaveLength(3)
+    expect(toolItems).toHaveLength(4)
     expect(actionItems).toHaveLength(1)
     expect(actionItems[0].id).toBe('action-new-idea')
   })

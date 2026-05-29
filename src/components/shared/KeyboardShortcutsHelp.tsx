@@ -12,9 +12,11 @@ const SHORTCUTS: Array<{ key: string; desc: string; section: string }> = [
   { section: 'Global', key: 'Esc', desc: 'Modal / Palette schließen' },
   { section: 'Navigation', key: 'G H', desc: 'Command Center (Home)' },
   { section: 'Navigation', key: 'G I', desc: 'Plan Mode (/idea)' },
+  { section: 'Navigation', key: 'G P', desc: 'Projekte' },
   { section: 'Navigation', key: 'G D', desc: 'Ausführen / Delegationen' },
   { section: 'Navigation', key: 'G L', desc: 'Live View' },
-  { section: 'Navigation', key: 'G S', desc: 'Settings / Werkzeuge' },
+  { section: 'Navigation', key: 'G T', desc: 'Werkzeuge' },
+  { section: 'Navigation', key: 'G S', desc: 'Einstellungen' },
   { section: 'Palette', key: '↑↓', desc: 'Ergebnis auswählen' },
   { section: 'Palette', key: '↵', desc: 'Zu Seite navigieren' },
 ]

@@ -7,9 +7,7 @@ import { signOut } from 'next-auth/react'
 import {
   LayoutDashboard,
   ListChecks,
-  BookOpen,
-  GitBranch,
-  Settings,
+  Wrench,
   Command,
   ChevronRight,
   Zap,
@@ -41,9 +39,7 @@ const navItems: NavItem[] = [
   { href: '/projects', key: 'plan', icon: FolderOpen, section: 'Main' },
   { href: '/delegations', key: 'execute', icon: ListChecks, section: 'Main' },
   { href: '/live', key: 'liveView', icon: Monitor, section: 'Main' },
-  { href: '/knowledge', key: 'knowledge', icon: BookOpen, section: 'More' },
-  { href: '/branches', key: 'system', icon: GitBranch, section: 'More' },
-  { href: '/settings', key: 'settings', icon: Settings, section: 'More' },
+  { href: '/tools', key: 'tools', icon: Wrench, section: 'More' },
 ]
 
 const sectionColors: Record<string, string> = {
@@ -186,9 +182,7 @@ export function AppNav() {
             <div className="pb-2">
               {moreNavItems.map(item => {
                 const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
-                const count =
-                  item.href === '/branches' ? attentionCount
-                    : undefined
+                const count = item.href === '/tools' ? attentionCount : undefined
                 const isLive = false
                 const isAutonomousSettings = item.href === '/settings' && autonomousModeActive
                 return (
@@ -302,7 +296,7 @@ export function AppNav() {
               )
             })}
             <Link
-              href="/settings"
+              href="/tools"
               className="shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white"
             >
               {ui.more}

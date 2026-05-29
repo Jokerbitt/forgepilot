@@ -40,6 +40,7 @@ export function CommandPalette() {
     { id: 'nav-projects', label: 'Projects', description: 'Projects and delegations', action: () => navigate('/projects'), group: 'Navigation' },
     { id: 'nav-delegations', label: 'Execute', description: 'Delegation queue', action: () => navigate('/delegations'), group: 'Navigation' },
     { id: 'nav-live', label: 'Live View', description: 'Watch agents and app status', action: () => navigate('/live'), group: 'Navigation' },
+    { id: 'nav-tools', label: 'Werkzeuge', description: 'Useful tools, expert mode and debug', action: () => navigate('/tools'), group: 'Tools' },
     { id: 'nav-branches', label: 'Branches', description: 'Review PRs and changes', action: () => navigate('/branches'), group: 'Tools' },
     { id: 'nav-knowledge', label: 'Knowledge', description: 'Saved learnings', action: () => navigate('/knowledge'), group: 'Tools' },
     { id: 'nav-settings', label: 'Settings', description: 'Connections and providers', action: () => navigate('/settings'), group: 'Tools' },
