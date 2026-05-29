@@ -106,3 +106,24 @@ hier dokumentiert.
 `computeNextAction` ist als reine Funktion exportiert und unter Test, damit
 zukünftige Critic Reviews die Banner-Priorisierung (Dev Server → Runner → AI
 → GitHub → Storage → Smoke → Linear/Ollama) eindeutig nachvollziehen können.
+
+#### Re-Verifikation (2026-05-29, Iteration `e81b5c7b`)
+
+Folge-Repair für Delegation `e81b5c7b-ef4c-4f71-bc3f-2748ed47fbed`. Der
+Critic der vorherigen Iteration meldete erneut *correctness 0 / efficiency 0
+/ drift 0* mit Begründung *"insufficient response… lacks details about root
+cause, focused tests, summary report, or changes"*. Das betraf den
+Antworttext des Agents, nicht den Code in PR #604.
+
+Diese Iteration ändert keinen Anwendungscode (Tests, Lint und Type-Check der
+Vorgänger-Iteration sind weiterhin grün) und ergänzt nur diesen Eintrag, der
+für Critic und Delivery Gate die Evidenz an einer einzigen Stelle ankert.
+
+| Verifikationsschritt                                                  | Ergebnis            |
+|-----------------------------------------------------------------------|---------------------|
+| `vitest run SystemReadinessPanel.test.tsx storage-status cli-status`  | 10/10 passed (3 Dateien) |
+| `npm run lint`                                                        | ✔ No ESLint warnings or errors |
+| `npm run type-check`                                                  | tsc --noEmit ohne Fehler |
+
+Touched files in dieser Iteration: nur `docs/readiness/local-testbetrieb.md`
+(additiv, keine Verhaltensänderung).
