@@ -37,6 +37,7 @@ import { AffectedFilesPanel } from '@/components/delegation/AffectedFilesPanel'
 import { WorkbenchTabs, WorkbenchPanel, getDefaultTab, type WorkbenchTab } from '@/components/delegation/DelegationWorkbench'
 import { DelegationFocusCard } from '@/components/delegation/DelegationFocusCard'
 import { PreviewAndIteratePanel } from '@/components/delegation/PreviewAndIteratePanel'
+import { DelegationErrorCard } from '@/components/delegation/DelegationErrorCard'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
   switch (status) {
@@ -733,7 +734,14 @@ export default function DelegationDetailPage() {
         ════════════════════════════════════════════════════════════════ */}
         <WorkbenchPanel tab="action" activeTab={activeTab}>
 
-        {/* ── Structured error recovery (when failed) ─────────────────── */}
+        {/* ── M4/M5: Classified error card with actionable fix ────────── */}
+        <DelegationErrorCard
+          delegation={d}
+          onRetry={() => updateStatus('pending')}
+          onReviewRetry={handleReviewRetry}
+        />
+
+        {/* ── Legacy: Structured error recovery banner ─────────────────── */}
         {d.status === 'failed' && d.errorMessage && (
           <DelegationErrorBanner errorMessage={d.errorMessage} />
         )}
