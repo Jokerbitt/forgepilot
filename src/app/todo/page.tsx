@@ -162,6 +162,26 @@ export default function TodoPage() {
         </header>
 
         <section
+          aria-label="Produktiver Testlauf"
+          className="mb-6 rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] p-4 sm:p-5"
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300" />
+              <div>
+                <p className="text-sm font-semibold text-emerald-100">Produktiver Testlauf geprueft</p>
+                <p className="mt-1 text-xs leading-5 text-emerald-100/75">
+                  Persistenz, API-Validierung, Reload-Verhalten und CI sind dokumentiert. Diese Seite ist der erste kleine ForgePilot-App-Run.
+                </p>
+              </div>
+            </div>
+            <Link href="/live" className={buttonClassName('secondary', 'min-h-9 shrink-0')}>
+              Live View
+            </Link>
+          </div>
+        </section>
+
+        <section
           aria-label="Neue Aufgabe anlegen"
           className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-5 shadow-sm shadow-black/20 sm:p-6"
         >
