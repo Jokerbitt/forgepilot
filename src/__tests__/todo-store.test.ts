@@ -12,7 +12,7 @@ import {
   buildSampleTodos,
   type Todo,
 } from '@/lib/todo/todo-store'
-import { JsonTodoRepository, parseTodos } from '@/lib/todo/todo-repository'
+import { createResilientTodoRepository, JsonTodoRepository, parseTodos, type TodoRepository } from '@/lib/todo/todo-repository'
 
 const FIXED_NOW = () => new Date('2026-05-29T12:00:00.000Z')
 let nextId = 0
@@ -180,5 +180,31 @@ describe('todo repository fallback', () => {
   it('rejects invalid persisted todo payloads', () => {
     expect(parseTodos([{ id: 'broken', title: 'Missing fields' }])).toBeNull()
     expect(parseTodos({ todos: [] })).toBeNull()
+  })
+
+  it('uses the fallback repository when primary storage fails', async () => {
+    const todos: Todo[] = [
+      {
+        id: 'fallback-1',
+        title: 'Fallback works',
+        priority: 'medium',
+        status: 'open',
+        createdAt: '2026-05-29T12:00:00.000Z',
+      },
+    ]
+    const failingPrimary: TodoRepository = {
+      async listAll() {
+        throw new Error('primary unavailable')
+      },
+      async replaceAll() {
+        throw new Error('primary unavailable')
+      },
+    }
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'forgepilot-todos-fallback-'))
+    const fallback = new JsonTodoRepository(path.join(dir, 'todos.json'))
+    const repository = createResilientTodoRepository(failingPrimary, fallback)
+
+    await expect(repository.replaceAll(todos)).resolves.toEqual(todos)
+    await expect(repository.listAll()).resolves.toEqual(todos)
   })
 })

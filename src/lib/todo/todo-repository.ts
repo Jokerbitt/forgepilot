@@ -12,6 +12,11 @@ export interface TodoRepository {
   replaceAll(todos: readonly Todo[]): Promise<Todo[]>
 }
 
+function reportFallback(reason: unknown) {
+  const message = reason instanceof Error ? reason.message : 'Unknown todo storage error'
+  console.warn(`[todo] PostgreSQL storage unavailable, using JSON fallback: ${message}`)
+}
+
 function rowToTodo(row: DbTodoItem): Todo {
   return {
     id: row.id,
@@ -48,6 +53,31 @@ export function isTodo(value: unknown): value is Todo {
 export function parseTodos(value: unknown): Todo[] | null {
   if (!Array.isArray(value)) return null
   return value.every(isTodo) ? value : null
+}
+
+class ResilientTodoRepository implements TodoRepository {
+  constructor(
+    private readonly primary: TodoRepository,
+    private readonly fallback: TodoRepository,
+  ) {}
+
+  async listAll(): Promise<Todo[]> {
+    try {
+      return await this.primary.listAll()
+    } catch (error) {
+      reportFallback(error)
+      return this.fallback.listAll()
+    }
+  }
+
+  async replaceAll(todos: readonly Todo[]): Promise<Todo[]> {
+    try {
+      return await this.primary.replaceAll(todos)
+    } catch (error) {
+      reportFallback(error)
+      return this.fallback.replaceAll(todos)
+    }
+  }
 }
 
 class PostgresTodoRepository implements TodoRepository {
@@ -101,6 +131,11 @@ export class JsonTodoRepository implements TodoRepository {
 }
 
 export function createTodoRepository(filePath = TODOS_FILE): TodoRepository {
-  if (isDatabaseConfigured()) return new PostgresTodoRepository()
-  return new JsonTodoRepository(filePath)
+  const fallback = new JsonTodoRepository(filePath)
+  if (isDatabaseConfigured()) return new ResilientTodoRepository(new PostgresTodoRepository(), fallback)
+  return fallback
+}
+
+export function createResilientTodoRepository(primary: TodoRepository, fallback: TodoRepository): TodoRepository {
+  return new ResilientTodoRepository(primary, fallback)
 }
