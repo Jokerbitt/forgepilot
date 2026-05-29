@@ -123,4 +123,20 @@ describe('failed delegation triage', () => {
     expect(summary.topItems[0].severity).toBe('critical')
     expect(summary.topItems.map(item => item.id)).not.toContain('ok')
   })
+
+  it('prioritizes the explicit auth error over earlier command log words', () => {
+    const item = classifyFailedDelegation(makeDelegation({
+      errorMessage: 'Anthropic API Key ungueltig oder nicht konfiguriert.',
+      logs: [
+        { timestamp: '2026-05-22T08:07:00.000Z', type: 'command', message: 'npm run lint' },
+        { timestamp: '2026-05-22T08:08:00.000Z', type: 'error', message: 'Anthropic API Key ungueltig oder nicht konfiguriert.' },
+      ],
+    }))
+
+    expect(item).toMatchObject({
+      category: 'human-review',
+      severity: 'critical',
+      failureCause: 'auth',
+    })
+  })
 })

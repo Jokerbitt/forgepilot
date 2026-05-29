@@ -108,6 +108,8 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   research: 'Research',
 }
 
+const TERMINAL_STATUSES = new Set(['completed', 'cancelled', 'rejected'])
+
 function getWorkItemId(delegation: Delegation): string {
   return delegation.contract.workItemId || delegation.contract.id || delegation.id
 }
@@ -188,12 +190,15 @@ function DelegationsContent() {
   }, [searchParams])
 
   // Filters — initialised from URL params
-  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') ?? 'Alle')
+  const initialStatusFilter = searchParams.get('status') ?? 'Alle'
+  const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter)
   const [projectFilter, setProjectFilter] = useState<string>(searchParams.get('project') ?? 'Alle')
   const [approvalFilter, setApprovalFilter] = useState<ApprovalFilter>((searchParams.get('approval') as ApprovalFilter) ?? 'Alle')
   const [searchQuery, setSearchQuery] = useState<string>(searchParams.get('q') ?? '')
   const [todayOnly, setTodayOnly] = useState(searchParams.get('today') === '1')
-  const [hideTerminal, setHideTerminal] = useState(searchParams.get('hideTerminal') === '1')
+  const [hideTerminal, setHideTerminal] = useState(
+    searchParams.get('hideTerminal') !== '0' && !TERMINAL_STATUSES.has(initialStatusFilter)
+  )
   const [tagFilter, setTagFilter] = useState<string>(searchParams.get('tag') ?? 'Alle')
   const [groupByBrief, setGroupByBrief] = useState(searchParams.get('groupByBrief') === '1')
   const [showAllRows, setShowAllRows] = useState(false)
@@ -207,7 +212,7 @@ function DelegationsContent() {
     if (approvalFilter !== 'Alle') params.set('approval', approvalFilter)
     if (searchQuery)               params.set('q',        searchQuery)
     if (todayOnly)                 params.set('today',    '1')
-    if (hideTerminal)              params.set('hideTerminal', '1')
+    if (!hideTerminal)             params.set('hideTerminal', '0')
     if (tagFilter !== 'Alle')      params.set('tag',      tagFilter)
     if (groupByBrief)              params.set('groupByBrief', '1')
     const qs = params.toString()
@@ -718,6 +723,10 @@ function DelegationsContent() {
   const pendingCount = delegations.filter(d => d.status === 'pending').length
   const failedCount = delegations.filter(d => d.status === 'failed').length
   const completedCount = delegations.filter(d => d.status === 'completed').length
+  const visibleRunningCount = sortedDelegations.filter(d => d.status === 'running').length
+  const visiblePendingCount = sortedDelegations.filter(d => d.status === 'pending').length
+  const visibleFailedCount = sortedDelegations.filter(d => d.status === 'failed').length
+  const visibleCompletedCount = sortedDelegations.filter(d => d.status === 'completed').length
   const approvalRequiredCount = delegations.filter(d => d.contract.requiresApproval).length
   const autoApprovedCount = delegations.filter(d => !d.contract.requiresApproval).length
   const riskBlockedCount = delegations.filter(d => d.contract.riskClass === 'C').length
@@ -761,21 +770,24 @@ function DelegationsContent() {
               <span>📋</span> Delegation Center
             </h1>
             <p className="text-gray-500 text-sm mt-1">
-              {runningCount > 0 && (
-                <span className="text-green-400 font-medium">{runningCount} läuft • </span>
+              {visibleRunningCount > 0 && (
+                <span className="text-green-400 font-medium">{visibleRunningCount} läuft • </span>
               )}
-              {pendingCount > 0 && (
-                <span className="text-yellow-400 font-medium">{pendingCount} ausstehend • </span>
+              {visiblePendingCount > 0 && (
+                <span className="text-yellow-400 font-medium">{visiblePendingCount} ausstehend • </span>
               )}
               {approvalRequiredCount > 0 && (
                 <span className="text-yellow-400 font-medium">{approvalRequiredCount} Freigabe noetig • </span>
               )}
-              {delegations.length} Delegation{delegations.length !== 1 ? 'en' : ''} gesamt
+              {sortedDelegations.length} sichtbar
+              {delegations.length !== sortedDelegations.length && (
+                <span className="text-gray-600"> · {delegations.length} in Historie</span>
+              )}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {/* Bulk delete confirm */}
-            {terminalCount > 0 && (
+            {!hideTerminal && terminalCount > 0 && (
               confirmBulkDelete ? (
                 <div className="flex items-center gap-2 bg-red-950/60 border border-red-900 rounded-lg px-3 py-1.5">
                   <span className="text-xs text-red-300">{terminalCount} löschen?</span>
@@ -812,7 +824,7 @@ function DelegationsContent() {
                 ✔ Alle freigeben ({approvableCount})
               </button>
             )}
-            {delegations.length > 0 && (
+            {sortedDelegations.length > 0 && (
               <div className="relative" ref={exportDropdownRef}>
                 <button
                   onClick={() => setShowExportDropdown(v => !v)}
@@ -920,18 +932,18 @@ function DelegationsContent() {
         )}
 
         {/* ── Cost / Stats Summary ──────────────────────────────────── */}
-        {!loading && delegations.length > 0 && (
+        {!loading && sortedDelegations.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
-              <div className="text-2xl font-bold text-white">{delegations.length}</div>
-              <div className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Gesamt</div>
+              <div className="text-2xl font-bold text-white">{sortedDelegations.length}</div>
+              <div className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Sichtbar</div>
             </div>
-            <div className={`bg-gray-900 border rounded-xl p-4 text-center ${runningCount > 0 ? 'border-green-800/60' : 'border-gray-800'}`}>
-              <div className={`text-2xl font-bold ${runningCount > 0 ? 'text-green-400' : 'text-gray-500'}`}>
-                {runningCount > 0 ? runningCount : completedCount}
+            <div className={`bg-gray-900 border rounded-xl p-4 text-center ${visibleRunningCount > 0 ? 'border-green-800/60' : 'border-gray-800'}`}>
+              <div className={`text-2xl font-bold ${visibleRunningCount > 0 ? 'text-green-400' : 'text-gray-500'}`}>
+                {visibleRunningCount > 0 ? visibleRunningCount : visibleCompletedCount}
               </div>
               <div className="text-xs text-gray-500 mt-1 uppercase tracking-wide">
-                {runningCount > 0 ? 'Laufend' : 'Abgeschlossen'}
+                {visibleRunningCount > 0 ? 'Laufend' : 'Abgeschlossen'}
               </div>
             </div>
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
@@ -955,14 +967,22 @@ function DelegationsContent() {
               <div key={i} className="h-14 bg-gray-900 rounded-xl border border-gray-800 animate-pulse" />
             ))}
           </div>
-        ) : delegations.length === 0 ? (
+        ) : sortedDelegations.length === 0 ? (
           <div className="bg-gray-900 p-10 rounded-xl border border-gray-800 text-center">
             <div className="text-4xl mb-3">🤖</div>
-            <h3 className="text-lg text-gray-400 mb-2">Noch keine Delegations</h3>
+            <h3 className="text-lg text-gray-400 mb-2">
+              {delegations.length === 0 ? 'Noch keine Delegationen' : 'Keine aktive Arbeit sichtbar'}
+            </h3>
             <p className="text-gray-600 text-sm mb-6">
-              Noch keine Delegations — starte eine Idee unter{' '}
-              <Link href="/idea" className="text-violet-400 hover:text-violet-300 underline underline-offset-2">/idea</Link>{' '}
-              oder erstelle direkt eine neue Delegation.
+              {delegations.length === 0 ? (
+                <>
+                  Starte eine Idee unter{' '}
+                  <Link href="/idea" className="text-violet-400 hover:text-violet-300 underline underline-offset-2">/idea</Link>{' '}
+                  oder erstelle direkt eine neue Delegation.
+                </>
+              ) : (
+                'Die Arbeitsfläche ist sauber. Abgeschlossene Evidence-Runs liegen in der Historie und stören den nächsten E2E-Test nicht.'
+              )}
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <Link
@@ -978,6 +998,15 @@ function DelegationsContent() {
                 <Plus size={16} />
                 Delegation erstellen
               </button>
+              {delegations.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setHideTerminal(false)}
+                  className="inline-flex items-center gap-2 px-4 py-2 border border-gray-700 hover:border-gray-500 text-gray-300 text-sm font-semibold rounded-lg transition-colors"
+                >
+                  Historie anzeigen
+                </button>
+              )}
             </div>
           </div>
         ) : (
@@ -986,10 +1015,10 @@ function DelegationsContent() {
             {/* ── KPI Strip ───────────────────────────────────────────── */}
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
               {[
-                { label: 'Gesamt',       value: delegations.length,    color: 'text-gray-200',    onClick: undefined },
-                { label: 'Laufend',      value: runningCount,          color: 'text-violet-400',  onClick: () => setStatusFilter('running') },
-                { label: 'Fertig',       value: completedCount,        color: 'text-emerald-400', onClick: () => setStatusFilter('completed') },
-                { label: 'Fehler',       value: failedCount,           color: failedCount > 0 ? 'text-red-400' : 'text-gray-600', onClick: failedCount > 0 ? () => setStatusFilter('failed') : undefined },
+                { label: 'Sichtbar',     value: sortedDelegations.length, color: 'text-gray-200',    onClick: undefined },
+                { label: 'Laufend',      value: visibleRunningCount,      color: 'text-violet-400',  onClick: () => setStatusFilter('running') },
+                { label: 'Fertig',       value: visibleCompletedCount,    color: 'text-emerald-400', onClick: () => setStatusFilter('completed') },
+                { label: 'Fehler',       value: visibleFailedCount,       color: visibleFailedCount > 0 ? 'text-red-400' : 'text-gray-600', onClick: visibleFailedCount > 0 ? () => setStatusFilter('failed') : undefined },
                 { label: 'Ø Dauer',      value: avgDurationMin != null ? `${avgDurationMin}m` : '–', color: 'text-blue-300', onClick: undefined },
                 { label: 'Budget',       value: hasActualCosts ? `$${totalActual.toFixed(3)}` : `~$${totalEstimated.toFixed(2)}`, color: hasActualCosts ? 'text-yellow-400' : 'text-gray-500', onClick: undefined },
               ].map(({ label, value, color, onClick }) => (
@@ -1012,7 +1041,10 @@ function DelegationsContent() {
                 {['Alle', 'running', 'pending', 'approved', 'completed', 'failed', 'cancelled', 'rejected'].map(s => (
                   <button
                     key={s}
-                    onClick={() => setStatusFilter(s)}
+                    onClick={() => {
+                      setStatusFilter(s)
+                      if (TERMINAL_STATUSES.has(s)) setHideTerminal(false)
+                    }}
                     className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                       statusFilter === s
                         ? 'bg-blue-600 text-white'
@@ -1180,6 +1212,7 @@ function DelegationsContent() {
                     setApprovalFilter('Alle')
                     setSearchQuery('')
                     setTodayOnly(false)
+                    setHideTerminal(true)
                     setTagFilter('Alle')
                   }}
                   className="text-blue-500 hover:text-blue-400 transition-colors"

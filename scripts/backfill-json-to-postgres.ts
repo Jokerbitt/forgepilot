@@ -124,6 +124,16 @@ async function main(): Promise<void> {
           autoOrchestrate: d.autoOrchestrate ?? false,
           priority: d.priority ?? null,
           briefId: d.briefId ?? null,
+          criticScore:
+            d.criticScore != null
+              ? (d.criticScore as unknown as Record<string, unknown>)
+              : null,
+          contextSnapshot:
+            d.contextSnapshot != null
+              ? (d.contextSnapshot as unknown as Record<string, unknown>)
+              : null,
+          startedAt: d.startedAt ? new Date(d.startedAt) : null,
+          completedAt: d.completedAt ? new Date(d.completedAt) : null,
           createdAt: new Date(d.createdAt),
           updatedAt: new Date(d.updatedAt),
         })
@@ -153,6 +163,16 @@ async function main(): Promise<void> {
             autoOrchestrate: d.autoOrchestrate ?? false,
             priority: d.priority ?? null,
             briefId: d.briefId ?? null,
+            criticScore:
+              d.criticScore != null
+                ? (d.criticScore as unknown as Record<string, unknown>)
+                : null,
+            contextSnapshot:
+              d.contextSnapshot != null
+                ? (d.contextSnapshot as unknown as Record<string, unknown>)
+                : null,
+            startedAt: d.startedAt ? new Date(d.startedAt) : null,
+            completedAt: d.completedAt ? new Date(d.completedAt) : null,
             updatedAt: new Date(d.updatedAt),
           },
         })

@@ -1,4 +1,5 @@
 import type { Delegation } from '@/lib/models/delegation'
+import type { AgentLog } from '@/lib/models/delegation'
 
 export type FailureCause =
   | 'cancelled'
@@ -28,6 +29,8 @@ export interface RetryPlan {
   backoffMs: number
 }
 
+export type RetryDelegationPatch = Partial<Omit<Delegation, 'id' | 'createdAt'>>
+
 const MAX_RETRIES = 3
 
 export function countRetries(delegation: Delegation): number {
@@ -48,8 +51,31 @@ function combinedFailureText(delegation: Delegation): string {
     .toLowerCase()
 }
 
+function primaryFailureText(delegation: Delegation): string {
+  return [
+    delegation.errorMessage,
+    delegation.failureFeedback,
+    ...(delegation.logs ?? []).filter(log => log.type === 'error').slice(-5).map(log => log.message),
+  ]
+    .filter(Boolean)
+    .join('\n')
+    .toLowerCase()
+}
+
+function containsAuthFailure(text: string): boolean {
+  return text.includes('authentication')
+    || text.includes('invalid x-api-key')
+    || text.includes('api key')
+    || text.includes('api-key')
+    || text.includes('oauth')
+    || text.includes('unauthorized')
+}
+
 export function detectFailureCause(delegation: Delegation): FailureCause {
   if (delegation.status === 'cancelled') return 'cancelled'
+
+  const primaryText = primaryFailureText(delegation)
+  if (containsAuthFailure(primaryText)) return 'auth'
 
   const text = combinedFailureText(delegation)
   if (text.includes('typescript') || text.includes('type error') || text.includes('ts(') || text.includes('tsc')) return 'type-error'
@@ -61,7 +87,7 @@ export function detectFailureCause(delegation: Delegation): FailureCause {
   if (text.includes('ambiguous') || text.includes('unclear') || text.includes('what exactly')) return 'unclear-requirements'
   if (text.includes('budget exceeded') || (text.includes('budget') && text.includes('cost'))) return 'budget-exceeded'
   if (text.includes('reached max turns') || text.includes('turn-limit') || text.includes('max turns')) return 'turn-limit'
-  if (text.includes('authentication') || text.includes('invalid x-api-key') || text.includes('api key')) return 'auth'
+  if (containsAuthFailure(text)) return 'auth'
   if (text.includes('rate limit') || text.includes('rate_limit')) return 'rate-limit'
   return 'unknown'
 }
@@ -136,5 +162,33 @@ export function buildRetryPlan(delegation: Delegation): RetryPlan {
     additionalContext: buildImprovedContext(failureCause, delegation),
     improvedGoal: delegation.contract.goal,
     backoffMs: computeBackoffMs(retryCount),
+  }
+}
+
+export function buildRetryDelegationPatch(
+  delegation: Delegation,
+  plan: RetryPlan,
+  now = new Date(),
+): RetryDelegationPatch {
+  const timestamp = now.toISOString()
+  const retryLog: AgentLog = {
+    timestamp,
+    type: 'info',
+    message: `Erneut eingereicht (Retry #${plan.retryCount + 1}) - ${plan.diagnosticMessage}`,
+  }
+
+  return {
+    status: 'pending',
+    startedAt: undefined,
+    completedAt: undefined,
+    errorMessage: undefined,
+    summaryReport: undefined,
+    criticScore: undefined,
+    actualCostUsd: undefined,
+    contract: {
+      ...delegation.contract,
+      context: plan.additionalContext,
+    },
+    logs: [...(delegation.logs ?? []), retryLog],
   }
 }

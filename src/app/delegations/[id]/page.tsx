@@ -33,6 +33,11 @@ import { AgentPhaseIndicator } from '@/components/delegation/AgentPhaseIndicator
 import { inferAgentPhase } from '@/lib/delegations/agent-phase'
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection'
 import { AffectedFilesPanel } from '@/components/delegation/AffectedFilesPanel'
+import {
+  DelegationStatusWorkspace,
+  defaultDetailView,
+  type DetailView,
+} from '@/components/delegation/DelegationStatusWorkspace'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
   switch (status) {
@@ -79,6 +84,25 @@ const RISK_COLORS: Record<string, string> = {
   C: 'bg-red-900/30 text-red-400 border-red-800',
 }
 
+type MergeSafetyStatus = 'ready' | 'review' | 'blocked'
+
+interface DelegationMergeSafety {
+  available: boolean
+  reason?: string
+  prNumber?: number
+  preview?: {
+    title: string
+    url: string
+    changedFiles: number
+    additions: number
+    deletions: number
+    checks: { state: 'success' | 'failure' | 'pending' | 'error' | 'unknown' }
+    files: Array<{ filename: string; status: string; changes: number; additions: number; deletions: number }>
+  }
+  manualSafety?: { status: MergeSafetyStatus; reasons: string[] }
+  autoSafety?: { status: MergeSafetyStatus; reasons: string[] }
+}
+
 export default function DelegationDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -88,6 +112,8 @@ export default function DelegationDetailPage() {
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [activeView, setActiveView] = useState<DetailView>('action')
+  const delegationStatus = delegation?.status
 
   const loadDelegation = useCallback(async () => {
     try {
@@ -102,6 +128,11 @@ export default function DelegationDetailPage() {
   }, [id])
 
   useEffect(() => { loadDelegation() }, [loadDelegation])
+
+  useEffect(() => {
+    if (!delegationStatus) return
+    setActiveView(defaultDetailView(delegationStatus))
+  }, [delegationStatus])
 
   // M229: shared preflight fetch — used by eager-load and manual rerun
   const runPreflight = useCallback(async (): Promise<PreflightResult | null> => {
@@ -227,16 +258,6 @@ export default function DelegationDetailPage() {
   const [executing, setExecuting] = useState(false)
   const orchPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Knowledge writeback card count for this delegation
-  const [writebackCount, setWritebackCount] = useState<number | null>(null)
-  useEffect(() => {
-    if (!id) return
-    fetch(`/api/knowledge-cards?sourceId=${id}`)
-      .then(r => r.json())
-      .then((d: { total?: number }) => setWritebackCount(d.total ?? 0))
-      .catch(() => undefined)
-  }, [id])
-
   const [creatingPR, setCreatingPR] = useState(false)
   const [prError, setPrError] = useState<string | null>(null)
   const [logsExpanded, setLogsExpanded] = useState(false)
@@ -249,6 +270,8 @@ export default function DelegationDetailPage() {
     title: string
   } | null>(null)
   const [prStatusLoading, setPrStatusLoading] = useState(false)
+  const [mergeSafety, setMergeSafety] = useState<DelegationMergeSafety | null>(null)
+  const [mergeSafetyLoading, setMergeSafetyLoading] = useState(false)
 
   // M224: preflight checks shown before execute
   const [preflightResult, setPreflightResult] = useState<PreflightResult | null>(null)
@@ -261,6 +284,7 @@ export default function DelegationDetailPage() {
   const [merging, setMerging] = useState(false)
   const [mergeResult, setMergeResult] = useState<{ merged: boolean; mergeCommit?: string; baseBranch?: string; githubRemote?: boolean } | null>(null)
   const [mergeError, setMergeError] = useState<string | null>(null)
+  const [autoMerging, setAutoMerging] = useState(false)
 
   // App Preview
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -327,6 +351,49 @@ export default function DelegationDetailPage() {
       setMergeError('Netzwerkfehler beim Mergen')
     } finally {
       setMerging(false)
+    }
+  }
+
+  const loadMergeSafety = useCallback(async () => {
+    if (!id || !delegation?.summaryReport?.prUrl) {
+      setMergeSafety(null)
+      return
+    }
+    setMergeSafetyLoading(true)
+    try {
+      const res = await fetch(`/api/delegations/${id}/merge-safety`)
+      const data = await res.json() as DelegationMergeSafety & { error?: string }
+      if (res.ok) setMergeSafety(data)
+      else setMergeSafety({ available: false, reason: data.error ?? 'Merge Safety konnte nicht geladen werden.' })
+    } catch {
+      setMergeSafety({ available: false, reason: 'Merge Safety konnte nicht geladen werden.' })
+    } finally {
+      setMergeSafetyLoading(false)
+    }
+  }, [delegation?.summaryReport?.prUrl, id])
+
+  useEffect(() => {
+    void loadMergeSafety()
+  }, [loadMergeSafety])
+
+  const handleAutoMerge = async () => {
+    if (!delegation?.summaryReport?.prUrl) return
+    setAutoMerging(true)
+    setMergeError(null)
+    try {
+      const res = await fetch(`/api/delegations/${id}/merge-safety`, { method: 'POST' })
+      const data = await res.json() as { merged?: boolean; error?: string; delegation?: Delegation }
+      if (!res.ok || !data.merged) {
+        setMergeError(data.error ?? 'Auto-Merge wurde vom Safety Gate blockiert.')
+        await loadMergeSafety()
+        return
+      }
+      if (data.delegation) setDelegation(data.delegation)
+      await loadMergeSafety()
+    } catch {
+      setMergeError('Netzwerkfehler beim Auto-Merge')
+    } finally {
+      setAutoMerging(false)
     }
   }
 
@@ -530,7 +597,39 @@ export default function DelegationDetailPage() {
           />
         </div>
 
-        {/* ── Header ───────────────────────────────────────────────────── */}
+        <DelegationStatusWorkspace
+          delegation={d}
+          activeView={activeView}
+          preflightResult={preflightResult}
+          canApprove={canApprove}
+          canStart={canStart}
+          canStop={canStop}
+          canCreatePR={canCreatePR}
+          canRetry={canRetry}
+          canReject={canReject}
+          canCancel={canCancel}
+          creatingPR={creatingPR}
+          onApprove={handleApprove}
+          onStart={handleStart}
+          onStop={() => updateStatus('cancelled')}
+          onCreatePR={handleCreatePR}
+          onRetry={() => updateStatus('pending')}
+          onReject={handleReject}
+          onCancel={() => updateStatus('cancelled')}
+          onToggleAutoOrchestrate={async () => {
+            if (!delegation) return
+            const updated = { ...delegation, autoOrchestrate: !delegation.autoOrchestrate }
+            setDelegation(updated)
+            await fetch('/api/delegations', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(updated),
+            })
+          }}
+          onSelectView={setActiveView}
+        />
+
+        {/* ── Context summary ──────────────────────────────────────────── */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
@@ -583,75 +682,8 @@ export default function DelegationDetailPage() {
               )}
             </div>
 
-            {/* Action buttons */}
+            {/* Secondary actions */}
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              {canApprove && (
-                <button onClick={handleApprove}
-                  className="px-3 py-1.5 text-sm bg-green-900/50 text-green-300 hover:bg-green-900 border border-green-800 rounded-lg transition-colors">
-                  ✔ Freigeben
-                </button>
-              )}
-              {canReject && (
-                <button onClick={handleReject}
-                  className="px-3 py-1.5 text-sm bg-red-950/50 text-red-400 hover:bg-red-950 border border-red-900/60 rounded-lg transition-colors">
-                  ✕ Ablehnen
-                </button>
-              )}
-              {canStart && (
-                <div className="flex items-center gap-1">
-                  <button onClick={handleStart}
-                    className="px-3 py-1.5 text-sm bg-blue-900/50 text-blue-300 hover:bg-blue-900 border border-blue-800 rounded-lg transition-colors font-medium">
-                    ▶ Starten
-                  </button>
-                  <button
-                    onClick={async () => {
-                      if (!delegation) return
-                      const updated = { ...delegation, autoOrchestrate: !delegation.autoOrchestrate }
-                      setDelegation(updated)
-                      await fetch('/api/delegations', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(updated),
-                      })
-                    }}
-                    title="Auto-Orchestrierung: Task automatisch in Sub-Tasks aufteilen"
-                    className={`px-2 py-1.5 text-xs rounded-lg border transition-colors ${
-                      delegation?.autoOrchestrate
-                        ? 'bg-violet-900/60 text-violet-300 border-violet-700'
-                        : 'text-slate-600 border-slate-800 hover:text-violet-400 hover:border-violet-900'
-                    }`}
-                  >
-                    ⚙ Auto
-                  </button>
-                </div>
-              )}
-              {canStop && (
-                <button onClick={() => updateStatus('cancelled')}
-                  className="px-3 py-1.5 text-sm bg-red-900/50 text-red-400 hover:bg-red-900 border border-red-900 rounded-lg transition-colors">
-                  ⛔ Stoppen
-                </button>
-              )}
-              {canCancel && (
-                <button onClick={() => updateStatus('cancelled')}
-                  className="px-3 py-1.5 text-sm text-gray-500 hover:text-yellow-400 border border-gray-800 hover:border-yellow-900/50 rounded-lg transition-colors">
-                  ✕ Abbrechen
-                </button>
-              )}
-              {canRetry && (
-                <button onClick={() => updateStatus('pending')}
-                  className="px-3 py-1.5 text-sm bg-blue-900/40 text-blue-400 hover:bg-blue-900 border border-blue-900/60 rounded-lg transition-colors">
-                  🔄 Wiederholen
-                </button>
-              )}
-              {canCreatePR && (
-                <button
-                  onClick={handleCreatePR}
-                  disabled={creatingPR}
-                  className="px-3 py-1.5 text-xs bg-emerald-900/40 text-emerald-300 hover:bg-emerald-900/70 border border-emerald-800/60 rounded-lg transition-colors disabled:opacity-40"
-                  title="GitHub Pull Request für diese abgeschlossene Delegation erstellen">
-                  {creatingPR ? '⏳ PR wird erstellt…' : '⎇ GitHub PR erstellen'}
-                </button>
-              )}
               {canClone && (
                 <button
                   onClick={handleClone}
@@ -717,7 +749,7 @@ export default function DelegationDetailPage() {
           </div>
 
           {/* ── Metrics Tiles (above-the-fold trust layer) ──────────── */}
-          <div className="mt-4 pt-4 border-t border-gray-800 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3" style={(d.retryCount ?? 0) > 0 ? { gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' } : undefined}>
+          <div className="mt-4 pt-4 border-t border-gray-800 grid grid-cols-1 sm:grid-cols-3 gap-3">
 
             {/* Status tile */}
             <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
@@ -734,15 +766,6 @@ export default function DelegationDetailPage() {
               {isDone && (!d.startedAt || !d.completedAt) && d.summaryReport && (
                 <span className="text-[10px] text-gray-600 font-mono">{formatCompletedDuration(d.createdAt, d.updatedAt)}</span>
               )}
-            </div>
-
-            {/* Risk tile */}
-            <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Risiko</span>
-              <span className={`text-xs font-bold ${RISK_COLORS[d.contract.riskClass]?.split(' ')[1] ?? 'text-gray-400'}`}>
-                Risk {d.contract.riskClass}
-              </span>
-              <span className="text-[10px] text-gray-600">{ROUTE_LABELS[d.executionRoute] ?? d.executionRoute}</span>
             </div>
 
             {/* Cost tile */}
@@ -782,51 +805,6 @@ export default function DelegationDetailPage() {
               )}
             </div>
 
-            {/* Grok Critic tile */}
-            <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Critic</span>
-              {d.criticScore ? (
-                <>
-                  <span className={`text-xs font-bold ${
-                    d.criticScore.verdict === 'approved' ? 'text-emerald-400' :
-                    d.criticScore.verdict === 'needs-revision' ? 'text-yellow-400' :
-                    'text-red-400'
-                  }`}>
-                    {d.criticScore.verdict === 'approved' ? '✓ OK' :
-                     d.criticScore.verdict === 'needs-revision' ? '⚠ Revision' : '✗ Abgelehnt'}
-                  </span>
-                  <span className="text-[10px] text-gray-600">
-                    {Math.round((d.criticScore.correctness + d.criticScore.efficiency + d.criticScore.drift) / 3)}pts
-                  </span>
-                </>
-              ) : d.status === 'completed' ? (
-                <span className="text-xs text-gray-600 italic">Ausstehend</span>
-              ) : (
-                <span className="text-xs text-gray-700">–</span>
-              )}
-            </div>
-            {/* Writeback tile */}
-            <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Writeback</span>
-              {writebackCount === null ? (
-                <span className="text-xs text-gray-700">–</span>
-              ) : writebackCount > 0 ? (
-                <a href="/knowledge-cards" className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors">
-                  {writebackCount} Karten
-                </a>
-              ) : (
-                <span className="text-xs text-gray-600">Keine</span>
-              )}
-            </div>
-
-            {/* Retry tile — only shown when retryCount > 0 */}
-            {(d.retryCount ?? 0) > 0 && (
-              <div className="bg-amber-950/30 border border-amber-800/40 rounded-lg px-3 py-2 flex flex-col gap-0.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">Retries</span>
-                <span className="text-sm font-bold text-amber-400">↺ {d.retryCount}</span>
-                <span className="text-[10px] text-amber-700/70">Versuche</span>
-              </div>
-            )}
           </div>
 
           {/* ── Simulation-mode info ─────────────────────────────────── */}
@@ -879,47 +857,44 @@ export default function DelegationDetailPage() {
           )}
         </div>
 
-        {/* ── Structured error recovery (when failed) ─────────────────── */}
-        {d.status === 'failed' && d.errorMessage && (
-          <DelegationErrorBanner errorMessage={d.errorMessage} />
+        {activeView === 'action' && (
+          <>
+            {d.status === 'failed' && d.errorMessage && (
+              <DelegationErrorBanner errorMessage={d.errorMessage} />
+            )}
+
+            <DelegationNextActionPanel
+              delegation={d}
+              onApprove={handleApprove}
+              onStart={handleStart}
+              onRetry={() => updateStatus('pending')}
+              onRetryEscalate={handleRetryEscalate}
+              onCreatePR={handleCreatePR}
+              creatingPR={creatingPR}
+              lastLogMessage={d.status === 'running' ? (d.logs ?? []).filter(l => l.type !== 'thought').slice(-1)[0]?.message : undefined}
+            />
+
+            <AgentActivityExplainer delegation={d} />
+
+            {(preflightLoading || preflightResult) && (
+              <PreflightCheckList
+                result={preflightResult}
+                loading={preflightLoading}
+                onRerun={d.status === 'approved' ? () => void runPreflight() : undefined}
+              />
+            )}
+
+            <DelegationLiveLog
+              delegationId={d.id}
+              isRunning={d.status === 'running'}
+              onCostUpdate={(cost) => setDelegation(prev => prev ? { ...prev, actualCostUsd: cost } : prev)}
+            />
+
+            <DelegationTimeline delegation={d} />
+          </>
         )}
 
-        {/* ── Next Action Panel ────────────────────────────────────────── */}
-        <DelegationNextActionPanel
-          delegation={d}
-          onApprove={handleApprove}
-          onStart={handleStart}
-          onRetry={() => updateStatus('pending')}
-          onRetryEscalate={handleRetryEscalate}
-          onCreatePR={handleCreatePR}
-          creatingPR={creatingPR}
-          lastLogMessage={d.status === 'running' ? (d.logs ?? []).filter(l => l.type !== 'thought').slice(-1)[0]?.message : undefined}
-        />
-
-        {/* ── Agent activity explainer ─────────────────────────────────── */}
-        <AgentActivityExplainer delegation={d} />
-
-        {/* ── Preflight Results (M224) ─────────────────────────────────── */}
-        {(preflightLoading || preflightResult) && (
-          <PreflightCheckList
-            result={preflightResult}
-            loading={preflightLoading}
-            onRerun={d.status === 'approved' ? () => void runPreflight() : undefined}
-          />
-        )}
-
-        {/* ── Live Execution Progress ──────────────────────────────────── */}
-        <DelegationLiveLog
-          delegationId={d.id}
-          isRunning={d.status === 'running'}
-          onCostUpdate={(cost) => setDelegation(prev => prev ? { ...prev, actualCostUsd: cost } : prev)}
-        />
-
-        {/* ── Timeline ─────────────────────────────────────────────────── */}
-        <DelegationTimeline delegation={d} />
-
-        {/* ── Orchestrated Sub-Tasks ───────────────────────────────────── */}
-        {orchestratedRun && (
+        {activeView === 'action' && orchestratedRun && (
           <div className="bg-slate-900 border border-violet-800/30 rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -1022,36 +997,32 @@ export default function DelegationDetailPage() {
           </div>
         )}
 
-        {/* ── Context Snapshot (M305) ──────────────────────────────────── */}
-        {d.contextSnapshot && d.contextSnapshot.cards.length > 0 && (
-          <details className="bg-gray-900 border border-gray-800 rounded-xl p-5 group">
-            <summary className="flex items-center justify-between cursor-pointer list-none">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                Kontext bei Ausführung ({d.contextSnapshot.cards.length} Karten · ~{d.contextSnapshot.tokenEstimate} Tokens)
-              </h2>
-              <span className="text-gray-600 text-xs group-open:rotate-180 transition-transform">▼</span>
-            </summary>
-            <ul className="mt-3 space-y-1">
-              {d.contextSnapshot.cards.map(card => (
-                <li key={card.id} className="flex items-start gap-2 text-xs text-gray-400">
-                  <span className="mt-0.5 px-1.5 py-0.5 rounded bg-gray-800 text-gray-500 font-mono shrink-0">{card.type}</span>
-                  <span>{card.title}</span>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-2 text-xs text-gray-600">
-              Erstellt: {new Date(d.contextSnapshot.builtAt).toLocaleString('de-DE')}
-            </p>
-          </details>
-        )}
+        {activeView === 'result' && (
+          <>
+            {d.status !== 'completed' && !d.summaryReport && (
+              <section className="rounded-xl border border-dashed border-gray-800 bg-gray-900/40 p-6">
+                <p className="text-sm font-semibold text-gray-300">Noch kein Ergebnis vorhanden</p>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
+                  Sobald die Delegation abgeschlossen ist, erscheinen hier PR, geaenderte Dateien,
+                  Qualitaetsbewertung und Knowledge Writeback. Bis dahin ist die Ansicht Aktion der richtige Ort.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveView('action')}
+                  className="mt-4 rounded-lg border border-violet-800/60 bg-violet-950/30 px-3 py-2 text-sm font-semibold text-violet-200 transition-colors hover:border-violet-600 hover:bg-violet-900/40"
+                >
+                  Zur Aktion wechseln
+                </button>
+              </section>
+            )}
 
-        {/* ── Knowledge Writeback ───────────────────────────────────────── */}
-        {(d.status === 'completed' || d.status === 'failed') && (
+            {/* ── Knowledge Writeback ───────────────────────────────────────── */}
+            {(d.status === 'completed' || d.status === 'failed') && (
           <KnowledgeWritebackPanel delegationId={id} delegation={d} />
-        )}
+            )}
 
-        {/* ── Gelerntes Wissen (full KnowledgeCardList with delegation link) ── */}
-        {d.status === 'completed' && (
+            {/* ── Gelerntes Wissen (full KnowledgeCardList with delegation link) ── */}
+            {d.status === 'completed' && (
           <section className="bg-gray-900 border border-emerald-900/30 rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">
@@ -1066,10 +1037,23 @@ export default function DelegationDetailPage() {
             </div>
             <KnowledgeCardList delegationId={id} />
           </section>
-        )}
+            )}
 
-        {/* ── PR Details (wenn PR vorhanden) ────────────────────────────── */}
-        {d.summaryReport?.prUrl && (
+            {d.status === 'completed' && d.summaryReport && !d.summaryReport.prUrl && d.summaryReport.keyPoints?.length > 0 && (
+          <section className="rounded-xl border border-emerald-900/30 bg-gray-900 p-4">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-emerald-600">Ergebnis</h2>
+            <ul className="space-y-1">
+              {d.summaryReport.keyPoints.map((pt, i) => (
+                <li key={i} className="flex items-start gap-1.5 text-sm text-green-400/80">
+                  <span className="mt-0.5 shrink-0 text-green-700">•</span> {pt}
+                </li>
+              ))}
+            </ul>
+          </section>
+            )}
+
+            {/* ── PR Details (wenn PR vorhanden) ────────────────────────────── */}
+            {d.summaryReport?.prUrl && (
           <div className="bg-gray-900 border border-emerald-900/30 rounded-xl p-4">
             <h2 className="text-xs font-semibold text-emerald-600 uppercase tracking-wider mb-3">Pull Request</h2>
             <div className="flex flex-wrap items-start gap-4">
@@ -1134,10 +1118,97 @@ export default function DelegationDetailPage() {
               </ul>
             )}
           </div>
-        )}
+            )}
 
-        {/* ── Grok Critic Review (full card, wenn completed) ─────────────── */}
-        {d.status === 'completed' && (
+            {d.status === 'completed' && (
+              <section className={`rounded-xl border p-4 ${
+                mergeSafety?.autoSafety?.status === 'ready'
+                  ? 'border-emerald-800/50 bg-emerald-950/20'
+                  : mergeSafety?.autoSafety?.status === 'blocked'
+                    ? 'border-red-900/50 bg-red-950/20'
+                    : 'border-amber-900/50 bg-amber-950/20'
+              }`}>
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Auto-Merge Safety Gate</p>
+                    <h2 className="mt-2 text-lg font-semibold text-white">
+                      {mergeSafetyLoading
+                        ? 'Prüfe PR-Sicherheit...'
+                        : mergeSafety?.autoSafety?.status === 'ready'
+                          ? 'Autonomes Mergen ist freigegeben'
+                          : mergeSafety?.autoSafety?.status === 'blocked'
+                            ? 'Autonomes Mergen ist blockiert'
+                            : !d.summaryReport?.prUrl
+                              ? 'PR erstellen, dann Safety Gate prüfen'
+                            : 'Review vor Merge nötig'}
+                    </h2>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-400">
+                      ForgePilot darf nur kleine Risk-A-Änderungen mit grüner CI, approved Critic,
+                      ohne sensible Dateien und ohne Secret-Hinweise autonom übernehmen.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void loadMergeSafety()}
+                      disabled={mergeSafetyLoading || !d.summaryReport?.prUrl}
+                      className="rounded-lg border border-gray-700 px-3 py-2 text-sm font-semibold text-gray-300 transition-colors hover:border-gray-500 disabled:opacity-50"
+                    >
+                      {mergeSafetyLoading ? 'Prüft...' : 'Neu prüfen'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAutoMerge}
+                      disabled={autoMerging || mergeSafety?.autoSafety?.status !== 'ready' || d.summaryReport?.prState === 'merged'}
+                      className="rounded-lg border border-emerald-700/70 bg-emerald-900/40 px-3 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:bg-emerald-800/50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {autoMerging ? 'Mergt sicher...' : d.summaryReport?.prState === 'merged' ? 'Bereits gemergt' : 'Sicher auto-mergen'}
+                    </button>
+                  </div>
+                </div>
+
+                {mergeSafety?.preview && (
+                  <div className="mt-4 grid gap-3 md:grid-cols-4">
+                    <div className="rounded-lg border border-gray-800 bg-gray-950/50 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">CI</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-200">{mergeSafety.preview.checks.state}</p>
+                    </div>
+                    <div className="rounded-lg border border-gray-800 bg-gray-950/50 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Diff</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-200">
+                        {mergeSafety.preview.changedFiles} Dateien · +{mergeSafety.preview.additions}/-{mergeSafety.preview.deletions}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-gray-800 bg-gray-950/50 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Auto</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-200">{mergeSafety.autoSafety?.status ?? 'unbekannt'}</p>
+                    </div>
+                    <div className="rounded-lg border border-gray-800 bg-gray-950/50 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Manual</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-200">{mergeSafety.manualSafety?.status ?? 'unbekannt'}</p>
+                    </div>
+                  </div>
+                )}
+
+                {(mergeSafety?.autoSafety?.reasons?.length || mergeSafety?.reason) && (
+                  <ul className="mt-4 space-y-1 text-sm text-gray-400">
+                    {mergeSafety.reason && <li>- {mergeSafety.reason}</li>}
+                    {mergeSafety.autoSafety?.reasons?.map(reason => (
+                      <li key={reason}>- {reason}</li>
+                    ))}
+                  </ul>
+                )}
+                {!d.summaryReport?.prUrl && (
+                  <p className="mt-4 text-sm text-amber-200/80">
+                    - Es gibt noch keinen Pull Request. Erstelle zuerst den PR; danach zeigt ForgePilot Diff, CI,
+                    Critic und Auto-Merge-Freigabe an.
+                  </p>
+                )}
+              </section>
+            )}
+
+            {/* ── Grok Critic Review (full card, wenn completed) ─────────────── */}
+            {d.status === 'completed' && (
           <GrokCriticCard
             delegationId={id}
             agentOutput={
@@ -1154,10 +1225,37 @@ export default function DelegationDetailPage() {
             }
             initialScore={d.criticScore}
           />
+            )}
+          </>
         )}
 
-        {/* ── Two-column: Contract + Details ────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {activeView === 'details' && (
+          <>
+            {/* ── Context Snapshot (M305) ──────────────────────────────────── */}
+            {d.contextSnapshot && d.contextSnapshot.cards.length > 0 && (
+              <details className="bg-gray-900 border border-gray-800 rounded-xl p-5 group">
+                <summary className="flex items-center justify-between cursor-pointer list-none">
+                  <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    Kontext bei Ausführung ({d.contextSnapshot.cards.length} Karten · ~{d.contextSnapshot.tokenEstimate} Tokens)
+                  </h2>
+                  <span className="text-gray-600 text-xs group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <ul className="mt-3 space-y-1">
+                  {d.contextSnapshot.cards.map(card => (
+                    <li key={card.id} className="flex items-start gap-2 text-xs text-gray-400">
+                      <span className="mt-0.5 px-1.5 py-0.5 rounded bg-gray-800 text-gray-500 font-mono shrink-0">{card.type}</span>
+                      <span>{card.title}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs text-gray-600">
+                  Erstellt: {new Date(d.contextSnapshot.builtAt).toLocaleString('de-DE')}
+                </p>
+              </details>
+            )}
+
+            {/* ── Two-column: Contract + Details ────────────────────────────── */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           {/* Contract Details */}
           <div className="space-y-4">
@@ -1329,9 +1427,13 @@ export default function DelegationDetailPage() {
             </div>
           </div>
         </div>
+          </>
+        )}
 
-        {/* App Preview — shown when completed and targetRepo is set */}
-        {d.status === 'completed' && (d as { targetRepo?: string }).targetRepo && (
+        {activeView === 'result' && (
+          <>
+            {/* App Preview — shown when completed and targetRepo is set */}
+            {d.status === 'completed' && (d as { targetRepo?: string }).targetRepo && (
           <div className="rounded-xl border border-emerald-800/40 bg-emerald-950/10 p-4 flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-semibold text-emerald-300">Ergebnis ansehen</p>
@@ -1368,10 +1470,10 @@ export default function DelegationDetailPage() {
               </button>
             </div>
           </div>
-        )}
+            )}
 
-        {/* Merge + PR Panel — shown when completed */}
-        {d.status === 'completed' && (
+            {/* Merge + PR Panel — shown when completed */}
+            {d.status === 'completed' && (
           <div className="rounded-xl border border-slate-700/50 bg-slate-900/20 p-4">
             <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Ergebnis übernehmen</p>
             <div className="flex flex-wrap items-center gap-2">
@@ -1450,10 +1552,10 @@ export default function DelegationDetailPage() {
               )}
             </div>
           </div>
-        )}
+            )}
 
-        {/* DoD Quality Check — shown when completed and DoD defined */}
-        {d.status === 'completed' && d.contract.definitionOfDone?.length > 0 && (
+            {/* DoD Quality Check — shown when completed and DoD defined */}
+            {d.status === 'completed' && d.contract.definitionOfDone?.length > 0 && (
           <div className="rounded-xl border border-slate-700/50 bg-slate-900/30 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
@@ -1550,30 +1652,36 @@ export default function DelegationDetailPage() {
               </>
             )}
           </div>
+            )}
+
+            {/* Agent Run Replay */}
+            <AgentRunReplayView delegationId={id} />
+          </>
         )}
 
-        {/* Agent Run Replay */}
-        <AgentRunReplayView delegationId={id} />
+        {activeView === 'details' && (
+          <>
+            {/* Allowed Tools — collapsible expert detail */}
+            {d.contract.allowedTools?.length > 0 && (
+              <CollapsibleSection
+                title="Erlaubte Tools"
+                collapsedHint={`${d.contract.allowedTools.length} Tools`}
+                defaultOpen={false}
+              >
+                <div className="flex flex-wrap gap-1.5">
+                  {d.contract.allowedTools.map(tool => (
+                    <span key={tool} className="px-2 py-0.5 text-xs rounded bg-gray-800 border border-gray-700 text-gray-400 font-mono">
+                      {tool}
+                    </span>
+                  ))}
+                </div>
+              </CollapsibleSection>
+            )}
 
-        {/* Allowed Tools — collapsible expert detail */}
-        {d.contract.allowedTools?.length > 0 && (
-          <CollapsibleSection
-            title="Erlaubte Tools"
-            collapsedHint={`${d.contract.allowedTools.length} Tools`}
-            defaultOpen={false}
-          >
-            <div className="flex flex-wrap gap-1.5">
-              {d.contract.allowedTools.map(tool => (
-                <span key={tool} className="px-2 py-0.5 text-xs rounded bg-gray-800 border border-gray-700 text-gray-400 font-mono">
-                  {tool}
-                </span>
-              ))}
-            </div>
-          </CollapsibleSection>
+            {/* Comment Thread */}
+            <DelegationCommentThread delegationId={d.id} />
+          </>
         )}
-
-        {/* Comment Thread */}
-        <DelegationCommentThread delegationId={d.id} />
 
         {/* Go back */}
         <div className="pb-4">

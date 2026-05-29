@@ -29,13 +29,27 @@ describe('compareDelegationStores', () => {
     expect(result.missingInPostgres).toEqual(['d2'])
   })
 
-  it('reports postgres records missing from json', () => {
+  it('allows postgres to contain historical records missing from json', () => {
     const result = compareDelegationStores(
       [{ id: 'd1', title: 'Auth', status: 'completed' }],
       [
         { id: 'd1', title: 'Auth', status: 'completed' },
         { id: 'd2', title: 'Cutover', status: 'pending' },
       ],
+    )
+
+    expect(result.readyForPostgresPrimary).toBe(true)
+    expect(result.missingInJson).toEqual(['d2'])
+  })
+
+  it('can require exact json/postgres parity for strict audits', () => {
+    const result = compareDelegationStores(
+      [{ id: 'd1', title: 'Auth', status: 'completed' }],
+      [
+        { id: 'd1', title: 'Auth', status: 'completed' },
+        { id: 'd2', title: 'Cutover', status: 'pending' },
+      ],
+      { allowPostgresSuperset: false },
     )
 
     expect(result.readyForPostgresPrimary).toBe(false)
