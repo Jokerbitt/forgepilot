@@ -12,7 +12,14 @@ import {
   buildSampleTodos,
   type Todo,
 } from '@/lib/todo/todo-store'
-import { createResilientTodoRepository, JsonTodoRepository, parseTodos, type TodoRepository } from '@/lib/todo/todo-repository'
+import {
+  createResilientTodoRepository,
+  JsonTodoRepository,
+  parseTodos,
+  TODO_TITLE_MAX_LENGTH,
+  validateIncomingTodos,
+  type TodoRepository,
+} from '@/lib/todo/todo-repository'
 
 const FIXED_NOW = () => new Date('2026-05-29T12:00:00.000Z')
 let nextId = 0
@@ -153,6 +160,85 @@ describe('buildSampleTodos', () => {
     const samples = buildSampleTodos(FIXED_NOW)
     expect(samples).toHaveLength(3)
     expect(samples.every(t => t.isSample === true)).toBe(true)
+  })
+})
+
+describe('validateIncomingTodos', () => {
+  const baseTodo: Todo = {
+    id: 'todo-1',
+    title: 'Write spec',
+    priority: 'high',
+    status: 'open',
+    createdAt: '2026-05-29T12:00:00.000Z',
+  }
+
+  it('accepts a valid payload and trims titles', () => {
+    const result = validateIncomingTodos([{ ...baseTodo, title: '   Write spec  ' }])
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.todos).toEqual([{ ...baseTodo, title: 'Write spec' }])
+    }
+  })
+
+  it('rejects non-array payloads with a clear reason', () => {
+    const result = validateIncomingTodos({ not: 'an array' })
+    expect(result).toEqual({ ok: false, reason: 'Aufgabenliste muss ein Array sein.' })
+  })
+
+  it('rejects empty or whitespace-only titles', () => {
+    const result = validateIncomingTodos([{ ...baseTodo, title: '   ' }])
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toMatch(/Titel darf nicht leer sein/)
+  })
+
+  it('rejects missing title field', () => {
+    const result = validateIncomingTodos([
+      { id: 'todo-1', priority: 'high', status: 'open', createdAt: '2026-05-29T12:00:00.000Z' },
+    ])
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toMatch(/Titel fehlt/)
+  })
+
+  it('rejects titles longer than the maximum length', () => {
+    const result = validateIncomingTodos([{ ...baseTodo, title: 'x'.repeat(TODO_TITLE_MAX_LENGTH + 1) }])
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toMatch(/Titel darf maximal/)
+  })
+
+  it('rejects unknown priority values', () => {
+    const result = validateIncomingTodos([{ ...baseTodo, priority: 'urgent' }])
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toMatch(/Ungueltige Prioritaet/)
+  })
+
+  it('rejects unknown status values', () => {
+    const result = validateIncomingTodos([{ ...baseTodo, status: 'archived' }])
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toMatch(/Ungueltiger Status/)
+  })
+
+  it('rejects an invalid createdAt timestamp', () => {
+    const result = validateIncomingTodos([{ ...baseTodo, createdAt: 'not-a-date' }])
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toMatch(/Erstelldatum/)
+  })
+
+  it('preserves the isSample flag when true and drops it when omitted', () => {
+    const result = validateIncomingTodos([
+      { ...baseTodo, id: 'a', isSample: true },
+      { ...baseTodo, id: 'b' },
+    ])
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.todos[0].isSample).toBe(true)
+      expect(result.todos[1].isSample).toBeUndefined()
+    }
+  })
+
+  it('reports the position of the invalid entry', () => {
+    const result = validateIncomingTodos([baseTodo, { ...baseTodo, id: '' }])
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toMatch(/Aufgabe 2/)
   })
 })
 

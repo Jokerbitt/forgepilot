@@ -55,6 +55,74 @@ export function parseTodos(value: unknown): Todo[] | null {
   return value.every(isTodo) ? value : null
 }
 
+export const TODO_TITLE_MAX_LENGTH = 500
+
+export type TodoValidationResult =
+  | { ok: true; todos: Todo[] }
+  | { ok: false; reason: string }
+
+export function validateIncomingTodos(value: unknown): TodoValidationResult {
+  if (!Array.isArray(value)) {
+    return { ok: false, reason: 'Aufgabenliste muss ein Array sein.' }
+  }
+
+  const validated: Todo[] = []
+  for (let index = 0; index < value.length; index++) {
+    const item = value[index]
+    const position = index + 1
+    if (typeof item !== 'object' || item === null) {
+      return { ok: false, reason: `Aufgabe ${position}: Eintrag muss ein Objekt sein.` }
+    }
+    const candidate = item as Record<string, unknown>
+
+    if (typeof candidate.id !== 'string' || candidate.id.length === 0) {
+      return { ok: false, reason: `Aufgabe ${position}: Ungueltige ID.` }
+    }
+    if (typeof candidate.title !== 'string') {
+      return { ok: false, reason: `Aufgabe ${position}: Titel fehlt oder ist kein Text.` }
+    }
+    const trimmedTitle = candidate.title.trim()
+    if (trimmedTitle.length === 0) {
+      return { ok: false, reason: `Aufgabe ${position}: Titel darf nicht leer sein.` }
+    }
+    if (trimmedTitle.length > TODO_TITLE_MAX_LENGTH) {
+      return {
+        ok: false,
+        reason: `Aufgabe ${position}: Titel darf maximal ${TODO_TITLE_MAX_LENGTH} Zeichen lang sein.`,
+      }
+    }
+    if (!isTodoPriority(candidate.priority)) {
+      return {
+        ok: false,
+        reason: `Aufgabe ${position}: Ungueltige Prioritaet. Erlaubt sind low, medium, high.`,
+      }
+    }
+    if (!isTodoStatus(candidate.status)) {
+      return {
+        ok: false,
+        reason: `Aufgabe ${position}: Ungueltiger Status. Erlaubt sind open, in_progress, done.`,
+      }
+    }
+    if (typeof candidate.createdAt !== 'string' || Number.isNaN(Date.parse(candidate.createdAt))) {
+      return { ok: false, reason: `Aufgabe ${position}: Ungueltiges Erstelldatum.` }
+    }
+    if (candidate.isSample !== undefined && typeof candidate.isSample !== 'boolean') {
+      return { ok: false, reason: `Aufgabe ${position}: Ungueltiges Sample-Flag.` }
+    }
+
+    validated.push({
+      id: candidate.id,
+      title: trimmedTitle,
+      priority: candidate.priority,
+      status: candidate.status,
+      createdAt: candidate.createdAt,
+      ...(candidate.isSample === true ? { isSample: true } : {}),
+    })
+  }
+
+  return { ok: true, todos: validated }
+}
+
 class ResilientTodoRepository implements TodoRepository {
   constructor(
     private readonly primary: TodoRepository,
