@@ -11,7 +11,7 @@
  * that every agent should know about.
  */
 
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { readKnowledgeCards } from '@/lib/knowledge/knowledge-card'
@@ -69,9 +69,13 @@ export function findRelevantFiles(
 
   for (const keyword of keywords) {
     try {
-      // grep -rl: list files containing the keyword
-      const output = execSync(
-        `grep -rl --include="*.ts" --include="*.tsx" --include="*.json" -i "${keyword.replace(/"/g, '')}" ${searchDirs.join(' ')} 2>/dev/null`,
+      // grep -rl: use execFileSync with args array (no shell interpolation) to avoid injection
+      const safeKeyword = keyword.replace(/[^a-zA-Z0-9_.\-]/g, '')
+      if (!safeKeyword) continue
+      const output = execFileSync(
+        'grep',
+        ['-rl', '--include=*.ts', '--include=*.tsx', '--include=*.json', '-i',
+          safeKeyword, ...searchDirs],
         { cwd: repoPath, encoding: 'utf8', timeout: 5000, maxBuffer: 1024 * 1024 },
       ).trim()
 

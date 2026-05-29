@@ -94,7 +94,13 @@ export function createSlashCommand(opts: {
   const dir = opts.scope === 'global' ? GLOBAL_COMMANDS_DIR : projectCommandsDir()
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 
-  const filePath = path.join(dir, `${opts.name}.md`)
+  // Security: sanitize name to prevent path traversal — only allow alphanum, dash, underscore
+  const safeName = opts.name.replace(/[^a-zA-Z0-9_-]/g, '_')
+  const filePath = path.join(dir, `${safeName}.md`)
+  // Extra guard: ensure the resolved path stays within the intended directory
+  if (!filePath.startsWith(dir + path.sep) && filePath !== path.join(dir, `${safeName}.md`)) {
+    throw new Error(`Invalid command name: path traversal detected`)
+  }
   fs.writeFileSync(filePath, opts.content)
 
   const firstLine = opts.content.split('\n').find(l => l.trim()) ?? ''
