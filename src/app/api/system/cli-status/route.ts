@@ -1,6 +1,7 @@
 import { execSync } from 'child_process'
 import { NextResponse } from 'next/server'
 import { readStoredApiKeys } from '@/lib/connectors/config'
+import { getCachedOrShallowRunnerReadiness } from '@/lib/system/runner-readiness'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,6 +11,7 @@ interface ToolStatus {
   available: boolean
   version: string | null
   authenticated: boolean | null
+  headlessReady?: boolean
   detail: string
 }
 
@@ -83,14 +85,20 @@ function buildToolStatus(binary: 'claude' | 'codex'): ToolStatus {
 }
 
 export async function GET(): Promise<NextResponse<CliStatusResponse>> {
+  const readiness = getCachedOrShallowRunnerReadiness()
   const claude = buildToolStatus('claude')
   const codex = buildToolStatus('codex')
   const { ANTHROPIC_API_KEY, OPENAI_API_KEY } = readStoredApiKeys()
   const claudeApiKeySet = Boolean(ANTHROPIC_API_KEY?.trim())
   const openAiApiKeySet = Boolean(OPENAI_API_KEY?.trim())
-  const zeroKeyReady = claude.available || codex.available
+  claude.headlessReady = readiness.claude.headlessReady
+  codex.headlessReady = readiness.codex.headlessReady
 
-  const activeMode: ActiveMode = claude.available
+  const zeroKeyReady = readiness.zeroKeyReady || claude.available || codex.available
+
+  const activeMode: ActiveMode = readiness.zeroKeyReady
+    ? readiness.activeMode
+    : claude.available
     ? 'claude-cli'
     : codex.available
       ? 'codex-cli'
@@ -100,8 +108,10 @@ export async function GET(): Promise<NextResponse<CliStatusResponse>> {
           ? 'openai-api'
           : 'simulation'
 
-  const recommendation = zeroKeyReady
-    ? 'Zero-Key-Ausführung ist möglich. API-Keys bleiben optional.'
+  const recommendation = readiness.zeroKeyReady
+    ? readiness.recommendation
+    : zeroKeyReady
+    ? 'Zero-Key-CLI ist installiert. Starte den Runner-Readiness-Test, um echte Headless-Ausfuehrung zu bestaetigen.'
     : 'Installiere und authentifiziere Claude Code oder Codex CLI, um ohne API-Key echten Code auszuführen.'
 
   return NextResponse.json({

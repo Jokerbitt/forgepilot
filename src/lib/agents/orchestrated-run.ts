@@ -54,6 +54,8 @@ export interface OrchestratedRun {
 
 export interface RunWatchdogOptions {
   now?: Date
+  /** Planning run without execution after this many minutes is failed. */
+  planningTimeoutMinutes?: number
   /** Running task without an alive process after this many minutes is failed. */
   runningTaskGraceMinutes?: number
   /** Whole running run older than this is failed as a hard stop. */
@@ -224,6 +226,7 @@ export function updateRunStatus(runId: string, status: RunStatus): void {
 
 export function reapStaleRuns(options: RunWatchdogOptions = {}): ReapedRun[] {
   const now = options.now ?? new Date()
+  const planningTimeoutMinutes = options.planningTimeoutMinutes ?? 30
   const runningTaskGraceMinutes = options.runningTaskGraceMinutes ?? 2
   const runTimeoutMinutes = options.runTimeoutMinutes ?? 30
   const processAlive = options.processAlive ?? isProcessAlive
@@ -231,10 +234,37 @@ export function reapStaleRuns(options: RunWatchdogOptions = {}): ReapedRun[] {
   const reaped: ReapedRun[] = []
 
   for (const run of store.runs) {
-    if (run.status !== 'running') continue
-
     const startedMs = new Date(run.createdAt).getTime()
     const runAgeMinutes = Math.max(0, Math.round((now.getTime() - startedMs) / 60_000))
+
+    if (run.status === 'planning' && runAgeMinutes >= planningTimeoutMinutes) {
+      for (const entry of run.tasks) {
+        if (entry.status !== 'pending') continue
+        entry.status = 'failed'
+        entry.result = {
+          qualityScore: 0,
+          grade: 'F',
+          issues: [`Watchdog marked planning task stale after ${runAgeMinutes}m without execution.`],
+          testsPassed: false,
+          typeErrorCount: 0,
+          lintErrorCount: 0,
+          completedAt: now.toISOString(),
+        }
+      }
+      run.status = 'failed'
+      run.currentTaskIndex = run.tasks.length
+      run.updatedAt = now.toISOString()
+      run.completedAt = now.toISOString()
+      reaped.push({
+        runId: run.id,
+        taskIds: run.tasks.map(entry => entry.task.id),
+        reason: 'planning run had no execution beyond watchdog timeout',
+      })
+      continue
+    }
+
+    if (run.status !== 'running') continue
+
     const failedTaskIds: string[] = []
 
     for (const entry of run.tasks) {

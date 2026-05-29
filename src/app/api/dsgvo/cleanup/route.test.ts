@@ -25,6 +25,7 @@ const fsMock = {
 }
 vi.mock('fs', () => ({ default: fsMock, ...fsMock }))
 vi.mock('@/lib/supabase/client', () => ({ getSupabaseClient: () => null }))
+vi.mock('@/db/index', () => ({ isDatabaseConfigured: () => false }))
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
