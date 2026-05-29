@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Delegation } from '@/lib/models/delegation'
-import { evaluateSafetyGates } from './route'
+import { evaluateSafetyGates } from '@/lib/delegations/auto-merge-gates'
 
 // ── Fixture ────────────────────────────────────────────────────────────────────
 
