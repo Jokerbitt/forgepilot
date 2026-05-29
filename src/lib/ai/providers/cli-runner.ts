@@ -15,6 +15,7 @@ import type {
   ProviderGenerateOptions,
   ProviderGenerateResult,
 } from './types'
+import { getCachedOrShallowRunnerReadiness } from '@/lib/system/runner-readiness'
 
 const execFileAsync = promisify(execFile)
 
@@ -50,8 +51,12 @@ export class ClaudeCLIProvider implements AIProvider {
   readonly supportsEmbeddings = false
 
   async generateText(options: ProviderGenerateOptions): Promise<ProviderGenerateResult> {
-    if (!cachedAvailable('claude')) {
+    const readiness = getCachedOrShallowRunnerReadiness()
+    if (!readiness.claude.available) {
       throw new Error('claude CLI not found — install Claude Code or add it to PATH')
+    }
+    if (!readiness.claude.headlessReady) {
+      throw new Error('claude CLI is installed but not headless-ready — run Deep Readiness in Live View and make sure Claude Code/Max is authenticated')
     }
 
     // Build a combined prompt including the system message
@@ -77,7 +82,8 @@ export class ClaudeCLIProvider implements AIProvider {
   }
 
   async isAvailable(): Promise<boolean> {
-    return cachedAvailable('claude')
+    const readiness = getCachedOrShallowRunnerReadiness()
+    return readiness.claude.headlessReady || (readiness.claude.available && cachedAvailable('claude') && readiness.activeMode === 'claude-cli')
   }
 }
 
@@ -90,8 +96,12 @@ export class CodexCLIProvider implements AIProvider {
   readonly supportsEmbeddings = false
 
   async generateText(options: ProviderGenerateOptions): Promise<ProviderGenerateResult> {
-    if (!cachedAvailable('codex')) {
+    const readiness = getCachedOrShallowRunnerReadiness()
+    if (!readiness.codex.available) {
       throw new Error('codex CLI not found — install Codex CLI or add it to PATH')
+    }
+    if (!readiness.codex.headlessReady) {
+      throw new Error('codex CLI is installed but not headless-ready — run Deep Readiness in Live View and make sure Codex CLI is authenticated')
     }
 
     const combinedPrompt = options.system
@@ -121,6 +131,7 @@ export class CodexCLIProvider implements AIProvider {
   }
 
   async isAvailable(): Promise<boolean> {
-    return cachedAvailable('codex')
+    const readiness = getCachedOrShallowRunnerReadiness()
+    return readiness.codex.headlessReady || (readiness.codex.available && cachedAvailable('codex') && readiness.activeMode === 'codex-cli')
   }
 }

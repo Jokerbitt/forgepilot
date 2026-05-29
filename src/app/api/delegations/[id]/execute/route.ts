@@ -40,6 +40,8 @@ import { checkParallelCompletion } from '@/lib/delegation-parallel'
 import { triggerCriticRetry } from '@/lib/delegations/critic-retry'
 import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-runtime-evidence'
 import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, type RunnerWorkspace } from '@/lib/agent-runner/worktree'
+import { getCachedOrShallowRunnerReadiness, getRunnerReadiness, writeCachedRunnerReadiness } from '@/lib/system/runner-readiness'
+import { selectDelegationExecutionMode } from '@/lib/delegations/execution-mode'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
@@ -274,24 +276,6 @@ async function autoMergePRIfEligible(prUrl: string, delegation: Delegation): Pro
       { event: 'pr.auto_merge.failed', error: String(err), prUrl, delegationId: delegation.id },
       'Auto-merge failed after safety gate',
     )
-  }
-}
-
-function isClaudeAvailable(): boolean {
-  try {
-    execSync('claude --version', { stdio: 'ignore', timeout: 3000 })
-    return true
-  } catch {
-    return false
-  }
-}
-
-function isCodexAvailable(): boolean {
-  try {
-    execSync('codex --version', { stdio: 'ignore', timeout: 3000 })
-    return true
-  } catch {
-    return false
   }
 }
 
@@ -1489,15 +1473,21 @@ export async function POST(
     : buildPrompt(delegation, contextCards, retryContext || undefined)
 
   // OTel: trace execution start + routing decision
-  const mode = delegation.executionRoute === 'ollama-agent'
-    ? 'ollama-agent'
-    : isClaudeAvailable()
-      ? 'claude-cli'
-      : isCodexAvailable()
-        ? 'codex-cli'
-        : readStoredApiKeys().ANTHROPIC_API_KEY?.trim()
-          ? 'claude-api'
-          : 'simulation'
+  let runnerReadiness = getCachedOrShallowRunnerReadiness()
+  if (
+    delegation.executionRoute !== 'ollama-agent'
+    && !runnerReadiness.zeroKeyReady
+    && (runnerReadiness.claude.available || runnerReadiness.codex.available)
+  ) {
+    runnerReadiness = getRunnerReadiness({ deep: true })
+    writeCachedRunnerReadiness(runnerReadiness)
+  }
+
+  const mode = selectDelegationExecutionMode({
+    executionRoute: delegation.executionRoute,
+    runnerReadiness,
+    anthropicApiKeySet: Boolean(readStoredApiKeys().ANTHROPIC_API_KEY?.trim()),
+  })
 
   void withSpan('delegation.execute', {
     'delegation.id':          id,

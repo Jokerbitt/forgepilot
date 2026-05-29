@@ -51,8 +51,31 @@ function combinedFailureText(delegation: Delegation): string {
     .toLowerCase()
 }
 
+function primaryFailureText(delegation: Delegation): string {
+  return [
+    delegation.errorMessage,
+    delegation.failureFeedback,
+    ...(delegation.logs ?? []).filter(log => log.type === 'error').slice(-5).map(log => log.message),
+  ]
+    .filter(Boolean)
+    .join('\n')
+    .toLowerCase()
+}
+
+function containsAuthFailure(text: string): boolean {
+  return text.includes('authentication')
+    || text.includes('invalid x-api-key')
+    || text.includes('api key')
+    || text.includes('api-key')
+    || text.includes('oauth')
+    || text.includes('unauthorized')
+}
+
 export function detectFailureCause(delegation: Delegation): FailureCause {
   if (delegation.status === 'cancelled') return 'cancelled'
+
+  const primaryText = primaryFailureText(delegation)
+  if (containsAuthFailure(primaryText)) return 'auth'
 
   const text = combinedFailureText(delegation)
   if (text.includes('typescript') || text.includes('type error') || text.includes('ts(') || text.includes('tsc')) return 'type-error'
@@ -64,7 +87,7 @@ export function detectFailureCause(delegation: Delegation): FailureCause {
   if (text.includes('ambiguous') || text.includes('unclear') || text.includes('what exactly')) return 'unclear-requirements'
   if (text.includes('budget exceeded') || (text.includes('budget') && text.includes('cost'))) return 'budget-exceeded'
   if (text.includes('reached max turns') || text.includes('turn-limit') || text.includes('max turns')) return 'turn-limit'
-  if (text.includes('authentication') || text.includes('invalid x-api-key') || text.includes('api key')) return 'auth'
+  if (containsAuthFailure(text)) return 'auth'
   if (text.includes('rate limit') || text.includes('rate_limit')) return 'rate-limit'
   return 'unknown'
 }
