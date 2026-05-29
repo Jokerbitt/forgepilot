@@ -529,6 +529,7 @@ export default function DelegationDetailPage() {
   const isDone      = d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled'
   const canCreatePR = d.status === 'completed' && !d.summaryReport?.prUrl
   const canClone    = isDone
+  const canOrchestrate = d.status === 'pending' || d.status === 'approved'
 
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6 md:p-8">
@@ -648,13 +649,15 @@ export default function DelegationDetailPage() {
                   {cloningDelegation ? '⏳' : '⧉ Klonen'}
                 </button>
               )}
-              <button
-                onClick={handleOrchestrate}
-                disabled={orchestrating}
-                className="px-2 py-1.5 text-xs text-violet-600 hover:text-violet-300 border border-gray-800 hover:border-violet-800 rounded-lg transition-colors disabled:opacity-40"
-                title="Task in atomare Sub-Tasks zerlegen">
-                {orchestrating ? '⚙…' : '⚙ Orchestrieren'}
-              </button>
+              {canOrchestrate && (
+                <button
+                  onClick={handleOrchestrate}
+                  disabled={orchestrating}
+                  className="px-2 py-1.5 text-xs text-violet-600 hover:text-violet-300 border border-gray-800 hover:border-violet-800 rounded-lg transition-colors disabled:opacity-40"
+                  title="Task in atomare Sub-Tasks zerlegen">
+                  {orchestrating ? '⚙…' : '⚙ Orchestrieren'}
+                </button>
+              )}
               <button onClick={handleCopy}
                 className={`px-2 py-1.5 text-xs border rounded-lg transition-colors ${copied ? 'text-green-400 border-green-800' : 'text-gray-600 border-gray-800 hover:text-gray-300'}`}
                 title="Permalink kopieren">
