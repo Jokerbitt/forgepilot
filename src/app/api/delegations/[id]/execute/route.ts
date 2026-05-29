@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/auth/require-auth'
 import { delegationLogger } from '@/lib/logger'
 import { withSpan } from '@/lib/tracing/tracer'
 import { checkRateLimit, buildRateLimitHeaders } from '@/lib/rate-limit'
-import { spawn, execSync, spawnSync } from 'child_process'
+import { spawn, execSync } from 'child_process'
 import type { Delegation, AgentLog, DelegationReport } from '@/lib/models/delegation'
 import { registerProcess, unregisterProcess } from '@/lib/process-registry'
 import { readStoredApiKeys } from '@/lib/connectors/config'
@@ -38,6 +38,8 @@ import { checkParallelCompletion } from '@/lib/delegation-parallel'
 import { triggerCriticRetry } from '@/lib/delegations/critic-retry'
 import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-runtime-evidence'
 import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, type RunnerWorkspace } from '@/lib/agent-runner/worktree'
+import { recordSkillOutcome, listSkills, seedBuiltinSkills } from '@/lib/skills/prompt-skill-registry'
+import { applyAutoOptimizations } from '@/lib/skills/skill-optimizer'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
@@ -359,21 +361,22 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
           logBuffer.push({ timestamp: new Date().toISOString(), type: 'thought', message: text.slice(0, 500) })
 
           // M109: Checkpoint detection — agent prints "CHECKPOINT: <phase>"
-          // Uses async test run to avoid blocking the stdout data event handler.
-          if (text.startsWith('CHECKPOINT:')) {
+          // Guard: skip if a test run is already in progress (concurrent CHECKPOINTs).
+          if (text.startsWith('CHECKPOINT:') && !checkpointTestRunning) {
             const phase = text.slice('CHECKPOINT:'.length).trim()
+            checkpointTestRunning = true
             logBuffer.push({ timestamp: new Date().toISOString(), type: 'info', message: `🔖 Checkpoint: ${phase} — Tests laufen…` })
             scheduleFlush()
-            // Fire-and-forget async — does not block stdout stream
             runPostExecutionTestsAsync(runnerWorkspace.path).then(testResult => {
-              appendLogs(id, [{
+              checkpointTestRunning = false
+              return appendLogs(id, [{
                 timestamp: new Date().toISOString(),
                 type: testResult.passed ? 'info' : 'error',
                 message: testResult.passed
                   ? `✅ Checkpoint bestanden: ${phase}`
                   : `❌ Checkpoint-Tests fehlgeschlagen: ${phase} — Agent läuft weiter`,
-              }]).catch(() => {})
-            }).catch(() => {})
+              }])
+            }).catch(() => { checkpointTestRunning = false })
           }
         } else if (block.type === 'tool_use' && block.name) {
           const summary = summariseTool(block.name, block.input ?? {})
@@ -399,22 +402,9 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     }
   }
 
-  // M107: Run tests in the workspace and return pass/fail + truncated output (sync, used post-execution)
-  function runPostExecutionTests(workspacePath: string): { passed: boolean; output: string } {
-    try {
-      const result = spawnSync(
-        'npm',
-        ['run', 'test:run', '--', '--reporter=verbose'],
-        { cwd: workspacePath, timeout: 90_000, encoding: 'utf-8' },
-      )
-      const raw = `${result.stdout ?? ''}\n${result.stderr ?? ''}`.trim()
-      return { passed: result.status === 0, output: raw.slice(-3000) }
-    } catch {
-      return { passed: false, output: 'Test runner timed out or crashed' }
-    }
-  }
-
-  // M109: Async variant — does not block the event loop (used during streaming checkpoints)
+  // M107/M109: Async test runner — used both during checkpoints and post-execution.
+  // Guard against concurrent runs: if a test is already running for this workspace, skip.
+  let checkpointTestRunning = false
   function runPostExecutionTestsAsync(workspacePath: string): Promise<{ passed: boolean; output: string }> {
     return new Promise(resolve => {
       const child = spawn('npm', ['run', 'test:run'], { cwd: workspacePath, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -551,7 +541,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       const autoRetryEnabled = true
       const currentRetryCount = current.retryCount ?? 0
       if (success && autoRetryEnabled && currentRetryCount < 3) {
-        const testResult = runPostExecutionTests(runnerWorkspace.path)
+        const testResult = await runPostExecutionTestsAsync(runnerWorkspace.path)
         if (!testResult.passed) {
           void appendLogs(id, [{
             timestamp: new Date().toISOString(),
@@ -640,7 +630,6 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
 
         // Record outcomes for all global skills — feeds the self-improving optimizer
         try {
-          const { recordSkillOutcome, listSkills, seedBuiltinSkills } = await import('@/lib/skills/prompt-skill-registry')
           seedBuiltinSkills()
           const globalSkills = listSkills({ scope: 'global', status: 'active' })
           const now = new Date().toISOString()
@@ -656,7 +645,6 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
           // Auto-optimize every 10 completed runs
           const totalRuns = globalSkills.reduce((sum, s) => sum + s.metrics.runsCount, 0)
           if (globalSkills.length > 0 && totalRuns > 0 && totalRuns % 10 === 0) {
-            const { applyAutoOptimizations } = await import('@/lib/skills/skill-optimizer')
             applyAutoOptimizations(85)
           }
         } catch {

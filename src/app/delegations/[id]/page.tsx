@@ -492,6 +492,17 @@ export default function DelegationDetailPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const handleAutoOrchestrateToggle = async () => {
+    if (!delegation) return
+    const next = !delegation.autoOrchestrate
+    setDelegation(prev => prev ? { ...prev, autoOrchestrate: next } : prev)
+    await fetch(`/api/delegations/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ autoOrchestrate: next }),
+    })
+  }
+
   if (loading) {
     return (
       <main className="min-h-screen bg-gray-950 text-white p-6 md:p-8">
@@ -615,44 +626,28 @@ export default function DelegationDetailPage() {
               )}
             </div>
 
-            {/* Utility buttons — primary actions moved to FocusCard below */}
+            {/* Utility buttons — secondary actions (primary in FocusCard below) */}
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              {/* Auto-orchestrate toggle — only relevant at start */}
-              {canStart && (
+              {canOrchestrate && (
                 <button
-                  onClick={async () => {
-                    if (!delegation) return
-                    const updated = { ...delegation, autoOrchestrate: !delegation.autoOrchestrate }
-                    setDelegation(updated)
-                    await fetch('/api/delegations', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify(updated),
-                    })
-                  }}
+                  onClick={handleAutoOrchestrateToggle}
                   title="Auto-Orchestrierung: Task automatisch in Sub-Tasks aufteilen"
                   className={`px-2 py-1.5 text-xs rounded-lg border transition-colors ${
                     delegation?.autoOrchestrate
                       ? 'bg-violet-900/60 text-violet-300 border-violet-700'
                       : 'text-slate-600 border-slate-800 hover:text-violet-400 hover:border-violet-900'
                   }`}
-                >
-                  ⚙ Auto
-                </button>
+                >⚙ Auto</button>
               )}
               {canClone && (
-                <button
-                  onClick={handleClone}
-                  disabled={cloningDelegation}
+                <button onClick={handleClone} disabled={cloningDelegation}
                   className="px-2 py-1.5 text-xs text-gray-600 hover:text-gray-300 border border-gray-800 hover:border-gray-700 rounded-lg transition-colors disabled:opacity-40"
                   title="Delegation als neuen Entwurf duplizieren">
                   {cloningDelegation ? '⏳' : '⧉ Klonen'}
                 </button>
               )}
               {canOrchestrate && (
-                <button
-                  onClick={handleOrchestrate}
-                  disabled={orchestrating}
+                <button onClick={handleOrchestrate} disabled={orchestrating}
                   className="px-2 py-1.5 text-xs text-violet-600 hover:text-violet-300 border border-gray-800 hover:border-violet-800 rounded-lg transition-colors disabled:opacity-40"
                   title="Task in atomare Sub-Tasks zerlegen">
                   {orchestrating ? '⚙…' : '⚙ Orchestrieren'}
@@ -664,12 +659,9 @@ export default function DelegationDetailPage() {
                 {copied ? '✓' : '🔗'}
               </button>
               {(d.logs ?? []).length > 0 && (
-                <button
-                  onClick={() => downloadLogsAsText(d)}
+                <button onClick={() => downloadLogsAsText(d)}
                   className="px-2 py-1.5 text-xs text-gray-600 hover:text-gray-300 border border-gray-800 hover:border-gray-600 rounded-lg transition-colors"
-                  title="Logs herunterladen">
-                  ⬇
-                </button>
+                  title="Logs herunterladen">⬇</button>
               )}
             </div>
           </div>
