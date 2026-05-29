@@ -151,6 +151,34 @@ function detectKnownError(output: string): string | undefined {
   return undefined
 }
 
+function isClaudeCliFallbackError(message: string | undefined): boolean {
+  if (!message) return false
+  const lower = message.toLowerCase()
+  return lower.includes('api key')
+    || lower.includes('anthropic')
+    || lower.includes('authentication')
+    || lower.includes('rate limit')
+    || lower.includes('rate-limit')
+}
+
+function alreadyAttemptedCodexFallback(delegation: Delegation): boolean {
+  return (delegation.logs ?? []).some(log => log.message.includes('Fallback auf Codex CLI'))
+}
+
+function isCodexFallbackReady(): boolean {
+  try {
+    const readiness = getRunnerReadiness({
+      deep: true,
+      cwd: process.cwd(),
+      timeoutMs: 30_000,
+    })
+    writeCachedRunnerReadiness(readiness)
+    return readiness.codex.headlessReady
+  } catch {
+    return false
+  }
+}
+
 /**
  * Parse actual cost from Claude CLI output.
  * Claude outputs something like: "Cost: $0.0234" or "Total cost: $0.01"
@@ -562,6 +590,29 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
       const current = await repo.findById(id)
       if (!current || current.status !== 'running') return
+
+      if (!success && isClaudeCliFallbackError(knownError) && !alreadyAttemptedCodexFallback(current)) {
+        if (isCodexFallbackReady()) {
+          const fallbackLog: AgentLog = {
+            timestamp: new Date().toISOString(),
+            type: 'info',
+            message: `Fallback auf Codex CLI: Claude CLI blockiert (${knownError}).`,
+          }
+          await repo.update(id, {
+            errorMessage: undefined,
+            logs: [...(current.logs ?? []), ...logBuffer, finalLog, fallbackLog],
+          })
+          await cleanupRunnerWorkspace()
+          runWithCodexCLI(id, prompt, new Date(), budgetUsd, riskClass, targetRepo)
+          return
+        }
+
+        await appendLogs(id, [{
+          timestamp: new Date().toISOString(),
+          type: 'error',
+          message: 'Codex CLI Fallback nicht bereit. Bitte Codex CLI lokal anmelden oder in Settings pruefen.',
+        }])
+      }
 
       const finalStatus = success ? 'completed' : 'failed'
       const finishedDelegation = await repo.update(id, {
