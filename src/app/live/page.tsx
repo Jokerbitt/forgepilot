@@ -20,6 +20,7 @@ import { RunsTab } from '@/components/live/RunsTab'
 import { MonitorTab } from '@/components/live/MonitorTab'
 import { OrchestrationsTab } from '@/components/live/OrchestrationsTab'
 import { RunnerReadinessBanner } from '@/components/shared/RunnerReadinessBanner'
+import { AutonomousLoopPanel } from '@/components/command-center/AutonomousLoopPanel'
 import { cx } from '@/components/ui/primitives'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -194,6 +195,9 @@ function StatusTab() {
           Stand abrufen
         </button>
       </div>
+
+      {/* Loop Status */}
+      <AutonomousLoopPanel />
 
       {/* KPI cards */}
       <section className="grid gap-4 lg:grid-cols-4">
