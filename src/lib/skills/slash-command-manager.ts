@@ -95,11 +95,14 @@ export function createSlashCommand(opts: {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 
   // Security: sanitize name to prevent path traversal — only allow alphanum, dash, underscore
-  const safeName = opts.name.replace(/[^a-zA-Z0-9_-]/g, '_')
-  const filePath = path.join(dir, `${safeName}.md`)
-  // Extra guard: ensure the resolved path stays within the intended directory
-  if (!filePath.startsWith(dir + path.sep) && filePath !== path.join(dir, `${safeName}.md`)) {
-    throw new Error(`Invalid command name: path traversal detected`)
+  const safeName = opts.name.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64)
+  if (!safeName) throw new Error('Command name must contain at least one valid character')
+
+  // Resolve and verify the final path stays strictly within the target directory
+  const resolvedDir = path.resolve(dir)
+  const filePath = path.resolve(resolvedDir, `${safeName}.md`)
+  if (!filePath.startsWith(resolvedDir + path.sep)) {
+    throw new Error(`Invalid command name: path escapes target directory`)
   }
   fs.writeFileSync(filePath, opts.content)
 
