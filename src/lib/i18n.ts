@@ -38,6 +38,7 @@ type NavKey =
   | 'activityDigest'
   | 'settings'
   | 'skills'
+  | 'planMode'
 
 type UiKey =
   | 'workspace'
@@ -145,6 +146,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
       activityDigest: { label: 'Aktivitäts-Digest', short: 'Digest' },
       settings: { label: 'Settings', short: 'Settings' },
       skills: { label: 'Skills', short: 'Skills' },
+      planMode: { label: 'Plan Mode', short: 'Plan' },
     },
     ui: {
       workspace: 'Workspace',
@@ -247,6 +249,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
       activityDigest: { label: 'Activity Digest', short: 'Digest' },
       settings: { label: 'Settings', short: 'Settings' },
       skills: { label: 'Skills', short: 'Skills' },
+      planMode: { label: 'Plan Mode', short: 'Plan' },
     },
     ui: {
       workspace: 'Workspace',

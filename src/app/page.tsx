@@ -68,6 +68,8 @@ export default function Home() {
                 id="prompt"
                 name="prompt"
                 rows={5}
+                // eslint-disable-next-line jsx-a11y/no-autofocus
+                autoFocus
                 placeholder="z.B. Baue eine kleine ToDo Planner WebApp mit Projekten, Prioritäten, Tagesansicht und lokaler Speicherung..."
                 className="w-full resize-none rounded-xl border border-white/[0.08] bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none transition-colors placeholder:text-slate-600 focus:border-violet-400/60"
               />

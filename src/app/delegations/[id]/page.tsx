@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useToast } from '@/components/shared/ToastProvider'
 import type { Delegation, DelegationStatus, DelegationReport, DoDQualityCheck } from '@/lib/models/delegation'
 import type { OrchestratedRun } from '@/lib/agents/orchestrated-run'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
@@ -85,6 +86,7 @@ export default function DelegationDetailPage() {
   const params = useParams()
   const router = useRouter()
   const id = typeof params.id === 'string' ? params.id : ''
+  const { addToast } = useToast()
 
   const [delegation, setDelegation] = useState<Delegation | null>(null)
   const [loading, setLoading] = useState(true)
@@ -289,12 +291,12 @@ export default function DelegationDetailPage() {
       const res = await fetch(`/api/delegations/${id}/review-retry`, { method: 'POST' })
       const data = await res.json() as { delegationId?: string; error?: string }
       if (!res.ok || !data.delegationId) {
-        alert(`Fehler: ${data.error ?? 'Unbekannter Fehler'}`)
+        addToast({ type: 'error', title: 'Review-Retry fehlgeschlagen', message: data.error ?? 'Unbekannter Fehler' })
         return
       }
       router.push(`/delegations/${data.delegationId}`)
     } catch {
-      alert('Review-Retry konnte nicht gestartet werden.')
+      addToast({ type: 'error', title: 'Review-Retry fehlgeschlagen', message: 'Netzwerkfehler — bitte erneut versuchen.' })
     } finally {
       setReviewRetryLoading(false)
     }
@@ -310,12 +312,12 @@ export default function DelegationDetailPage() {
         setPreviewUrl(data.url)
         window.open(data.url, '_blank', 'noopener')
       } else if (data.message) {
-        alert(data.message)
+        addToast({ type: 'info', title: 'Vorschau', message: data.message })
       } else if (data.error) {
-        alert(`Vorschau-Fehler: ${data.error}`)
+        addToast({ type: 'error', title: 'Vorschau-Fehler', message: data.error })
       }
     } catch {
-      alert('Vorschau konnte nicht gestartet werden.')
+      addToast({ type: 'error', title: 'Vorschau-Fehler', message: 'Netzwerkfehler — bitte erneut versuchen.' })
     } finally {
       setPreviewLoading(false)
     }
@@ -329,11 +331,12 @@ export default function DelegationDetailPage() {
       const data = await res.json() as { qualityCheck?: DoDQualityCheck; error?: string }
       if (res.ok && data.qualityCheck) {
         setQualityCheck(data.qualityCheck)
+        addToast({ type: 'success', title: 'Qualitäts-Check abgeschlossen', message: `Ergebnis: ${data.qualityCheck.verdict}` })
       } else {
-        alert(`Qualitäts-Check fehlgeschlagen: ${data.error ?? 'Unbekannter Fehler'}`)
+        addToast({ type: 'error', title: 'Qualitäts-Check fehlgeschlagen', message: data.error ?? 'Unbekannter Fehler' })
       }
     } catch {
-      alert('Qualitäts-Check konnte nicht gestartet werden.')
+      addToast({ type: 'error', title: 'Qualitäts-Check-Fehler', message: 'Netzwerkfehler — bitte erneut versuchen.' })
     } finally {
       setQualityCheckLoading(false)
     }

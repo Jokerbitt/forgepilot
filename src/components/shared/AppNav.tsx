@@ -21,6 +21,7 @@ import {
   Monitor,
   AlertTriangle,
   Sparkles,
+  Map,
 } from 'lucide-react'
 import type { DelegationStats } from '@/app/api/delegations/stats/route'
 import type { AttentionItem } from '@/lib/models/attention'
@@ -57,10 +58,11 @@ const navItems: NavItem[] = [
   { href: '/settings',    key: 'settings',         icon: Settings,        group: 'core' },
 
   // ── Workflow tools (visible but secondary) ──────────────────────────────
-  { href: '/live',      key: 'liveView',  icon: Monitor,    group: 'workflow' },
-  { href: '/projects',  key: 'plan',      icon: FolderOpen, group: 'workflow' },
-  { href: '/inbox',     key: 'inbox',     icon: Inbox,      group: 'workflow' },
-  { href: '/knowledge', key: 'knowledge', icon: BookOpen,   group: 'workflow' },
+  { href: '/live',               key: 'liveView',  icon: Monitor,    group: 'workflow' },
+  { href: '/projects',           key: 'plan',      icon: FolderOpen, group: 'workflow' },
+  { href: '/delegations/plan',   key: 'planMode',  icon: Map,        group: 'workflow', isNew: true },
+  { href: '/inbox',              key: 'inbox',     icon: Inbox,      group: 'workflow' },
+  { href: '/knowledge',          key: 'knowledge', icon: BookOpen,   group: 'workflow' },
 
   // ── Expert tools (power-user, rarely needed — collapsed by default) ──────
   { href: '/analytics',      key: 'costAnalytics', icon: BarChart3, group: 'expert' },

@@ -9,7 +9,6 @@ import {
   Clock,
   Loader2,
   ChevronRight,
-  ArrowLeft,
   ExternalLink,
   GitPullRequest,
   RefreshCw,
@@ -217,14 +216,14 @@ export default function PlanStatusPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
-      {/* Back nav */}
-      <Link
-        href="/delegations/plan"
-        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-300 transition-colors"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Plan Mode
-      </Link>
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-1.5 text-xs text-slate-600" aria-label="Breadcrumb">
+        <Link href="/" className="hover:text-slate-400 transition-colors">Command Center</Link>
+        <ChevronRight className="h-3 w-3" />
+        <Link href="/delegations/plan" className="hover:text-slate-400 transition-colors">Plan Mode</Link>
+        <ChevronRight className="h-3 w-3" />
+        <span className="text-slate-400 truncate max-w-[200px]">{data.goal}</span>
+      </nav>
 
       {/* Header */}
       <div className="space-y-1">
