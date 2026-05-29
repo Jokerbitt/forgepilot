@@ -275,6 +275,9 @@ export default function DelegationDetailPage() {
   const [mergeResult, setMergeResult] = useState<{ merged: boolean; mergeCommit?: string; baseBranch?: string; githubRemote?: boolean } | null>(null)
   const [mergeError, setMergeError] = useState<string | null>(null)
 
+  // M7: Auto-Merge Safety Gates
+  const [autoMerging, setAutoMerging] = useState(false)
+
   // App Preview
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
@@ -360,6 +363,42 @@ export default function DelegationDetailPage() {
       setMergeError('Netzwerkfehler beim Mergen')
     } finally {
       setMerging(false)
+    }
+  }
+
+  const handleAutoMerge = async () => {
+    if (!delegation) return
+    setAutoMerging(true)
+    try {
+      const res = await fetch(`/api/delegations/${id}/auto-merge`, { method: 'POST' })
+      const data = await res.json() as {
+        merged: boolean
+        gates: Array<{ name: string; passed: boolean; detail: string }>
+        blockedBy?: string
+      }
+      if (data.merged) {
+        addToast({ type: 'success', title: 'PR gemerged ✅', message: 'Auto-Merge erfolgreich abgeschlossen.' })
+        setDelegation(prev => prev
+          ? {
+              ...prev,
+              summaryReport: prev.summaryReport
+                ? { ...prev.summaryReport, prState: 'merged' }
+                : prev.summaryReport,
+            }
+          : prev)
+      } else {
+        const failedGates = data.gates.filter(g => !g.passed)
+        const details = failedGates.map(g => `• ${g.name}: ${g.detail}`).join('\n')
+        addToast({
+          type: 'error',
+          title: `Merge blockiert: ${data.blockedBy ?? 'Safety Gate fehlgeschlagen'}`,
+          message: details || 'Ein oder mehrere Safety-Gates haben nicht bestanden.',
+        })
+      }
+    } catch {
+      addToast({ type: 'error', title: 'Auto-Merge Fehler', message: 'Netzwerkfehler — bitte erneut versuchen.' })
+    } finally {
+      setAutoMerging(false)
     }
   }
 
@@ -943,6 +982,27 @@ export default function DelegationDetailPage() {
                   </li>
                 ))}
               </ul>
+            )}
+
+            {/* M7: Auto-Merge Safety Gates — only when PR is open */}
+            {d.summaryReport?.prUrl && d.summaryReport.prState !== 'merged' && (
+              <div className="mt-3 pt-3 border-t border-gray-800">
+                <button
+                  onClick={handleAutoMerge}
+                  disabled={autoMerging}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border border-violet-700/60 bg-violet-950/30 text-violet-300 hover:bg-violet-900/40 hover:border-violet-600 hover:text-violet-200 transition-colors disabled:opacity-40"
+                >
+                  {autoMerging ? (
+                    <>
+                      <span className="h-3 w-3 animate-spin rounded-full border border-violet-400 border-t-transparent" />
+                      Safety-Checks laufen…
+                    </>
+                  ) : '⚡ Sicher mergen (Auto-Gates)'}
+                </button>
+                <p className="mt-1.5 text-[10px] text-gray-600">
+                  Prüft Safety-Gates bevor gemergt wird: Status, Risk-Class, Tests, Änderungsumfang, Critic-Score
+                </p>
+              </div>
             )}
           </div>
         )}
