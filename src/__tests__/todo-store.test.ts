@@ -1,3 +1,6 @@
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
 import { describe, it, expect } from 'vitest'
 import {
   createTodo,
@@ -9,6 +12,7 @@ import {
   buildSampleTodos,
   type Todo,
 } from '@/lib/todo/todo-store'
+import { JsonTodoRepository, parseTodos } from '@/lib/todo/todo-repository'
 
 const FIXED_NOW = () => new Date('2026-05-29T12:00:00.000Z')
 let nextId = 0
@@ -149,5 +153,32 @@ describe('buildSampleTodos', () => {
     const samples = buildSampleTodos(FIXED_NOW)
     expect(samples).toHaveLength(3)
     expect(samples.every(t => t.isSample === true)).toBe(true)
+  })
+})
+
+describe('todo repository fallback', () => {
+  it('persists todos across repository instances', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'forgepilot-todos-'))
+    const filePath = path.join(dir, 'todos.json')
+    const todos: Todo[] = [
+      {
+        id: 'persisted-1',
+        title: 'Persist me',
+        priority: 'high',
+        status: 'open',
+        createdAt: '2026-05-29T12:00:00.000Z',
+      },
+    ]
+
+    const writer = new JsonTodoRepository(filePath)
+    await writer.replaceAll(todos)
+
+    const reader = new JsonTodoRepository(filePath)
+    await expect(reader.listAll()).resolves.toEqual(todos)
+  })
+
+  it('rejects invalid persisted todo payloads', () => {
+    expect(parseTodos([{ id: 'broken', title: 'Missing fields' }])).toBeNull()
+    expect(parseTodos({ todos: [] })).toBeNull()
   })
 })

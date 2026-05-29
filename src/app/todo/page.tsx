@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { CheckCircle2, Circle, ListChecks, PlayCircle, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { Badge, EmptyState, buttonClassName, cx } from '@/components/ui/primitives'
@@ -46,6 +46,12 @@ const FILTERS: Array<{ value: TodoFilter; label: string }> = [
 
 const PRIORITY_OPTIONS: TodoPriority[] = ['high', 'medium', 'low']
 const STATUS_OPTIONS: TodoStatus[] = ['open', 'in_progress', 'done']
+const GENERIC_STORAGE_ERROR = 'Aufgaben konnten nicht gespeichert werden. Bitte versuche es erneut.'
+
+interface TodoApiResponse {
+  todos?: Todo[]
+  error?: string
+}
 
 export default function TodoPage() {
   const [todos, setTodos] = useState<Todo[]>([])
@@ -53,6 +59,9 @@ export default function TodoPage() {
   const [priority, setPriority] = useState<TodoPriority>('medium')
   const [status, setStatus] = useState<TodoStatus>('open')
   const [filter, setFilter] = useState<TodoFilter>('all')
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [storageError, setStorageError] = useState<string | null>(null)
 
   const sorted = useMemo(() => sortTodos(todos), [todos])
   const visible = useMemo(() => filterTodos(sorted, filter), [sorted, filter])
@@ -61,30 +70,76 @@ export default function TodoPage() {
   const sampleMode = isSampleSet(todos)
   const isEmpty = todos.length === 0
 
-  function handleAdd() {
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadTodos() {
+      try {
+        const response = await fetch('/api/todo', { cache: 'no-store' })
+        const payload = (await response.json()) as TodoApiResponse
+        if (!response.ok) throw new Error(payload.error ?? 'Aufgaben konnten nicht geladen werden.')
+        if (isMounted) {
+          setTodos(payload.todos ?? [])
+          setStorageError(null)
+        }
+      } catch (error) {
+        if (isMounted) {
+          setStorageError(error instanceof Error ? error.message : 'Aufgaben konnten nicht geladen werden.')
+        }
+      } finally {
+        if (isMounted) setIsLoading(false)
+      }
+    }
+
+    void loadTodos()
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  async function persistTodos(nextTodos: Todo[]) {
+    setIsSaving(true)
+    try {
+      const response = await fetch('/api/todo', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ todos: nextTodos }),
+      })
+      const payload = (await response.json()) as TodoApiResponse
+      if (!response.ok) throw new Error(payload.error ?? GENERIC_STORAGE_ERROR)
+      setTodos(payload.todos ?? nextTodos)
+      setStorageError(null)
+      return true
+    } catch (error) {
+      setStorageError(error instanceof Error ? error.message : GENERIC_STORAGE_ERROR)
+      return false
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function handleAdd() {
     const created = createTodo({ title, priority, status })
     if (!created) return
-    setTodos(current => {
-      const purged = current.filter(todo => !todo.isSample)
-      return [...purged, created]
-    })
-    setTitle('')
+    const nextTodos = [...todos.filter(todo => !todo.isSample), created]
+    const saved = await persistTodos(nextTodos)
+    if (saved) setTitle('')
   }
 
   function handleStatusChange(id: string, next: TodoStatus) {
-    setTodos(current => current.map(todo => (todo.id === id ? { ...todo, status: next } : todo)))
+    void persistTodos(todos.map(todo => (todo.id === id ? { ...todo, status: next } : todo)))
   }
 
   function handleRemove(id: string) {
-    setTodos(current => current.filter(todo => todo.id !== id))
+    void persistTodos(todos.filter(todo => todo.id !== id))
   }
 
   function handleLoadSample() {
-    setTodos(buildSampleTodos())
+    void persistTodos(buildSampleTodos())
   }
 
   function handleClearSample() {
-    setTodos([])
+    void persistTodos([])
   }
 
   return (
@@ -123,7 +178,7 @@ export default function TodoPage() {
               onKeyDown={event => {
                 if (event.key === 'Enter') {
                   event.preventDefault()
-                  handleAdd()
+                  void handleAdd()
                 }
               }}
               placeholder="z.B. Projekt-Brief fuer Neuer Kunde vorbereiten"
@@ -149,13 +204,18 @@ export default function TodoPage() {
               <p className="text-xs text-slate-500">Enter speichert die Aufgabe sofort.</p>
               <button
                 type="button"
-                onClick={handleAdd}
-                disabled={!title.trim()}
+                onClick={() => void handleAdd()}
+                disabled={!title.trim() || isSaving || isLoading}
                 className={buttonClassName('primary', 'min-h-10 sm:w-auto')}
               >
-                Aufgabe speichern
+                {isSaving ? 'Speichert...' : 'Aufgabe speichern'}
               </button>
             </div>
+            {storageError && (
+              <p role="alert" className="rounded-lg border border-rose-500/25 bg-rose-500/[0.08] px-3 py-2 text-xs leading-5 text-rose-100">
+                {storageError}
+              </p>
+            )}
           </div>
         </section>
 
@@ -223,7 +283,13 @@ export default function TodoPage() {
           )}
 
           <div className="mt-4">
-            {isEmpty ? (
+            {isLoading ? (
+              <EmptyState
+                icon={<ListChecks className="h-5 w-5" />}
+                title="Aufgaben werden geladen"
+                description="Die gespeicherten Aufgaben werden aus der lokalen Ablage gelesen."
+              />
+            ) : isEmpty ? (
               <EmptyState
                 icon={<ListChecks className="h-5 w-5" />}
                 title="Noch keine Aufgaben"
