@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft,
@@ -58,8 +58,10 @@ function GoalStep({
 }: {
   onGenerate: (goal: string, context: string, targetRepo: string, maxPhases: number) => Promise<void>
 }) {
-  const [goal, setGoal] = useState('')
-  const [context, setContext] = useState('')
+  // Pre-fill from query params (e.g. from Concept Analyzer)
+  const searchParams = useSearchParams()
+  const [goal, setGoal] = useState(() => searchParams.get('goal') ?? '')
+  const [context, setContext] = useState(() => searchParams.get('context') ?? '')
   const [targetRepo, setTargetRepo] = useState('')
   const [maxPhases, setMaxPhases] = useState(4)
   const [loading, setLoading] = useState(false)
