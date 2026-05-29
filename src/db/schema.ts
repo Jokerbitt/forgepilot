@@ -55,6 +55,7 @@ export const delegations = pgTable(
     priority: integer('priority'),
     briefId: text('brief_id'),
     criticScore: jsonb('critic_score').$type<Record<string, unknown>>(),
+    qualityCheck: jsonb('quality_check').$type<Record<string, unknown>>(),
     contextSnapshot: jsonb('context_snapshot').$type<Record<string, unknown>>(),
     startedAt: timestamp('started_at', { withTimezone: true }),
     completedAt: timestamp('completed_at', { withTimezone: true }),

@@ -194,6 +194,43 @@ interface DailyAssistantSnapshotResponse {
     prOpen?: number
     prMerged?: number
   }
+  queueHygiene?: {
+    totalItems?: number
+    visibleCount?: number
+    hiddenDuplicateCount?: number
+    noisyTestCount?: number
+    riskCCount?: number
+    recommendation?: string
+    duplicateGroups?: Array<{
+      title: string
+      count: number
+      representativeId: string
+      hiddenCount?: number
+    }>
+    visibleItems?: Array<{
+      id: string
+      title: string
+      status: string
+      riskClass: string
+      requiresApproval?: boolean
+    }>
+  }
+  deliveryGate?: {
+    status?: Tone
+    message?: string
+    action?: {
+      type: 'quality_check' | 'critic_review' | 'create_pr' | 'review_pr' | 'repair_required'
+      label: string
+      reason: string
+      delegation: {
+        id: string
+        title: string
+        href: string
+        prUrl?: string
+        riskClass: string
+      }
+    } | null
+  }
 }
 
 interface AssistantCycleResponse {
@@ -713,6 +750,92 @@ export default function LiveViewPage() {
                   {assistantCycleResult.error ?? assistantCycleResult.message ?? 'Assistant-Zyklus geprüft.'}
                 </div>
               )}
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-lg border border-white/[0.07] bg-black/15 p-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-white">Ruhige Arbeitsqueue</p>
+                <p className="mt-1 max-w-3xl text-xs leading-5 text-sky-50/60">
+                  {dailyAssistant?.queueHygiene?.recommendation ?? 'ForgePilot verdichtet Duplikate und Test-Rauschen, damit du nur die nächsten sinnvollen Schritte siehst.'}
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center text-xs sm:min-w-[320px]">
+                <span className="rounded-md border border-white/[0.07] bg-white/[0.035] px-2 py-2">
+                  <span className="block font-bold text-white">{dailyAssistant?.queueHygiene?.visibleCount ?? 0}</span>
+                  <span className="text-slate-500">sichtbar</span>
+                </span>
+                <span className="rounded-md border border-white/[0.07] bg-white/[0.035] px-2 py-2">
+                  <span className="block font-bold text-white">{dailyAssistant?.queueHygiene?.hiddenDuplicateCount ?? 0}</span>
+                  <span className="text-slate-500">Duplikate</span>
+                </span>
+                <span className="rounded-md border border-white/[0.07] bg-white/[0.035] px-2 py-2">
+                  <span className="block font-bold text-white">{dailyAssistant?.queueHygiene?.noisyTestCount ?? 0}</span>
+                  <span className="text-slate-500">Test-Rauschen</span>
+                </span>
+              </div>
+            </div>
+            <div className="mt-3 grid gap-2 lg:grid-cols-2 xl:grid-cols-3">
+              {(dailyAssistant?.queueHygiene?.visibleItems ?? []).slice(0, 6).map(item => (
+                <Link
+                  key={item.id}
+                  href={`/delegations/${item.id}`}
+                  className="rounded-md border border-white/[0.06] bg-white/[0.025] px-3 py-2 transition hover:border-sky-400/30 hover:bg-sky-500/10"
+                >
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="truncate text-xs font-semibold text-slate-100">{item.title}</span>
+                    <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+                      {item.riskClass}
+                    </span>
+                  </span>
+                  <span className="mt-1 block text-[11px] text-slate-500">
+                    {item.status === 'approved' ? 'freigegeben' : item.status === 'pending' ? 'wartet' : item.status}
+                  </span>
+                </Link>
+              ))}
+            </div>
+            {(dailyAssistant?.queueHygiene?.duplicateGroups?.length ?? 0) > 0 && (
+              <p className="mt-3 text-[11px] leading-5 text-slate-500">
+                Größte Gruppen: {(dailyAssistant?.queueHygiene?.duplicateGroups ?? [])
+                  .slice(0, 3)
+                  .map(group => `${group.title} (${group.count}x)`)
+                  .join(', ')}
+              </p>
+            )}
+          </div>
+
+          <div className={cx(
+            'mt-4 rounded-lg border p-3',
+            toneClasses(dailyAssistant?.deliveryGate?.status ?? 'neutral'),
+          )}>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-white">PR- und Delivery-Gate</p>
+                <p className="mt-1 text-xs leading-5 opacity-80">
+                  {dailyAssistant?.deliveryGate?.message ?? 'ForgePilot prüft, ob abgeschlossene Arbeit Quality Check, Critic, PR oder Reparatur braucht.'}
+                </p>
+                {dailyAssistant?.deliveryGate?.action?.reason && (
+                  <p className="mt-1 text-[11px] leading-5 opacity-70">{dailyAssistant.deliveryGate.action.reason}</p>
+                )}
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {dailyAssistant?.deliveryGate?.action?.delegation.href && (
+                  <Link href={dailyAssistant.deliveryGate.action.delegation.href} className={buttonClassName('secondary')}>
+                    Delegation öffnen
+                  </Link>
+                )}
+                {dailyAssistant?.deliveryGate?.action?.delegation.prUrl && (
+                  <a
+                    href={dailyAssistant.deliveryGate.action.delegation.prUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={buttonClassName('primary')}
+                  >
+                    PR öffnen
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         </section>

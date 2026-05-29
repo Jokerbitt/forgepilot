@@ -49,6 +49,12 @@ describe('Postgres delegation mapping', () => {
       tokenEstimate: 128,
       builtAt: '2026-05-23T10:01:00.000Z',
     }
+    const qualityCheck = {
+      criteria: [{ item: 'Tests pass', met: true, confidence: 'high', notes: 'Verified' }],
+      overallScore: 92,
+      verdict: 'passed',
+      checkedAt: '2026-05-23T10:06:00.000Z',
+    }
 
     const delegation = __test__.rowToDelegation({
       id: '11111111-1111-4111-8111-111111111111',
@@ -84,6 +90,7 @@ describe('Postgres delegation mapping', () => {
       priority: null,
       briefId: null,
       criticScore: null,
+      qualityCheck,
       contextSnapshot: snapshot,
       startedAt: new Date('2026-05-23T10:02:00.000Z'),
       completedAt: new Date('2026-05-23T10:05:00.000Z'),
@@ -92,6 +99,7 @@ describe('Postgres delegation mapping', () => {
     })
 
     expect(delegation.contextSnapshot).toEqual(snapshot)
+    expect(delegation.qualityCheck).toEqual(qualityCheck)
     expect(delegation.startedAt).toBe('2026-05-23T10:02:00.000Z')
     expect(delegation.completedAt).toBe('2026-05-23T10:05:00.000Z')
   })

@@ -41,11 +41,27 @@ export function getDeliveryActionForDelegation(delegation: Delegation): Delivery
     }
   }
 
+  if (delegation.qualityCheck.verdict === 'partial') {
+    return {
+      type: 'repair_required',
+      delegation,
+      reason: 'DoD Quality Check ist nur teilweise bestanden. Erst offene Kriterien reparieren.',
+    }
+  }
+
   if (!delegation.criticScore) {
     return {
       type: 'critic_review',
       delegation,
       reason: 'Abgeschlossene Delegation braucht eine Critic-Bewertung.',
+    }
+  }
+
+  if (delegation.criticScore.verdict !== 'approved') {
+    return {
+      type: 'repair_required',
+      delegation,
+      reason: 'Critic Review hat die Delegation nicht freigegeben. Erst Reparatur oder manuelle Entscheidung.',
     }
   }
 

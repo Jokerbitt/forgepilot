@@ -75,6 +75,42 @@ describe('pickNextDeliveryAction', () => {
     expect(action?.type).toBe('create_pr')
   })
 
+  it('requires repair when quality check is only partial', () => {
+    const action = pickNextDeliveryAction([
+      makeDelegation({
+        qualityCheck: {
+          criteria: [],
+          overallScore: 72,
+          verdict: 'partial',
+          checkedAt: '2026-05-26T12:01:00.000Z',
+        },
+      }),
+    ])
+    expect(action?.type).toBe('repair_required')
+  })
+
+  it('requires repair when critic rejects the work', () => {
+    const action = pickNextDeliveryAction([
+      makeDelegation({
+        qualityCheck: {
+          criteria: [],
+          overallScore: 90,
+          verdict: 'passed',
+          checkedAt: '2026-05-26T12:01:00.000Z',
+        },
+        criticScore: {
+          correctness: 52,
+          efficiency: 70,
+          drift: 40,
+          verdict: 'rejected',
+          summary: 'Not ready',
+          runAt: '2026-05-26T12:02:00.000Z',
+        },
+      }),
+    ])
+    expect(action?.type).toBe('repair_required')
+  })
+
   it('does not auto-process Risk C delegations', () => {
     const action = pickNextDeliveryAction([
       makeDelegation({

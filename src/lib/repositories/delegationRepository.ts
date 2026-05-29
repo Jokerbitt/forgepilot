@@ -80,6 +80,10 @@ function rowToDelegation(row: DbDelegation): Delegation {
       row.criticScore != null
         ? (row.criticScore as unknown as Delegation['criticScore'])
         : undefined,
+    qualityCheck:
+      row.qualityCheck != null
+        ? (row.qualityCheck as unknown as Delegation['qualityCheck'])
+        : undefined,
     contextSnapshot:
       row.contextSnapshot != null
         ? (row.contextSnapshot as unknown as Delegation['contextSnapshot'])
@@ -149,6 +153,10 @@ class PostgresDelegationRepository implements DelegationRepository {
         criticScore:
           input.criticScore != null
             ? (input.criticScore as unknown as Record<string, unknown>)
+            : null,
+        qualityCheck:
+          input.qualityCheck != null
+            ? (input.qualityCheck as unknown as Record<string, unknown>)
             : null,
         contextSnapshot:
           input.contextSnapshot != null
@@ -228,6 +236,14 @@ class PostgresDelegationRepository implements DelegationRepository {
               criticScore:
                 patch.criticScore != null
                   ? (patch.criticScore as unknown as Record<string, unknown>)
+                  : null,
+            }
+          : {}),
+        ...(hasOwnPatch(patch, 'qualityCheck')
+          ? {
+              qualityCheck:
+                patch.qualityCheck != null
+                  ? (patch.qualityCheck as unknown as Record<string, unknown>)
                   : null,
             }
           : {}),
