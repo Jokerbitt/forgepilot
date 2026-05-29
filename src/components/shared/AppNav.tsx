@@ -6,35 +6,16 @@ import { useEffect, useState } from 'react'
 import { signOut } from 'next-auth/react'
 import {
   LayoutDashboard,
-  Inbox,
-  FileText,
-  CheckSquare,
-  Kanban,
-  Activity,
   ListChecks,
-  History,
-  Bot,
   BookOpen,
-  Package,
   GitBranch,
-  Shield,
-  FlaskConical,
   Settings,
   Command,
   ChevronRight,
   Zap,
-  BarChart3,
-  Search,
-  Brain,
-  Network,
   Lightbulb,
   FolderOpen,
-  Bell,
-  Radio,
   Monitor,
-  GraduationCap,
-  ClipboardList,
-  MapPin,
   AlertTriangle,
 } from 'lucide-react'
 import type { DelegationStats } from '@/app/api/delegations/stats/route'
@@ -58,32 +39,11 @@ const navItems: NavItem[] = [
   { href: '/', key: 'commandCenter', icon: LayoutDashboard, section: 'Main' },
   { href: '/idea', key: 'ideaToProduction', icon: Lightbulb, section: 'Main', isNew: true },
   { href: '/projects', key: 'plan', icon: FolderOpen, section: 'Main' },
+  { href: '/delegations', key: 'execute', icon: ListChecks, section: 'Main' },
   { href: '/live', key: 'liveView', icon: Monitor, section: 'Main' },
-  { href: '/delegations', key: 'execute', icon: ListChecks, section: 'More' },
   { href: '/knowledge', key: 'knowledge', icon: BookOpen, section: 'More' },
   { href: '/branches', key: 'system', icon: GitBranch, section: 'More' },
   { href: '/settings', key: 'settings', icon: Settings, section: 'More' },
-  { href: '/knowledge-cards', key: 'delegationLessons', icon: GraduationCap, section: 'More' },
-  { href: '/briefing', key: 'briefing', icon: ClipboardList, section: 'More' },
-  { href: '/model-router', key: 'system', icon: GitBranch, section: 'More' },
-  { href: '/inbox', key: 'inbox', icon: Inbox, section: 'More' },
-  { href: '/notifications', key: 'notifications', icon: Bell, section: 'More' },
-  { href: '/project-briefs', key: 'projectBriefs', icon: FileText, section: 'More' },
-  { href: '/work-items', key: 'workItems', icon: CheckSquare, section: 'More' },
-  { href: '/board', key: 'agentBoard', icon: Kanban, section: 'More' },
-  { href: '/active', key: 'activeRuns', icon: Activity, section: 'More' },
-  { href: '/agent-runs', key: 'agentRuns', icon: History, section: 'More' },
-  { href: '/agents', key: 'agentControl', icon: Bot, section: 'More' },
-  { href: '/orchestrations', key: 'orchestrations', icon: Network, section: 'More' },
-  { href: '/monitor', key: 'agentMonitor', icon: Radio, section: 'More' },
-  { href: '/pm-agent', key: 'pmAgent', icon: Brain, section: 'More' },
-  { href: '/knowledge/research', key: 'researchPlatform', icon: Search, section: 'More' },
-  { href: '/context-packages', key: 'contextPackages', icon: Package, section: 'More' },
-  { href: '/planning', key: 'planningAudit', icon: MapPin, section: 'More' },
-  { href: '/governance', key: 'governanceHub', icon: Shield, section: 'More' },
-  { href: '/analytics', key: 'costAnalytics', icon: BarChart3, section: 'More' },
-  { href: '/pilot', key: 'e2ePilot', icon: FlaskConical, section: 'More' },
-  { href: '/digest', key: 'activityDigest', icon: Bell, section: 'Utility' },
 ]
 
 const sectionColors: Record<string, string> = {
@@ -93,7 +53,6 @@ const sectionColors: Record<string, string> = {
 
 const primaryNavItems = navItems.filter(item => item.section === 'Main')
 const moreNavItems = navItems.filter(item => item.section === 'More')
-const utilityNavItems = navItems.filter(item => item.section === 'Utility')
 
 export function AppNav() {
   const { locale, setLocale, nav, ui } = useI18n()
@@ -217,17 +176,20 @@ export function AppNav() {
                 isMoreActive ? 'text-violet-300' : 'text-slate-500'
               )}
             >
-              Expert Tools
+              {locale === 'de' ? 'Werkzeuge' : 'Tools'}
             </summary>
+            <p className="px-3 pb-2 text-[11px] leading-4 text-slate-600">
+              {locale === 'de'
+                ? 'Nur das, was du im Alltag wirklich brauchst.'
+                : 'Only the tools you need day to day.'}
+            </p>
             <div className="pb-2">
               {moreNavItems.map(item => {
                 const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
                 const count =
-                  item.href === '/active' ? running
-                    : item.href === '/inbox' ? attentionCount
-                    : item.href === '/notifications' ? unreadNotificationCount
+                  item.href === '/branches' ? attentionCount
                     : undefined
-                const isLive = item.href === '/active' && running > 0
+                const isLive = false
                 const isAutonomousSettings = item.href === '/settings' && autonomousModeActive
                 return (
                   <SidebarLink
@@ -262,21 +224,6 @@ export function AppNav() {
               </button>
             </div>
           )}
-          {utilityNavItems.map(item => {
-            const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
-            const isAutonomousSettings = item.href === '/settings' && autonomousModeActive
-            return (
-              <SidebarLink
-                key={item.href}
-                href={item.href}
-                label={nav[item.key].label}
-                icon={item.icon}
-                isActive={isActive}
-                autonomousActive={isAutonomousSettings}
-                compact
-              />
-            )
-          })}
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
