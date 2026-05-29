@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/auth/require-auth'
 import { getNBAConfig } from '@/lib/nba-engine/nba-config'
 import { computeAutopilotScore } from '@/lib/nba-engine/autopilot-score'
 import { pickNextSafe } from '@/lib/delegations/next-safe'
+import { buildProjectPipelineSummary } from '@/lib/daily-assistant/project-pipeline'
 import { reapStaleDelegations } from '@/lib/delegations/watchdog'
 import {
   assessDelegationActionability,
@@ -20,6 +21,8 @@ import {
   createDelegationRepository,
   SINGLE_TENANT_USER_ID,
 } from '@/lib/repositories/delegationRepository'
+import { readWorkPackages } from '@/lib/knowledge/milestone-store'
+import { readProjectBriefs } from '@/lib/project-briefs'
 import type { Delegation } from '@/lib/models/delegation'
 
 interface AutonomyCycleRequest {
@@ -106,6 +109,11 @@ export async function POST(request: NextRequest) {
   const reaped = await reapStaleDelegations(repo, { runningSilentMinutes: timeoutMinutes })
   const delegations = await repo.listByStatus()
   const counts = countDelegations(delegations)
+  const projectPipeline = buildProjectPipelineSummary({
+    briefs: readProjectBriefs(),
+    workPackages: readWorkPackages(),
+    delegations,
+  })
 
   if (counts.failed > 0 && !body.force) {
     return NextResponse.json({
@@ -116,6 +124,7 @@ export async function POST(request: NextRequest) {
       delivery,
       runnerReadiness,
       counts,
+      projectPipeline,
       candidate: null,
       started: false,
     })
@@ -187,6 +196,7 @@ export async function POST(request: NextRequest) {
         runnerReadiness,
         counts,
         runningCount,
+        projectPipeline,
         skippedCandidates,
         refinedCandidates,
         candidate: null,
@@ -199,12 +209,15 @@ export async function POST(request: NextRequest) {
       status: runningCount >= config.maxConcurrentAgents ? 'waiting' : 'idle',
       message: runningCount >= config.maxConcurrentAgents
         ? `Maximal ${config.maxConcurrentAgents} Agent(en) laufen bereits. Assistant wartet.`
-        : 'Keine sichere freigegebene Delegation startbereit. Plane eine neue Idee oder gib die naechste Aufgabe frei.',
+        : projectPipeline.blockedByDependencyCount > 0
+          ? 'Keine neue Delegation startbereit: groessere App-Slices warten auf gemergte PRs oder abgeschlossene Abhaengigkeiten.'
+          : 'Keine sichere freigegebene Delegation startbereit. Plane eine neue Idee oder gib die naechste Aufgabe frei.',
       reaped,
       delivery,
       runnerReadiness,
       counts,
       runningCount,
+      projectPipeline,
       candidate: null,
       started: false,
     })
