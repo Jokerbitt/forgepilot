@@ -19,6 +19,7 @@ import { LiveAgentActivityPanel } from '@/components/live/LiveAgentActivityPanel
 import { RunsTab } from '@/components/live/RunsTab'
 import { MonitorTab } from '@/components/live/MonitorTab'
 import { OrchestrationsTab } from '@/components/live/OrchestrationsTab'
+import { RunnerReadinessBanner } from '@/components/shared/RunnerReadinessBanner'
 import { cx } from '@/components/ui/primitives'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -267,6 +268,10 @@ function StatusTab() {
                 </a>
               ))}
             </div>
+          </div>
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-4">
+            <h2 className="mb-3 text-sm font-semibold text-white">Runner-Bereitschaft</h2>
+            <RunnerReadinessBanner detailed={false} />
           </div>
           <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.07] p-4">
             <h2 className="text-sm font-semibold text-violet-100">So testest du sinnvoll</h2>
