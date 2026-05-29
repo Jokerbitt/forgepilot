@@ -106,8 +106,12 @@ export interface LoopStats {
   successRate: number | null
 }
 
+// Track last loop-complete notification to avoid duplicates
+let _lastLoopCompletedDate = ''
+
 /**
- * Compute loop statistics for the current day or a specific plan.
+ * Compute loop statistics for the current day.
+ * If all tasks complete for the first time today, fires a loop_complete notification.
  */
 export async function computeLoopStats(): Promise<LoopStats> {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
@@ -128,10 +132,32 @@ export async function computeLoopStats(): Promise<LoopStats> {
 
   const done = counts.completed + counts.failed
   const successRate = done > 0 ? Math.round((counts.completed / done) * 100) : null
+  const allDone = counts.running === 0 && counts.pending === 0 && done > 0
+
+  // Fire loop_complete notification once per day when all tasks finish
+  if (allDone && _lastLoopCompletedDate !== today && done >= 2) {
+    _lastLoopCompletedDate = today
+    try {
+      const { saveNotification } = await import('@/lib/notifications/notification-store')
+      const { randomUUID } = await import('crypto')
+      saveNotification({
+        id: randomUUID(),
+        type: 'loop_complete',
+        severity: counts.failed === 0 ? 'info' : 'warning',
+        title: `Loop abgeschlossen: ${counts.completed}/${done} erfolgreich`,
+        body: `Heute ${counts.completed} Delegation${counts.completed !== 1 ? 'en' : ''} abgeschlossen${
+          counts.failed > 0 ? `, ${counts.failed} fehlgeschlagen` : ''
+        }. Loop-Zyklus beendet.`,
+        link: '/morning',
+        read: false,
+        createdAt: new Date().toISOString(),
+      })
+    } catch { /* non-critical */ }
+  }
 
   return {
     ...counts,
-    allDone: counts.running === 0 && counts.pending === 0 && done > 0,
+    allDone,
     successRate,
   }
 }

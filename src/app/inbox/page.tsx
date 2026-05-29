@@ -44,7 +44,8 @@ const ATTENTION_TYPE_ICON: Record<string, string> = {
 // ─── Notifications (tab 2) ────────────────────────────────────────────────────
 
 const NOTIF_TYPE_ICON: Record<NotificationType, string> = {
-  run_complete:             '✅',
+  run_complete: '✅',
+  loop_complete: '🔁',
   run_failed:               '❌',
   delegation_approved:      '✓',
   delegation_pending:       '⏳',
