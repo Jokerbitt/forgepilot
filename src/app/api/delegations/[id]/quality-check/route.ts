@@ -169,13 +169,23 @@ export async function POST(
   // Persist quality check on delegation
   await repo.update(id, { qualityCheck })
 
-  // Loop-Closure: auto-repair if verdict is failed/partial in autopilot mode
-  if (qualityCheck.verdict !== 'passed') {
-    const updatedDelegation = await repo.findById(id)
-    if (updatedDelegation) {
+  // Loop-Closure: trigger next action based on verdict
+  const updatedDelegation = await repo.findById(id)
+  if (updatedDelegation) {
+    const { getNBAConfig } = await import('@/lib/nba-engine/nba-config')
+    const config = getNBAConfig()
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+
+    if (qualityCheck.verdict !== 'passed') {
+      // Auto-repair: create fix delegation in autopilot mode
       import('@/lib/delegations/loop-closure').then(({ scheduleAutoRepair }) =>
         scheduleAutoRepair(updatedDelegation, qualityCheck),
       ).catch(() => {})
+    } else if (qualityCheck.verdict === 'passed' && updatedDelegation.summaryReport?.prUrl) {
+      // QC passed + PR exists: trigger auto-merge in autopilot mode
+      if (config.approvalMode === 'autopilot') {
+        fetch(`${baseUrl}/api/delegations/${id}/auto-merge`, { method: 'POST' }).catch(() => {})
+      }
     }
   }
 
