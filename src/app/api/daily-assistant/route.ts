@@ -14,6 +14,7 @@ import { buildAppBuilderCapability } from '@/lib/daily-assistant/app-builder'
 import { buildAssistantRoadmap } from '@/lib/daily-assistant/roadmap'
 import { buildQueueHygieneSummary } from '@/lib/daily-assistant/queue-hygiene'
 import { describeDeliveryAction, pickNextDeliveryAction, type DeliveryCycleAction } from '@/lib/daily-assistant/delivery-cycle'
+import { findExistingRepairDelegation } from '@/lib/daily-assistant/repair-delegation'
 import { getAutopilotReadiness } from '@/lib/autopilot/readiness'
 import type { Delegation } from '@/lib/models/delegation'
 import { getNBAConfig } from '@/lib/nba-engine/nba-config'
@@ -118,6 +119,9 @@ export async function GET() {
   const appBuilder = buildAppBuilderCapability({ assistant: input, queue, autopilot })
   const roadmap = buildAssistantRoadmap({ assistant: input, queue, autopilot, appBuilder })
   const deliveryAction = pickNextDeliveryAction(delegations)
+  const repairDelegation = deliveryAction?.type === 'repair_required'
+    ? await findExistingRepairDelegation(repo, deliveryAction.delegation)
+    : null
 
   return NextResponse.json({
     generatedAt: new Date().toISOString(),
@@ -140,6 +144,15 @@ export async function GET() {
           : 'ready',
       message: describeDeliveryAction(deliveryAction),
       action: deliveryActionPayload(deliveryAction),
+      repairDelegation: repairDelegation
+        ? {
+            id: repairDelegation.id,
+            title: repairDelegation.title || repairDelegation.contract.goal,
+            href: `/delegations/${repairDelegation.id}`,
+            status: repairDelegation.status,
+            riskClass: repairDelegation.contract.riskClass,
+          }
+        : null,
     },
     stats,
     settings: {

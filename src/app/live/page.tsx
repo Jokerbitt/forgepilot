@@ -230,6 +230,13 @@ interface DailyAssistantSnapshotResponse {
         riskClass: string
       }
     } | null
+    repairDelegation?: {
+      id: string
+      title: string
+      href: string
+      status: string
+      riskClass: string
+    } | null
   }
 }
 
@@ -818,8 +825,18 @@ export default function LiveViewPage() {
                 {dailyAssistant?.deliveryGate?.action?.reason && (
                   <p className="mt-1 text-[11px] leading-5 opacity-70">{dailyAssistant.deliveryGate.action.reason}</p>
                 )}
+                {dailyAssistant?.deliveryGate?.repairDelegation && (
+                  <p className="mt-2 text-[11px] leading-5 text-emerald-200/80">
+                    Repair-Slice bereit: {dailyAssistant.deliveryGate.repairDelegation.title}
+                  </p>
+                )}
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
+                {dailyAssistant?.deliveryGate?.repairDelegation?.href && (
+                  <Link href={dailyAssistant.deliveryGate.repairDelegation.href} className={buttonClassName('primary')}>
+                    Repair öffnen
+                  </Link>
+                )}
                 {dailyAssistant?.deliveryGate?.action?.delegation.href && (
                   <Link href={dailyAssistant.deliveryGate.action.delegation.href} className={buttonClassName('secondary')}>
                     Delegation öffnen

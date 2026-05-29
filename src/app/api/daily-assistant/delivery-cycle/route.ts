@@ -11,6 +11,7 @@ import {
   createDelegationRepository,
   SINGLE_TENANT_USER_ID,
 } from '@/lib/repositories/delegationRepository'
+import { ensureRepairDelegation } from '@/lib/daily-assistant/repair-delegation'
 
 interface DeliveryCycleRequest {
   dryRun?: boolean
@@ -82,6 +83,26 @@ export async function POST(request: NextRequest) {
   }
 
   if (action.type === 'repair_required') {
+    if (body.force) {
+      const repair = await ensureRepairDelegation(repo, action.delegation)
+      return NextResponse.json({
+        ok: true,
+        status: repair.created ? 'repair_created' : 'repair_exists',
+        message: repair.created
+          ? 'Repair-Delegation wurde aus dem Delivery-Gate erstellt.'
+          : 'Repair-Delegation existiert bereits; keine Duplikate erzeugt.',
+        action: actionPayload(action),
+        repairDelegation: {
+          id: repair.delegation.id,
+          title: repair.delegation.title || repair.delegation.contract.goal,
+          href: `/delegations/${repair.delegation.id}`,
+          status: repair.delegation.status,
+          riskClass: repair.delegation.contract.riskClass,
+        },
+        executed: repair.created,
+      })
+    }
+
     return NextResponse.json({
       ok: true,
       status: 'blocked',
