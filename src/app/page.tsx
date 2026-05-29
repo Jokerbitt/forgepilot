@@ -4,6 +4,7 @@ import { ConnectorHealthBar } from '@/components/command-center/ConnectorHealthB
 import { DailyAssistantPanel } from '@/components/command-center/DailyAssistantPanel'
 import { TodayStatsBar } from '@/components/command-center/TodayStatsBar'
 import { AppBuilderCard } from '@/components/command-center/AppBuilderCard'
+import { AutonomousLoopPanel } from '@/components/command-center/AutonomousLoopPanel'
 import { ApiKeysBanner } from '@/components/shared/ApiKeysBanner'
 import { NoAIProviderBanner } from '@/components/shared/NoAIProviderBanner'
 import { OnboardingBanner as OnboardingWizardBanner } from '@/components/onboarding/OnboardingBanner'
@@ -109,6 +110,7 @@ export default function Home() {
           </div>
 
           <aside className="space-y-5">
+            <AutonomousLoopPanel />
             <DailyAssistantPanel />
           </aside>
         </section>

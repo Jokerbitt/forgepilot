@@ -38,6 +38,7 @@ import { checkParallelCompletion } from '@/lib/delegation-parallel'
 import { triggerCriticRetry } from '@/lib/delegations/critic-retry'
 import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-runtime-evidence'
 import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, type RunnerWorkspace } from '@/lib/agent-runner/worktree'
+import { getNBAConfig } from '@/lib/nba-engine/nba-config'
 import { recordSkillOutcome, listSkills, seedBuiltinSkills } from '@/lib/skills/prompt-skill-registry'
 import { applyAutoOptimizations } from '@/lib/skills/skill-optimizer'
 import { detectKnownError, classifyError, extractErrorSnippet } from '@/lib/runner-health/error-classifier'
@@ -588,6 +589,16 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       if (success) {
         void triggerChain(finishedDelegation, fullOutput).catch(() => {})
       }
+
+      // Loop-Closure: in autopilot mode, auto-start the next safe delegation
+      // after a successful completion (fills the gap between chain steps)
+      try {
+        const config = getNBAConfig()
+        if (success && config.approvalMode === 'autopilot' && !finishedDelegation.chainNextId) {
+          const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+          fetch(`${baseUrl}/api/delegations/next-safe`, { method: 'POST' }).catch(() => {})
+        }
+      } catch { /* non-critical */ }
 
       {
 

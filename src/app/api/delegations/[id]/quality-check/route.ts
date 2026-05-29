@@ -169,6 +169,16 @@ export async function POST(
   // Persist quality check on delegation
   await repo.update(id, { qualityCheck })
 
+  // Loop-Closure: auto-repair if verdict is failed/partial in autopilot mode
+  if (qualityCheck.verdict !== 'passed') {
+    const updatedDelegation = await repo.findById(id)
+    if (updatedDelegation) {
+      import('@/lib/delegations/loop-closure').then(({ scheduleAutoRepair }) =>
+        scheduleAutoRepair(updatedDelegation, qualityCheck),
+      ).catch(() => {})
+    }
+  }
+
   return NextResponse.json({ qualityCheck })
 }
 
