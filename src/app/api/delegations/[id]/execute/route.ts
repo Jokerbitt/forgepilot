@@ -359,19 +359,21 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
           logBuffer.push({ timestamp: new Date().toISOString(), type: 'thought', message: text.slice(0, 500) })
 
           // M109: Checkpoint detection — agent prints "CHECKPOINT: <phase>"
+          // Uses async test run to avoid blocking the stdout data event handler.
           if (text.startsWith('CHECKPOINT:')) {
             const phase = text.slice('CHECKPOINT:'.length).trim()
-            logBuffer.push({ timestamp: new Date().toISOString(), type: 'info', message: `🔖 Checkpoint: ${phase} — führe Tests aus…` })
+            logBuffer.push({ timestamp: new Date().toISOString(), type: 'info', message: `🔖 Checkpoint: ${phase} — Tests laufen…` })
             scheduleFlush()
-            // Run tests synchronously in the workspace (blocks for up to 90s)
-            const testResult = runPostExecutionTests(runnerWorkspace.path)
-            logBuffer.push({
-              timestamp: new Date().toISOString(),
-              type: testResult.passed ? 'info' : 'error',
-              message: testResult.passed
-                ? `✅ Checkpoint-Tests bestanden: ${phase}`
-                : `❌ Checkpoint-Tests fehlgeschlagen: ${phase} — Agent wird fortgesetzt`,
-            })
+            // Fire-and-forget async — does not block stdout stream
+            runPostExecutionTestsAsync(runnerWorkspace.path).then(testResult => {
+              appendLogs(id, [{
+                timestamp: new Date().toISOString(),
+                type: testResult.passed ? 'info' : 'error',
+                message: testResult.passed
+                  ? `✅ Checkpoint bestanden: ${phase}`
+                  : `❌ Checkpoint-Tests fehlgeschlagen: ${phase} — Agent läuft weiter`,
+              }]).catch(() => {})
+            }).catch(() => {})
           }
         } else if (block.type === 'tool_use' && block.name) {
           const summary = summariseTool(block.name, block.input ?? {})
@@ -397,7 +399,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     }
   }
 
-  // M107: Run tests in the workspace and return pass/fail + truncated output
+  // M107: Run tests in the workspace and return pass/fail + truncated output (sync, used post-execution)
   function runPostExecutionTests(workspacePath: string): { passed: boolean; output: string } {
     try {
       const result = spawnSync(
@@ -410,6 +412,24 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     } catch {
       return { passed: false, output: 'Test runner timed out or crashed' }
     }
+  }
+
+  // M109: Async variant — does not block the event loop (used during streaming checkpoints)
+  function runPostExecutionTestsAsync(workspacePath: string): Promise<{ passed: boolean; output: string }> {
+    return new Promise(resolve => {
+      const child = spawn('npm', ['run', 'test:run'], { cwd: workspacePath, stdio: ['ignore', 'pipe', 'pipe'] })
+      let out = ''
+      child.stdout?.on('data', (chunk: Buffer) => { out += chunk.toString() })
+      child.stderr?.on('data', (chunk: Buffer) => { out += chunk.toString() })
+      const timer = setTimeout(() => {
+        child.kill()
+        resolve({ passed: false, output: 'Test runner timed out' })
+      }, 90_000)
+      child.on('close', (code: number | null) => {
+        clearTimeout(timer)
+        resolve({ passed: code === 0, output: out.slice(-3000) })
+      })
+    })
   }
 
   proc.stdout?.on('data', (chunk: Buffer) => {
