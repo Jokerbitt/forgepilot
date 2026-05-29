@@ -11,6 +11,7 @@ import {
   type DailyAssistantQueueItem,
 } from '@/lib/daily-assistant/next-action'
 import { buildAppBuilderCapability } from '@/lib/daily-assistant/app-builder'
+import { buildAssistantRoadmap } from '@/lib/daily-assistant/roadmap'
 import { getAutopilotReadiness } from '@/lib/autopilot/readiness'
 import type { Delegation } from '@/lib/models/delegation'
 import { getNBAConfig } from '@/lib/nba-engine/nba-config'
@@ -95,6 +96,7 @@ export async function GET() {
   const blockers = buildDailyAssistantBlockers(input, queue)
   const autopilot = getAutopilotReadiness()
   const appBuilder = buildAppBuilderCapability({ assistant: input, queue, autopilot })
+  const roadmap = buildAssistantRoadmap({ assistant: input, queue, autopilot, appBuilder })
 
   return NextResponse.json({
     generatedAt: new Date().toISOString(),
@@ -103,6 +105,7 @@ export async function GET() {
     action,
     autonomyText: describeAutonomy(input),
     appBuilder,
+    roadmap,
     autopilot,
     steps,
     blockers,

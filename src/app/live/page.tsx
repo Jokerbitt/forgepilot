@@ -154,11 +154,38 @@ interface AppBuilderCapability {
   }>
 }
 
+interface AssistantRoadmap {
+  title?: string
+  summary?: string
+  focusMilestoneId?: string
+  nextAutonomousStep?: {
+    label: string
+    detail: string
+    href: string
+    mode: 'plan' | 'execute' | 'validate' | 'review' | 'configure'
+  }
+  milestones?: Array<{
+    id: string
+    title: string
+    goal: string
+    status: 'done' | 'active' | 'blocked' | 'next'
+    progress: number
+    whyItMatters: string
+    acceptanceCriteria: string[]
+    nextAction: {
+      label: string
+      href: string
+      mode: 'plan' | 'execute' | 'validate' | 'review' | 'configure'
+    }
+  }>
+}
+
 interface DailyAssistantSnapshotResponse {
   status?: Tone
   readinessScore?: number
   autonomyText?: string
   appBuilder?: AppBuilderCapability
+  roadmap?: AssistantRoadmap
   stats?: {
     pending?: number
     approved?: number
@@ -295,7 +322,7 @@ export default function LiveViewPage() {
       fetchJson<CliStatusResponse>('/api/system/cli-status'),
       fetchJson<DailyReportResponse>('/api/reports/daily', 8000),
       fetchJson<AutopilotReadinessResponse>('/api/autopilot/readiness', 8000),
-      fetchJson<DailyAssistantSnapshotResponse>('/api/daily-assistant', 8000),
+      fetchJson<DailyAssistantSnapshotResponse>('/api/daily-assistant', 16000),
     ])
 
     if (statsRes.ok) setDelegations(statsRes.data)
@@ -401,6 +428,7 @@ export default function LiveViewPage() {
   const autopilotTone = autopilotReadiness?.status ?? 'attention'
   const runnerPrBlocked = autopilotReadiness ? !autopilotReadiness.canExecuteCode : false
   const appBuilder = dailyAssistant?.appBuilder
+  const roadmap = dailyAssistant?.roadmap
   const appBuilderTone: Tone = appBuilder?.level === 'blocked'
     ? 'blocked'
     : appBuilder?.canRunFullyAutonomous
@@ -686,6 +714,87 @@ export default function LiveViewPage() {
                 </div>
               )}
             </div>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-white/[0.08] bg-white/[0.035] p-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-4xl">
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Roadmap zum echten Entwicklungs-Assistenten</p>
+              <h2 className="mt-2 text-xl font-bold text-white">
+                {roadmap?.title ?? 'ForgePilot wird schrittweise autonomer'}
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                {roadmap?.summary ?? 'Der Daily Assistant priorisiert Runner-Stabilität, Live-Verständlichkeit, PR-Gates und Selbstoptimierung.'}
+              </p>
+            </div>
+            {roadmap?.nextAutonomousStep && (
+              <Link
+                href={roadmap.nextAutonomousStep.href}
+                className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-white/[0.1] bg-white/[0.055] px-3.5 py-2 text-sm font-semibold text-slate-100 transition hover:border-violet-400/40 hover:bg-violet-500/10"
+              >
+                {roadmap.nextAutonomousStep.label}
+                <ExternalLink className="h-4 w-4" />
+              </Link>
+            )}
+          </div>
+
+          {roadmap?.nextAutonomousStep && (
+            <div className="mt-4 rounded-lg border border-violet-500/20 bg-violet-500/[0.07] px-4 py-3">
+              <p className="text-sm font-semibold text-violet-100">Nächster autonomer Schritt</p>
+              <p className="mt-1 text-xs leading-5 text-violet-100/75">{roadmap.nextAutonomousStep.detail}</p>
+            </div>
+          )}
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+            {(roadmap?.milestones ?? []).map(milestone => {
+              const tone: Tone = milestone.status === 'done'
+                ? 'ready'
+                : milestone.status === 'blocked'
+                  ? 'blocked'
+                  : milestone.status === 'active'
+                    ? 'attention'
+                    : 'neutral'
+              return (
+                <article
+                  key={milestone.id}
+                  className={cx(
+                    'rounded-lg border p-4',
+                    roadmap?.focusMilestoneId === milestone.id
+                      ? 'border-violet-400/40 bg-violet-500/[0.08]'
+                      : 'border-white/[0.07] bg-black/15',
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{milestone.title}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">{milestone.goal}</p>
+                    </div>
+                    <span className={cx('shrink-0 rounded-full border px-2 py-1 text-[11px] font-semibold', toneClasses(tone))}>
+                      {milestone.progress}%
+                    </span>
+                  </div>
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                    <div
+                      className={cx(
+                        'h-full rounded-full',
+                        tone === 'ready' ? 'bg-emerald-400' : tone === 'blocked' ? 'bg-rose-400' : tone === 'attention' ? 'bg-amber-300' : 'bg-slate-500',
+                      )}
+                      style={{ width: `${milestone.progress}%` }}
+                    />
+                  </div>
+                  <p className="mt-3 text-xs leading-5 text-slate-500">{milestone.whyItMatters}</p>
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-600">
+                      {milestone.status === 'done' ? 'Erledigt' : milestone.status === 'blocked' ? 'Blockiert' : milestone.status === 'active' ? 'Aktiv' : 'Danach'}
+                    </span>
+                    <Link href={milestone.nextAction.href} className="text-xs font-semibold text-violet-300 hover:text-violet-200">
+                      {milestone.nextAction.label}
+                    </Link>
+                  </div>
+                </article>
+              )
+            })}
           </div>
         </section>
 
