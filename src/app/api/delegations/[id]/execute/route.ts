@@ -54,6 +54,106 @@ async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Dele
   })
 }
 
+function buildClaudeCliSummaryReport(fullOutput: string, elapsed: number, prUrl?: string): DelegationReport {
+  const prMetadata = prUrl ? readPrMetadata(prUrl) : null
+  const files = prMetadata?.files ?? []
+  const filePaths = files.map(file => file.path)
+  const filesAdded = files.filter(file => file.changeType === 'ADDED').map(file => file.path)
+  const filesDeleted = files.filter(file => file.changeType === 'DELETED').map(file => file.path)
+  const filesModified = files
+    .filter(file => file.changeType !== 'ADDED' && file.changeType !== 'DELETED')
+    .map(file => file.path)
+  const testsPassed = parseTestsPassed(fullOutput)
+  const doneLine = extractDoneLine(fullOutput)
+
+  const keyPoints = [
+    doneLine ?? 'Ausführung via Claude CLI abgeschlossen',
+    prMetadata?.title ? `PR erstellt: ${prMetadata.title}` : prUrl ? 'GitHub PR erstellt' : undefined,
+    filePaths.length > 0 ? `${filePaths.length} Dateien geändert` : undefined,
+    testsPassed ? `${testsPassed} Tests erfolgreich` : undefined,
+  ].filter(Boolean) as string[]
+
+  return {
+    keyPoints,
+    changes: filePaths,
+    timeTakenMinutes: elapsed,
+    ...(filesAdded.length > 0 ? { filesAdded } : {}),
+    ...(filesModified.length > 0 ? { filesModified } : {}),
+    ...(filesDeleted.length > 0 ? { filesDeleted } : {}),
+    ...(testsPassed ? { testsPassed } : {}),
+    ...(prMetadata?.additions !== undefined ? { linesAdded: prMetadata.additions } : {}),
+    ...(prMetadata?.deletions !== undefined ? { linesRemoved: prMetadata.deletions } : {}),
+    ...(prUrl ? { prUrl, prState: 'open' as const } : {}),
+    ...(prMetadata?.headRefName ? { branchName: prMetadata.headRefName } : {}),
+    ...(prMetadata?.commitMessages?.length ? { commitMessages: prMetadata.commitMessages } : {}),
+  }
+}
+
+interface PrMetadata {
+  title?: string
+  headRefName?: string
+  additions?: number
+  deletions?: number
+  files: Array<{ path: string; changeType?: string }>
+  commitMessages: string[]
+}
+
+function readPrMetadata(prUrl: string): PrMetadata | null {
+  const match = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/pull\/(\d+)(?:\b|$)/.exec(prUrl.trim())
+  if (!match) return null
+
+  try {
+    const [, owner, repo, number] = match
+    const output = execSync(
+      `gh pr view ${number} --repo ${owner}/${repo} --json title,headRefName,files,additions,deletions,commits`,
+      { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 15_000 },
+    )
+    const parsed = JSON.parse(output) as {
+      title?: string
+      headRefName?: string
+      additions?: number
+      deletions?: number
+      files?: Array<{ path?: string; changeType?: string }>
+      commits?: Array<{ messageHeadline?: string }>
+    }
+    return {
+      title: parsed.title,
+      headRefName: parsed.headRefName,
+      additions: parsed.additions,
+      deletions: parsed.deletions,
+      files: (parsed.files ?? [])
+        .filter(file => typeof file.path === 'string' && file.path.length > 0)
+        .map(file => ({ path: file.path!, changeType: file.changeType })),
+      commitMessages: (parsed.commits ?? [])
+        .map(commit => commit.messageHeadline)
+        .filter((message): message is string => Boolean(message)),
+    }
+  } catch {
+    return null
+  }
+}
+
+function extractDoneLine(fullOutput: string): string | undefined {
+  const line = fullOutput
+    .split('\n')
+    .map(item => item.trim())
+    .find(item => item.startsWith('DONE:'))
+  return line?.replace(/^DONE:\s*/i, '').trim()
+}
+
+function parseTestsPassed(fullOutput: string): number | undefined {
+  const vitestMatch = /Tests?\s+(\d+)\s+passed/i.exec(fullOutput)
+  if (vitestMatch) return Number(vitestMatch[1])
+
+  const germanMatch = /(\d+)\s+gr[üu]ner?\s+Vitest-Tests/i.exec(fullOutput)
+  if (germanMatch) return Number(germanMatch[1])
+
+  const passingMatch = /(\d+)\s+passing/i.exec(fullOutput)
+  if (passingMatch) return Number(passingMatch[1])
+
+  return undefined
+}
+
 function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryContext?: string): string {
   const c = delegation.contract
   const slug = (c.workItemId ?? delegation.id).replace(/[^a-z0-9-]/gi, '-').toLowerCase()
@@ -545,7 +645,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     }
 
     const report: DelegationReport | undefined = success
-      ? { keyPoints: ['Ausführung via Claude CLI abgeschlossen'], changes: [], timeTakenMinutes: elapsed, ...(prUrl ? { prUrl, prState: 'open' as const } : {}) }
+      ? buildClaudeCliSummaryReport(fullOutput, elapsed, prUrl)
       : undefined
 
     const cleanupRunnerWorkspace = async () => {
