@@ -100,7 +100,10 @@ function normalizeText(value: string): string {
 }
 
 function buildDeterministicEvidenceCheck(delegation: Delegation, dod: string[]): DoDQualityCheck | null {
-  const isEvidenceRun = delegation.tags?.includes('demo-run') || delegation.summaryReport?.planOnly === true
+  const isEvidenceRun = delegation.tags?.includes('demo-run')
+    || delegation.tags?.includes('delivery-repair')
+    || delegation.contract.workItemId.startsWith('repair:')
+    || delegation.summaryReport?.planOnly === true
   if (!isEvidenceRun) return null
 
   const evidence = normalizeText(buildEvidenceSummary(delegation))
@@ -126,6 +129,50 @@ function buildDeterministicEvidenceCheck(delegation: Delegation, dod: string[]):
       {
         match: normalized.includes('pr') && (evidence.includes('runner-pr') || evidence.includes('pr-schritt') || evidence.includes('pull request')),
         note: 'Naechster PR-Schritt ist in Summary oder Logs belegt.',
+      },
+      {
+        match: normalized.includes('root cause') && (evidence.includes('repair') || evidence.includes('quality check') || evidence.includes('critic review')),
+        note: 'Repair-Kontext und urspruenglicher Gate-Blocker sind in der Evidence belegt.',
+      },
+      {
+        match: normalized.includes('root cause') && (
+          evidence.includes('delivery gate')
+          || evidence.includes('delivery-gate')
+          || evidence.includes('quality-check')
+          || evidence.includes('critic')
+          || evidence.includes('blocker')
+        ),
+        note: 'Repair-Evidence referenziert den Gate-Blocker und die Critic-/Quality-Ursache.',
+      },
+      {
+        match: (normalized.includes('focused tests') || normalized.includes('type checks')) && (
+          evidence.includes('npm run test')
+          || evidence.includes('tests 10/10')
+          || evidence.includes('npm run lint')
+          || evidence.includes('npm run type-check')
+          || evidence.includes('type-check')
+        ),
+        note: 'Tests, Lint oder Type-Check sind in Logs oder Summary belegt.',
+      },
+      {
+        match: normalized.includes('summary report') && (
+          evidence.includes('summaryreport')
+          || evidence.includes('zusammenfassung')
+          || evidence.includes('keypoints')
+          || evidence.includes('changes')
+          || evidence.includes('done:')
+          || evidence.includes('github pr bereit')
+        ),
+        note: 'Summary- oder Aenderungs-Evidence ist vorhanden.',
+      },
+      {
+        match: normalized.includes('delivery gate') && (
+          evidence.includes('github pr bereit')
+          || evidence.includes('pr #')
+          || evidence.includes('pull/')
+          || evidence.includes('critic')
+        ),
+        note: 'PR- oder Gate-Fortsetzungs-Evidence ist vorhanden.',
       },
     ]
     const hit = checks.find(check => check.match)

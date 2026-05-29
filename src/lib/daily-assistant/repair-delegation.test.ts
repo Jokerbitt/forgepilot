@@ -94,6 +94,20 @@ describe('repair delegation', () => {
     expect(input.contract.requiresApproval).toBe(true)
   })
 
+  it('keeps nested repair slices pending to avoid infinite autonomous loops', () => {
+    const original = makeDelegation({
+      title: 'Repair: Improve delivery flow',
+      contract: {
+        ...makeDelegation().contract,
+        workItemId: 'repair:original-root',
+      },
+    })
+    const input = buildRepairDelegationInput(original)
+
+    expect(input.status).toBe('pending')
+    expect(input.contract.requiresApproval).toBe(true)
+  })
+
   it('creates one repair delegation and avoids duplicates', async () => {
     const original = makeDelegation()
     const repo = makeRepo()

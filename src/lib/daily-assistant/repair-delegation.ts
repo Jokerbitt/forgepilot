@@ -6,6 +6,7 @@ import type {
 } from '@/lib/repositories/delegationRepository'
 
 const REPAIR_TAG = 'delivery-repair'
+const MAX_AUTO_REPAIR_DEPTH = 1
 
 export interface RepairDelegationResult {
   created: boolean
@@ -14,6 +15,12 @@ export interface RepairDelegationResult {
 
 function repairWorkItemId(delegation: Delegation): string {
   return `repair:${delegation.id}`
+}
+
+function repairDepth(delegation: Delegation): number {
+  const titleDepth = (delegation.title.match(/\bRepair:/g) ?? []).length
+  const workItemDepth = delegation.contract.workItemId.startsWith('repair:') ? 1 : 0
+  return Math.max(titleDepth, workItemDepth)
 }
 
 function summarizeFailedCriteria(delegation: Delegation): string[] {
@@ -54,7 +61,8 @@ function buildRepairContext(delegation: Delegation): string {
 export function buildRepairDelegationInput(delegation: Delegation, now = new Date()): CreateDelegationInput {
   const timestamp = now.toISOString()
   const riskClass = delegation.contract.riskClass
-  const requiresApproval = riskClass === 'C'
+  const nextRepairDepth = repairDepth(delegation) + 1
+  const requiresApproval = riskClass === 'C' || nextRepairDepth > MAX_AUTO_REPAIR_DEPTH
   const logs: AgentLog[] = [{
     timestamp,
     type: 'info',
