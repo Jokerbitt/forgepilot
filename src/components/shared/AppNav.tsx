@@ -23,6 +23,7 @@ import {
   Sparkles,
   Map,
   ScanText,
+  Sun,
 } from 'lucide-react'
 import type { DelegationStats } from '@/app/api/delegations/stats/route'
 import type { AttentionItem } from '@/lib/models/attention'
@@ -52,8 +53,9 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  // ── Core workflow (5 items — the daily-use loop) ─────────────────────────
+  // ── Core workflow — daily-use loop ──────────────────────────────────────
   { href: '/',            key: 'commandCenter',    icon: LayoutDashboard, group: 'core' },
+  { href: '/morning',     key: 'briefing',         icon: Sun,             group: 'core' },
   { href: '/idea',        key: 'ideaToProduction', icon: Lightbulb,       group: 'core', isNew: true },
   { href: '/concept',     key: 'conceptAnalyzer',  icon: ScanText,        group: 'core', isNew: true },
   { href: '/delegations', key: 'execute',          icon: ListChecks,      group: 'core' },
