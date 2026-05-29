@@ -355,7 +355,24 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       const msg = event.message as { content?: Array<{ type: string; text?: string; name?: string; input?: Record<string, unknown> }> }
       for (const block of msg?.content ?? []) {
         if (block.type === 'text' && block.text?.trim()) {
-          logBuffer.push({ timestamp: new Date().toISOString(), type: 'thought', message: block.text.trim().slice(0, 500) })
+          const text = block.text.trim()
+          logBuffer.push({ timestamp: new Date().toISOString(), type: 'thought', message: text.slice(0, 500) })
+
+          // M109: Checkpoint detection — agent prints "CHECKPOINT: <phase>"
+          if (text.startsWith('CHECKPOINT:')) {
+            const phase = text.slice('CHECKPOINT:'.length).trim()
+            logBuffer.push({ timestamp: new Date().toISOString(), type: 'info', message: `🔖 Checkpoint: ${phase} — führe Tests aus…` })
+            scheduleFlush()
+            // Run tests synchronously in the workspace (blocks for up to 90s)
+            const testResult = runPostExecutionTests(runnerWorkspace.path)
+            logBuffer.push({
+              timestamp: new Date().toISOString(),
+              type: testResult.passed ? 'info' : 'error',
+              message: testResult.passed
+                ? `✅ Checkpoint-Tests bestanden: ${phase}`
+                : `❌ Checkpoint-Tests fehlgeschlagen: ${phase} — Agent wird fortgesetzt`,
+            })
+          }
         } else if (block.type === 'tool_use' && block.name) {
           const summary = summariseTool(block.name, block.input ?? {})
           logBuffer.push({ timestamp: new Date().toISOString(), type: 'command', message: summary })
