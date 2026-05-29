@@ -21,6 +21,45 @@ function isDeliverableRisk(delegation: Delegation): boolean {
   return delegation.contract.riskClass !== 'C'
 }
 
+function isDeliveryRepair(delegation: Delegation): boolean {
+  return delegation.tags?.includes('delivery-repair') === true
+    || (delegation.contract.workItemId ?? '').startsWith('repair:')
+    || (delegation.title ?? '').startsWith('Repair:')
+}
+
+function repairedDelegationId(delegation: Delegation): string | null {
+  return (delegation.contract.workItemId ?? '').startsWith('repair:')
+    ? delegation.contract.workItemId.slice('repair:'.length)
+    : null
+}
+
+function deliveryIdentity(delegation: Delegation): string {
+  const workItemId = delegation.contract.workItemId
+  if (workItemId && !workItemId.startsWith('repair:')) return `work:${workItemId}`
+  return `title:${(delegation.title || delegation.contract.goal).trim().toLowerCase()}`
+}
+
+function hasCompletedRepairEvidence(delegation: Delegation): boolean {
+  return isDeliveryRepair(delegation)
+    && delegation.status === 'completed'
+    && delegation.qualityCheck?.verdict === 'passed'
+    && Boolean(delegation.summaryReport?.prUrl)
+}
+
+function isSupersededCompletedDelegation(delegation: Delegation, allDelegations: Delegation[]): boolean {
+  if (delegation.status !== 'completed' || isDeliveryRepair(delegation)) return false
+  const identity = deliveryIdentity(delegation)
+  const currentUpdatedAt = updatedAtTime(delegation)
+
+  return allDelegations.some(candidate =>
+    candidate.id !== delegation.id
+    && candidate.status === 'completed'
+    && !isDeliveryRepair(candidate)
+    && deliveryIdentity(candidate) === identity
+    && updatedAtTime(candidate) > currentUpdatedAt
+  )
+}
+
 export function getDeliveryActionForDelegation(delegation: Delegation): DeliveryCycleAction | null {
   if (delegation.status !== 'completed') return null
   if (!isDeliverableRisk(delegation)) return null
@@ -58,6 +97,18 @@ export function getDeliveryActionForDelegation(delegation: Delegation): Delivery
   }
 
   if (delegation.criticScore.verdict !== 'approved') {
+    if (
+      isDeliveryRepair(delegation)
+      && delegation.qualityCheck.verdict === 'passed'
+      && delegation.summaryReport?.prUrl
+    ) {
+      return {
+        type: 'review_pr',
+        delegation,
+        reason: 'Repair-Slice ist bereits mehrfach repariert, Quality Check ist bestanden und PR ist vorhanden. Keine weitere automatische Repair-Kaskade; PR braucht Review- oder Merge-Entscheidung.',
+      }
+    }
+
     return {
       type: 'repair_required',
       delegation,
@@ -85,9 +136,27 @@ export function getDeliveryActionForDelegation(delegation: Delegation): Delivery
 }
 
 export function pickNextDeliveryAction(delegations: Delegation[]): DeliveryCycleAction | null {
+  const completedRepairTargets = new Set(
+    delegations
+      .filter(hasCompletedRepairEvidence)
+      .map(repairedDelegationId)
+      .filter((id): id is string => Boolean(id)),
+  )
+
   return delegations
+    .filter(delegation => !isSupersededCompletedDelegation(delegation, delegations))
     .map(getDeliveryActionForDelegation)
     .filter((action): action is DeliveryCycleAction => Boolean(action))
+    .map(action => {
+      if (action.type !== 'repair_required') return action
+      if (!completedRepairTargets.has(action.delegation.id)) return action
+
+      return {
+        type: 'review_pr',
+        delegation: action.delegation,
+        reason: 'Eine abgeschlossene Repair-Delegation mit bestandenem Quality Check und PR existiert bereits. Keine weitere automatische Repair-Kaskade; PR braucht Review- oder Merge-Entscheidung.',
+      } satisfies DeliveryCycleAction
+    })
     .sort((a, b) => {
       const rank: Record<DeliveryCycleActionType, number> = {
         repair_required: 0,

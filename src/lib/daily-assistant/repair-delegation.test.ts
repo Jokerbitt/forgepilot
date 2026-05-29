@@ -81,7 +81,19 @@ describe('repair delegation', () => {
     expect(input.contract.context).toContain('No test evidence found.')
     expect(input.contract.context).toContain('Good direction, but evidence is incomplete.')
     expect(input.contract.definitionOfDone.join('\n')).toContain('Delivery Gate')
+    expect(input.contract.maxBudgetUsd).toBe(1)
     expect(input.chainedFromId).toBe('original-1')
+  })
+
+  it('adds a minimum budget when the original delegation had zero budget', () => {
+    const input = buildRepairDelegationInput(makeDelegation({
+      contract: {
+        ...makeDelegation().contract,
+        maxBudgetUsd: 0,
+      },
+    }))
+
+    expect(input.contract.maxBudgetUsd).toBe(0.2)
   })
 
   it('keeps risk C repair slices pending for manual approval', () => {

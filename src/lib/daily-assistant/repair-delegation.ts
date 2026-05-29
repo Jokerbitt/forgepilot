@@ -83,6 +83,7 @@ export function buildRepairDelegationInput(delegation: Delegation, now = new Dat
         'Summary report explains the changed files and remaining risk.',
         'Critic Review and Delivery Gate can continue without the same blocker.',
       ],
+      maxBudgetUsd: Math.max(0.2, delegation.contract.maxBudgetUsd || 0),
       requiresApproval,
       createdAt: timestamp,
     },

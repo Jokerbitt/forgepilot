@@ -111,6 +111,138 @@ describe('pickNextDeliveryAction', () => {
     expect(action?.type).toBe('repair_required')
   })
 
+  it('stops repeated repair cascades once a nested repair has passed quality and has a PR', () => {
+    const action = pickNextDeliveryAction([
+      makeDelegation({
+        id: 'repair-nested',
+        title: 'Repair: Repair: Useful feature',
+        tags: ['delivery-repair'],
+        contract: {
+          ...makeDelegation().contract,
+          workItemId: 'repair:previous',
+        },
+        qualityCheck: {
+          criteria: [],
+          overallScore: 100,
+          verdict: 'passed',
+          checkedAt: '2026-05-26T12:01:00.000Z',
+        },
+        criticScore: {
+          correctness: 0,
+          efficiency: 0,
+          drift: 0,
+          verdict: 'rejected',
+          summary: 'Evidence was not explicit enough.',
+          runAt: '2026-05-26T12:02:00.000Z',
+        },
+        summaryReport: {
+          keyPoints: ['Evidence added'],
+          changes: ['Updated docs'],
+          timeTakenMinutes: 3,
+          prUrl: 'https://github.com/Jokerbitt/forgepilot/pull/604',
+          prState: 'open',
+        },
+      }),
+    ])
+
+    expect(action?.type).toBe('review_pr')
+    expect(action?.reason).toContain('Keine weitere automatische Repair-Kaskade')
+  })
+
+  it('does not keep requiring repair for an original delegation after a repair PR exists', () => {
+    const original = makeDelegation({
+      id: 'original',
+      qualityCheck: {
+        criteria: [],
+        overallScore: 100,
+        verdict: 'passed',
+        checkedAt: '2026-05-26T12:01:00.000Z',
+      },
+      criticScore: {
+        correctness: 0,
+        efficiency: 0,
+        drift: 0,
+        verdict: 'rejected',
+        summary: 'Needs repair',
+        runAt: '2026-05-26T12:02:00.000Z',
+      },
+      summaryReport: {
+        keyPoints: ['Original PR'],
+        changes: [],
+        timeTakenMinutes: 3,
+        prUrl: 'https://github.com/Jokerbitt/forgepilot/pull/602',
+        prState: 'open',
+      },
+    })
+    const repair = makeDelegation({
+      id: 'repair',
+      title: 'Repair: Original',
+      tags: ['delivery-repair'],
+      contract: {
+        ...makeDelegation().contract,
+        workItemId: 'repair:original',
+      },
+      qualityCheck: {
+        criteria: [],
+        overallScore: 100,
+        verdict: 'passed',
+        checkedAt: '2026-05-26T12:03:00.000Z',
+      },
+      criticScore: {
+        correctness: 0,
+        efficiency: 0,
+        drift: 0,
+        verdict: 'rejected',
+        summary: 'Evidence was still contested',
+        runAt: '2026-05-26T12:04:00.000Z',
+      },
+      summaryReport: {
+        keyPoints: ['Repair PR'],
+        changes: ['Evidence added'],
+        timeTakenMinutes: 3,
+        prUrl: 'https://github.com/Jokerbitt/forgepilot/pull/603',
+        prState: 'open',
+      },
+    })
+
+    const action = pickNextDeliveryAction([original, repair])
+
+    expect(action?.type).toBe('review_pr')
+    expect(action?.reason).toContain('Eine abgeschlossene Repair-Delegation')
+  })
+
+  it('skips older completed duplicate runs for the same work item', () => {
+    const older = makeDelegation({
+      id: 'older',
+      updatedAt: '2026-05-26T12:00:00.000Z',
+      completedAt: '2026-05-26T12:00:00.000Z',
+      contract: {
+        ...makeDelegation().contract,
+        workItemId: 'demo-todo-webapp',
+      },
+    })
+    const newer = makeDelegation({
+      id: 'newer',
+      updatedAt: '2026-05-26T12:10:00.000Z',
+      completedAt: '2026-05-26T12:10:00.000Z',
+      contract: {
+        ...makeDelegation().contract,
+        workItemId: 'demo-todo-webapp',
+      },
+      qualityCheck: {
+        criteria: [],
+        overallScore: 100,
+        verdict: 'passed',
+        checkedAt: '2026-05-26T12:11:00.000Z',
+      },
+    })
+
+    const action = pickNextDeliveryAction([older, newer])
+
+    expect(action?.delegation.id).toBe('newer')
+    expect(action?.type).toBe('critic_review')
+  })
+
   it('does not auto-process Risk C delegations', () => {
     const action = pickNextDeliveryAction([
       makeDelegation({
