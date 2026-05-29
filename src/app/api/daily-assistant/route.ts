@@ -11,6 +11,7 @@ import {
   type DailyAssistantInput,
   type DailyAssistantQueueItem,
 } from '@/lib/daily-assistant/next-action'
+import { generateDailyBriefing, generateFallbackBriefing } from '@/lib/daily-assistant/briefing-generator'
 import type { Delegation } from '@/lib/models/delegation'
 import { getNBAConfig } from '@/lib/nba-engine/nba-config'
 import {
@@ -112,12 +113,30 @@ export async function GET() {
   const appBuilderCapability = buildAppBuilderCapability(input)
   const todayStats = computeTodayStats(delegations)
 
+  const briefingInput = {
+    pending: stats.pending,
+    approved: stats.approved,
+    running: stats.running,
+    failed: stats.failed,
+    completedToday: todayStats.completedToday,
+    prOpen: stats.prOpen,
+    qualityPassRate: todayStats.qualityPassRate,
+    topPendingGoal: queue[0]?.title,
+  }
+  let briefing: string
+  try {
+    briefing = await generateDailyBriefing(briefingInput)
+  } catch {
+    briefing = generateFallbackBriefing(briefingInput)
+  }
+
   return NextResponse.json({
     generatedAt: new Date().toISOString(),
     status: action.tone,
     readinessScore: computeReadiness(input),
     action,
     autonomyText: describeAutonomy(input),
+    briefing,
     steps,
     blockers,
     queue,

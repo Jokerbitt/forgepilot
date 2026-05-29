@@ -35,6 +35,7 @@ interface AssistantSnapshot {
   readinessScore: number
   action: DailyAssistantAction
   autonomyText: string
+  briefing?: string
   steps: DailyAssistantStep[]
   blockers: DailyAssistantBlocker[]
   stats: DelegationStats
@@ -177,6 +178,11 @@ export function DailyAssistantPanel() {
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
             {action.detail}
           </p>
+          {snapshot?.briefing && (
+            <p className="text-sm text-slate-200 leading-relaxed border-l-2 border-violet-500 pl-3 mt-3 max-w-3xl">
+              {snapshot.briefing}
+            </p>
+          )}
           <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
             {autonomyText}
           </p>
