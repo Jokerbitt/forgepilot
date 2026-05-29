@@ -233,12 +233,22 @@ export default function MorningPage() {
   const handleStart = async () => {
     setStarting(true)
     try {
-      const res = await fetch('/api/delegations/next-safe', { method: 'POST' })
+      // Use /api/loop/start which auto-approves + starts in one step
+      const res = await fetch('/api/loop/start', { method: 'POST' })
       if (res.ok) {
-        const data = await res.json() as { delegation?: { id: string }; started?: boolean }
-        if (data.started && data.delegation?.id) {
-          router.push(`/delegations/${data.delegation.id}`)
+        const result = await res.json() as { started?: boolean; delegationId?: string; approved?: number }
+        if (result.started && result.delegationId) {
+          router.push(`/delegations/${result.delegationId}`)
           return
+        }
+        // If nothing started, try next-safe directly
+        const nsRes = await fetch('/api/delegations/next-safe', { method: 'POST' })
+        if (nsRes.ok) {
+          const nsData = await nsRes.json() as { delegation?: { id: string }; started?: boolean }
+          if (nsData.started && nsData.delegation?.id) {
+            router.push(`/delegations/${nsData.delegation.id}`)
+            return
+          }
         }
       }
       await load()

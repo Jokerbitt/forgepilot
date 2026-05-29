@@ -89,9 +89,17 @@ export function AutonomousLoopPanel() {
     setStarting(true)
     try {
       const res = await fetch('/api/delegations/next-safe', { method: 'POST' })
-      if (res.ok) {
-        await load()
-      }
+      if (res.ok) await load()
+    } catch { /* ignore */ } finally {
+      setStarting(false)
+    }
+  }
+
+  const handleStartLoop = async () => {
+    setStarting(true)
+    try {
+      const res = await fetch('/api/loop/start', { method: 'POST' })
+      if (res.ok) await load()
     } catch { /* ignore */ } finally {
       setStarting(false)
     }
@@ -193,7 +201,16 @@ export function AutonomousLoopPanel() {
 
       {/* CTA */}
       <div className="flex gap-2">
-        {nextAction.type === 'start-delegation' && (
+        {nextAction.type === 'idle' && stats.total === 0 ? (
+          <button
+            onClick={() => void handleStartLoop()}
+            disabled={starting}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-violet-500 disabled:opacity-50 flex-1 justify-center"
+          >
+            {starting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+            {starting ? 'Startet…' : 'Loop starten'}
+          </button>
+        ) : nextAction.type === 'start-delegation' && (
           <button
             onClick={() => void handleStartNext()}
             disabled={starting}
