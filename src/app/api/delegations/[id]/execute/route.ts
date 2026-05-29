@@ -40,6 +40,8 @@ import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-run
 import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, type RunnerWorkspace } from '@/lib/agent-runner/worktree'
 import { recordSkillOutcome, listSkills, seedBuiltinSkills } from '@/lib/skills/prompt-skill-registry'
 import { applyAutoOptimizations } from '@/lib/skills/skill-optimizer'
+import { detectKnownError, classifyError, extractErrorSnippet } from '@/lib/runner-health/error-classifier'
+import { quickPreflightCheck } from '@/lib/runner-health/runner-detector'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
@@ -134,22 +136,8 @@ type SkillCategory = NonNullable<import('@/lib/models/delegation').TaskContract[
  * Detect credit/auth errors in claude CLI output.
  * Returns a user-friendly message or undefined if no known error.
  */
-function detectKnownError(output: string): string | undefined {
-  const lower = output.toLowerCase()
-  if (lower.includes('credit balance') || lower.includes('insufficient_quota') || lower.includes('billing')) {
-    return 'Anthropic-Guthaben aufgebraucht. Bitte unter console.anthropic.com aufladen.'
-  }
-  if (lower.includes('authentication') || lower.includes('invalid x-api-key') || lower.includes('api_key')) {
-    return 'Anthropic API Key ungültig oder nicht konfiguriert. Bitte in den Einstellungen prüfen.'
-  }
-  if (lower.includes('rate limit') || lower.includes('rate_limit')) {
-    return 'Anthropic Rate Limit erreicht. Warte kurz und versuche es erneut.'
-  }
-  if (lower.includes('reached max turns') || lower.includes('max turns')) {
-    return 'Claude CLI hat das Turn-Limit erreicht. Erhöhe das Budget oder schneide die Delegation kleiner zu.'
-  }
-  return undefined
-}
+// detectKnownError and classifyError are imported from @/lib/runner-health/error-classifier
+// This keeps the execute route using a shared, testable classifier.
 
 /**
  * Parse actual cost from Claude CLI output.
@@ -559,11 +547,17 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       }
 
       const finalStatus = success ? 'completed' : 'failed'
+      // M4: Use full classifier for rich error message
+      const classifiedFailure = !success ? classifyError(fullOutput) : null
+      const friendlyError = classifiedFailure && classifiedFailure.category !== 'unknown'
+        ? `${classifiedFailure.title} — ${classifiedFailure.fix}`
+        : knownError ?? (code !== 0 ? `Prozess beendet mit Exit-Code ${code ?? 'unbekannt'}` : undefined)
+
       const finishedDelegation = await repo.update(id, {
         status: finalStatus,
         completedAt: new Date().toISOString(),
         ...(!success
-          ? { errorMessage: knownError ?? `Claude CLI failed with exit code ${code ?? 'unknown'}` }
+          ? { errorMessage: friendlyError }
           : {}),
         ...(actualCost ? { actualCostUsd: actualCost } : {}),
         ...(report ? { summaryReport: report } : {}),
@@ -1156,6 +1150,19 @@ export async function POST(
   const blocker = getExecutionStartBlocker(delegation)
   if (blocker) {
     return NextResponse.json({ error: blocker.error }, { status: blocker.status })
+  }
+
+  // M4: Quick pre-flight — verify critical tools available before starting
+  if (delegation.executionRoute === 'local-agent') {
+    const preflightError = quickPreflightCheck()
+    if (preflightError) {
+      await appendLogs(id, [{
+        timestamp: new Date().toISOString(),
+        type: 'error',
+        message: `⛔ Pre-Flight-Check fehlgeschlagen: ${preflightError}`,
+      }], 'failed')
+      return NextResponse.json({ error: preflightError, category: 'tool_missing' }, { status: 424 })
+    }
   }
 
   // M209: Pre-execution budget guard — reject before starting if estimate exceeds limit
