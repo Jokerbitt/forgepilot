@@ -496,6 +496,9 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
 
     const cleanupRunnerWorkspace = async () => {
       if (shouldKeepRunnerWorktree({ success, env: process.env })) {
+        // M120: Store workspace path in delegation for preview access
+        const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+        await repo.update(id, { worktreePath: runnerWorkspace.path }).catch(() => {})
         await appendLogs(id, [{
           timestamp: new Date().toISOString(),
           type: success ? 'info' : 'error',

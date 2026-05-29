@@ -195,6 +195,10 @@ export interface Delegation {
   targetRepo?: string
   /** Auto-generated DoD quality check result after execution */
   qualityCheck?: DoDQualityCheck
+  /** M120: Path to the runner workspace / worktree where the agent wrote code */
+  worktreePath?: string
+  /** M120: Detected app type in the worktree for preview purposes */
+  worktreeAppType?: 'static' | 'nextjs' | 'vite' | 'unknown'
   createdAt: string
   updatedAt: string
 }

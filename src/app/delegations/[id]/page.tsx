@@ -36,6 +36,7 @@ import { CollapsibleSection } from '@/components/ui/CollapsibleSection'
 import { AffectedFilesPanel } from '@/components/delegation/AffectedFilesPanel'
 import { WorkbenchTabs, WorkbenchPanel, getDefaultTab, type WorkbenchTab } from '@/components/delegation/DelegationWorkbench'
 import { DelegationFocusCard } from '@/components/delegation/DelegationFocusCard'
+import { PreviewAndIteratePanel } from '@/components/delegation/PreviewAndIteratePanel'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
   switch (status) {
@@ -1130,6 +1131,9 @@ export default function DelegationDetailPage() {
             )}
           </div>
         )}
+
+        {/* ── M120: Preview & Iterate ──────────────────────────────────── */}
+        <PreviewAndIteratePanel delegation={d} />
 
         {/* ── Knowledge Writeback ───────────────────────────────────────── */}
         {(d.status === 'completed' || d.status === 'failed') && (
