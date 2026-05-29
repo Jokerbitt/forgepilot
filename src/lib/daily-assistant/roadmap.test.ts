@@ -62,8 +62,8 @@ describe('buildAssistantRoadmap', () => {
       appBuilder,
     })
 
-    expect(roadmap.milestones).toHaveLength(6)
-    expect(roadmap.milestones[0].id).toBe('m4-reliable-execute-loop')
+    expect(roadmap.milestones).toHaveLength(8)
+    expect(roadmap.milestones[0].id).toBe('m4-production-assistant-control-center')
     expect(roadmap.milestones[0].progress).toBe(100)
     expect(roadmap.nextAutonomousStep.href).toBe('/live')
   })
@@ -76,9 +76,9 @@ describe('buildAssistantRoadmap', () => {
       appBuilder: { ...appBuilder, level: 'blocked', canBuildSmallApp: false, canBuildMultiSliceMvp: false, canRunFullyAutonomous: false },
     })
 
-    const executeLoop = roadmap.milestones.find(m => m.id === 'm4-reliable-execute-loop')
+    const executeLoop = roadmap.milestones.find(m => m.id === 'm5-reliable-runner-fallback-layer')
     expect(executeLoop?.status).toBe('blocked')
-    expect(roadmap.focusMilestoneId).toBe('m4-reliable-execute-loop')
+    expect(roadmap.focusMilestoneId).toBe('m4-production-assistant-control-center')
     expect(roadmap.nextAutonomousStep.href).toContain('urgent=true')
   })
 
@@ -99,8 +99,29 @@ describe('buildAssistantRoadmap', () => {
       appBuilder: { ...appBuilder, level: 'blocked', score: 35, canBuildSmallApp: false, canBuildMultiSliceMvp: false, canRunFullyAutonomous: false },
     })
 
-    expect(roadmap.focusMilestoneId).toBe('m4-reliable-execute-loop')
+    expect(roadmap.focusMilestoneId).toBe('m5-reliable-runner-fallback-layer')
     expect(roadmap.nextAutonomousStep.label).toBe('Runner einrichten')
     expect(roadmap.nextAutonomousStep.mode).toBe('configure')
+  })
+
+  it('surfaces pending decisions before starting more autonomous work', () => {
+    const roadmap = buildAssistantRoadmap({
+      assistant: { ...baseAssistant, pending: 1, approved: 0, prMerged: 0 },
+      queue: [{
+        id: 'repair-1',
+        title: 'Repair slice',
+        status: 'pending',
+        riskClass: 'A',
+        requiresApproval: true,
+        updatedAt: '2026-05-29T08:00:00.000Z',
+      }],
+      autopilot: readyAutopilot,
+      appBuilder,
+    })
+
+    const controlCenter = roadmap.milestones[0]
+    expect(controlCenter.id).toBe('m4-production-assistant-control-center')
+    expect(controlCenter.nextAction.label).toBe('Entscheidung prüfen')
+    expect(controlCenter.nextAction.mode).toBe('review')
   })
 })

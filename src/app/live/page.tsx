@@ -301,6 +301,15 @@ function statusLabel(tone: Tone): string {
   return 'Info'
 }
 
+function roadmapModeLabel(mode?: NonNullable<AssistantRoadmap['nextAutonomousStep']>['mode']): string {
+  if (mode === 'execute') return 'Ausführen'
+  if (mode === 'validate') return 'Prüfen'
+  if (mode === 'review') return 'Entscheiden'
+  if (mode === 'configure') return 'Einrichten'
+  if (mode === 'plan') return 'Planen'
+  return 'Nächster Schritt'
+}
+
 function statusIcon(tone: Tone) {
   if (tone === 'ready') return <CheckCircle2 className="h-4 w-4" />
   if (tone === 'attention') return <AlertTriangle className="h-4 w-4" />
@@ -881,8 +890,15 @@ export default function LiveViewPage() {
 
           {roadmap?.nextAutonomousStep && (
             <div className="mt-4 rounded-lg border border-violet-500/20 bg-violet-500/[0.07] px-4 py-3">
-              <p className="text-sm font-semibold text-violet-100">Nächster autonomer Schritt</p>
-              <p className="mt-1 text-xs leading-5 text-violet-100/75">{roadmap.nextAutonomousStep.detail}</p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-violet-100">Nächster autonomer Schritt</p>
+                  <p className="mt-1 text-xs leading-5 text-violet-100/75">{roadmap.nextAutonomousStep.detail}</p>
+                </div>
+                <span className="inline-flex w-fit shrink-0 rounded-full border border-violet-300/20 bg-violet-300/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-widest text-violet-100">
+                  {roadmapModeLabel(roadmap.nextAutonomousStep.mode)}
+                </span>
+              </div>
             </div>
           )}
 
@@ -924,6 +940,21 @@ export default function LiveViewPage() {
                     />
                   </div>
                   <p className="mt-3 text-xs leading-5 text-slate-500">{milestone.whyItMatters}</p>
+                  {milestone.acceptanceCriteria.length > 0 && (
+                    <details className="mt-3 rounded-md border border-white/[0.06] bg-black/10 px-3 py-2">
+                      <summary className="cursor-pointer text-xs font-semibold text-slate-300">
+                        Akzeptanzkriterien
+                      </summary>
+                      <ul className="mt-2 space-y-1.5 text-xs leading-5 text-slate-500">
+                        {milestone.acceptanceCriteria.map(criterion => (
+                          <li key={criterion} className="flex gap-2">
+                            <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-slate-500" />
+                            <span>{criterion}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
                   <div className="mt-3 flex items-center justify-between gap-3">
                     <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-600">
                       {milestone.status === 'done' ? 'Erledigt' : milestone.status === 'blocked' ? 'Blockiert' : milestone.status === 'active' ? 'Aktiv' : 'Danach'}
