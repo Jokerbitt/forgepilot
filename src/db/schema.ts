@@ -32,6 +32,9 @@ export const executionRouteEnum = pgEnum('execution_route', [
   'manual',
 ])
 
+export const todoPriorityEnum = pgEnum('todo_priority', ['low', 'medium', 'high'])
+export const todoStatusEnum = pgEnum('todo_status', ['open', 'in_progress', 'done'])
+
 export const delegations = pgTable(
   'delegations',
   {
@@ -71,6 +74,28 @@ export const delegations = pgTable(
 
 export type DbDelegation = typeof delegations.$inferSelect
 export type NewDbDelegation = typeof delegations.$inferInsert
+
+// ─── Todos ───────────────────────────────────────────────────────────────────
+
+export const todoItems = pgTable(
+  'todo_items',
+  {
+    id: text('id').primaryKey(),
+    title: text('title').notNull(),
+    priority: todoPriorityEnum('priority').notNull().default('medium'),
+    status: todoStatusEnum('status').notNull().default('open'),
+    isSample: boolean('is_sample').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('todo_items_status_idx').on(t.status),
+    index('todo_items_created_at_idx').on(t.createdAt),
+  ]
+)
+
+export type DbTodoItem = typeof todoItems.$inferSelect
+export type NewDbTodoItem = typeof todoItems.$inferInsert
 
 // ─── ProjectBriefs ────────────────────────────────────────────────────────────
 
