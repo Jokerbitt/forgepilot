@@ -3,6 +3,7 @@ import { ArrowRight, Bot, FolderOpen, Map, Radio, Settings, Sparkles } from 'luc
 import { ConnectorHealthBar } from '@/components/command-center/ConnectorHealthBar'
 import { DailyAssistantPanel } from '@/components/command-center/DailyAssistantPanel'
 import { TodayStatsBar } from '@/components/command-center/TodayStatsBar'
+import { AppBuilderCard } from '@/components/command-center/AppBuilderCard'
 import { ApiKeysBanner } from '@/components/shared/ApiKeysBanner'
 import { NoAIProviderBanner } from '@/components/shared/NoAIProviderBanner'
 import { OnboardingBanner as OnboardingWizardBanner } from '@/components/onboarding/OnboardingBanner'
@@ -89,6 +90,10 @@ export default function Home() {
                 </Link>
               </div>
             </form>
+
+            <div className="mt-6">
+              <AppBuilderCard />
+            </div>
 
             <div className="mt-6 grid gap-3 md:grid-cols-3">
               {assistantSteps.map((step, index) => (
