@@ -100,6 +100,7 @@ export function NewDelegationDialog({
       'extend-data-model': TEMPLATES[0], 'add-cron-job': TEMPLATES[3],
       'fix-bug': TEMPLATES[1], 'add-tests': TEMPLATES[2],
       'refactor-module': TEMPLATES[3], 'write-docs': TEMPLATES[2],
+      'large-feature': TEMPLATES[0],
     }
     if (simpleMap[templateId]) setSelectedTemplate(simpleMap[templateId])
   }

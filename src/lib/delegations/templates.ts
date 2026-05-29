@@ -196,6 +196,32 @@ export const DELEGATION_TEMPLATES: DelegationTemplate[] = [
     maxBudgetUsd: 0.5,
   },
 
+  // ─── Large Feature ─────────────────────────────────────────────────────────
+  {
+    id: 'large-feature',
+    name: 'Large Feature',
+    description: 'Multi-phase feature: data model, API, UI, tests — $8 budget, up to 140 turns',
+    emoji: '🚀',
+    category: 'feature',
+    goal: 'Implement [FEATURE NAME]: [DESCRIBE WHAT IT DOES]. Covers data model, API routes, UI components and tests.',
+    acceptanceCriteria: [
+      'Data model / schema defined and typed in src/lib/models/',
+      'API routes implemented with Zod validation and error handling',
+      'UI component(s) wired to the API, responsive and accessible',
+      'All new paths covered by Vitest tests (happy path + error cases)',
+      'npm run type-check passes with 0 errors',
+      'npm run test:run passes',
+      'No regressions in existing tests',
+    ],
+    skillCategory: 'ui-component',
+    riskClass: 'B',
+    branchStrategy: 'feature',
+    requiresApproval: true,
+    privacyMode: 'local',
+    maxBudgetUsd: 8,
+    context: 'Large feature — agent should commit after each major phase (data model, API, UI, tests) and verify tests pass before proceeding to the next phase.',
+  },
+
   // ─── Infrastructure ────────────────────────────────────────────────────────
   {
     id: 'add-cron-job',

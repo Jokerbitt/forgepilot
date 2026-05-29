@@ -625,10 +625,11 @@ function PlanWizardInner() {
       <div className="mx-auto max-w-3xl">
         {/* Header */}
         <div className="mb-8">
-          <Link href="/delegations" className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition">
-            <ArrowLeft className="h-4 w-4" />
-            Zur Delegation Queue
-          </Link>
+          <nav className="flex items-center gap-1.5 text-xs text-slate-600" aria-label="Breadcrumb">
+            <Link href="/" className="hover:text-slate-400 transition-colors">Command Center</Link>
+            <span aria-hidden="true">›</span>
+            <span className="text-slate-400">Plan Mode</span>
+          </nav>
           <div className="mt-4 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600">
               <Sparkles className="h-5 w-5 text-white" />
