@@ -1039,6 +1039,19 @@ export default function DelegationDetailPage() {
           </section>
             )}
 
+            {d.status === 'completed' && d.summaryReport && !d.summaryReport.prUrl && d.summaryReport.keyPoints?.length > 0 && (
+          <section className="rounded-xl border border-emerald-900/30 bg-gray-900 p-4">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-emerald-600">Ergebnis</h2>
+            <ul className="space-y-1">
+              {d.summaryReport.keyPoints.map((pt, i) => (
+                <li key={i} className="flex items-start gap-1.5 text-sm text-green-400/80">
+                  <span className="mt-0.5 shrink-0 text-green-700">•</span> {pt}
+                </li>
+              ))}
+            </ul>
+          </section>
+            )}
+
             {/* ── PR Details (wenn PR vorhanden) ────────────────────────────── */}
             {d.summaryReport?.prUrl && (
           <div className="bg-gray-900 border border-emerald-900/30 rounded-xl p-4">
