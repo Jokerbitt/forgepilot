@@ -199,6 +199,10 @@ export interface Delegation {
   worktreePath?: string
   /** M120: Detected app type in the worktree for preview purposes */
   worktreeAppType?: 'static' | 'nextjs' | 'vite' | 'unknown'
+  /** Token tracking — populated from Claude CLI stream-json result event */
+  inputTokens?: number
+  outputTokens?: number
+  cachedTokens?: number
   createdAt: string
   updatedAt: string
 }

@@ -1315,6 +1315,17 @@ export default function DelegationDetailPage() {
                     <dd className="text-yellow-400 font-mono">${d.actualCostUsd.toFixed(4)}</dd>
                   </div>
                 )}
+                {(d.inputTokens != null || d.outputTokens != null) && (
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-gray-500">Tokens</dt>
+                    <dd className="text-slate-300 font-mono text-xs">
+                      {d.inputTokens != null ? `${(d.inputTokens / 1000).toFixed(1)}k in` : ''}
+                      {d.inputTokens != null && d.outputTokens != null ? ' / ' : ''}
+                      {d.outputTokens != null ? `${(d.outputTokens / 1000).toFixed(1)}k out` : ''}
+                      {d.cachedTokens != null && d.cachedTokens > 0 ? ` / ${(d.cachedTokens / 1000).toFixed(1)}k cached` : ''}
+                    </dd>
+                  </div>
+                )}
               </dl>
             </CollapsibleSection>
 

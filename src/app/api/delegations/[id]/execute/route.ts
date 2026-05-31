@@ -55,6 +55,44 @@ async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Dele
   })
 }
 
+/**
+ * Compact retry prompt — replaces the full buildPrompt() on auto-retry runs.
+ * Saves ~70% tokens by omitting skill/knowledge/codebase blocks already in the agent's context.
+ * Includes ONLY: goal, DoD, branch, and the specific test failure output.
+ */
+function buildRetryPrompt(
+  delegation: Delegation,
+  retryN: number,
+  maxRetries: number,
+  testOutput: string,
+): string {
+  const c = delegation.contract
+  const slug = (c.workItemId ?? delegation.id).replace(/[^a-z0-9-]/gi, '-').toLowerCase()
+  const branch = `${c.branchStrategy ?? 'feature'}/${slug}-task`
+  const dod = (c.definitionOfDone ?? [])
+    .filter(Boolean)
+    .map(d => `- [ ] ${d}`)
+    .join('\n') || '- [ ] Task erfolgreich abgeschlossen'
+
+  return `You are continuing work on the same task. DO NOT re-read files you already have in context.
+
+## Task (reminder)
+${c.goal}
+
+## Branch: \`${branch}\`
+
+## Definition of Done
+${dod}
+
+## Auto-Retry ${retryN}/${maxRetries} — Fix these test failures
+Do not break passing tests. Only fix what is failing:
+\`\`\`
+${testOutput.slice(-2500)}
+\`\`\`
+
+Run \`npm run test:run\` to verify your fix. Then commit.`
+}
+
 function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryContext?: string, targetRepo?: string): string {
   const c = delegation.contract
   const slug = (c.workItemId ?? delegation.id).replace(/[^a-z0-9-]/gi, '-').toLowerCase()
@@ -124,6 +162,12 @@ ${dod}
 - Tests must cover the new behavior — not just type-check.
 - Never commit directly to main. Never force-push.
 - If a step fails, diagnose root cause before retrying.
+
+## Token efficiency (follow strictly to keep costs low)
+- **Never re-read a file you already have in context** — use what you read.
+- **One WebFetch attempt per URL** — if it fails (4xx/5xx), try a different approach.
+- **Diagnose before retrying commands** — read error output fully before repeating.
+- **Config files stay in context** — never reload tsconfig.json, package.json twice.
 ${skillBlock}${knowledgeBlock}${codebaseBlock}
 
 Start now.`
@@ -385,9 +429,26 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
         }
       }
     } else if (type === 'result') {
-      // Extract final cost from the result event
+      // Extract cost + token counts from the result event
       const cost = event.total_cost_usd as number | undefined
       if (cost != null) fullOutput += `\nCost: $${cost.toFixed(4)}`
+
+      // Token tracking — Claude CLI stream-json includes usage in result event
+      const usage = event.usage as { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number } | undefined
+      if (usage) {
+        const inp = usage.input_tokens ?? 0
+        const out = usage.output_tokens ?? 0
+        const cached = usage.cache_read_input_tokens ?? 0
+        fullOutput += `\nTokens: ${inp} in / ${out} out${cached ? ` / ${cached} cached` : ''}`
+        // Store on delegation for analytics (non-blocking update)
+        if (inp > 0 || out > 0) {
+          createDelegationRepository(SINGLE_TENANT_USER_ID).update(id, {
+            inputTokens: inp,
+            outputTokens: out,
+            cachedTokens: cached,
+          }).catch(() => {})
+        }
+      }
     }
   }
 
@@ -541,7 +602,8 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
             message: `🔄 Auto-Retry ${currentRetryCount + 1}/3 — Tests fehlgeschlagen:\n${testResult.output.slice(0, 600)}`,
           }])
           await repo.update(id, { retryCount: currentRetryCount + 1 })
-          const retryPrompt = `${prompt}\n\n## M107 Auto-Retry ${currentRetryCount + 1}/3\nFix failing tests (do not break passing tests):\n\`\`\`\n${testResult.output.slice(-2000)}\n\`\`\``
+          // Use compact retry prompt — saves ~70% tokens vs repeating full original prompt
+          const retryPrompt = buildRetryPrompt(current, currentRetryCount + 1, 3, testResult.output)
           runWithClaudeCLI(id, retryPrompt, startTime, budgetUsd, riskClass, targetRepo, runnerWorkspace)
           return // Don't cleanup the workspace — the retry run will handle it
         }
