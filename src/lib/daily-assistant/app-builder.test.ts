@@ -62,6 +62,8 @@ describe('buildAppBuilderCapability', () => {
     expect(capability.canBuildMultiSliceMvp).toBe(true)
     expect(capability.canRunFullyAutonomous).toBe(true)
     expect(capability.safeNextAction.mode).toBe('execute')
+    expect(capability.safeNextAction.href).toBe('/delegations/delegation-1')
+    expect(capability.gates.find(gate => gate.id === 'queue')?.detail).toContain('direkt startbare Delegation')
   })
 
   it('blocks large builds when no real runner is available', () => {
@@ -83,6 +85,7 @@ describe('buildAppBuilderCapability', () => {
     expect(capability.level).toBe('blocked')
     expect(capability.canBuildSmallApp).toBe(false)
     expect(capability.safeNextAction.mode).toBe('execute')
+    expect(capability.safeNextAction.href).toBe('/delegations/delegation-1')
     expect(capability.gates.find(gate => gate.id === 'runner')?.ready).toBe(false)
   })
 
@@ -141,5 +144,39 @@ describe('buildAppBuilderCapability', () => {
     expect(capability.safeNextAction.label).toBe('Projekt-Slice vorbereiten')
     expect(capability.safeNextAction.href).toBe('/projects/brief-1')
     expect(capability.gates.find(gate => gate.id === 'project-pipeline')?.ready).toBe(true)
+  })
+
+  it('does not present a direct execute action when queued work still needs review', () => {
+    const capability = buildAppBuilderCapability({
+      assistant: { ...baseAssistant, approved: 1, pending: 1 },
+      queue: [
+        {
+          ...safeQueueItem,
+          id: 'needs-review',
+          status: 'approved',
+          requiresApproval: true,
+        },
+        {
+          ...safeQueueItem,
+          id: 'risk-c',
+          riskClass: 'C',
+        },
+      ],
+      autopilot: readyAutopilot,
+      projectPipeline: {
+        projectCount: 1,
+        workPackageCount: 2,
+        safeSliceCount: 0,
+        blockedByDependencyCount: 1,
+        inFlightSliceCount: 0,
+        completedSliceCount: 0,
+        recommendation: 'Einige Slices brauchen noch Review.',
+        nextCandidate: null,
+      },
+    })
+
+    expect(capability.safeNextAction.mode).toBe('review')
+    expect(capability.safeNextAction.href).toBe('/projects')
+    expect(capability.gates.find(gate => gate.id === 'queue')?.detail).toContain('kein direkt startbarer Slice')
   })
 })

@@ -45,12 +45,17 @@ function countSafeQueue(queue: DailyAssistantQueueItem[]): number {
   return queue.filter(item => item.status === 'approved' && item.riskClass !== 'C' && item.requiresApproval !== true).length
 }
 
+function findSafeQueueCandidate(queue: DailyAssistantQueueItem[]): DailyAssistantQueueItem | null {
+  return queue.find(item => item.status === 'approved' && item.riskClass !== 'C' && item.requiresApproval !== true) ?? null
+}
+
 function clampScore(score: number): number {
   return Math.max(0, Math.min(100, Math.round(score)))
 }
 
 export function buildAppBuilderCapability(input: BuildAppBuilderCapabilityInput): AppBuilderCapability {
   const safeQueue = countSafeQueue(input.queue)
+  const safeQueueCandidate = findSafeQueueCandidate(input.queue)
   const failedQueueItem = input.queue.find(item => item.status === 'failed')
   const projectPipeline = input.projectPipeline
   const safeProjectSlices = projectPipeline?.safeSliceCount ?? 0
@@ -87,7 +92,9 @@ export function buildAppBuilderCapability(input: BuildAppBuilderCapabilityInput)
       label: 'Arbeitsqueue',
       ready: hasPlanableWork,
       detail: hasPlanableWork
-        ? `${input.assistant.pending + input.assistant.approved} Delegation(en), ${safeProjectSlices} sichere Projekt-Slice(s) startbereit.`
+        ? safeQueueCandidate
+          ? `${safeQueue} direkt startbare Delegation(en), ${safeProjectSlices} Projekt-Slice(s) vorbereitbar.`
+          : `${input.assistant.pending + input.assistant.approved} Delegation(en), aber kein direkt startbarer Slice ohne Review.`
         : 'Noch keine Arbeitspakete. Starte im Plan Mode mit einer Produktidee.',
     },
     {
@@ -141,8 +148,8 @@ export function buildAppBuilderCapability(input: BuildAppBuilderCapabilityInput)
       }
     : input.assistant.running > 0
       ? { label: 'Agenten live beobachten', href: '/live', mode: 'review' as const }
-      : safeQueue > 0
-        ? { label: 'Nächsten sicheren Slice starten', href: '/delegations', mode: 'execute' as const }
+      : safeQueueCandidate
+        ? { label: 'Sicheren Slice starten', href: `/delegations/${safeQueueCandidate.id}`, mode: 'execute' as const }
         : projectPipeline?.nextCandidate
           ? { label: 'Projekt-Slice vorbereiten', href: projectPipeline.nextCandidate.href, mode: 'execute' as const }
         : hasPlanableWork
