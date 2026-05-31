@@ -565,6 +565,13 @@ export default function DelegationDetailPage() {
   const isDone      = d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled'
   const canCreatePR = d.status === 'completed' && !d.summaryReport?.prUrl
   const canClone    = isDone
+  const hasReviewablePr = Boolean(d.summaryReport?.prUrl)
+  const showMergeGovernance = d.status === 'completed' || (d.status === 'failed' && hasReviewablePr)
+  const budgetLimit = d.contract.maxCostUsd ?? d.contract.maxBudgetUsd
+  const budgetExceeded = typeof d.actualCostUsd === 'number'
+    && typeof budgetLimit === 'number'
+    && budgetLimit > 0
+    && d.actualCostUsd > budgetLimit
 
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6 md:p-8">
@@ -1120,7 +1127,7 @@ export default function DelegationDetailPage() {
           </div>
             )}
 
-            {d.status === 'completed' && (
+            {showMergeGovernance && (
               <section className={`rounded-xl border p-4 ${
                 mergeSafety?.autoSafety?.status === 'ready'
                   ? 'border-emerald-800/50 bg-emerald-950/20'
@@ -1130,7 +1137,7 @@ export default function DelegationDetailPage() {
               }`}>
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Auto-Merge Safety Gate</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">PR- und Merge-Governance</p>
                     <h2 className="mt-2 text-lg font-semibold text-white">
                       {mergeSafetyLoading
                         ? 'Prüfe PR-Sicherheit...'
@@ -1144,7 +1151,8 @@ export default function DelegationDetailPage() {
                     </h2>
                     <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-400">
                       ForgePilot darf nur kleine Risk-A-Änderungen mit grüner CI, approved Critic,
-                      ohne sensible Dateien und ohne Secret-Hinweise autonom übernehmen.
+                      eingehaltenem Budget, ohne sensible Dateien und ohne Secret-Hinweise autonom übernehmen.
+                      Fehlgeschlagene Läufe mit PR bleiben sichtbar prüfbar, brauchen aber bewusste Review-Freigabe.
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -1168,7 +1176,7 @@ export default function DelegationDetailPage() {
                 </div>
 
                 {mergeSafety?.preview && (
-                  <div className="mt-4 grid gap-3 md:grid-cols-4">
+                  <div className="mt-4 grid gap-3 md:grid-cols-5">
                     <div className="rounded-lg border border-gray-800 bg-gray-950/50 p-3">
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">CI</p>
                       <p className="mt-1 text-sm font-semibold text-gray-200">{mergeSafety.preview.checks.state}</p>
@@ -1183,10 +1191,30 @@ export default function DelegationDetailPage() {
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Auto</p>
                       <p className="mt-1 text-sm font-semibold text-gray-200">{mergeSafety.autoSafety?.status ?? 'unbekannt'}</p>
                     </div>
+                    <div className={`rounded-lg border p-3 ${
+                      budgetExceeded ? 'border-red-900/60 bg-red-950/20' : 'border-gray-800 bg-gray-950/50'
+                    }`}>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Budget</p>
+                      <p className={`mt-1 text-sm font-semibold ${budgetExceeded ? 'text-red-200' : 'text-gray-200'}`}>
+                        {typeof d.actualCostUsd === 'number'
+                          ? `$${d.actualCostUsd.toFixed(2)} / $${budgetLimit.toFixed(2)}`
+                          : `$${budgetLimit.toFixed(2)} Limit`}
+                      </p>
+                    </div>
                     <div className="rounded-lg border border-gray-800 bg-gray-950/50 p-3">
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Manual</p>
                       <p className="mt-1 text-sm font-semibold text-gray-200">{mergeSafety.manualSafety?.status ?? 'unbekannt'}</p>
                     </div>
+                  </div>
+                )}
+
+                {d.status === 'failed' && d.summaryReport?.prUrl && (
+                  <div className="mt-4 rounded-lg border border-red-900/50 bg-red-950/20 p-3 text-sm text-red-100">
+                    <p className="font-semibold">Safety Stop aktiv</p>
+                    <p className="mt-1 text-red-100/80">
+                      Der Agent hat einen PR erzeugt, aber die Delegation ist nicht abgeschlossen. Prüfe zuerst Fehler,
+                      Budget und Critic-Ergebnis; Auto-Merge bleibt blockiert.
+                    </p>
                   </div>
                 )}
 
