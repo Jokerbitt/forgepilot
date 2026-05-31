@@ -30,7 +30,7 @@ import { extractKnowledge } from '@/lib/knowledge/extraction'
 import { persistGrokCriticForDelegation } from '@/lib/eval/auto-grok-critic'
 import { writebackExecutionInsights, writebackDelegationKnowledge } from '@/lib/knowledge/writeback'
 import { notifyExecutionResult, notifyBudgetWarning } from '@/lib/notifications'
-import { checkBudget, wouldExceedBudget } from '@/lib/budget/guard'
+import { checkBudget, getBudgetLimit, wouldExceedBudget } from '@/lib/budget/guard'
 import { triggerChain } from '@/lib/delegations/chaining'
 
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
@@ -211,6 +211,7 @@ ${dod}
 - **No gold-plating**: implement exactly what the Definition of Done requires. Nothing more.
 - **Turn checkpoint**: at turn ${checkpointTurn}, stop and re-read "## Task" and "## Definition of Done" above before continuing.
 - **Progress signal every 10 turns**: print "PROGRESS: <what done> | <what next> | <turns used>/${maxTurns}"
+- **Budget gate**: if this cannot be completed safely inside $${c.maxBudgetUsd}, stop before widening scope and print "ESCALATION: budget-risk — <smallest next slice>".
 - **Abort conditions** — stop immediately and print "ESCALATION: <reason>" if:
   - You've used more than 60% of turns without a commit
   - A step fails 3 times with the same error
@@ -1544,8 +1545,9 @@ export async function POST(
 
   // M209: Pre-execution budget guard — reject before starting if estimate exceeds limit
   if (wouldExceedBudget(delegation, delegation.costEstimateUsd)) {
+    const limit = getBudgetLimit(delegation)
     return NextResponse.json(
-      { error: `Estimated cost $${delegation.costEstimateUsd} exceeds budget limit $${delegation.contract.maxCostUsd}` },
+      { error: `Estimated cost $${delegation.costEstimateUsd} exceeds budget limit $${limit}` },
       { status: 422 },
     )
   }

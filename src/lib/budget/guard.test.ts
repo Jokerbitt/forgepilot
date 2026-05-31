@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { checkBudget, wouldExceedBudget } from './guard'
+import { checkBudget, getBudgetLimit, wouldExceedBudget } from './guard'
 import type { Delegation } from '@/lib/models/delegation'
 
 const mockRepo = { update: vi.fn(), findById: vi.fn(), create: vi.fn(), delete: vi.fn(), listByStatus: vi.fn(), listByProject: vi.fn() }
@@ -46,6 +46,29 @@ describe('checkBudget', () => {
   })
 })
 
+describe('getBudgetLimit', () => {
+  it('prefers explicit maxCostUsd when present', () => {
+    expect(getBudgetLimit({
+      ...base,
+      contract: { ...base.contract, maxCostUsd: 0.75, maxBudgetUsd: 2 } as never,
+    })).toBe(0.75)
+  })
+
+  it('falls back to maxBudgetUsd for ordinary delegations', () => {
+    expect(getBudgetLimit({
+      ...base,
+      contract: { riskClass: 'B', goal: 'test', acceptanceCriteria: [], maxBudgetUsd: 1 } as never,
+    })).toBe(1)
+  })
+
+  it('returns null when neither budget field is positive', () => {
+    expect(getBudgetLimit({
+      ...base,
+      contract: { riskClass: 'B', goal: 'test', acceptanceCriteria: [], maxBudgetUsd: 0 } as never,
+    })).toBeNull()
+  })
+})
+
 describe('wouldExceedBudget', () => {
   it('returns false when no limit', () => {
     expect(wouldExceedBudget({ ...base, contract: { riskClass: 'B', goal: '', acceptanceCriteria: [] } as never }, 999)).toBe(false)
@@ -57,5 +80,14 @@ describe('wouldExceedBudget', () => {
 
   it('returns false when estimate is within limit', () => {
     expect(wouldExceedBudget(base, 0.5)).toBe(false)
+  })
+
+  it('uses maxBudgetUsd when maxCostUsd is not set', () => {
+    const delegation = {
+      ...base,
+      contract: { riskClass: 'B', goal: 'test', acceptanceCriteria: [], maxBudgetUsd: 1 } as never,
+    }
+
+    expect(wouldExceedBudget(delegation, 1.25)).toBe(true)
   })
 })
