@@ -22,6 +22,18 @@ const securityHeaders = [
   },
 ]
 
+const previewSecurityHeaders = securityHeaders.map((header) => {
+  if (header.key === 'X-Frame-Options') {
+    return { ...header, value: 'SAMEORIGIN' }
+  }
+
+  if (header.key === 'Content-Security-Policy') {
+    return { ...header, value: header.value.replace("frame-ancestors 'none'", "frame-ancestors 'self'") }
+  }
+
+  return header
+})
+
 const nextConfig = {
   output: 'standalone',
   webpack(config) {
@@ -37,7 +49,11 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: '/(.*)',
+        source: '/demo/:path*',
+        headers: previewSecurityHeaders,
+      },
+      {
+        source: '/((?!demo(?:/|$)).*)',
         headers: securityHeaders,
       },
     ]
