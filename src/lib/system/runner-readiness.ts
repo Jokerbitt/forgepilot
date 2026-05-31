@@ -26,7 +26,8 @@ export interface RunnerReadiness {
   checkedAt: string
 }
 
-const CACHE_TTL_MS = 10 * 60 * 1000
+const DEFAULT_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+const CACHE_TTL_MS = Number.parseInt(process.env.RUNNER_READINESS_CACHE_TTL_MS ?? '', 10) || DEFAULT_CACHE_TTL_MS
 const CACHE_FILE = path.join(process.cwd(), 'config', 'runner-readiness-cache.json')
 const PING_PROMPT = 'Return exactly: PONG'
 
