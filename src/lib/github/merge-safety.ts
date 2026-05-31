@@ -72,6 +72,11 @@ function touchesSensitiveFiles(preview: GitHubPullRequestPreview): string[] {
     .map(file => file.filename)
 }
 
+function budgetLimit(delegation?: Delegation): number | null {
+  const value = delegation?.contract.maxCostUsd ?? delegation?.contract.maxBudgetUsd
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
+}
+
 export function evaluateMergeSafety(
   preview: GitHubPullRequestPreview,
   options: {
@@ -125,6 +130,29 @@ export function evaluateMergeSafety(
   }
   if (options.delegation?.criticScore?.verdict && options.delegation.criticScore.verdict !== 'approved') {
     blockingReasons.push(`Critic Verdict ist nicht approved (${options.delegation.criticScore.verdict}).`)
+  }
+
+  if (options.delegation) {
+    const limit = budgetLimit(options.delegation)
+    const actual = options.delegation.actualCostUsd
+    const exceededBudget = typeof actual === 'number' && limit !== null && actual > limit
+    const failedWithBudget = options.delegation.status === 'failed'
+      && /budget exceeded|budget/i.test(options.delegation.errorMessage ?? '')
+
+    if (exceededBudget || failedWithBudget) {
+      const detail = limit !== null && typeof actual === 'number'
+        ? `Budget überschritten ($${actual.toFixed(4)} > $${limit.toFixed(4)}).`
+        : 'Budget-Gate hat den Lauf gestoppt.'
+      if (policy.mode === 'auto') {
+        blockingReasons.push(`${detail} Auto-Merge braucht explizite Review-Freigabe.`)
+      } else {
+        reasons.push(`${detail} Bitte Scope, Kosten und PR bewusst prüfen.`)
+      }
+    }
+
+    if (policy.mode === 'auto' && options.delegation.status !== 'completed') {
+      blockingReasons.push(`Auto-Merge ist nur fuer abgeschlossene Delegationen erlaubt (aktuell: ${options.delegation.status}).`)
+    }
   }
 
   if (blockingReasons.length > 0) {

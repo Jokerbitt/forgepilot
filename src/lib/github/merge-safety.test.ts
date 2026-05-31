@@ -109,4 +109,35 @@ describe('evaluateMergeSafety', () => {
     expect(verdict.status).toBe('blocked')
     expect(verdict.reasons.join(' ')).toContain('sensible Werte')
   })
+
+  it('blocks auto-merge for budget-stopped delegations even when CI is green', () => {
+    const verdict = evaluateMergeSafety(preview(), {
+      delegation: delegation({
+        status: 'failed',
+        actualCostUsd: 1.57,
+        errorMessage: 'Budget exceeded: $1.5700 > $0.5000 limit',
+        contract: { ...delegation().contract, riskClass: 'A', maxCostUsd: 0.5 },
+      }),
+      mode: 'auto',
+    })
+
+    expect(verdict.status).toBe('blocked')
+    expect(verdict.reasons.join(' ')).toContain('Budget überschritten')
+    expect(verdict.reasons.join(' ')).toContain('abgeschlossene Delegationen')
+  })
+
+  it('keeps manual merge in review for budget-stopped PRs', () => {
+    const verdict = evaluateMergeSafety(preview(), {
+      delegation: delegation({
+        status: 'failed',
+        actualCostUsd: 1.57,
+        errorMessage: 'Budget exceeded: $1.5700 > $0.5000 limit',
+        contract: { ...delegation().contract, riskClass: 'A', maxCostUsd: 0.5 },
+      }),
+      mode: 'manual',
+    })
+
+    expect(verdict.status).toBe('review')
+    expect(verdict.reasons.join(' ')).toContain('Budget überschritten')
+  })
 })
