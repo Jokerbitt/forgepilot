@@ -4,35 +4,28 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { CheckCircle2, Circle, Plus, Rocket, RotateCcw, Target } from 'lucide-react'
 import { Badge, buttonClassName, cx } from '@/components/ui/primitives'
-
-interface TodoItem {
-  id: string
-  title: string
-  area: string
-  done: boolean
-}
-
-const initialTodos: TodoItem[] = [
-  { id: 'focus', title: 'MVP-Aufgaben fuer heute festlegen', area: 'Planung', done: true },
-  { id: 'ui', title: 'Klare ToDo-Liste mit Fortschritt pruefen', area: 'Produkt', done: false },
-  { id: 'runner', title: 'Echten Runner-PR aus ForgePilot starten', area: 'ForgePilot', done: false },
-]
-
-const STORAGE_KEY = 'forgepilot.todo-planner-demo.todos.v1'
+import {
+  TODO_STORAGE_KEY,
+  type TodoItem,
+  appendTodo,
+  computeProgress,
+  findNextTodo,
+  freshDemoTodos,
+  groupTodosByArea,
+  parseStoredTodos,
+  toggleTodoDone,
+} from './todo-state'
 
 export default function TodoPlannerDemoPage() {
-  const [todos, setTodos] = useState(initialTodos)
+  const [todos, setTodos] = useState<TodoItem[]>(() => freshDemoTodos())
   const [newTitle, setNewTitle] = useState('')
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw) as TodoItem[]
-        if (Array.isArray(parsed) && parsed.every(item => item.id && item.title && typeof item.done === 'boolean')) {
-          setTodos(parsed)
-        }
+      const stored = parseStoredTodos(window.localStorage.getItem(TODO_STORAGE_KEY))
+      if (stored && stored.length > 0) {
+        setTodos(stored)
       }
     } catch {
       // Demo should keep working even when localStorage is unavailable.
@@ -44,42 +37,33 @@ export default function TodoPlannerDemoPage() {
   useEffect(() => {
     if (!loaded) return
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(todos))
+      window.localStorage.setItem(TODO_STORAGE_KEY, JSON.stringify(todos))
     } catch {
       // Non-critical for the demo surface.
     }
   }, [loaded, todos])
 
-  const doneCount = todos.filter(todo => todo.done).length
-  const progress = Math.round((doneCount / todos.length) * 100)
-  const nextTodo = todos.find(todo => !todo.done)
+  const progress = computeProgress(todos)
+  const nextTodo = findNextTodo(todos)
+  const grouped = useMemo(() => groupTodosByArea(todos), [todos])
 
-  const grouped = useMemo(() => {
-    return todos.reduce<Record<string, TodoItem[]>>((groups, todo) => {
-      groups[todo.area] = [...(groups[todo.area] ?? []), todo]
-      return groups
-    }, {})
-  }, [todos])
-
-  function toggleTodo(id: string) {
-    setTodos(current => current.map(todo => todo.id === id ? { ...todo, done: !todo.done } : todo))
+  function handleToggle(id: string) {
+    setTodos(current => toggleTodoDone(current, id))
   }
 
-  function addTodo() {
-    const title = newTitle.trim()
-    if (!title) return
-    setTodos(current => [
-      ...current,
-      { id: crypto.randomUUID(), title, area: 'Heute', done: false },
-    ])
+  function handleAdd() {
+    const trimmed = newTitle.trim()
+    if (!trimmed) return
+    setTodos(current => appendTodo(current, trimmed, crypto.randomUUID()))
     setNewTitle('')
   }
 
-  function resetTodos() {
-    setTodos(initialTodos)
+  function handleReset() {
+    const fresh = freshDemoTodos()
+    setTodos(fresh)
     setNewTitle('')
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(initialTodos))
+      window.localStorage.setItem(TODO_STORAGE_KEY, JSON.stringify(fresh))
     } catch {
       // ignore
     }
@@ -97,7 +81,8 @@ export default function TodoPlannerDemoPage() {
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
                 Eine kleine, greifbare Test-App aus ForgePilot: Aufgaben erfassen, Fokus erkennen,
-                Fortschritt sehen und den naechsten produktiven PR-Schritt ausloesen.
+                Fortschritt sehen und den naechsten produktiven PR-Schritt ausloesen. Deine
+                Aufgaben bleiben lokal in diesem Browser gespeichert.
               </p>
             </div>
             <Link href="/live" className={buttonClassName('secondary', 'shrink-0')}>
@@ -110,8 +95,8 @@ export default function TodoPlannerDemoPage() {
           <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.08] p-4">
             <CheckCircle2 className="h-5 w-5 text-emerald-300" />
             <p className="mt-3 text-xs font-semibold uppercase tracking-widest text-emerald-200/80">Fortschritt</p>
-            <p className="mt-1 text-3xl font-bold text-white">{progress}%</p>
-            <p className="mt-1 text-sm text-emerald-100/70">{doneCount} von {todos.length} erledigt</p>
+            <p className="mt-1 text-3xl font-bold text-white">{progress.percent}%</p>
+            <p className="mt-1 text-sm text-emerald-100/70">{progress.doneCount} von {progress.total} erledigt</p>
           </div>
           <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.08] p-4 md:col-span-2">
             <Target className="h-5 w-5 text-violet-300" />
@@ -130,23 +115,28 @@ export default function TodoPlannerDemoPage() {
               <h2 className="text-lg font-semibold text-white">Aufgaben</h2>
               <p className="mt-1 text-sm text-slate-500">Kompakt, bedienbar, ohne Technik-Overload.</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <input
                 value={newTitle}
                 onChange={event => setNewTitle(event.target.value)}
                 onKeyDown={event => {
-                  if (event.key === 'Enter') addTodo()
+                  if (event.key === 'Enter') handleAdd()
                 }}
                 placeholder="Neue Aufgabe..."
                 className="min-h-10 w-56 rounded-lg border border-white/[0.08] bg-black/20 px-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-violet-500/50"
               />
-              <button type="button" onClick={addTodo} className={buttonClassName('primary')}>
+              <button type="button" onClick={handleAdd} className={buttonClassName('primary')}>
                 <Plus className="h-4 w-4" />
                 Hinzufuegen
               </button>
-              <button type="button" onClick={resetTodos} className={buttonClassName('secondary')}>
+              <button
+                type="button"
+                onClick={handleReset}
+                className={buttonClassName('secondary')}
+                aria-label="Demo-Aufgaben zuruecksetzen"
+              >
                 <RotateCcw className="h-4 w-4" />
-                Demo resetten
+                Demo zuruecksetzen
               </button>
             </div>
           </div>
@@ -160,7 +150,7 @@ export default function TodoPlannerDemoPage() {
                     <button
                       key={todo.id}
                       type="button"
-                      onClick={() => toggleTodo(todo.id)}
+                      onClick={() => handleToggle(todo.id)}
                       className={cx(
                         'flex w-full items-center gap-3 rounded-lg border px-3 py-3 text-left transition',
                         todo.done
