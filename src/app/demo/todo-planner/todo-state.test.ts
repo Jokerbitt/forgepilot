@@ -131,7 +131,7 @@ describe('todo-planner demo state', () => {
     const reset = freshDemoTodos()
     expect(reset).toEqual([
       { id: 'focus', title: 'MVP-Aufgaben fuer heute festlegen', area: 'Planung', done: true },
-      { id: 'ui', title: 'Klare ToDo-Liste mit Fortschritt pruefen', area: 'Produkt', done: false },
+      { id: 'ui', title: 'Klare ToDo-Liste mit Fortschritt prüfen', area: 'Produkt', done: false },
       { id: 'runner', title: 'Echten Runner-PR aus ForgePilot starten', area: 'ForgePilot', done: false },
     ])
   })

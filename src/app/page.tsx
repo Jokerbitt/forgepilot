@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Bot, FolderOpen, Radio, Settings, Sparkles } from 'lucide-react'
+import { ArrowRight, Bot, FolderOpen, Radio, Rocket, Settings, Sparkles } from 'lucide-react'
 import { ConnectorHealthBar } from '@/components/command-center/ConnectorHealthBar'
 import { DailyAssistantPanel } from '@/components/command-center/DailyAssistantPanel'
 import { ApiKeysBanner } from '@/components/shared/ApiKeysBanner'
@@ -35,6 +35,12 @@ const quickLinks = [
     title: 'Live View',
     body: 'Was Agenten gerade tun, was fertig ist und was blockiert.',
     icon: Radio,
+  },
+  {
+    href: '/demo/todo-planner',
+    title: 'App-Vorschau',
+    body: 'Die aktuelle ToDo Planner Demo direkt öffnen und testen.',
+    icon: Rocket,
   },
   {
     href: '/settings',
@@ -101,7 +107,7 @@ export default function Home() {
           </aside>
         </section>
 
-        <section className="mt-5 grid gap-3 md:grid-cols-3">
+        <section className="mt-5 grid gap-3 md:grid-cols-4">
           {quickLinks.map(item => {
             const Icon = item.icon
             return (
