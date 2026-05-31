@@ -102,7 +102,11 @@ export function DailyAssistantPanel() {
   const autopilotMinScore = snapshot?.settings.autopilotMinScore ?? 85
   const autopilotMaxRiskClass = snapshot?.settings.autopilotMaxRiskClass ?? 'A'
   const maxConcurrentAgents = snapshot?.settings.maxConcurrentAgents ?? 2
-  const safeStartItems = (snapshot?.queue ?? []).filter(item => item.status === 'approved' && item.riskClass !== 'C')
+  const safeStartItems = (snapshot?.queue ?? []).filter(item => (
+    item.status === 'approved'
+    && item.riskClass !== 'C'
+    && item.requiresApproval !== true
+  ))
   const nextSafeStart = safeStartItems[0]
 
   const runAssistantCycle = async () => {
@@ -325,7 +329,7 @@ export function DailyAssistantPanel() {
         ) : snapshot?.queue.length ? (
           <div className="mt-4 space-y-2">
             {snapshot.queue.map(item => {
-              const canStartNow = item.status === 'approved' && item.riskClass !== 'C'
+              const canStartNow = item.status === 'approved' && item.riskClass !== 'C' && item.requiresApproval !== true
               return (
               <div
                 key={item.id}
