@@ -38,6 +38,53 @@ interface DelegationStatsResponse {
   prCreated?: number
 }
 
+interface ProjectBriefListItem {
+  id: string
+  title: string
+  status?: string
+  targetPlatform?: string
+  persistenceStrategy?: string
+  desiredOutcome?: string
+  rawIdea?: string
+  updatedAt?: string
+  delegationIds?: string[]
+}
+
+interface DelegationListItem {
+  id: string
+  title?: string
+  status: string
+  briefId?: string
+  briefTitle?: string
+  updatedAt?: string
+  contract?: {
+    goal?: string
+    riskClass?: string
+    requiresApproval?: boolean
+  }
+  summaryReport?: {
+    prUrl?: string
+    prState?: string
+  }
+}
+
+interface LiveProjectCard {
+  id: string
+  title: string
+  status: string
+  platform: string
+  persistence: string
+  description: string
+  previewHref?: string
+  projectHref: string
+  delegationsHref: string
+  delegations: DelegationListItem[]
+  runningCount: number
+  completedCount: number
+  failedCount: number
+  nextDelegation?: DelegationListItem
+}
+
 interface StorageStatusResponse {
   mode?: string
   readsFrom?: string
@@ -272,44 +319,6 @@ interface AssistantCycleResponse {
   error?: string
 }
 
-const previewPages = [
-  {
-    label: 'Command Center',
-    href: '/',
-    description: 'Startpunkt: Idee eingeben, Plan Mode starten, nächste Empfehlung sehen.',
-  },
-  {
-    label: 'Plan Mode',
-    href: '/idea',
-    description: 'Aus einer Idee wird ein Produktplan mit Arbeitspaketen.',
-  },
-  {
-    label: 'Ausführen',
-    href: '/delegations',
-    description: 'Delegations prüfen, freigeben, starten und Ergebnisse kontrollieren.',
-  },
-  {
-    label: 'ToDo Demo',
-    href: '/demo/todo-planner',
-    description: 'Die erste testbare Demo-App aus dem ForgePilot-Run.',
-  },
-  {
-    label: 'Branches',
-    href: '/branches',
-    description: 'Pull Requests prüfen, Änderungen ansehen und sicher in main mergen.',
-  },
-  {
-    label: 'Wissen',
-    href: '/knowledge',
-    description: 'Gespeicherte Erkenntnisse und Writebacks ansehen.',
-  },
-  {
-    label: 'Settings',
-    href: '/settings',
-    description: 'Provider, lokale Modelle, GitHub, Linear und Betrieb prüfen.',
-  },
-]
-
 function toneClasses(tone: Tone): string {
   if (tone === 'ready') return 'border-emerald-500/20 bg-emerald-500/[0.07] text-emerald-200'
   if (tone === 'attention') return 'border-amber-500/20 bg-amber-500/[0.07] text-amber-200'
@@ -338,6 +347,57 @@ function statusIcon(tone: Tone) {
   if (tone === 'attention') return <AlertTriangle className="h-4 w-4" />
   if (tone === 'blocked') return <AlertTriangle className="h-4 w-4" />
   return <Activity className="h-4 w-4" />
+}
+
+function isTodoProject(project: Pick<ProjectBriefListItem, 'title' | 'rawIdea' | 'desiredOutcome'>): boolean {
+  const source = `${project.title} ${project.rawIdea ?? ''} ${project.desiredOutcome ?? ''}`.toLowerCase()
+  return source.includes('todo') || source.includes('to-do') || source.includes('task planner')
+}
+
+function buildLiveProjectCards(
+  projects: ProjectBriefListItem[],
+  delegations: DelegationListItem[],
+): LiveProjectCard[] {
+  const sourceProjects = projects.length > 0
+    ? projects
+    : [{
+        id: 'demo-todo-planner',
+        title: 'Demo: ToDo Planner WebApp',
+        status: 'demo',
+        targetPlatform: 'webapp',
+        persistenceStrategy: 'localStorage',
+        desiredOutcome: 'Testbare App-Vorschau mit Aufgaben, Fortschritt und lokaler Speicherung.',
+      }]
+
+  return sourceProjects.map(project => {
+    const projectDelegations = delegations.filter(delegation => (
+      delegation.briefId === project.id
+      || delegation.briefTitle === project.title
+      || project.delegationIds?.includes(delegation.id)
+    ))
+    const runningCount = projectDelegations.filter(delegation => delegation.status === 'running').length
+    const completedCount = projectDelegations.filter(delegation => delegation.status === 'completed').length
+    const failedCount = projectDelegations.filter(delegation => delegation.status === 'failed').length
+    const nextDelegation = projectDelegations.find(delegation => ['running', 'approved', 'pending', 'failed'].includes(delegation.status))
+      ?? projectDelegations[0]
+
+    return {
+      id: project.id,
+      title: project.title,
+      status: project.status ?? 'unknown',
+      platform: project.targetPlatform ?? 'unbekannt',
+      persistence: project.persistenceStrategy ?? 'unbekannt',
+      description: project.desiredOutcome ?? project.rawIdea ?? 'Noch keine Beschreibung vorhanden.',
+      previewHref: isTodoProject(project) ? '/demo/todo-planner' : undefined,
+      projectHref: `/projects/${project.id}`,
+      delegationsHref: `/delegations?briefId=${encodeURIComponent(project.id)}`,
+      delegations: projectDelegations,
+      runningCount,
+      completedCount,
+      failedCount,
+      nextDelegation,
+    }
+  })
 }
 
 async function fetchJson<T>(href: string, timeoutMs = 5000): Promise<{ ok: true; data: T } | { ok: false; detail: string }> {
@@ -369,9 +429,11 @@ async function fetchJson<T>(href: string, timeoutMs = 5000): Promise<{ ok: true;
 }
 
 export default function LiveViewPage() {
-  const [selectedPath, setSelectedPath] = useState('/')
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null)
+  const [projects, setProjects] = useState<ProjectBriefListItem[]>([])
+  const [projectDelegations, setProjectDelegations] = useState<DelegationListItem[]>([])
   const [delegations, setDelegations] = useState<DelegationStatsResponse | null>(null)
   const [storage, setStorage] = useState<StorageStatusResponse | null>(null)
   const [executeHealth, setExecuteHealth] = useState<ExecuteHealthResponse | null>(null)
@@ -390,7 +452,7 @@ export default function LiveViewPage() {
 
   const refresh = async () => {
     setLoading(true)
-    const [healthRes, statsRes, storageRes, executeRes, cliRes, reportRes, autopilotRes, assistantRes] = await Promise.all([
+    const [healthRes, statsRes, storageRes, executeRes, cliRes, reportRes, autopilotRes, assistantRes, projectsRes, delegationsRes] = await Promise.all([
       fetchJson<{ status?: string }>('/api/health'),
       fetchJson<DelegationStatsResponse>('/api/delegations/stats'),
       fetchJson<StorageStatusResponse>('/api/storage-status'),
@@ -399,8 +461,12 @@ export default function LiveViewPage() {
       fetchJson<DailyReportResponse>('/api/reports/daily', 8000),
       fetchJson<AutopilotReadinessResponse>('/api/autopilot/readiness', 8000),
       fetchJson<DailyAssistantSnapshotResponse>('/api/daily-assistant', 16000),
+      fetchJson<ProjectBriefListItem[]>('/api/project-briefs', 8000),
+      fetchJson<DelegationListItem[]>('/api/delegations?limit=200', 8000),
     ])
 
+    if (projectsRes.ok) setProjects(projectsRes.data)
+    if (delegationsRes.ok) setProjectDelegations(delegationsRes.data)
     if (statsRes.ok) setDelegations(statsRes.data)
     if (storageRes.ok) setStorage(storageRes.data)
     if (executeRes.ok) setExecuteHealth(executeRes.data)
@@ -493,7 +559,15 @@ export default function LiveViewPage() {
   const firstRealValueProgress = dailyReport?.firstRealValueLoop?.progressPct ?? 0
   const provenRuns = dailyReport?.executeLoopEvidence?.provenRuns ?? 0
   const targetRuns = dailyReport?.executeLoopEvidence?.targetRuns ?? 5
-  const previewUrl = selectedPath
+  const liveProjects = useMemo(
+    () => buildLiveProjectCards(projects, projectDelegations),
+    [projectDelegations, projects],
+  )
+  const selectedProject = liveProjects.find(project => project.id === selectedProjectId)
+    ?? liveProjects.find(project => project.previewHref)
+    ?? liveProjects[0]
+  const selectedProjectDelegations = selectedProject?.delegations ?? []
+  const previewUrl = selectedProject?.previewHref
   const zeroKeyLabel = cliStatus?.activeMode === 'claude-cli'
     ? 'Claude Max bereit'
     : cliStatus?.activeMode === 'codex-cli'
@@ -1069,7 +1143,7 @@ export default function LiveViewPage() {
                   setDemoRun(res.ok ? data : { error: data.error ?? `HTTP ${res.status}` })
                   if (res.ok) {
                     await refresh()
-                    setSelectedPath(data.appPreviewHref ?? '/demo/todo-planner')
+                    setSelectedProjectId(data.projectId ?? null)
                   }
                 } catch (error) {
                   setDemoRun({ error: error instanceof Error ? error.message : 'Demo-Run konnte nicht gestartet werden.' })
@@ -1177,43 +1251,129 @@ export default function LiveViewPage() {
 
         <AgentWorkbenchSummary />
 
-        <section className="grid min-h-[720px] gap-5 xl:grid-cols-[380px_1fr]">
+        <section className="grid min-h-[720px] gap-5 xl:grid-cols-[420px_1fr]">
           <aside className="space-y-4">
             <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold text-white">Testbare Kernseiten</h2>
+                <h2 className="text-sm font-semibold text-white">Projekte</h2>
                 <span className="flex items-center gap-1.5 text-xs text-slate-500">
                   <Clock3 className="h-3.5 w-3.5" />
                   {lastCheckedAt ?? 'lädt'}
                 </span>
               </div>
               <div className="space-y-2">
-                {previewPages.map(page => (
+                {liveProjects.map(project => (
                   <button
-                    key={page.href}
+                    key={project.id}
                     type="button"
-                    onClick={() => setSelectedPath(page.href)}
+                    onClick={() => setSelectedProjectId(project.id)}
                     className={cx(
                       'w-full rounded-lg border px-3 py-3 text-left transition',
-                      selectedPath === page.href
+                      selectedProject?.id === project.id
                         ? 'border-violet-500/40 bg-violet-500/[0.12]'
                         : 'border-white/[0.06] bg-white/[0.025] hover:border-white/[0.14] hover:bg-white/[0.045]'
                     )}
                   >
                     <span className="flex items-center justify-between gap-3">
-                      <span className="font-semibold text-slate-100">{page.label}</span>
-                      <ExternalLink className="h-3.5 w-3.5 text-slate-500" />
+                      <span className="min-w-0 truncate font-semibold text-slate-100">{project.title}</span>
+                      <span className={cx(
+                        'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold',
+                        project.failedCount > 0
+                          ? 'border-red-500/25 bg-red-500/10 text-red-200'
+                          : project.runningCount > 0
+                            ? 'border-amber-500/25 bg-amber-500/10 text-amber-200'
+                            : project.previewHref
+                              ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200'
+                              : 'border-white/[0.08] bg-white/[0.04] text-slate-400',
+                      )}>
+                        {project.runningCount > 0 ? 'läuft' : project.previewHref ? 'Vorschau' : project.status}
+                      </span>
                     </span>
-                    <span className="mt-1 block text-xs leading-5 text-slate-500">{page.description}</span>
+                    <span className="mt-1 block line-clamp-2 text-xs leading-5 text-slate-500">{project.description}</span>
+                    <span className="mt-2 grid grid-cols-3 gap-2 text-center text-[11px] text-slate-500">
+                      <span className="rounded-md border border-white/[0.06] bg-black/20 px-2 py-1">
+                        {project.delegations.length} Tasks
+                      </span>
+                      <span className="rounded-md border border-white/[0.06] bg-black/20 px-2 py-1">
+                        {project.platform}
+                      </span>
+                      <span className="rounded-md border border-white/[0.06] bg-black/20 px-2 py-1">
+                        {project.persistence}
+                      </span>
+                    </span>
                   </button>
                 ))}
               </div>
             </div>
 
             <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-4">
-              <h2 className="mb-3 text-sm font-semibold text-white">Live Checks</h2>
+              <h2 className="mb-3 text-sm font-semibold text-white">Projektstatus</h2>
+              {selectedProject ? (
+                <div className="space-y-3">
+                  <div className="rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-3">
+                    <p className="text-sm font-semibold text-white">{selectedProject.title}</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">{selectedProject.description}</p>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+                      <span className="rounded-md border border-white/[0.06] bg-black/20 px-2 py-2">
+                        <span className="block font-bold text-white">{selectedProject.runningCount}</span>
+                        <span className="text-slate-500">aktiv</span>
+                      </span>
+                      <span className="rounded-md border border-white/[0.06] bg-black/20 px-2 py-2">
+                        <span className="block font-bold text-white">{selectedProject.completedCount}</span>
+                        <span className="text-slate-500">fertig</span>
+                      </span>
+                      <span className="rounded-md border border-white/[0.06] bg-black/20 px-2 py-2">
+                        <span className="block font-bold text-white">{selectedProject.failedCount}</span>
+                        <span className="text-slate-500">Fehler</span>
+                      </span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Link href={selectedProject.projectHref} className={buttonClassName('secondary')}>
+                        Projekt öffnen
+                      </Link>
+                      <Link href={selectedProject.delegationsHref} className={buttonClassName('secondary')}>
+                        Delegationen
+                      </Link>
+                      {selectedProject.previewHref && (
+                        <Link href={selectedProject.previewHref} className={buttonClassName('primary')}>
+                          App öffnen
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {selectedProjectDelegations.slice(0, 5).map(delegation => (
+                      <Link
+                        key={delegation.id}
+                        href={`/delegations/${delegation.id}`}
+                        className="block rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-2 transition hover:border-violet-500/30 hover:bg-violet-500/[0.05]"
+                      >
+                        <span className="flex items-center justify-between gap-3">
+                          <span className="truncate text-xs font-semibold text-slate-100">
+                            {delegation.title ?? delegation.contract?.goal ?? delegation.id}
+                          </span>
+                          <span className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+                            {delegation.status}
+                          </span>
+                        </span>
+                      </Link>
+                    ))}
+                    {selectedProjectDelegations.length === 0 && (
+                      <p className="rounded-lg border border-dashed border-white/[0.08] px-3 py-4 text-sm text-slate-500">
+                        Noch keine Delegationen für dieses Projekt sichtbar.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">Noch kein Projekt geladen.</p>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-white/[0.07] bg-white/[0.035] p-4">
+              <h2 className="mb-3 text-sm font-semibold text-white">Systemchecks</h2>
               <div className="space-y-2">
-                {endpoints.map(endpoint => (
+                {endpoints.slice(0, 5).map(endpoint => (
                   <a
                     key={endpoint.href}
                     href={endpoint.href}
@@ -1248,22 +1408,50 @@ export default function LiveViewPage() {
             <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] bg-white/[0.035] px-4 py-3">
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Vorschau</p>
-                <p className="truncate text-sm font-semibold text-white">{previewUrl}</p>
+                <p className="truncate text-sm font-semibold text-white">
+                  {selectedProject?.title ?? 'Kein Projekt ausgewählt'}
+                </p>
               </div>
-              <Link
-                href={previewUrl}
-                className="inline-flex items-center gap-2 rounded-lg border border-white/[0.09] bg-white/[0.04] px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-violet-500/30 hover:bg-violet-500/10"
-              >
-                Seite öffnen
-                <ExternalLink className="h-3.5 w-3.5" />
-              </Link>
+              {previewUrl ? (
+                <Link
+                  href={previewUrl}
+                  className="inline-flex items-center gap-2 rounded-lg border border-white/[0.09] bg-white/[0.04] px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-violet-500/30 hover:bg-violet-500/10"
+                >
+                  App öffnen
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Link>
+              ) : (
+                <Link
+                  href={selectedProject?.projectHref ?? '/projects'}
+                  className="inline-flex items-center gap-2 rounded-lg border border-white/[0.09] bg-white/[0.04] px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-violet-500/30 hover:bg-violet-500/10"
+                >
+                  Projekt öffnen
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Link>
+              )}
             </div>
-            <iframe
-              key={previewUrl}
-              title="ForgePilot Live Preview"
-              src={previewUrl}
-              className="h-[720px] w-full bg-[#08080d]"
-            />
+            {previewUrl ? (
+              <iframe
+                key={previewUrl}
+                title="Projekt App-Vorschau"
+                src={previewUrl}
+                className="h-[720px] w-full bg-[#08080d]"
+              />
+            ) : (
+              <div className="grid h-[720px] place-items-center px-6 text-center">
+                <div className="max-w-md">
+                  <Monitor className="mx-auto h-10 w-10 text-slate-600" />
+                  <h3 className="mt-4 text-lg font-semibold text-white">Noch keine App-Vorschau erkannt</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">
+                    Für dieses Projekt gibt es bereits Plan- und Delegationsdaten, aber noch keine testbare App-Route.
+                    Starte einen App-Run oder öffne die Projektdetails, um den nächsten Slice zu erzeugen.
+                  </p>
+                  <Link href={selectedProject?.projectHref ?? '/projects'} className={buttonClassName('primary', 'mt-4')}>
+                    Projekt öffnen
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
         </section>
       </div>
