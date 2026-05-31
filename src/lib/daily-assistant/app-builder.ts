@@ -51,6 +51,7 @@ function clampScore(score: number): number {
 
 export function buildAppBuilderCapability(input: BuildAppBuilderCapabilityInput): AppBuilderCapability {
   const safeQueue = countSafeQueue(input.queue)
+  const failedQueueItem = input.queue.find(item => item.status === 'failed')
   const projectPipeline = input.projectPipeline
   const safeProjectSlices = projectPipeline?.safeSliceCount ?? 0
   const hasPlanableWork = input.assistant.pending > 0
@@ -133,7 +134,11 @@ export function buildAppBuilderCapability(input: BuildAppBuilderCapabilityInput)
         : 'small-app'
 
   const safeNextAction = input.assistant.failed > 0
-    ? { label: 'Fehler triagieren', href: '/delegations?urgent=true', mode: 'repair' as const }
+    ? {
+        label: failedQueueItem ? 'Blocker prüfen' : 'Fehler triagieren',
+        href: failedQueueItem ? `/delegations/${failedQueueItem.id}` : '/delegations?urgent=true',
+        mode: 'repair' as const,
+      }
     : input.assistant.running > 0
       ? { label: 'Agenten live beobachten', href: '/live', mode: 'review' as const }
       : safeQueue > 0

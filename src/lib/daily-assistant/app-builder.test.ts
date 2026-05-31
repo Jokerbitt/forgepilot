@@ -89,13 +89,13 @@ describe('buildAppBuilderCapability', () => {
   it('prioritizes failed delegation repair over new autonomous app work', () => {
     const capability = buildAppBuilderCapability({
       assistant: { ...baseAssistant, failed: 1 },
-      queue: [safeQueueItem],
+      queue: [{ ...safeQueueItem, id: 'failed-1', status: 'failed', title: 'Budget stopped PR' }],
       autopilot: readyAutopilot,
     })
 
     expect(capability.level).toBe('blocked')
     expect(capability.safeNextAction.mode).toBe('repair')
-    expect(capability.safeNextAction.href).toContain('urgent=true')
+    expect(capability.safeNextAction.href).toBe('/delegations/failed-1')
   })
 
   it('sends the user to plan mode when no work is queued yet', () => {
