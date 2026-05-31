@@ -93,25 +93,23 @@ export async function GET(): Promise<NextResponse<CliStatusResponse>> {
   const openAiApiKeySet = Boolean(OPENAI_API_KEY?.trim())
   claude.headlessReady = readiness.claude.headlessReady
   codex.headlessReady = readiness.codex.headlessReady
+  if (claude.headlessReady) claude.detail = readiness.claude.detail
+  if (codex.headlessReady) codex.detail = readiness.codex.detail
 
-  const zeroKeyReady = readiness.zeroKeyReady || claude.available || codex.available
+  const zeroKeyReady = readiness.zeroKeyReady
 
-  const activeMode: ActiveMode = readiness.zeroKeyReady
+  const activeMode: ActiveMode = readiness.ready
     ? readiness.activeMode
-    : claude.available
-    ? 'claude-cli'
-    : codex.available
-      ? 'codex-cli'
-      : claudeApiKeySet
-        ? 'claude-api'
-        : openAiApiKeySet
-          ? 'openai-api'
-          : 'simulation'
+    : claudeApiKeySet
+      ? 'claude-api'
+      : openAiApiKeySet
+        ? 'openai-api'
+        : 'simulation'
 
   const recommendation = readiness.zeroKeyReady
     ? readiness.recommendation
-    : zeroKeyReady
-    ? 'Zero-Key-CLI ist installiert. Starte den Runner-Readiness-Test, um echte Headless-Ausfuehrung zu bestaetigen.'
+    : claude.available || codex.available
+    ? 'Zero-Key-CLI ist installiert, aber noch nicht headless bestaetigt. Starte Deep Readiness, bevor autonom Code ausgefuehrt wird.'
     : 'Installiere und authentifiziere Claude Code oder Codex CLI, um ohne API-Key echten Code auszuführen.'
 
   return NextResponse.json({
