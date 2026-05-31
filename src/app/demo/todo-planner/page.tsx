@@ -81,7 +81,7 @@ export default function TodoPlannerDemoPage() {
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
                 Eine kleine, greifbare Test-App aus ForgePilot: Aufgaben erfassen, Fokus erkennen,
-                Fortschritt sehen und den naechsten produktiven PR-Schritt ausloesen. Deine
+                Fortschritt sehen und den nächsten produktiven PR-Schritt auslösen. Deine
                 Aufgaben bleiben lokal in diesem Browser gespeichert.
               </p>
             </div>
@@ -100,10 +100,10 @@ export default function TodoPlannerDemoPage() {
           </div>
           <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.08] p-4 md:col-span-2">
             <Target className="h-5 w-5 text-violet-300" />
-            <p className="mt-3 text-xs font-semibold uppercase tracking-widest text-violet-200/80">Naechste sinnvolle Aktion</p>
+            <p className="mt-3 text-xs font-semibold uppercase tracking-widest text-violet-200/80">Nächste sinnvolle Aktion</p>
             <p className="mt-1 text-xl font-semibold text-white">{nextTodo?.title ?? 'Alles erledigt'}</p>
             <p className="mt-2 text-sm leading-6 text-violet-100/70">
-              ForgePilot soll genau diese Art von Klarheit liefern: Was ist als naechstes sinnvoll,
+              ForgePilot soll genau diese Art von Klarheit liefern: Was ist als nächstes sinnvoll,
               warum, und welcher Agent arbeitet daran?
             </p>
           </div>
@@ -127,16 +127,16 @@ export default function TodoPlannerDemoPage() {
               />
               <button type="button" onClick={handleAdd} className={buttonClassName('primary')}>
                 <Plus className="h-4 w-4" />
-                Hinzufuegen
+                Hinzufügen
               </button>
               <button
                 type="button"
                 onClick={handleReset}
                 className={buttonClassName('secondary')}
-                aria-label="Demo-Aufgaben zuruecksetzen"
+                aria-label="Demo-Aufgaben zurücksetzen"
               >
                 <RotateCcw className="h-4 w-4" />
-                Demo zuruecksetzen
+                Demo zurücksetzen
               </button>
             </div>
           </div>
@@ -175,15 +175,15 @@ export default function TodoPlannerDemoPage() {
             <div>
               <div className="flex items-center gap-2 text-amber-200">
                 <Rocket className="h-4 w-4" />
-                <p className="text-sm font-semibold">Naechster Produktionsbeweis</p>
+                <p className="text-sm font-semibold">Nächster Produktionsbeweis</p>
               </div>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-100/70">
-                Diese Demo beweist die Bedienung und Sichtbarkeit. Als naechstes sollte ForgePilot denselben
-                ToDo-App-Auftrag mit einem echten Runner-PR erzeugen und durch Critic + Writeback abschliessen.
+                Diese Demo beweist die Bedienung und Sichtbarkeit. Als nächstes sollte ForgePilot denselben
+                ToDo-App-Auftrag mit einem echten Runner-PR erzeugen und durch Critic + Writeback abschließen.
               </p>
             </div>
             <Link href="/delegations" className={buttonClassName('secondary', 'shrink-0')}>
-              Delegations pruefen
+              Delegations prüfen
             </Link>
           </div>
         </section>
