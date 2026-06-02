@@ -46,7 +46,7 @@
     "@opentelemetry/auto-instrumentations-node": "^0.76.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.218.0",
     "@opentelemetry/sdk-node": "^0.218.0",
-    "@sentry/nextjs": "^10.53.1",
+    "@sentry/nextjs": "^10.55.0",
     "@supabase/supabase-js": "^2.106.2",
     "cmdk": "^1.1.1",
     "drizzle-orm": "^0.45.2",
