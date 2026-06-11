@@ -14,6 +14,14 @@ const repoCreate       = vi.fn<[unknown], Promise<Delegation>>()
 const repoUpdate       = vi.fn<[string, Partial<Delegation>], Promise<Delegation | null>>()
 const repoDelete       = vi.fn<[string], Promise<boolean>>()
 const getDelegationStorageMode = vi.fn(() => 'json')
+const defaultVisibleStatuses: Delegation['status'][] = [
+  'pending',
+  'approved',
+  'running',
+  'completed',
+  'failed',
+  'rejected',
+]
 
 vi.mock('@/lib/repositories/delegationRepository', () => ({
   SINGLE_TENANT_USER_ID: 'user-1',
@@ -83,7 +91,27 @@ describe('GET /api/delegations', () => {
     expect(res.status).toBe(200)
     const body = await res.json() as Delegation[]
     expect(body).toHaveLength(2)
-    expect(repoListByStatus).toHaveBeenCalledWith(undefined)
+    expect(repoListByStatus).toHaveBeenCalledWith(defaultVisibleStatuses)
+  })
+
+  it('keeps cancelled delegations out of the default list', async () => {
+    repoListByStatus.mockResolvedValueOnce([makeDelegation({ id: 'del-active' })])
+    const { GET } = await import('./route')
+    const res = await GET(makeGetRequest('http://localhost/api/delegations'))
+    const body = await res.json() as Delegation[]
+    expect(body).toHaveLength(1)
+    expect(repoListByStatus).toHaveBeenCalledWith(defaultVisibleStatuses)
+    expect(repoListByStatus.mock.calls[0][0]).not.toContain('cancelled')
+  })
+
+  it('returns cancelled delegations when explicitly requested', async () => {
+    repoListByStatus.mockResolvedValueOnce([makeDelegation({ id: 'del-archived', status: 'cancelled' })])
+    const { GET } = await import('./route')
+    const res = await GET(makeGetRequest('http://localhost/api/delegations?statuses=cancelled'))
+    const body = await res.json() as Delegation[]
+    expect(body).toHaveLength(1)
+    expect(body[0].status).toBe('cancelled')
+    expect(repoListByStatus).toHaveBeenCalledWith(['cancelled'])
   })
 
   it('filters by ?statuses=running,pending', async () => {

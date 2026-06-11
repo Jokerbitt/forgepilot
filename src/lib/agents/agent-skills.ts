@@ -5,7 +5,7 @@
  * and which tasks it should pick first.
  */
 
-export type AgentType = 'claude-code' | 'codex' | 'antigravity' | 'general'
+export type AgentType = 'claude-code' | 'codex' | 'antigravity' | 'hermes' | 'openclaw' | 'general'
 
 export type SkillCategory =
   | 'api-route'
@@ -109,6 +109,22 @@ export const AGENT_PROFILES: Record<AgentType, AgentProfile> = {
     weaknesses: ['infrastructure', 'data-model'],
     maxConcurrentFiles: 5,
     skills: [SKILL_UI_COMPONENT, SKILL_TEST, SKILL_REFACTOR],
+  },
+  'hermes': {
+    type: 'hermes',
+    displayName: 'Hermes',
+    strengths: ['documentation', 'test', 'refactor'],
+    weaknesses: ['infrastructure'],
+    maxConcurrentFiles: 3,
+    skills: [SKILL_TEST, SKILL_REFACTOR],
+  },
+  'openclaw': {
+    type: 'openclaw',
+    displayName: 'OpenClaw',
+    strengths: ['api-route', 'data-model', 'refactor'],
+    weaknesses: ['infrastructure'],
+    maxConcurrentFiles: 5,
+    skills: [SKILL_API_ROUTE, SKILL_DATA_MODEL, SKILL_REFACTOR, SKILL_TEST],
   },
   'general': {
     type: 'general',

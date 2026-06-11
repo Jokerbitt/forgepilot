@@ -23,6 +23,13 @@ export function buildCriticAgentOutput(report: DelegationReport | undefined, fal
   const parts = [
     ...(report?.keyPoints ?? []),
     ...(report?.changes ?? []),
+    ...(report?.filesAdded?.map(file => `Added: ${file}`) ?? []),
+    ...(report?.filesModified?.map(file => `Modified: ${file}`) ?? []),
+    ...(report?.filesDeleted?.map(file => `Deleted: ${file}`) ?? []),
+    ...(typeof report?.testsPassed === 'number' ? [`Tests passed: ${report.testsPassed}`] : []),
+    ...(typeof report?.linesAdded === 'number' ? [`Lines added: ${report.linesAdded}`] : []),
+    ...(typeof report?.linesRemoved === 'number' ? [`Lines removed: ${report.linesRemoved}`] : []),
+    ...(report?.prUrl ? [`Pull request: ${report.prUrl}`] : []),
     ...(report?.warnings?.map(warning => `Warning: ${warning}`) ?? []),
   ].filter(Boolean)
 

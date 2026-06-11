@@ -398,13 +398,17 @@ export function buildDailyAssistantSteps(input: DailyAssistantInput): DailyAssis
 
 export function buildDailyAssistantBlockers(input: DailyAssistantInput, queue: DailyAssistantQueueItem[] = []): DailyAssistantBlocker[] {
   const blockers: DailyAssistantBlocker[] = []
+  const failedItems = queue.filter(item => item.status === 'failed')
 
   if (input.failed > 0) {
+    const singleFailure = input.failed === 1 ? failedItems[0] : undefined
     blockers.push({
       id: 'failed-delegations',
-      title: 'Fehlgeschlagene Delegationen blockieren Autonomie',
-      detail: `${input.failed} Fehler müssen verstanden werden, bevor neue Arbeit automatisch starten sollte.`,
-      href: '/delegations?urgent=true',
+      title: singleFailure ? 'Eine Delegation blockiert Autonomie' : 'Fehlgeschlagene Delegationen blockieren Autonomie',
+      detail: singleFailure
+        ? `"${singleFailure.title}" braucht Review, bevor neue Arbeit automatisch starten sollte.`
+        : `${input.failed} Fehler müssen verstanden werden, bevor neue Arbeit automatisch starten sollte.`,
+      href: singleFailure ? `/delegations/${singleFailure.id}` : '/delegations?urgent=true',
       severity: 'critical',
     })
   }

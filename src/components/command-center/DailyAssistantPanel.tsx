@@ -44,6 +44,15 @@ interface AssistantSnapshot {
   appBuilderCapability?: AppBuilderCapability
 }
 
+interface AutonomyCycleResponse {
+  ok?: boolean
+  status?: 'blocked' | 'waiting' | 'idle' | 'ready' | 'started' | 'start_failed'
+  message?: string
+  started?: boolean
+  candidate?: { id: string; title: string; href: string } | null
+  error?: string
+}
+
 function toneClasses(tone: 'ready' | 'attention' | 'blocked') {
   if (tone === 'ready') return 'border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-100'
   if (tone === 'blocked') return 'border-red-500/25 bg-red-500/[0.08] text-red-100'
@@ -96,27 +105,33 @@ export function DailyAssistantPanel() {
   const autopilotMinScore = snapshot?.settings.autopilotMinScore ?? 85
   const autopilotMaxRiskClass = snapshot?.settings.autopilotMaxRiskClass ?? 'A'
   const maxConcurrentAgents = snapshot?.settings.maxConcurrentAgents ?? 2
-  const safeStartItems = (snapshot?.queue ?? []).filter(item => item.status === 'approved' && item.riskClass !== 'C')
+  const safeStartItems = (snapshot?.queue ?? []).filter(item => (
+    item.status === 'approved'
+    && item.riskClass !== 'C'
+    && item.requiresApproval !== true
+  ))
   const nextSafeStart = safeStartItems[0]
 
-  const runAutopilotOnce = async () => {
+  const runAssistantCycle = async () => {
     setWorking(true)
     setError(null)
     setMessage(null)
     try {
-      const response = await fetch('/api/autopilot/tick', { method: 'POST' })
-      const data = await response.json() as { skipped?: boolean; reason?: string; count?: number; triggered?: string[] }
-      if (!response.ok) throw new Error('Autopilot konnte nicht gestartet werden.')
-      if (data.skipped) {
-        setMessage(`Autopilot wartet: ${data.reason ?? 'nicht aktiv'}.`)
-      } else {
-        setMessage(data.count && data.count > 0
-          ? `Autopilot hat ${data.count} Delegation(en) gestartet.`
-          : 'Autopilot hat geprüft: gerade keine passende sichere Aufgabe startbereit.')
+      const response = await fetch('/api/daily-assistant/autonomy-cycle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: approvalMode !== 'autopilot' }),
+      })
+      const data = await response.json() as AutonomyCycleResponse
+      if (!response.ok || data.ok === false) {
+        throw new Error(data.message ?? data.error ?? 'Assistant konnte den Autonomie-Zyklus nicht ausführen.')
       }
+      setMessage(data.message ?? (data.started
+        ? 'Assistant hat eine sichere Delegation gestartet.'
+        : 'Assistant hat geprüft: gerade nichts sicher startbereit.'))
       await refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Autopilot konnte nicht ausgeführt werden.')
+      setError(err instanceof Error ? err.message : 'Assistant konnte den Autonomie-Zyklus nicht ausführen.')
     } finally {
       setWorking(false)
     }
@@ -326,7 +341,7 @@ export function DailyAssistantPanel() {
         ) : snapshot?.queue.length ? (
           <div className="mt-4 space-y-2">
             {snapshot.queue.map(item => {
-              const canStartNow = item.status === 'approved' && item.riskClass !== 'C'
+              const canStartNow = item.status === 'approved' && item.riskClass !== 'C' && item.requiresApproval !== true
               return (
               <div
                 key={item.id}
@@ -428,12 +443,12 @@ export function DailyAssistantPanel() {
         </Link>
         <button
           type="button"
-          onClick={() => void runAutopilotOnce()}
+          onClick={() => void runAssistantCycle()}
           disabled={working || loading}
           className={buttonClassName('secondary', 'min-h-11 flex-1 disabled:opacity-50')}
         >
           {working ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-          Autopilot prüfen
+          Assistant übernehmen lassen
         </button>
         <button
           type="button"

@@ -2,7 +2,6 @@ export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
 import {
-  buildAppBuilderCapability,
   buildDailyAssistantAction,
   buildDailyAssistantBlockers,
   buildDailyAssistantSteps,
@@ -12,8 +11,17 @@ import {
   type DailyAssistantQueueItem,
 } from '@/lib/daily-assistant/next-action'
 import { generateDailyBriefing, generateFallbackBriefing } from '@/lib/daily-assistant/briefing-generator'
+import { buildAppBuilderCapability } from '@/lib/daily-assistant/app-builder'
+import { buildAssistantRoadmap } from '@/lib/daily-assistant/roadmap'
+import { buildQueueHygieneSummary } from '@/lib/daily-assistant/queue-hygiene'
+import { buildProjectPipelineSummary } from '@/lib/daily-assistant/project-pipeline'
+import { describeDeliveryAction, pickNextDeliveryAction, type DeliveryCycleAction } from '@/lib/daily-assistant/delivery-cycle'
+import { findExistingRepairDelegation } from '@/lib/daily-assistant/repair-delegation'
+import { getAutopilotReadiness } from '@/lib/autopilot/readiness'
 import type { Delegation } from '@/lib/models/delegation'
 import { getNBAConfig } from '@/lib/nba-engine/nba-config'
+import { readProjectBriefs } from '@/lib/project-briefs'
+import { readWorkPackages } from '@/lib/knowledge/milestone-store'
 import {
   createDelegationRepository,
   getDelegationStorageMode,
@@ -83,16 +91,34 @@ function computeReadiness(input: DailyAssistantInput): number {
   return Math.max(0, Math.min(100, score))
 }
 
+function deliveryActionPayload(action: DeliveryCycleAction | null) {
+  if (!action) return null
+  return {
+    type: action.type,
+    label: describeDeliveryAction(action),
+    reason: action.reason,
+    delegation: {
+      id: action.delegation.id,
+      title: action.delegation.title || action.delegation.contract.goal,
+      href: `/delegations/${action.delegation.id}`,
+      prUrl: action.delegation.summaryReport?.prUrl,
+      riskClass: action.delegation.contract.riskClass,
+    },
+  }
+}
+
 export async function GET() {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
   const config = getNBAConfig()
   const delegations = await repo.listByStatus()
   const stats = countByStatus(delegations)
-  const queue = sortAssistantQueue(
+  const rawQueue = sortAssistantQueue(
     delegations
       .filter(delegation => ['failed', 'running', 'approved', 'pending'].includes(delegation.status))
       .map(toQueueItem),
-  ).slice(0, 8)
+  )
+  const queueHygiene = buildQueueHygieneSummary(rawQueue, { maxVisible: 6 })
+  const queue = queueHygiene.visibleItems
 
   const input: DailyAssistantInput = {
     pending: stats.pending,
@@ -110,9 +136,21 @@ export async function GET() {
   const action = buildDailyAssistantAction(input)
   const steps = buildDailyAssistantSteps(input)
   const blockers = buildDailyAssistantBlockers(input, queue)
-  const appBuilderCapability = buildAppBuilderCapability(input)
-  const todayStats = computeTodayStats(delegations)
+  const autopilot = getAutopilotReadiness()
+  const projectPipeline = buildProjectPipelineSummary({
+    briefs: readProjectBriefs(),
+    workPackages: readWorkPackages(),
+    delegations,
+  })
+  const appBuilder = buildAppBuilderCapability({ assistant: input, queue, autopilot, projectPipeline })
+  const roadmap = buildAssistantRoadmap({ assistant: input, queue, autopilot, appBuilder })
+  const deliveryAction = pickNextDeliveryAction(delegations)
+  const repairDelegation = deliveryAction?.type === 'repair_required'
+    ? await findExistingRepairDelegation(repo, deliveryAction.delegation)
+    : null
 
+  // Our addition: today stats + AI morning briefing
+  const todayStats = computeTodayStats(delegations)
   const briefingInput = {
     pending: stats.pending,
     approved: stats.approved,
@@ -137,12 +175,35 @@ export async function GET() {
     action,
     autonomyText: describeAutonomy(input),
     briefing,
+    appBuilder,
+    roadmap,
+    autopilot,
     steps,
     blockers,
     queue,
+    queueHygiene,
+    projectPipeline,
+    deliveryGate: {
+      status: deliveryAction?.type === 'repair_required'
+        ? 'blocked'
+        : deliveryAction
+          ? 'attention'
+          : 'ready',
+      message: describeDeliveryAction(deliveryAction),
+      action: deliveryActionPayload(deliveryAction),
+      repairDelegation: repairDelegation
+        ? {
+            id: repairDelegation.id,
+            title: repairDelegation.title || repairDelegation.contract.goal,
+            href: `/delegations/${repairDelegation.id}`,
+            status: repairDelegation.status,
+            riskClass: repairDelegation.contract.riskClass,
+          }
+        : null,
+    },
     stats,
     todayStats,
-    appBuilderCapability,
+    appBuilderCapability: appBuilder,
     settings: {
       approvalMode: config.approvalMode,
       autopilotMinScore: config.autopilotMinScore,

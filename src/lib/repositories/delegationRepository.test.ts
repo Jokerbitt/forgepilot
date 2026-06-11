@@ -16,9 +16,19 @@ describe('getDelegationStorageMode', () => {
     expect(
       getDelegationStorageMode({
         DATABASE_URL: 'postgresql://localhost/forgepilot',
-        FORGEPILOT_DELEGATION_STORAGE: 'dual',
+        STORAGE_MODE: 'dual',
       })
     ).toBe('dual')
+  })
+
+  it('allows a delegation-specific override over STORAGE_MODE', () => {
+    expect(
+      getDelegationStorageMode({
+        DATABASE_URL: 'postgresql://localhost/forgepilot',
+        STORAGE_MODE: 'postgres',
+        FORGEPILOT_DELEGATION_STORAGE: 'json',
+      })
+    ).toBe('json')
   })
 
   it('ignores unknown storage modes and derives mode from DATABASE_URL', () => {
@@ -38,6 +48,12 @@ describe('Postgres delegation mapping', () => {
       cards: [{ id: 'card-1', title: 'Routing lesson', type: 'learning', tags: ['execute-loop'] }],
       tokenEstimate: 128,
       builtAt: '2026-05-23T10:01:00.000Z',
+    }
+    const qualityCheck = {
+      criteria: [{ item: 'Tests pass', met: true, confidence: 'high', notes: 'Verified' }],
+      overallScore: 92,
+      verdict: 'passed',
+      checkedAt: '2026-05-23T10:06:00.000Z',
     }
 
     const delegation = __test__.rowToDelegation({
@@ -74,6 +90,7 @@ describe('Postgres delegation mapping', () => {
       priority: null,
       briefId: null,
       criticScore: null,
+      qualityCheck,
       contextSnapshot: snapshot,
       startedAt: new Date('2026-05-23T10:02:00.000Z'),
       completedAt: new Date('2026-05-23T10:05:00.000Z'),
@@ -82,6 +99,7 @@ describe('Postgres delegation mapping', () => {
     })
 
     expect(delegation.contextSnapshot).toEqual(snapshot)
+    expect(delegation.qualityCheck).toEqual(qualityCheck)
     expect(delegation.startedAt).toBe('2026-05-23T10:02:00.000Z')
     expect(delegation.completedAt).toBe('2026-05-23T10:05:00.000Z')
   })

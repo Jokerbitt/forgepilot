@@ -15,12 +15,11 @@ import { NextResponse } from 'next/server'
 import { apiLogger } from '@/lib/logger'
 import { getNBAConfig } from '@/lib/nba-engine/nba-config'
 import { computeAutopilotScore } from '@/lib/nba-engine/autopilot-score'
+import { pickNextSafe, type NextSafeResult } from '@/lib/delegations/next-safe'
 import {
   createDelegationRepository,
   SINGLE_TENANT_USER_ID,
 } from '@/lib/repositories/delegationRepository'
-import { pickNextSafe } from '@/lib/delegations/pick-next-safe'
-import type { NextSafeResult } from '@/lib/delegations/pick-next-safe'
 import type { Delegation } from '@/lib/models/delegation'
 
 export async function GET() {

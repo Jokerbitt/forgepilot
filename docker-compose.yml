@@ -34,7 +34,9 @@ services:
       - GITHUB_OWNER=${GITHUB_OWNER:-Jokerbitt}
       - GITHUB_REPOSITORIES=${GITHUB_REPOSITORIES:-forgepilot}
       - NODE_ENV=production
-      - DATABASE_URL=${DATABASE_URL:-}
+      - STORAGE_MODE=${STORAGE_MODE:-postgres}
+      - FORGEPILOT_DELEGATION_STORAGE=${FORGEPILOT_DELEGATION_STORAGE:-postgres}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://forgepilot:forgepilot@postgres:5432/forgepilot}
     volumes:
       - forgepilot-config:/app/config
     depends_on:

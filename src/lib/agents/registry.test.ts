@@ -104,7 +104,7 @@ describe('pickAgentForWorkload', () => {
 })
 
 describe('DEFAULT_AGENT_PROFILES', () => {
-  it('has all 8 required roles', () => {
+  it('has all required roles', () => {
     const roles = DEFAULT_AGENT_PROFILES.map(p => p.role)
     expect(roles).toContain('product-planner')
     expect(roles).toContain('architect')
@@ -114,6 +114,8 @@ describe('DEFAULT_AGENT_PROFILES', () => {
     expect(roles).toContain('qa-reviewer')
     expect(roles).toContain('devops-automation')
     expect(roles).toContain('knowledge-curator')
+    expect(roles).toContain('critic-reviewer')
+    expect(roles).toContain('external-coding-agent')
   })
 
   it('all profiles have unique ids', () => {

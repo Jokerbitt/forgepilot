@@ -36,6 +36,7 @@ type NavKey =
   | 'liveView'
   | 'e2ePilot'
   | 'activityDigest'
+  | 'tools'
   | 'settings'
   | 'skills'
   | 'planMode'
@@ -121,10 +122,10 @@ export const dictionaries: Record<Locale, Dictionary> = {
       commandCenter: { label: 'Command Center', short: 'Command' },
       briefing: { label: 'Briefing', short: 'Briefing' },
       plan: { label: 'Projekte', short: 'Projekte' },
-      execute: { label: 'Ausführen', short: 'Execute' },
+      execute: { label: 'Ausführen', short: 'Ausführen' },
       knowledge: { label: 'Wissen', short: 'Wissen' },
       delegationLessons: { label: 'Lernkarten', short: 'Lessons' },
-      system: { label: 'System', short: 'System' },
+      system: { label: 'Branches', short: 'Branches' },
       inbox: { label: 'Eingang', short: 'Eingang' },
       notifications: { label: 'Benachrichtigungen', short: 'Infos' },
       projectBriefs: { label: 'Projekt-Briefs', short: 'Briefs' },
@@ -145,14 +146,15 @@ export const dictionaries: Record<Locale, Dictionary> = {
       liveView: { label: 'Live View', short: 'Live' },
       e2ePilot: { label: 'E2E Pilot', short: 'Pilot' },
       activityDigest: { label: 'Aktivitäts-Digest', short: 'Digest' },
-      settings: { label: 'Settings', short: 'Settings' },
+      tools: { label: 'Werkzeuge', short: 'Werkzeuge' },
+      settings: { label: 'Einstellungen', short: 'Settings' },
       skills: { label: 'Skills', short: 'Skills' },
       planMode: { label: 'Plan Mode', short: 'Plan' },
       conceptAnalyzer: { label: 'Konzept analysieren', short: 'Konzept' },
     },
     ui: {
       workspace: 'Workspace',
-      more: 'More',
+      more: 'Werkzeuge',
       new: 'Neu',
       logout: 'Abmelden',
       quickSearch: 'Quick Search',
@@ -249,6 +251,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
       liveView: { label: 'Live View', short: 'Live' },
       e2ePilot: { label: 'E2E Pilot', short: 'Pilot' },
       activityDigest: { label: 'Activity Digest', short: 'Digest' },
+      tools: { label: 'Tools', short: 'Tools' },
       settings: { label: 'Settings', short: 'Settings' },
       skills: { label: 'Skills', short: 'Skills' },
       planMode: { label: 'Plan Mode', short: 'Plan' },

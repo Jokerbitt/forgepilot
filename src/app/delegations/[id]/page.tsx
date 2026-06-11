@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useToast } from '@/components/shared/ToastProvider'
 import type { Delegation, DelegationStatus, DelegationReport, DoDQualityCheck } from '@/lib/models/delegation'
 import type { OrchestratedRun } from '@/lib/agents/orchestrated-run'
 import { ElapsedTimer, formatCompletedDuration } from '@/components/shared/ElapsedTimer'
@@ -18,6 +17,8 @@ import { AgentRunReplayView } from '@/components/delegation/AgentRunReplayView'
 import { GrokCriticCard } from '@/components/delegation/GrokCriticCard'
 import { DelegationPipelineBreadcrumb } from '@/components/delegation/DelegationPipelineBreadcrumb'
 import { KnowledgeWritebackPanel } from '@/components/delegation/KnowledgeWritebackPanel'
+import { PreviewAndIteratePanel } from '@/components/delegation/PreviewAndIteratePanel'
+import { DelegationErrorCard } from '@/components/delegation/DelegationErrorCard'
 import { KnowledgeCardList } from '@/components/knowledge'
 import { DelegationLiveLog } from '@/components/delegation/DelegationLiveLog'
 import { DelegationNextActionPanel } from '@/components/delegation/DelegationNextActionPanel'
@@ -34,10 +35,11 @@ import { AgentPhaseIndicator } from '@/components/delegation/AgentPhaseIndicator
 import { inferAgentPhase } from '@/lib/delegations/agent-phase'
 import { CollapsibleSection } from '@/components/ui/CollapsibleSection'
 import { AffectedFilesPanel } from '@/components/delegation/AffectedFilesPanel'
-import { WorkbenchTabs, WorkbenchPanel, getDefaultTab, type WorkbenchTab } from '@/components/delegation/DelegationWorkbench'
-import { DelegationFocusCard } from '@/components/delegation/DelegationFocusCard'
-import { PreviewAndIteratePanel } from '@/components/delegation/PreviewAndIteratePanel'
-import { DelegationErrorCard } from '@/components/delegation/DelegationErrorCard'
+import {
+  DelegationStatusWorkspace,
+  defaultDetailView,
+  type DetailView,
+} from '@/components/delegation/DelegationStatusWorkspace'
 
 function getTaskStatusStyle(status: string): { textClass: string; icon: string; iconClass: string } {
   switch (status) {
@@ -84,16 +86,36 @@ const RISK_COLORS: Record<string, string> = {
   C: 'bg-red-900/30 text-red-400 border-red-800',
 }
 
+type MergeSafetyStatus = 'ready' | 'review' | 'blocked'
+
+interface DelegationMergeSafety {
+  available: boolean
+  reason?: string
+  prNumber?: number
+  preview?: {
+    title: string
+    url: string
+    changedFiles: number
+    additions: number
+    deletions: number
+    checks: { state: 'success' | 'failure' | 'pending' | 'error' | 'unknown' }
+    files: Array<{ filename: string; status: string; changes: number; additions: number; deletions: number }>
+  }
+  manualSafety?: { status: MergeSafetyStatus; reasons: string[] }
+  autoSafety?: { status: MergeSafetyStatus; reasons: string[] }
+}
+
 export default function DelegationDetailPage() {
   const params = useParams()
   const router = useRouter()
   const id = typeof params.id === 'string' ? params.id : ''
-  const { addToast } = useToast()
 
   const [delegation, setDelegation] = useState<Delegation | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [activeView, setActiveView] = useState<DetailView>('action')
+  const delegationStatus = delegation?.status
 
   const loadDelegation = useCallback(async () => {
     try {
@@ -108,6 +130,11 @@ export default function DelegationDetailPage() {
   }, [id])
 
   useEffect(() => { loadDelegation() }, [loadDelegation])
+
+  useEffect(() => {
+    if (!delegationStatus) return
+    setActiveView(defaultDetailView(delegationStatus))
+  }, [delegationStatus])
 
   // M229: shared preflight fetch — used by eager-load and manual rerun
   const runPreflight = useCallback(async (): Promise<PreflightResult | null> => {
@@ -233,23 +260,6 @@ export default function DelegationDetailPage() {
   const [executing, setExecuting] = useState(false)
   const orchPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Knowledge writeback card count for this delegation
-  const [writebackCount, setWritebackCount] = useState<number | null>(null)
-  useEffect(() => {
-    if (!id) return
-    fetch(`/api/knowledge-cards?sourceId=${id}`)
-      .then(r => r.json())
-      .then((d: { total?: number }) => setWritebackCount(d.total ?? 0))
-      .catch(() => undefined)
-  }, [id])
-
-  // Evidence Workbench: active tab state — auto-selects based on delegation status on first load
-  const [activeTab, setActiveTab] = useState<WorkbenchTab>('action')
-  useEffect(() => {
-    if (delegation) setActiveTab(getDefaultTab(delegation))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [delegation?.id]) // Only on initial load, not every status update
-
   const [creatingPR, setCreatingPR] = useState(false)
   const [prError, setPrError] = useState<string | null>(null)
   const [logsExpanded, setLogsExpanded] = useState(false)
@@ -262,6 +272,8 @@ export default function DelegationDetailPage() {
     title: string
   } | null>(null)
   const [prStatusLoading, setPrStatusLoading] = useState(false)
+  const [mergeSafety, setMergeSafety] = useState<DelegationMergeSafety | null>(null)
+  const [mergeSafetyLoading, setMergeSafetyLoading] = useState(false)
 
   // M224: preflight checks shown before execute
   const [preflightResult, setPreflightResult] = useState<PreflightResult | null>(null)
@@ -274,8 +286,6 @@ export default function DelegationDetailPage() {
   const [merging, setMerging] = useState(false)
   const [mergeResult, setMergeResult] = useState<{ merged: boolean; mergeCommit?: string; baseBranch?: string; githubRemote?: boolean } | null>(null)
   const [mergeError, setMergeError] = useState<string | null>(null)
-
-  // M7: Auto-Merge Safety Gates
   const [autoMerging, setAutoMerging] = useState(false)
 
   // App Preview
@@ -287,25 +297,6 @@ export default function DelegationDetailPage() {
     (delegation as (Delegation & { qualityCheck?: DoDQualityCheck }) | null)?.qualityCheck ?? null
   )
   const [qualityCheckLoading, setQualityCheckLoading] = useState(false)
-  const [reviewRetryLoading, setReviewRetryLoading] = useState(false)
-
-  const handleReviewRetry = async () => {
-    if (!delegation) return
-    setReviewRetryLoading(true)
-    try {
-      const res = await fetch(`/api/delegations/${id}/review-retry`, { method: 'POST' })
-      const data = await res.json() as { delegationId?: string; error?: string }
-      if (!res.ok || !data.delegationId) {
-        addToast({ type: 'error', title: 'Review-Retry fehlgeschlagen', message: data.error ?? 'Unbekannter Fehler' })
-        return
-      }
-      router.push(`/delegations/${data.delegationId}`)
-    } catch {
-      addToast({ type: 'error', title: 'Review-Retry fehlgeschlagen', message: 'Netzwerkfehler — bitte erneut versuchen.' })
-    } finally {
-      setReviewRetryLoading(false)
-    }
-  }
 
   const handleOpenPreview = async () => {
     if (!delegation) return
@@ -317,12 +308,12 @@ export default function DelegationDetailPage() {
         setPreviewUrl(data.url)
         window.open(data.url, '_blank', 'noopener')
       } else if (data.message) {
-        addToast({ type: 'info', title: 'Vorschau', message: data.message })
+        alert(data.message)
       } else if (data.error) {
-        addToast({ type: 'error', title: 'Vorschau-Fehler', message: data.error })
+        alert(`Vorschau-Fehler: ${data.error}`)
       }
     } catch {
-      addToast({ type: 'error', title: 'Vorschau-Fehler', message: 'Netzwerkfehler — bitte erneut versuchen.' })
+      alert('Vorschau konnte nicht gestartet werden.')
     } finally {
       setPreviewLoading(false)
     }
@@ -336,12 +327,11 @@ export default function DelegationDetailPage() {
       const data = await res.json() as { qualityCheck?: DoDQualityCheck; error?: string }
       if (res.ok && data.qualityCheck) {
         setQualityCheck(data.qualityCheck)
-        addToast({ type: 'success', title: 'Qualitäts-Check abgeschlossen', message: `Ergebnis: ${data.qualityCheck.verdict}` })
       } else {
-        addToast({ type: 'error', title: 'Qualitäts-Check fehlgeschlagen', message: data.error ?? 'Unbekannter Fehler' })
+        alert(`Qualitäts-Check fehlgeschlagen: ${data.error ?? 'Unbekannter Fehler'}`)
       }
     } catch {
-      addToast({ type: 'error', title: 'Qualitäts-Check-Fehler', message: 'Netzwerkfehler — bitte erneut versuchen.' })
+      alert('Qualitäts-Check konnte nicht gestartet werden.')
     } finally {
       setQualityCheckLoading(false)
     }
@@ -366,37 +356,44 @@ export default function DelegationDetailPage() {
     }
   }
 
-  const handleAutoMerge = async () => {
-    if (!delegation) return
-    setAutoMerging(true)
+  const loadMergeSafety = useCallback(async () => {
+    if (!id || !delegation?.summaryReport?.prUrl) {
+      setMergeSafety(null)
+      return
+    }
+    setMergeSafetyLoading(true)
     try {
-      const res = await fetch(`/api/delegations/${id}/auto-merge`, { method: 'POST' })
-      const data = await res.json() as {
-        merged: boolean
-        gates: Array<{ name: string; passed: boolean; detail: string }>
-        blockedBy?: string
-      }
-      if (data.merged) {
-        addToast({ type: 'success', title: 'PR gemerged ✅', message: 'Auto-Merge erfolgreich abgeschlossen.' })
-        setDelegation(prev => prev
-          ? {
-              ...prev,
-              summaryReport: prev.summaryReport
-                ? { ...prev.summaryReport, prState: 'merged' }
-                : prev.summaryReport,
-            }
-          : prev)
-      } else {
-        const failedGates = data.gates.filter(g => !g.passed)
-        const details = failedGates.map(g => `• ${g.name}: ${g.detail}`).join('\n')
-        addToast({
-          type: 'error',
-          title: `Merge blockiert: ${data.blockedBy ?? 'Safety Gate fehlgeschlagen'}`,
-          message: details || 'Ein oder mehrere Safety-Gates haben nicht bestanden.',
-        })
-      }
+      const res = await fetch(`/api/delegations/${id}/merge-safety`)
+      const data = await res.json() as DelegationMergeSafety & { error?: string }
+      if (res.ok) setMergeSafety(data)
+      else setMergeSafety({ available: false, reason: data.error ?? 'Merge Safety konnte nicht geladen werden.' })
     } catch {
-      addToast({ type: 'error', title: 'Auto-Merge Fehler', message: 'Netzwerkfehler — bitte erneut versuchen.' })
+      setMergeSafety({ available: false, reason: 'Merge Safety konnte nicht geladen werden.' })
+    } finally {
+      setMergeSafetyLoading(false)
+    }
+  }, [delegation?.summaryReport?.prUrl, id])
+
+  useEffect(() => {
+    void loadMergeSafety()
+  }, [loadMergeSafety])
+
+  const handleAutoMerge = async () => {
+    if (!delegation?.summaryReport?.prUrl) return
+    setAutoMerging(true)
+    setMergeError(null)
+    try {
+      const res = await fetch(`/api/delegations/${id}/merge-safety`, { method: 'POST' })
+      const data = await res.json() as { merged?: boolean; error?: string; delegation?: Delegation }
+      if (!res.ok || !data.merged) {
+        setMergeError(data.error ?? 'Auto-Merge wurde vom Safety Gate blockiert.')
+        await loadMergeSafety()
+        return
+      }
+      if (data.delegation) setDelegation(data.delegation)
+      await loadMergeSafety()
+    } catch {
+      setMergeError('Netzwerkfehler beim Auto-Merge')
     } finally {
       setAutoMerging(false)
     }
@@ -533,17 +530,6 @@ export default function DelegationDetailPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleAutoOrchestrateToggle = async () => {
-    if (!delegation) return
-    const next = !delegation.autoOrchestrate
-    setDelegation(prev => prev ? { ...prev, autoOrchestrate: next } : prev)
-    await fetch(`/api/delegations/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ autoOrchestrate: next }),
-    })
-  }
-
   if (loading) {
     return (
       <main className="min-h-screen bg-gray-950 text-white p-6 md:p-8">
@@ -581,7 +567,13 @@ export default function DelegationDetailPage() {
   const isDone      = d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled'
   const canCreatePR = d.status === 'completed' && !d.summaryReport?.prUrl
   const canClone    = isDone
-  const canOrchestrate = d.status === 'pending' || d.status === 'approved'
+  const hasReviewablePr = Boolean(d.summaryReport?.prUrl)
+  const showMergeGovernance = d.status === 'completed' || (d.status === 'failed' && hasReviewablePr)
+  const budgetLimit = d.contract.maxCostUsd ?? d.contract.maxBudgetUsd
+  const budgetExceeded = typeof d.actualCostUsd === 'number'
+    && typeof budgetLimit === 'number'
+    && budgetLimit > 0
+    && d.actualCostUsd > budgetLimit
 
   return (
     <main className="min-h-screen bg-gray-950 text-white p-6 md:p-8">
@@ -614,7 +606,39 @@ export default function DelegationDetailPage() {
           />
         </div>
 
-        {/* ── Header ───────────────────────────────────────────────────── */}
+        <DelegationStatusWorkspace
+          delegation={d}
+          activeView={activeView}
+          preflightResult={preflightResult}
+          canApprove={canApprove}
+          canStart={canStart}
+          canStop={canStop}
+          canCreatePR={canCreatePR}
+          canRetry={canRetry}
+          canReject={canReject}
+          canCancel={canCancel}
+          creatingPR={creatingPR}
+          onApprove={handleApprove}
+          onStart={handleStart}
+          onStop={() => updateStatus('cancelled')}
+          onCreatePR={handleCreatePR}
+          onRetry={() => updateStatus('pending')}
+          onReject={handleReject}
+          onCancel={() => updateStatus('cancelled')}
+          onToggleAutoOrchestrate={async () => {
+            if (!delegation) return
+            const updated = { ...delegation, autoOrchestrate: !delegation.autoOrchestrate }
+            setDelegation(updated)
+            await fetch('/api/delegations', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(updated),
+            })
+          }}
+          onSelectView={setActiveView}
+        />
+
+        {/* ── Context summary ──────────────────────────────────────────── */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
@@ -667,45 +691,141 @@ export default function DelegationDetailPage() {
               )}
             </div>
 
-            {/* Utility buttons — secondary actions (primary in FocusCard below) */}
+            {/* Secondary actions */}
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              {canOrchestrate && (
-                <button
-                  onClick={handleAutoOrchestrateToggle}
-                  title="Auto-Orchestrierung: Task automatisch in Sub-Tasks aufteilen"
-                  className={`px-2 py-1.5 text-xs rounded-lg border transition-colors ${
-                    delegation?.autoOrchestrate
-                      ? 'bg-violet-900/60 text-violet-300 border-violet-700'
-                      : 'text-slate-600 border-slate-800 hover:text-violet-400 hover:border-violet-900'
-                  }`}
-                >⚙ Auto</button>
-              )}
               {canClone && (
-                <button onClick={handleClone} disabled={cloningDelegation}
-                  className="px-2 py-1.5 text-xs text-gray-600 hover:text-gray-300 border border-gray-800 hover:border-gray-700 rounded-lg transition-colors disabled:opacity-40"
+                <button
+                  onClick={handleClone}
+                  disabled={cloningDelegation}
+                  className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-700 rounded-lg transition-colors disabled:opacity-40"
                   title="Delegation als neuen Entwurf duplizieren">
-                  {cloningDelegation ? '⏳' : '⧉ Klonen'}
+                  {cloningDelegation ? '⏳ …' : '⧉ Klonen'}
                 </button>
               )}
-              {canOrchestrate && (
-                <button onClick={handleOrchestrate} disabled={orchestrating}
-                  className="px-2 py-1.5 text-xs text-violet-600 hover:text-violet-300 border border-gray-800 hover:border-violet-800 rounded-lg transition-colors disabled:opacity-40"
-                  title="Task in atomare Sub-Tasks zerlegen">
-                  {orchestrating ? '⚙…' : '⚙ Orchestrieren'}
-                </button>
+              {d.summaryReport?.prUrl && (
+                <div className="flex items-center gap-1.5">
+                  <a
+                    href={d.summaryReport.prUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 text-xs bg-emerald-950/40 text-emerald-400 hover:text-emerald-300 border border-emerald-900/60 rounded-lg transition-colors"
+                    title="Pull Request auf GitHub öffnen">
+                    ⎇ PR #{d.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? ''}
+                  </a>
+                  {d.summaryReport.prState === 'merged' && (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-950/50 text-violet-300 border border-violet-800/40" title={d.summaryReport.prMergedAt ? `Gemergt: ${new Date(d.summaryReport.prMergedAt).toLocaleString('de-DE')}` : 'Gemergt'}>
+                      Merged
+                    </span>
+                  )}
+                  {d.summaryReport.prState === 'closed' && (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-950/50 text-red-400 border border-red-800/40">
+                      Closed
+                    </span>
+                  )}
+                  {(d.summaryReport.prState === 'open' || !d.summaryReport.prState) && (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-950/50 text-emerald-400 border border-emerald-800/40">
+                      Open
+                    </span>
+                  )}
+                </div>
               )}
+              {prError && (
+                <span className="text-xs text-red-400 border border-red-900/40 bg-red-950/20 rounded-lg px-2 py-1.5 max-w-xs truncate" title={prError}>
+                  ⚠ {prError}
+                </span>
+              )}
+              <button
+                onClick={handleOrchestrate}
+                disabled={orchestrating}
+                className="px-3 py-1.5 text-xs bg-violet-900/40 text-violet-300 hover:bg-violet-900/70 border border-violet-800/60 rounded-lg transition-colors disabled:opacity-40"
+                title="Task in atomare Sub-Tasks zerlegen und den besten Agenten zuweisen">
+                {orchestrating ? '⚙ Zerlege…' : '⚙ Orchestrieren'}
+              </button>
               <button onClick={handleCopy}
-                className={`px-2 py-1.5 text-xs border rounded-lg transition-colors ${copied ? 'text-green-400 border-green-800' : 'text-gray-600 border-gray-800 hover:text-gray-300'}`}
+                className={`px-3 py-1.5 text-xs border rounded-lg transition-colors ${copied ? 'text-green-400 border-green-800' : 'text-gray-500 border-gray-800 hover:text-gray-300'}`}
                 title="Permalink kopieren">
-                {copied ? '✓' : '🔗'}
+                {copied ? '✓ Kopiert' : '🔗 Link'}
               </button>
               {(d.logs ?? []).length > 0 && (
-                <button onClick={() => downloadLogsAsText(d)}
-                  className="px-2 py-1.5 text-xs text-gray-600 hover:text-gray-300 border border-gray-800 hover:border-gray-600 rounded-lg transition-colors"
-                  title="Logs herunterladen">⬇</button>
+                <button
+                  onClick={() => downloadLogsAsText(d)}
+                  className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 border border-gray-800 hover:border-gray-600 rounded-lg transition-colors"
+                  title="Logs als Textdatei herunterladen">
+                  ⬇ Logs
+                </button>
               )}
             </div>
           </div>
+
+          {/* ── Metrics Tiles (above-the-fold trust layer) ──────────── */}
+          <div className="mt-4 pt-4 border-t border-gray-800 grid grid-cols-1 sm:grid-cols-3 gap-3">
+
+            {/* Status tile */}
+            <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Status</span>
+              <span className={`text-xs font-bold ${STATUS_COLORS[d.status]?.split(' ')[1] ?? 'text-gray-400'}`}>
+                {STATUS_LABELS[d.status] || d.status}
+              </span>
+              {d.status === 'running' && (
+                <ElapsedTimer startedAt={d.startedAt ?? d.updatedAt ?? d.createdAt} className="text-[10px] text-green-400 font-mono" />
+              )}
+              {isDone && d.startedAt && d.completedAt && (
+                <span className="text-[10px] text-gray-600 font-mono">{formatCompletedDuration(d.startedAt, d.completedAt)}</span>
+              )}
+              {isDone && (!d.startedAt || !d.completedAt) && d.summaryReport && (
+                <span className="text-[10px] text-gray-600 font-mono">{formatCompletedDuration(d.createdAt, d.updatedAt)}</span>
+              )}
+            </div>
+
+            {/* Cost tile */}
+            <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">Kosten</span>
+              <CostMeter
+                actualCostUsd={d.actualCostUsd}
+                estimateCostUsd={d.costEstimateUsd}
+                maxBudgetUsd={d.contract.maxBudgetUsd}
+              />
+            </div>
+
+            {/* PR tile */}
+            <div className="bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 flex flex-col gap-0.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">PR</span>
+              {d.summaryReport?.prUrl ? (
+                <a
+                  href={d.summaryReport.prUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1"
+                >
+                  ⎇ #{d.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? ''}
+                </a>
+              ) : (
+                <span className="text-xs text-gray-600">Kein PR</span>
+              )}
+              {prStatus && (
+                <span className={`text-[10px] font-medium ${
+                  prStatus.state === 'merged' ? 'text-violet-400' :
+                  prStatus.state === 'closed' ? 'text-gray-500' :
+                  'text-emerald-500'
+                }`}>
+                  {prStatus.state === 'merged' ? 'Merged' : prStatus.state === 'closed' ? 'Closed' : 'Open'}
+                  {prStatus.ciState === 'success' ? ' · CI ✓' : prStatus.ciState === 'failure' ? ' · CI ✗' : ''}
+                </span>
+              )}
+            </div>
+
+          </div>
+
+          {/* ── Simulation-mode info ─────────────────────────────────── */}
+          {(d.executionRoute === 'direct-chat' || d.executionRoute === 'n8n') && d.status === 'pending' && (
+            <div className="mt-3 flex items-start gap-2 rounded-lg border border-blue-900/40 bg-blue-950/20 px-3 py-2.5 text-xs text-blue-300/80">
+              <span className="shrink-0 mt-0.5">ℹ</span>
+              <span>
+                Diese Delegation läuft im <strong>Simulations-Modus</strong> (Route: {d.executionRoute}).
+                Für echte Ausführung Claude CLI oder einen lokalen Agenten konfigurieren.
+              </span>
+            </div>
+          )}
 
           {/* ── Duration Timeline Bar ─────────────────────────────────── */}
           <DurationBar
@@ -714,6 +834,12 @@ export default function DelegationDetailPage() {
             completedAt={d.completedAt}
             status={d.status}
           />
+
+          {/* ── Timing ───────────────────────────────────────────────── */}
+          <div className="mt-3 flex flex-wrap gap-4 text-[10px] text-gray-700">
+            <span>Erstellt: {new Date(d.createdAt).toLocaleString('de-DE')}</span>
+            <span>Aktualisiert: {new Date(d.updatedAt).toLocaleString('de-DE')}</span>
+          </div>
 
           {/* ── M230: Chain links ────────────────────────────────────── */}
           {(d.chainedDelegationId || d.chainedFromId) && (
@@ -740,75 +866,44 @@ export default function DelegationDetailPage() {
           )}
         </div>
 
-        {/* ── Concept A: Status-driven focus card ──────────────────────── */}
-        <DelegationFocusCard
-          delegation={d}
-          onApprove={handleApprove}
-          onReject={handleReject}
-          onStart={handleStart}
-          onStop={() => updateStatus('cancelled')}
-          onRetry={() => updateStatus('pending')}
-          onRetryEscalate={handleRetryEscalate}
-          onCreatePR={handleCreatePR}
-          onMerge={handleMerge}
-          creatingPR={creatingPR}
-          merging={merging}
-          mergeResult={mergeResult}
-          mergeError={mergeError}
-          prStatus={prStatus}
-          writebackCount={writebackCount}
-        />
+        {activeView === 'action' && (
+          <>
+            {d.status === 'failed' && d.errorMessage && (
+              <DelegationErrorBanner errorMessage={d.errorMessage} />
+            )}
 
-        {/* ── Evidence Workbench Tab Bar ───────────────────────────────── */}
-        <WorkbenchTabs
-          delegation={d}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          hasKnowledge={(writebackCount ?? 0) > 0}
-          hasCritic={!!d.criticScore}
-        />
+            <DelegationNextActionPanel
+              delegation={d}
+              onApprove={handleApprove}
+              onStart={handleStart}
+              onRetry={() => updateStatus('pending')}
+              onRetryEscalate={handleRetryEscalate}
+              onCreatePR={handleCreatePR}
+              creatingPR={creatingPR}
+              lastLogMessage={d.status === 'running' ? (d.logs ?? []).filter(l => l.type !== 'thought').slice(-1)[0]?.message : undefined}
+            />
 
-        {/* ═══════════════════════════════════════════════════════════════
-            ACTION TAB — Agent execution, logs, timeline, sub-tasks
-        ════════════════════════════════════════════════════════════════ */}
-        <WorkbenchPanel tab="action" activeTab={activeTab}>
+            <AgentActivityExplainer delegation={d} />
 
-        {/* ── M4/M5: Classified error card with actionable fix ────────── */}
-        <DelegationErrorCard
-          delegation={d}
-          onRetry={() => updateStatus('pending')}
-          onReviewRetry={handleReviewRetry}
-        />
+            {(preflightLoading || preflightResult) && (
+              <PreflightCheckList
+                result={preflightResult}
+                loading={preflightLoading}
+                onRerun={d.status === 'approved' ? () => void runPreflight() : undefined}
+              />
+            )}
 
-        {/* ── Legacy: Structured error recovery banner ─────────────────── */}
-        {d.status === 'failed' && d.errorMessage && (
-          <DelegationErrorBanner errorMessage={d.errorMessage} />
+            <DelegationLiveLog
+              delegationId={d.id}
+              isRunning={d.status === 'running'}
+              onCostUpdate={(cost) => setDelegation(prev => prev ? { ...prev, actualCostUsd: cost } : prev)}
+            />
+
+            <DelegationTimeline delegation={d} />
+          </>
         )}
 
-        {/* ── Agent activity explainer ─────────────────────────────────── */}
-        <AgentActivityExplainer delegation={d} />
-
-        {/* ── Preflight Results (M224) ─────────────────────────────────── */}
-        {(preflightLoading || preflightResult) && (
-          <PreflightCheckList
-            result={preflightResult}
-            loading={preflightLoading}
-            onRerun={d.status === 'approved' ? () => void runPreflight() : undefined}
-          />
-        )}
-
-        {/* ── Live Execution Progress ──────────────────────────────────── */}
-        <DelegationLiveLog
-          delegationId={d.id}
-          isRunning={d.status === 'running'}
-          onCostUpdate={(cost) => setDelegation(prev => prev ? { ...prev, actualCostUsd: cost } : prev)}
-        />
-
-        {/* ── Timeline ─────────────────────────────────────────────────── */}
-        <DelegationTimeline delegation={d} />
-
-        {/* ── Orchestrated Sub-Tasks ───────────────────────────────────── */}
-        {orchestratedRun && (
+        {activeView === 'action' && orchestratedRun && (
           <div className="bg-slate-900 border border-violet-800/30 rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -911,15 +1006,69 @@ export default function DelegationDetailPage() {
           </div>
         )}
 
-        </WorkbenchPanel>{/* end action tab */}
+        {activeView === 'result' && (
+          <>
+            {d.status !== 'completed' && !d.summaryReport && (
+              <section className="rounded-xl border border-dashed border-gray-800 bg-gray-900/40 p-6">
+                <p className="text-sm font-semibold text-gray-300">Noch kein Ergebnis vorhanden</p>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
+                  Sobald die Delegation abgeschlossen ist, erscheinen hier PR, geaenderte Dateien,
+                  Qualitaetsbewertung und Knowledge Writeback. Bis dahin ist die Ansicht Aktion der richtige Ort.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveView('action')}
+                  className="mt-4 rounded-lg border border-violet-800/60 bg-violet-950/30 px-3 py-2 text-sm font-semibold text-violet-200 transition-colors hover:border-violet-600 hover:bg-violet-900/40"
+                >
+                  Zur Aktion wechseln
+                </button>
+              </section>
+            )}
 
-        {/* ═══════════════════════════════════════════════════════════════
-            RESULTS TAB — PR details, merge, quality, writeback, knowledge
-        ════════════════════════════════════════════════════════════════ */}
-        <WorkbenchPanel tab="results" activeTab={activeTab}>
+            {/* ── M4/M5: Classified error card with actionable fix ────────── */}
+            <DelegationErrorCard delegation={d} />
 
-        {/* ── PR Details (wenn PR vorhanden) ────────────────────────────── */}
-        {d.summaryReport?.prUrl && (
+            {/* ── M120: Preview & Iterate ──────────────────────────────────── */}
+            <PreviewAndIteratePanel delegation={d} />
+
+            {/* ── Knowledge Writeback ───────────────────────────────────────── */}
+            {(d.status === 'completed' || d.status === 'failed') && (
+          <KnowledgeWritebackPanel delegationId={id} delegation={d} />
+            )}
+
+            {/* ── Gelerntes Wissen (full KnowledgeCardList with delegation link) ── */}
+            {d.status === 'completed' && (
+          <section className="bg-gray-900 border border-emerald-900/30 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">
+                Gelerntes Wissen
+              </h2>
+              <a
+                href="/knowledge-cards"
+                className="text-xs text-emerald-600 hover:text-emerald-400 transition-colors"
+              >
+                Alle Wissenskarten →
+              </a>
+            </div>
+            <KnowledgeCardList delegationId={id} />
+          </section>
+            )}
+
+            {d.status === 'completed' && d.summaryReport && !d.summaryReport.prUrl && d.summaryReport.keyPoints?.length > 0 && (
+          <section className="rounded-xl border border-emerald-900/30 bg-gray-900 p-4">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-emerald-600">Ergebnis</h2>
+            <ul className="space-y-1">
+              {d.summaryReport.keyPoints.map((pt, i) => (
+                <li key={i} className="flex items-start gap-1.5 text-sm text-green-400/80">
+                  <span className="mt-0.5 shrink-0 text-green-700">•</span> {pt}
+                </li>
+              ))}
+            </ul>
+          </section>
+            )}
+
+            {/* ── PR Details (wenn PR vorhanden) ────────────────────────────── */}
+            {d.summaryReport?.prUrl && (
           <div className="bg-gray-900 border border-emerald-900/30 rounded-xl p-4">
             <h2 className="text-xs font-semibold text-emerald-600 uppercase tracking-wider mb-3">Pull Request</h2>
             <div className="flex flex-wrap items-start gap-4">
@@ -983,105 +1132,119 @@ export default function DelegationDetailPage() {
                 ))}
               </ul>
             )}
-
-            {/* M7: Auto-Merge Safety Gates — only when PR is open */}
-            {d.summaryReport?.prUrl && d.summaryReport.prState !== 'merged' && (
-              <div className="mt-3 pt-3 border-t border-gray-800">
-                <button
-                  onClick={handleAutoMerge}
-                  disabled={autoMerging}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border border-violet-700/60 bg-violet-950/30 text-violet-300 hover:bg-violet-900/40 hover:border-violet-600 hover:text-violet-200 transition-colors disabled:opacity-40"
-                >
-                  {autoMerging ? (
-                    <>
-                      <span className="h-3 w-3 animate-spin rounded-full border border-violet-400 border-t-transparent" />
-                      Safety-Checks laufen…
-                    </>
-                  ) : '⚡ Sicher mergen (Auto-Gates)'}
-                </button>
-                <p className="mt-1.5 text-[10px] text-gray-600">
-                  Prüft Safety-Gates bevor gemergt wird: Status, Risk-Class, Tests, Änderungsumfang, Critic-Score
-                </p>
-              </div>
-            )}
           </div>
-        )}
+            )}
 
-        {/* App Preview — shown when completed and targetRepo is set */}
-        {d.status === 'completed' && (d as { targetRepo?: string }).targetRepo && (
-          <div className="rounded-xl border border-emerald-800/40 bg-emerald-950/10 p-4 flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold text-emerald-300">Ergebnis ansehen</p>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Agent hat Änderungen auf einen Feature-Branch committed. Starte einen Preview-Server um die App zu testen.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {previewUrl && (
-                <a
-                  href={previewUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-emerald-400 hover:text-emerald-300 underline font-mono"
-                >
-                  {previewUrl}
-                </a>
-              )}
-              <button
-                onClick={handleOpenPreview}
-                disabled={previewLoading}
-                className="rounded-lg border border-emerald-700/60 bg-emerald-900/30 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-800/40 hover:text-emerald-200 transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                {previewLoading ? (
-                  <>
-                    <span className="h-3.5 w-3.5 animate-spin rounded-full border border-emerald-400 border-t-transparent" />
-                    Starte…
-                  </>
-                ) : previewUrl ? (
-                  '↗ Erneut öffnen'
-                ) : (
-                  '▶ Im Browser öffnen'
+            {showMergeGovernance && (
+              <section className={`rounded-xl border p-4 ${
+                mergeSafety?.autoSafety?.status === 'ready'
+                  ? 'border-emerald-800/50 bg-emerald-950/20'
+                  : mergeSafety?.autoSafety?.status === 'blocked'
+                    ? 'border-red-900/50 bg-red-950/20'
+                    : 'border-amber-900/50 bg-amber-950/20'
+              }`}>
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">PR- und Merge-Governance</p>
+                    <h2 className="mt-2 text-lg font-semibold text-white">
+                      {mergeSafetyLoading
+                        ? 'Prüfe PR-Sicherheit...'
+                        : mergeSafety?.autoSafety?.status === 'ready'
+                          ? 'Autonomes Mergen ist freigegeben'
+                          : mergeSafety?.autoSafety?.status === 'blocked'
+                            ? 'Autonomes Mergen ist blockiert'
+                            : !d.summaryReport?.prUrl
+                              ? 'PR erstellen, dann Safety Gate prüfen'
+                            : 'Review vor Merge nötig'}
+                    </h2>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-400">
+                      ForgePilot darf nur kleine Risk-A-Änderungen mit grüner CI, approved Critic,
+                      eingehaltenem Budget, ohne sensible Dateien und ohne Secret-Hinweise autonom übernehmen.
+                      Fehlgeschlagene Läufe mit PR bleiben sichtbar prüfbar, brauchen aber bewusste Review-Freigabe.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void loadMergeSafety()}
+                      disabled={mergeSafetyLoading || !d.summaryReport?.prUrl}
+                      className="rounded-lg border border-gray-700 px-3 py-2 text-sm font-semibold text-gray-300 transition-colors hover:border-gray-500 disabled:opacity-50"
+                    >
+                      {mergeSafetyLoading ? 'Prüft...' : 'Neu prüfen'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAutoMerge}
+                      disabled={autoMerging || mergeSafety?.autoSafety?.status !== 'ready' || d.summaryReport?.prState === 'merged'}
+                      className="rounded-lg border border-emerald-700/70 bg-emerald-900/40 px-3 py-2 text-sm font-semibold text-emerald-100 transition-colors hover:bg-emerald-800/50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {autoMerging ? 'Mergt sicher...' : d.summaryReport?.prState === 'merged' ? 'Bereits gemergt' : 'Sicher auto-mergen'}
+                    </button>
+                  </div>
+                </div>
+
+                {mergeSafety?.preview && (
+                  <div className="mt-4 grid gap-3 md:grid-cols-5">
+                    <div className="rounded-lg border border-gray-800 bg-gray-950/50 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">CI</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-200">{mergeSafety.preview.checks.state}</p>
+                    </div>
+                    <div className="rounded-lg border border-gray-800 bg-gray-950/50 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Diff</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-200">
+                        {mergeSafety.preview.changedFiles} Dateien · +{mergeSafety.preview.additions}/-{mergeSafety.preview.deletions}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-gray-800 bg-gray-950/50 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Auto</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-200">{mergeSafety.autoSafety?.status ?? 'unbekannt'}</p>
+                    </div>
+                    <div className={`rounded-lg border p-3 ${
+                      budgetExceeded ? 'border-red-900/60 bg-red-950/20' : 'border-gray-800 bg-gray-950/50'
+                    }`}>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Budget</p>
+                      <p className={`mt-1 text-sm font-semibold ${budgetExceeded ? 'text-red-200' : 'text-gray-200'}`}>
+                        {typeof d.actualCostUsd === 'number'
+                          ? `$${d.actualCostUsd.toFixed(2)} / $${budgetLimit.toFixed(2)}`
+                          : `$${budgetLimit.toFixed(2)} Limit`}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-gray-800 bg-gray-950/50 p-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Manual</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-200">{mergeSafety.manualSafety?.status ?? 'unbekannt'}</p>
+                    </div>
+                  </div>
                 )}
-              </button>
-            </div>
-          </div>
-        )}
 
-        {/* Merge result confirmation — only shown after successful merge, primary actions are in FocusCard */}
-        {mergeResult && (
-          <div className="rounded-xl border border-emerald-800/50 bg-emerald-950/20 px-4 py-3 flex items-center gap-3">
-            <span className="text-sm text-emerald-400">✓ Gemergt</span>
-            {mergeResult.mergeCommit && (
-              <span className="font-mono text-xs text-slate-500">{mergeResult.mergeCommit}</span>
+                {d.status === 'failed' && d.summaryReport?.prUrl && (
+                  <div className="mt-4 rounded-lg border border-red-900/50 bg-red-950/20 p-3 text-sm text-red-100">
+                    <p className="font-semibold">Safety Stop aktiv</p>
+                    <p className="mt-1 text-red-100/80">
+                      Der Agent hat einen PR erzeugt, aber die Delegation ist nicht abgeschlossen. Prüfe zuerst Fehler,
+                      Budget und Critic-Ergebnis; Auto-Merge bleibt blockiert.
+                    </p>
+                  </div>
+                )}
+
+                {(mergeSafety?.autoSafety?.reasons?.length || mergeSafety?.reason) && (
+                  <ul className="mt-4 space-y-1 text-sm text-gray-400">
+                    {mergeSafety.reason && <li>- {mergeSafety.reason}</li>}
+                    {mergeSafety.autoSafety?.reasons?.map(reason => (
+                      <li key={reason}>- {reason}</li>
+                    ))}
+                  </ul>
+                )}
+                {!d.summaryReport?.prUrl && (
+                  <p className="mt-4 text-sm text-amber-200/80">
+                    - Es gibt noch keinen Pull Request. Erstelle zuerst den PR; danach zeigt ForgePilot Diff, CI,
+                    Critic und Auto-Merge-Freigabe an.
+                  </p>
+                )}
+              </section>
             )}
-            {mergeResult.baseBranch && (
-              <span className="text-xs text-slate-600">→ {mergeResult.baseBranch}</span>
-            )}
-            {mergeResult?.githubRemote && !d.summaryReport?.prUrl && (
-              <span className="text-xs text-slate-500 ml-auto">
-                GitHub Remote verfügbar — PR erstellen via FocusCard
-              </span>
-            )}
-          </div>
-        )}
 
-
-        {/* ── Key Points (wenn kein PR, aber summaryReport vorhanden) ──────── */}
-        {d.summaryReport && !d.summaryReport.prUrl && d.summaryReport.keyPoints && d.summaryReport.keyPoints.length > 0 && (
-          <div className="bg-gray-900 border border-green-900/40 rounded-xl p-4">
-            <h2 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Ergebnis</h2>
-            <ul className="space-y-1">
-              {d.summaryReport.keyPoints.map((pt, i) => (
-                <li key={i} className="text-sm text-green-400/80 flex items-start gap-1.5">
-                  <span className="text-green-700 mt-0.5">•</span> {pt}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* ── Grok Critic Review (full card, wenn completed) ─────────────── */}
-        {d.status === 'completed' && (
+            {/* ── Grok Critic Review (full card, wenn completed) ─────────────── */}
+            {d.status === 'completed' && (
           <GrokCriticCard
             delegationId={id}
             agentOutput={
@@ -1098,180 +1261,37 @@ export default function DelegationDetailPage() {
             }
             initialScore={d.criticScore}
           />
-        )}
-
-        {/* DoD Quality Check — shown when completed and DoD defined */}
-        {d.status === 'completed' && d.contract.definitionOfDone?.length > 0 && (
-          <div className="rounded-xl border border-slate-700/50 bg-slate-900/30 p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-slate-200">DoD Qualitäts-Check</p>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  KI bewertet ob der Agent alle Kriterien erfüllt hat
-                </p>
-              </div>
-              {!qualityCheck && (
-                <button
-                  onClick={handleQualityCheck}
-                  disabled={qualityCheckLoading}
-                  className="rounded-lg border border-slate-600 bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-slate-500 hover:text-white transition-colors disabled:opacity-50 flex items-center gap-1.5"
-                >
-                  {qualityCheckLoading ? (
-                    <>
-                      <span className="h-2.5 w-2.5 animate-spin rounded-full border border-slate-400 border-t-transparent" />
-                      Prüft…
-                    </>
-                  ) : '✦ Jetzt prüfen'}
-                </button>
-              )}
-              {qualityCheck && (
-                <button
-                  onClick={handleQualityCheck}
-                  disabled={qualityCheckLoading}
-                  className="text-xs text-slate-600 hover:text-slate-400 transition-colors disabled:opacity-50"
-                >
-                  {qualityCheckLoading ? 'Prüft…' : '↺ Neu prüfen'}
-                </button>
-              )}
-            </div>
-
-            {qualityCheck && (
-              <>
-                {/* Verdict banner */}
-                <div className={`rounded-lg px-3 py-2 flex items-center justify-between ${
-                  qualityCheck.verdict === 'passed'
-                    ? 'bg-emerald-950/40 border border-emerald-800/50'
-                    : qualityCheck.verdict === 'partial'
-                    ? 'bg-amber-950/40 border border-amber-800/50'
-                    : 'bg-red-950/40 border border-red-800/50'
-                }`}>
-                  <span className={`text-sm font-bold ${
-                    qualityCheck.verdict === 'passed' ? 'text-emerald-300'
-                    : qualityCheck.verdict === 'partial' ? 'text-amber-300'
-                    : 'text-red-300'
-                  }`}>
-                    {qualityCheck.verdict === 'passed' ? '✅ Bestanden'
-                      : qualityCheck.verdict === 'partial' ? '⚠️ Teilweise erfüllt'
-                      : '❌ Nicht erfüllt'}
-                  </span>
-                  <span className={`text-xs font-mono font-bold ${
-                    qualityCheck.overallScore >= 80 ? 'text-emerald-400'
-                    : qualityCheck.overallScore >= 50 ? 'text-amber-400'
-                    : 'text-red-400'
-                  }`}>
-                    {qualityCheck.overallScore}/100
-                  </span>
-                </div>
-
-                {/* Criteria list */}
-                <div className="space-y-1.5">
-                  {qualityCheck.criteria.map((c, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs">
-                      <span className={`shrink-0 mt-0.5 ${c.met ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {c.met ? '✓' : '✗'}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <span className={c.met ? 'text-slate-300' : 'text-slate-400 line-through'}>{c.item}</span>
-                        {c.notes && (
-                          <p className="text-slate-600 mt-0.5 leading-relaxed">{c.notes}</p>
-                        )}
-                      </div>
-                      <span className={`shrink-0 text-[10px] px-1 rounded ${
-                        c.confidence === 'high' ? 'text-slate-600 bg-slate-800'
-                        : c.confidence === 'medium' ? 'text-amber-700 bg-amber-950/30'
-                        : 'text-red-700 bg-red-950/30'
-                      }`}>
-                        {c.confidence}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Retry suggestion */}
-                {qualityCheck.suggestion && qualityCheck.verdict !== 'passed' && (
-                  <div className="rounded-lg border border-violet-800/40 bg-violet-950/20 px-3 py-2">
-                    <p className="text-xs text-violet-300">
-                      <span className="font-semibold">Verbesserungsvorschlag:</span> {qualityCheck.suggestion}
-                    </p>
-                  </div>
-                )}
-
-                {/* Fix-it loop: retry with review feedback injected as context */}
-                {qualityCheck.verdict !== 'passed' && (
-                  <button
-                    type="button"
-                    onClick={handleReviewRetry}
-                    disabled={reviewRetryLoading}
-                    className="w-full rounded-lg border border-violet-600/40 bg-violet-600/10 px-3 py-2 text-xs font-semibold text-violet-300 transition hover:bg-violet-600/20 disabled:opacity-50"
-                  >
-                    {reviewRetryLoading
-                      ? '⏳ Erstelle Fix-Delegation…'
-                      : '🔁 Fix-Delegation erstellen (Review-Feedback als Kontext)'}
-                  </button>
-                )}
-              </>
             )}
-          </div>
+          </>
         )}
 
-        {/* ── M120: Preview & Iterate ──────────────────────────────────── */}
-        <PreviewAndIteratePanel delegation={d} />
+        {activeView === 'details' && (
+          <>
+            {/* ── Context Snapshot (M305) ──────────────────────────────────── */}
+            {d.contextSnapshot && d.contextSnapshot.cards.length > 0 && (
+              <details className="bg-gray-900 border border-gray-800 rounded-xl p-5 group">
+                <summary className="flex items-center justify-between cursor-pointer list-none">
+                  <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    Kontext bei Ausführung ({d.contextSnapshot.cards.length} Karten · ~{d.contextSnapshot.tokenEstimate} Tokens)
+                  </h2>
+                  <span className="text-gray-600 text-xs group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <ul className="mt-3 space-y-1">
+                  {d.contextSnapshot.cards.map(card => (
+                    <li key={card.id} className="flex items-start gap-2 text-xs text-gray-400">
+                      <span className="mt-0.5 px-1.5 py-0.5 rounded bg-gray-800 text-gray-500 font-mono shrink-0">{card.type}</span>
+                      <span>{card.title}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs text-gray-600">
+                  Erstellt: {new Date(d.contextSnapshot.builtAt).toLocaleString('de-DE')}
+                </p>
+              </details>
+            )}
 
-        {/* ── Knowledge Writeback ───────────────────────────────────────── */}
-        {(d.status === 'completed' || d.status === 'failed') && (
-          <KnowledgeWritebackPanel delegationId={id} delegation={d} />
-        )}
-
-        {/* ── Gelerntes Wissen (full KnowledgeCardList with delegation link) ── */}
-        {d.status === 'completed' && (
-          <section className="bg-gray-900 border border-emerald-900/30 rounded-xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">
-                Gelerntes Wissen
-              </h2>
-              <a
-                href="/knowledge-cards"
-                className="text-xs text-emerald-600 hover:text-emerald-400 transition-colors"
-              >
-                Alle Wissenskarten →
-              </a>
-            </div>
-            <KnowledgeCardList delegationId={id} />
-          </section>
-        )}
-
-        {/* ── Context Snapshot (M305) ──────────────────────────────────── */}
-        {d.contextSnapshot && d.contextSnapshot.cards.length > 0 && (
-          <details className="bg-gray-900 border border-gray-800 rounded-xl p-5 group">
-            <summary className="flex items-center justify-between cursor-pointer list-none">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                Kontext bei Ausführung ({d.contextSnapshot.cards.length} Karten · ~{d.contextSnapshot.tokenEstimate} Tokens)
-              </h2>
-              <span className="text-gray-600 text-xs group-open:rotate-180 transition-transform">▼</span>
-            </summary>
-            <ul className="mt-3 space-y-1">
-              {d.contextSnapshot.cards.map(card => (
-                <li key={card.id} className="flex items-start gap-2 text-xs text-gray-400">
-                  <span className="mt-0.5 px-1.5 py-0.5 rounded bg-gray-800 text-gray-500 font-mono shrink-0">{card.type}</span>
-                  <span>{card.title}</span>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-2 text-xs text-gray-600">
-              Erstellt: {new Date(d.contextSnapshot.builtAt).toLocaleString('de-DE')}
-            </p>
-          </details>
-        )}
-
-        </WorkbenchPanel>{/* end results tab */}
-
-        {/* ═══════════════════════════════════════════════════════════════
-            DETAILS TAB — Tech contract, execution log, tools, replay, comments
-        ════════════════════════════════════════════════════════════════ */}
-        <WorkbenchPanel tab="details" activeTab={activeTab}>
-
-        {/* ── Two-column: Contract + Details ────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* ── Two-column: Contract + Details ────────────────────────────── */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           {/* Contract Details */}
           <div className="space-y-4">
@@ -1367,7 +1387,7 @@ export default function DelegationDetailPage() {
               </div>
             )}
 
-            {/* Summary Report keyPoints — only if no prUrl (prUrl case handled in results tab) */}
+            {/* Summary Report keyPoints — only if no prUrl (prUrl case handled above) */}
             {d.summaryReport && !d.summaryReport.prUrl && d.summaryReport.keyPoints && (
               <div className="bg-gray-900 border border-green-900/40 rounded-xl p-4">
                 <h2 className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-3">Ergebnis</h2>
@@ -1454,31 +1474,261 @@ export default function DelegationDetailPage() {
             </div>
           </div>
         </div>
-
-        {/* Agent Run Replay */}
-        <AgentRunReplayView delegationId={id} />
-
-        {/* Allowed Tools — collapsible expert detail */}
-        {d.contract.allowedTools?.length > 0 && (
-          <CollapsibleSection
-            title="Erlaubte Tools"
-            collapsedHint={`${d.contract.allowedTools.length} Tools`}
-            defaultOpen={false}
-          >
-            <div className="flex flex-wrap gap-1.5">
-              {d.contract.allowedTools.map(tool => (
-                <span key={tool} className="px-2 py-0.5 text-xs rounded bg-gray-800 border border-gray-700 text-gray-400 font-mono">
-                  {tool}
-                </span>
-              ))}
-            </div>
-          </CollapsibleSection>
+          </>
         )}
 
-        {/* Comment Thread */}
-        <DelegationCommentThread delegationId={d.id} />
+        {activeView === 'result' && (
+          <>
+            {/* App Preview — shown when completed and targetRepo is set */}
+            {d.status === 'completed' && (d as { targetRepo?: string }).targetRepo && (
+          <div className="rounded-xl border border-emerald-800/40 bg-emerald-950/10 p-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-emerald-300">Ergebnis ansehen</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Agent hat Änderungen auf einen Feature-Branch committed. Starte einen Preview-Server um die App zu testen.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {previewUrl && (
+                <a
+                  href={previewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-emerald-400 hover:text-emerald-300 underline font-mono"
+                >
+                  {previewUrl}
+                </a>
+              )}
+              <button
+                onClick={handleOpenPreview}
+                disabled={previewLoading}
+                className="rounded-lg border border-emerald-700/60 bg-emerald-900/30 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-800/40 hover:text-emerald-200 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {previewLoading ? (
+                  <>
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border border-emerald-400 border-t-transparent" />
+                    Starte…
+                  </>
+                ) : previewUrl ? (
+                  '↗ Erneut öffnen'
+                ) : (
+                  '▶ Im Browser öffnen'
+                )}
+              </button>
+            </div>
+          </div>
+            )}
 
-        </WorkbenchPanel>{/* end details tab */}
+            {/* Merge + PR Panel — shown when completed */}
+            {d.status === 'completed' && (
+          <div className="rounded-xl border border-slate-700/50 bg-slate-900/20 p-4">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3">Ergebnis übernehmen</p>
+            <div className="flex flex-wrap items-center gap-2">
+
+              {/* Merge in main */}
+              {!mergeResult ? (
+                <button
+                  onClick={handleMerge}
+                  disabled={merging}
+                  className="flex items-center gap-2 rounded-lg border border-violet-700/60 bg-violet-950/30 px-4 py-2 text-sm font-semibold text-violet-300 hover:border-violet-500 hover:text-violet-200 transition-colors disabled:opacity-50"
+                >
+                  {merging ? (
+                    <>
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border border-violet-400 border-t-transparent" />
+                      Mergt…
+                    </>
+                  ) : (
+                    <>⎇ In main mergen</>
+                  )}
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 rounded-lg border border-emerald-800/50 bg-emerald-950/20 px-3 py-2">
+                  <span className="text-emerald-400 text-sm">✓ Gemergt</span>
+                  {mergeResult.mergeCommit && (
+                    <span className="font-mono text-xs text-slate-500">{mergeResult.mergeCommit}</span>
+                  )}
+                  {mergeResult.baseBranch && (
+                    <span className="text-xs text-slate-600">→ {mergeResult.baseBranch}</span>
+                  )}
+                </div>
+              )}
+
+              {/* GitHub PR — always available for completed delegations */}
+              {!d.summaryReport?.prUrl ? (
+                <button
+                  onClick={handleCreatePR}
+                  disabled={creatingPR}
+                  className="flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800/50 px-4 py-2 text-sm font-semibold text-slate-300 hover:border-slate-400 hover:text-white transition-colors disabled:opacity-50"
+                >
+                  {creatingPR ? (
+                    <>
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border border-slate-400 border-t-transparent" />
+                      Erstellt PR…
+                    </>
+                  ) : (
+                    <>⤴ GitHub PR erstellen</>
+                  )}
+                </button>
+              ) : (
+                <a
+                  href={d.summaryReport.prUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 rounded-lg border border-emerald-800/50 bg-emerald-950/20 px-3 py-2 text-sm font-semibold text-emerald-400 hover:text-emerald-300 transition-colors"
+                >
+                  ⤴ PR #{d.summaryReport.prUrl.match(/\/pull\/(\d+)/)?.[1] ?? ''}
+                  {d.summaryReport.prState === 'merged' && (
+                    <span className="text-xs text-violet-400">· Merged</span>
+                  )}
+                </a>
+              )}
+
+              {/* Errors */}
+              {mergeError && (
+                <p className="w-full text-xs text-red-400 mt-1">{mergeError}</p>
+              )}
+              {prError && (
+                <p className="w-full text-xs text-red-400 mt-1">{prError}</p>
+              )}
+
+              {/* Hint after merge: GitHub PR available */}
+              {mergeResult?.githubRemote && !d.summaryReport?.prUrl && (
+                <p className="w-full text-xs text-slate-500 mt-0.5">
+                  Repo hat GitHub Remote — du kannst jetzt auch einen PR erstellen.
+                </p>
+              )}
+            </div>
+          </div>
+            )}
+
+            {/* DoD Quality Check — shown when completed and DoD defined */}
+            {d.status === 'completed' && d.contract.definitionOfDone?.length > 0 && (
+          <div className="rounded-xl border border-slate-700/50 bg-slate-900/30 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-200">DoD Qualitäts-Check</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  KI bewertet ob der Agent alle Kriterien erfüllt hat
+                </p>
+              </div>
+              {!qualityCheck && (
+                <button
+                  onClick={handleQualityCheck}
+                  disabled={qualityCheckLoading}
+                  className="rounded-lg border border-slate-600 bg-slate-800/60 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-slate-500 hover:text-white transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {qualityCheckLoading ? (
+                    <>
+                      <span className="h-2.5 w-2.5 animate-spin rounded-full border border-slate-400 border-t-transparent" />
+                      Prüft…
+                    </>
+                  ) : '✦ Jetzt prüfen'}
+                </button>
+              )}
+              {qualityCheck && (
+                <button
+                  onClick={handleQualityCheck}
+                  disabled={qualityCheckLoading}
+                  className="text-xs text-slate-600 hover:text-slate-400 transition-colors disabled:opacity-50"
+                >
+                  {qualityCheckLoading ? 'Prüft…' : '↺ Neu prüfen'}
+                </button>
+              )}
+            </div>
+
+            {qualityCheck && (
+              <>
+                {/* Verdict banner */}
+                <div className={`rounded-lg px-3 py-2 flex items-center justify-between ${
+                  qualityCheck.verdict === 'passed'
+                    ? 'bg-emerald-950/40 border border-emerald-800/50'
+                    : qualityCheck.verdict === 'partial'
+                    ? 'bg-amber-950/40 border border-amber-800/50'
+                    : 'bg-red-950/40 border border-red-800/50'
+                }`}>
+                  <span className={`text-sm font-bold ${
+                    qualityCheck.verdict === 'passed' ? 'text-emerald-300'
+                    : qualityCheck.verdict === 'partial' ? 'text-amber-300'
+                    : 'text-red-300'
+                  }`}>
+                    {qualityCheck.verdict === 'passed' ? '✅ Bestanden'
+                      : qualityCheck.verdict === 'partial' ? '⚠️ Teilweise erfüllt'
+                      : '❌ Nicht erfüllt'}
+                  </span>
+                  <span className={`text-xs font-mono font-bold ${
+                    qualityCheck.overallScore >= 80 ? 'text-emerald-400'
+                    : qualityCheck.overallScore >= 50 ? 'text-amber-400'
+                    : 'text-red-400'
+                  }`}>
+                    {qualityCheck.overallScore}/100
+                  </span>
+                </div>
+
+                {/* Criteria list */}
+                <div className="space-y-1.5">
+                  {qualityCheck.criteria.map((c, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs">
+                      <span className={`shrink-0 mt-0.5 ${c.met ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {c.met ? '✓' : '✗'}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <span className={c.met ? 'text-slate-300' : 'text-slate-400 line-through'}>{c.item}</span>
+                        {c.notes && (
+                          <p className="text-slate-600 mt-0.5 leading-relaxed">{c.notes}</p>
+                        )}
+                      </div>
+                      <span className={`shrink-0 text-[10px] px-1 rounded ${
+                        c.confidence === 'high' ? 'text-slate-600 bg-slate-800'
+                        : c.confidence === 'medium' ? 'text-amber-700 bg-amber-950/30'
+                        : 'text-red-700 bg-red-950/30'
+                      }`}>
+                        {c.confidence}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Retry suggestion */}
+                {qualityCheck.suggestion && qualityCheck.verdict !== 'passed' && (
+                  <div className="rounded-lg border border-violet-800/40 bg-violet-950/20 px-3 py-2">
+                    <p className="text-xs text-violet-300">
+                      <span className="font-semibold">Verbesserungsvorschlag:</span> {qualityCheck.suggestion}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+            )}
+
+            {/* Agent Run Replay */}
+            <AgentRunReplayView delegationId={id} />
+          </>
+        )}
+
+        {activeView === 'details' && (
+          <>
+            {/* Allowed Tools — collapsible expert detail */}
+            {d.contract.allowedTools?.length > 0 && (
+              <CollapsibleSection
+                title="Erlaubte Tools"
+                collapsedHint={`${d.contract.allowedTools.length} Tools`}
+                defaultOpen={false}
+              >
+                <div className="flex flex-wrap gap-1.5">
+                  {d.contract.allowedTools.map(tool => (
+                    <span key={tool} className="px-2 py-0.5 text-xs rounded bg-gray-800 border border-gray-700 text-gray-400 font-mono">
+                      {tool}
+                    </span>
+                  ))}
+                </div>
+              </CollapsibleSection>
+            )}
+
+            {/* Comment Thread */}
+            <DelegationCommentThread delegationId={d.id} />
+          </>
+        )}
 
         {/* Go back */}
         <div className="pb-4">

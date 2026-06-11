@@ -9,16 +9,21 @@ export interface BudgetCheckResult {
   reason?: string
 }
 
+export function getBudgetLimit(delegation: Delegation): number | null {
+  const limit = delegation.contract?.maxCostUsd ?? delegation.contract?.maxBudgetUsd
+  return typeof limit === 'number' && limit > 0 ? limit : null
+}
+
 /**
  * Check if a delegation has exceeded its budget.
  * If exceeded, updates delegation status to 'failed' with error message and notifies operator.
  * Never throws.
  */
 export async function checkBudget(delegation: Delegation): Promise<BudgetCheckResult> {
-  const limit = delegation.contract?.maxCostUsd
+  const limit = getBudgetLimit(delegation)
   const actual = delegation.actualCostUsd ?? delegation.costEstimateUsd ?? 0
 
-  if (!limit || limit <= 0) {
+  if (!limit) {
     return { exceeded: false, limit: null, actual }
   }
 
@@ -66,7 +71,7 @@ export function wouldExceedBudget(
   delegation: Delegation,
   estimatedCostUsd: number,
 ): boolean {
-  const limit = delegation.contract?.maxCostUsd
-  if (!limit || limit <= 0) return false
+  const limit = getBudgetLimit(delegation)
+  if (!limit) return false
   return estimatedCostUsd > limit
 }

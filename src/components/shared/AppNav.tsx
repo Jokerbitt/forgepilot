@@ -6,16 +6,12 @@ import { useEffect, useState } from 'react'
 import { signOut } from 'next-auth/react'
 import {
   LayoutDashboard,
-  Inbox,
-  FileText,
   ListChecks,
-  Bot,
-  BookOpen,
+  Wrench,
   Settings,
   Command,
   ChevronRight,
   Zap,
-  BarChart3,
   Lightbulb,
   FolderOpen,
   Monitor,
@@ -53,39 +49,31 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  // ── Core workflow — daily-use loop ──────────────────────────────────────
+  // ── Core — daily-use loop (main's lean structure + our loop pages) ──────
   { href: '/',            key: 'commandCenter',    icon: LayoutDashboard, group: 'core' },
   { href: '/morning',     key: 'briefing',         icon: Sun,             group: 'core' },
   { href: '/idea',        key: 'ideaToProduction', icon: Lightbulb,       group: 'core', isNew: true },
-  { href: '/concept',     key: 'conceptAnalyzer',  icon: ScanText,        group: 'core', isNew: true },
   { href: '/delegations', key: 'execute',          icon: ListChecks,      group: 'core' },
   { href: '/settings',    key: 'settings',         icon: Settings,        group: 'core' },
 
-  // ── Workflow tools (visible but secondary) ──────────────────────────────
-  { href: '/live',               key: 'liveView',  icon: Monitor,    group: 'workflow' },
-  { href: '/projects',           key: 'plan',      icon: FolderOpen, group: 'workflow' },
-  { href: '/delegations/plan',   key: 'planMode',  icon: Map,        group: 'workflow', isNew: true },
-  { href: '/inbox',              key: 'inbox',     icon: Inbox,      group: 'workflow' },
-  { href: '/knowledge',          key: 'knowledge', icon: BookOpen,   group: 'workflow' },
+  // ── Workflow (visible but secondary) ────────────────────────────────────
+  { href: '/live',             key: 'liveView',        icon: Monitor,    group: 'workflow' },
+  { href: '/projects',         key: 'plan',            icon: FolderOpen, group: 'workflow' },
+  { href: '/delegations/plan', key: 'planMode',        icon: Map,        group: 'workflow', isNew: true },
+  { href: '/concept',          key: 'conceptAnalyzer', icon: ScanText,   group: 'workflow', isNew: true },
 
-  // ── Expert tools (power-user, rarely needed — collapsed by default) ──────
-  { href: '/analytics',      key: 'costAnalytics', icon: BarChart3, group: 'expert' },
-  { href: '/project-briefs', key: 'projectBriefs', icon: FileText,  group: 'expert' },
-  { href: '/agents',         key: 'agentControl',  icon: Bot,       group: 'expert' },
-  { href: '/skills',         key: 'skills',        icon: Sparkles,  group: 'expert' },
-  // Removed from nav (still accessible by URL):
-  //   /branches  — git ops happen in terminal
-  //   /work-items — redundant with /projects
+  // ── Werkzeuge (collapsed — /tools hub links to everything else) ─────────
+  { href: '/tools',  key: 'tools',  icon: Wrench,   group: 'expert' },
+  { href: '/skills', key: 'skills', icon: Sparkles, group: 'expert' },
 ]
 
 const coreNavItems     = navItems.filter(item => item.group === 'core')
 const workflowNavItems = navItems.filter(item => item.group === 'workflow')
 const expertNavItems   = navItems.filter(item => item.group === 'expert')
 
-// Backward-compat aliases (some render helpers still reference these)
+// Aliases used by render helpers
 const primaryNavItems  = coreNavItems
 const moreNavItems     = expertNavItems
-const utilityNavItems: NavItem[] = []
 
 export function AppNav() {
   const { locale, setLocale, nav, ui } = useI18n()
@@ -240,12 +228,17 @@ export function AppNav() {
                   ? 'text-violet-300' : 'text-slate-500'
               )}
             >
-              ⋯ Mehr
+              {locale === 'de' ? 'Werkzeuge' : 'Tools'}
             </summary>
+            <p className="px-3 pb-2 text-[11px] leading-4 text-slate-600">
+              {locale === 'de'
+                ? 'Nur das, was du im Alltag wirklich brauchst.'
+                : 'Only the tools you need day to day.'}
+            </p>
             <div className="pb-2">
               {expertNavItems.map(item => {
                 const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
-                const count = undefined
+                const count = item.href === '/tools' ? attentionCount : undefined
                 const isLive = false
                 const isAutonomousSettings = item.href === '/settings' && autonomousModeActive
                 return (
@@ -281,21 +274,6 @@ export function AppNav() {
               </button>
             </div>
           )}
-          {utilityNavItems.map(item => {
-            const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
-            const isAutonomousSettings = item.href === '/settings' && autonomousModeActive
-            return (
-              <SidebarLink
-                key={item.href}
-                href={item.href}
-                label={nav[item.key].label}
-                icon={item.icon}
-                isActive={isActive}
-                autonomousActive={isAutonomousSettings}
-                compact
-              />
-            )
-          })}
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
@@ -374,7 +352,7 @@ export function AppNav() {
               )
             })}
             <Link
-              href="/settings"
+              href="/tools"
               className="shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white"
             >
               {ui.more}

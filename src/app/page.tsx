@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Bot, FolderOpen, Map, Radio, Settings, Sparkles } from 'lucide-react'
+import { ArrowRight, Bot, FolderOpen, Map, Radio, Rocket, Settings, Sparkles } from 'lucide-react'
 import { ConnectorHealthBar } from '@/components/command-center/ConnectorHealthBar'
 import { DailyAssistantPanel } from '@/components/command-center/DailyAssistantPanel'
 import { TodayStatsBar } from '@/components/command-center/TodayStatsBar'
@@ -9,6 +9,7 @@ import { ApiKeysBanner } from '@/components/shared/ApiKeysBanner'
 import { NoAIProviderBanner } from '@/components/shared/NoAIProviderBanner'
 import { OnboardingBanner as OnboardingWizardBanner } from '@/components/onboarding/OnboardingBanner'
 import { buttonClassName } from '@/components/ui/primitives'
+import { AgentWorkbenchSummary } from '@/components/workbench/AgentWorkbenchSummary'
 
 const assistantSteps = [
   {
@@ -43,6 +44,12 @@ const quickLinks = [
     title: 'Live View',
     body: 'Was Agenten gerade tun, was fertig ist und was blockiert.',
     icon: Radio,
+  },
+  {
+    href: '/demo/todo-planner',
+    title: 'App-Vorschau',
+    body: 'Die aktuelle ToDo Planner Demo direkt öffnen und testen.',
+    icon: Rocket,
   },
   {
     href: '/settings',
@@ -112,6 +119,7 @@ export default function Home() {
           <aside className="space-y-5">
             <AutonomousLoopPanel />
             <DailyAssistantPanel />
+            <AgentWorkbenchSummary compact />
           </aside>
         </section>
 
@@ -120,7 +128,7 @@ export default function Home() {
           <TodayStatsBar />
         </section>
 
-        <section className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+        <section className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
           {quickLinks.map(item => {
             const Icon = item.icon
             return (

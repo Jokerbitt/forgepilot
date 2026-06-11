@@ -166,4 +166,22 @@ describe('orchestrated-run', () => {
     expect(getRun(runId)?.status).toBe('running')
     expect(getRun(runId)?.tasks[0].status).toBe('running')
   })
+
+  it('watchdog fails stale planning runs that never started execution', () => {
+    const created = new Date(getRun(runId)!.createdAt)
+    const reaped = reapStaleRuns({
+      now: new Date(created.getTime() + 60 * 60_000),
+      planningTimeoutMinutes: 30,
+    })
+
+    expect(reaped).toHaveLength(1)
+    expect(reaped[0]).toMatchObject({
+      runId,
+      reason: 'planning run had no execution beyond watchdog timeout',
+    })
+    const run = getRun(runId)
+    expect(run?.status).toBe('failed')
+    expect(run?.tasks.every(task => task.status === 'failed')).toBe(true)
+    expect(run?.tasks[0].result?.issues[0]).toContain('planning task stale')
+  })
 })
