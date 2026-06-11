@@ -86,7 +86,12 @@ export function buildSelectiveContext(
     : ''
 
   const codebaseBlock = cfg.codebase && targetRepo
-    ? buildCodebaseContextBlock(contract.goal, contract.context ?? '', targetRepo)
+    ? buildCodebaseContextBlock(
+        contract.goal,
+        contract.context ?? '',
+        targetRepo,
+        cfg.codebase === 'minimal', // pass minimal flag — saves ~800 tokens for bug-fix/test/refactor
+      )
     : ''
 
   const estimatedTokens = roughTokens(skillBlock) + roughTokens(knowledgeBlock) + roughTokens(codebaseBlock)

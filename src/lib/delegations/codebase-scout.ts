@@ -58,6 +58,7 @@ export function findRelevantFiles(
   context: string,
   repoPath: string,
   maxFiles = MAX_FILES,
+  snippetChars = SNIPPET_CHARS,
 ): RelevantFile[] {
   const keywords = extractKeywords(`${goal} ${context}`)
   if (keywords.length === 0) return []
@@ -110,8 +111,8 @@ export function findRelevantFiles(
     let snippet = ''
     try {
       const full = readFileSync(filePath, 'utf8')
-      snippet = full.slice(0, SNIPPET_CHARS)
-      if (full.length > SNIPPET_CHARS) snippet += '\n  // ... (truncated)'
+      snippet = full.slice(0, snippetChars)
+      if (full.length > snippetChars) snippet += '\n  // ... (truncated)'
     } catch {
       snippet = '(could not read)'
     }
@@ -252,14 +253,19 @@ export function findFailureLessons(
 
 /**
  * Build the "## Codebase Context" block for injection into the agent prompt.
+ * @param minimal - when true, uses reduced SNIPPET_CHARS (200) and MAX_FILES (3)
+ *   Saves ~800 tokens for bug-fix, test, refactor, ui-component tasks.
  */
 export function buildCodebaseContextBlock(
   goal: string,
   context: string,
   repoPath: string,
+  minimal = false,
 ): string {
+  const snippetChars = minimal ? 200 : SNIPPET_CHARS
+  const maxFiles = minimal ? 3 : MAX_FILES
   const config = readProjectConfig(repoPath)
-  const relevantFiles = findRelevantFiles(goal, context, repoPath)
+  const relevantFiles = findRelevantFiles(goal, context, repoPath, maxFiles, snippetChars)
 
   const lines: string[] = []
 
