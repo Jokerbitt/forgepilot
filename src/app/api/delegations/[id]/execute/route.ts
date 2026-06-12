@@ -201,7 +201,9 @@ function parseTestsPassed(fullOutput: string): number | undefined {
 function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryContext?: string, targetRepo?: string): string {
   const c = delegation.contract
   const slug = (c.workItemId ?? delegation.id).replace(/[^a-z0-9-]/gi, '-').toLowerCase()
-  const branch = `${c.branchStrategy ?? 'feature'}/${slug}-task`
+  // Unique suffix prevents branch/PR collisions when the same workItemId runs twice
+  const uniq = delegation.id.replace(/-/g, '').slice(0, 6)
+  const branch = `${c.branchStrategy ?? 'feature'}/${slug}-${uniq}`
   const commitPrefix = c.taskType || 'feat'
   const maxTurns = budgetToClaudeCliMaxTurns(c.maxBudgetUsd)
   const checkpointTurn = Math.max(10, Math.floor(maxTurns * 0.4))
