@@ -553,7 +553,10 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       timestamp: new Date().toISOString(),
       type: 'error',
       message,
-    }])
+    }], 'failed') // set terminal status — otherwise the delegation hangs on 'running' forever
+    createDelegationRepository(SINGLE_TENANT_USER_ID)
+      .update(id, { errorMessage: message, completedAt: new Date().toISOString() })
+      .catch(() => {})
     try {
       if (proc.pid) process.kill(-proc.pid, 'SIGTERM')
     } catch {
@@ -655,16 +658,18 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
   // M107/M109: Async test runner — used both during checkpoints and post-execution.
   // Guard against concurrent runs: if a test is already running for this workspace, skip.
   let checkpointTestRunning = false
-  function runPostExecutionTestsAsync(workspacePath: string): Promise<{ passed: boolean; output: string }> {
+  function runPostExecutionTestsAsync(workspacePath: string): Promise<{ passed: boolean; output: string; timedOut?: boolean }> {
     return new Promise(resolve => {
       const child = spawn('npm', ['run', 'test:run'], { cwd: workspacePath, stdio: ['ignore', 'pipe', 'pipe'] })
       let out = ''
       child.stdout?.on('data', (chunk: Buffer) => { out += chunk.toString() })
       child.stderr?.on('data', (chunk: Buffer) => { out += chunk.toString() })
+      // 300s: full suite in a fresh worktree takes 2-4 min (collect + 3500+ tests).
+      // A timeout is an INFRA signal (slow machine, npm install missing) — never a code-failure.
       const timer = setTimeout(() => {
         child.kill()
-        resolve({ passed: false, output: 'Test runner timed out' })
-      }, 90_000)
+        resolve({ passed: false, output: 'Test runner timed out after 300s', timedOut: true })
+      }, 300_000)
       child.on('close', (code: number | null) => {
         clearTimeout(timer)
         resolve({ passed: code === 0, output: out.slice(-3000) })
@@ -795,7 +800,14 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       const currentRetryCount = current.retryCount ?? 0
       if (success && autoRetryEnabled && currentRetryCount < 3) {
         const testResult = await runPostExecutionTestsAsync(runnerWorkspace.path)
-        if (!testResult.passed) {
+        if (testResult.timedOut) {
+          // Infra problem, not a code problem — do NOT burn a retry on it
+          void appendLogs(id, [{
+            timestamp: new Date().toISOString(),
+            type: 'info',
+            message: '⚠ Test-Runner-Timeout (Infra) — kein Auto-Retry, Lauf wird als abgeschlossen gewertet. Tests bitte manuell prüfen.',
+          }])
+        } else if (!testResult.passed) {
           void appendLogs(id, [{
             timestamp: new Date().toISOString(),
             type: 'error',
@@ -1486,11 +1498,15 @@ function runWithCodexCLI(id: string, prompt: string, startTime: Date, budgetUsd:
   startupTimer = setTimeout(() => {
     if (sawOutput) return
     const timeoutSeconds = Math.round(startupTimeoutMs / 1000)
+    const codexStallMessage = `Codex CLI hat nach ${timeoutSeconds}s keine Ausgabe geliefert. Bitte Codex CLI lokal mit \`codex exec "ping"\` testen und erneut starten.`
     void appendLogs(id, [{
       timestamp: new Date().toISOString(),
       type: 'error',
-      message: `Codex CLI hat nach ${timeoutSeconds}s keine Ausgabe geliefert. Bitte Codex CLI lokal mit \`codex exec "ping"\` testen und erneut starten.`,
-    }])
+      message: codexStallMessage,
+    }], 'failed')
+    createDelegationRepository(SINGLE_TENANT_USER_ID)
+      .update(id, { errorMessage: codexStallMessage, completedAt: new Date().toISOString() })
+      .catch(() => {})
     try {
       if (proc.pid) process.kill(-proc.pid, 'SIGTERM')
     } catch {
