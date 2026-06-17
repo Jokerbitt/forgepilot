@@ -40,7 +40,9 @@ export async function triggerChain(
         return { created: false, skipped: true, reason: 'chainNextId delegation not found or not pending' }
       }
 
-      await repo.update(chainNextId, { status: 'approved' })
+      // Set chainedFromId so the next phase can reuse this phase's persistent
+      // workspace (build directly on top instead of re-scaffolding from scratch).
+      await repo.update(chainNextId, { status: 'approved', chainedFromId: completedDelegation.id })
 
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
       fetch(`${baseUrl}/api/delegations/${chainNextId}/execute`, { method: 'POST' }).catch(() => {})
