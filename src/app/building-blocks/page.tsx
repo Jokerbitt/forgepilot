@@ -65,7 +65,7 @@ export default function BuildingBlocksPage() {
         <Link href="/" className="text-sm text-slate-500 hover:text-slate-300">← Command Center</Link>
 
         <div className="mt-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-violet-400">Don't reinvent the wheel</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-violet-400">Don&apos;t reinvent the wheel</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight">SaaS Building Blocks</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
             Wiederverwendbare, getestete Bausteine, die Agenten beim App-Bau kopieren und anpassen —
