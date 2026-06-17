@@ -222,7 +222,7 @@ function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryC
     ? `\n## Context\n${c.context.trim()}\n${contextCardsBlock}${retryContext ?? ''}`
     : `${contextCardsBlock}${retryContext ?? ''}`
 
-  const { skillBlock, knowledgeBlock, codebaseBlock, profile } = buildSelectiveContext(c, targetRepo)
+  const { skillBlock, knowledgeBlock, codebaseBlock, buildingBlocksBlock, profile } = buildSelectiveContext(c, targetRepo)
 
   return `You are an autonomous software engineering agent working on **ForgePilot** — a local-first AI Workflow OS built with Next.js 14, TypeScript strict, Tailwind CSS, and Vitest.
 
@@ -276,7 +276,7 @@ ${dod}
 - **One WebFetch attempt per URL** — if it fails (4xx/5xx), try a different approach.
 - **Diagnose before retrying commands** — read error output fully before repeating.
 - **Config files stay in context** — never reload tsconfig.json, package.json twice.
-${skillBlock}${knowledgeBlock}${codebaseBlock}
+${skillBlock}${knowledgeBlock}${codebaseBlock}${buildingBlocksBlock}
 
 Start now.`
 }

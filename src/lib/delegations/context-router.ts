@@ -8,6 +8,7 @@
 import { buildKnowledgeBlock } from './knowledge-packages'
 import { buildCodebaseContextBlock } from './codebase-scout'
 import { assembleSkillBlock, seedBuiltinSkills } from '@/lib/skills/prompt-skill-registry'
+import { buildBuildingBlocksCatalog } from '@/lib/building-blocks/catalog'
 import type { TaskContract } from '@/lib/models/delegation'
 
 export type ContextProfile = 'feature' | 'bug-fix' | 'test' | 'ui-component' | 'review' | 'refactor' | 'docs' | 'infra'
@@ -16,6 +17,8 @@ export interface ContextBlocks {
   skillBlock: string
   knowledgeBlock: string
   codebaseBlock: string
+  /** Reusable SaaS building-block catalog (empty for non-building task types) */
+  buildingBlocksBlock: string
   /** Estimated token cost of all blocks combined */
   estimatedTokens: number
   /** Which profile was used */
@@ -48,15 +51,17 @@ const PROFILE_CONFIG: Record<ContextProfile, {
   skill: boolean
   knowledge: boolean
   codebase: boolean | 'minimal'
+  /** Inject the reusable SaaS building-block catalog — only for build-heavy profiles */
+  buildingBlocks: boolean
 }> = {
-  'feature':      { skill: true,  knowledge: true,  codebase: true      },
-  'bug-fix':      { skill: true,  knowledge: false, codebase: 'minimal' },
-  'test':         { skill: true,  knowledge: false, codebase: 'minimal' },
-  'ui-component': { skill: true,  knowledge: true,  codebase: 'minimal' },
-  'review':       { skill: false, knowledge: false, codebase: false     },
-  'refactor':     { skill: true,  knowledge: false, codebase: 'minimal' },
-  'docs':         { skill: false, knowledge: false, codebase: 'minimal' },
-  'infra':        { skill: true,  knowledge: true,  codebase: true      },
+  'feature':      { skill: true,  knowledge: true,  codebase: true,      buildingBlocks: true  },
+  'bug-fix':      { skill: true,  knowledge: false, codebase: 'minimal', buildingBlocks: false },
+  'test':         { skill: true,  knowledge: false, codebase: 'minimal', buildingBlocks: false },
+  'ui-component': { skill: true,  knowledge: true,  codebase: 'minimal', buildingBlocks: true  },
+  'review':       { skill: false, knowledge: false, codebase: false,     buildingBlocks: false },
+  'refactor':     { skill: true,  knowledge: false, codebase: 'minimal', buildingBlocks: false },
+  'docs':         { skill: false, knowledge: false, codebase: 'minimal', buildingBlocks: false },
+  'infra':        { skill: true,  knowledge: true,  codebase: true,      buildingBlocks: true  },
 }
 
 function roughTokens(s: string): number {
@@ -94,7 +99,13 @@ export function buildSelectiveContext(
       )
     : ''
 
-  const estimatedTokens = roughTokens(skillBlock) + roughTokens(knowledgeBlock) + roughTokens(codebaseBlock)
+  // Building-block catalog: lightweight (metadata only), agent reads files on demand
+  const buildingBlocksBlock = cfg.buildingBlocks
+    ? buildBuildingBlocksCatalog(contract.goal, contract.context ?? '')
+    : ''
 
-  return { skillBlock, knowledgeBlock, codebaseBlock, estimatedTokens, profile }
+  const estimatedTokens = roughTokens(skillBlock) + roughTokens(knowledgeBlock)
+    + roughTokens(codebaseBlock) + roughTokens(buildingBlocksBlock)
+
+  return { skillBlock, knowledgeBlock, codebaseBlock, buildingBlocksBlock, estimatedTokens, profile }
 }
