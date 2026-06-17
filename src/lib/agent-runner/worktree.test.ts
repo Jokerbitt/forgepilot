@@ -11,6 +11,7 @@ import {
   sanitizeWorktreeName,
   shouldKeepRunnerWorktree,
   writebackLocalResult,
+  reuseExistingWorkspace,
 } from './worktree'
 
 vi.mock('child_process', () => ({
@@ -308,4 +309,32 @@ describe('writebackLocalResult', () => {
     expect(result).toBeNull()
   })
 
+})
+
+describe('reuseExistingWorkspace', () => {
+  it('returns null for a non-existent path', () => {
+    expect(reuseExistingWorkspace('/tmp/does-not-exist-xyz-123')).toBeNull()
+  })
+
+  it('returns null when path exists but is not a git repo', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-reuse-nogit-'))
+    try {
+      expect(reuseExistingWorkspace(dir)).toBeNull()
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('reuses a directory that contains a .git folder', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-reuse-git-'))
+    try {
+      fs.mkdirSync(path.join(dir, '.git'))
+      const ws = reuseExistingWorkspace(dir)
+      expect(ws).not.toBeNull()
+      expect(ws?.path).toBe(dir)
+      expect(typeof ws?.cleanup).toBe('function')
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })

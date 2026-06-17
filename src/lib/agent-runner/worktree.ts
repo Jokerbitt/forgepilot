@@ -148,6 +148,26 @@ export function writebackLocalResult(options: {
   return { branch, fileCount, mergedToMain, defaultBranch }
 }
 
+/**
+ * Wrap an EXISTING workspace path as a RunnerWorkspace so a later chain phase
+ * can keep building on the previous phase's work (persistent multi-phase build).
+ * Returns null when the path is missing or not a git repo.
+ */
+export function reuseExistingWorkspace(
+  workspacePath: string,
+  env: Record<string, string | undefined> = process.env,
+): RunnerWorkspace | null {
+  if (!workspacePath || !fs.existsSync(workspacePath)) return null
+  if (!fs.existsSync(path.join(workspacePath, '.git'))) return null
+  return {
+    path: workspacePath,
+    cleanup: () => {
+      if (env.FORGEPILOT_KEEP_RUNNER_WORKTREES === 'true') return
+      fs.rmSync(workspacePath, { recursive: true, force: true })
+    },
+  }
+}
+
 export function prepareRunnerWorkspace(options: {
   delegationId: string
   sourceCwd?: string

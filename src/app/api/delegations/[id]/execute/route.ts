@@ -39,7 +39,7 @@ import type { MemoryCard } from '@/lib/knowledge/types'
 import { checkParallelCompletion } from '@/lib/delegation-parallel'
 import { triggerCriticRetry } from '@/lib/delegations/critic-retry'
 import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-runtime-evidence'
-import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, writebackLocalResult, type RunnerWorkspace } from '@/lib/agent-runner/worktree'
+import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, writebackLocalResult, reuseExistingWorkspace, type RunnerWorkspace } from '@/lib/agent-runner/worktree'
 import { getNBAConfig } from '@/lib/nba-engine/nba-config'
 import { recordSkillOutcome, listSkills, seedBuiltinSkills } from '@/lib/skills/prompt-skill-registry'
 import { applyAutoOptimizations } from '@/lib/skills/skill-optimizer'
@@ -752,6 +752,23 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       : undefined
 
     const cleanupRunnerWorkspace = async () => {
+      // Persistent multi-phase build: if this delegation has a NEXT chain phase,
+      // keep the workspace alive so the next phase builds on this one's work.
+      // Only the LAST phase writes back to the target repo + cleans up.
+      const _chainState = await createDelegationRepository(SINGLE_TENANT_USER_ID).findById(id).catch(() => null)
+      const hasNextPhase = Boolean(_chainState?.chainNextId)
+      if (success && hasNextPhase) {
+        await createDelegationRepository(SINGLE_TENANT_USER_ID)
+          .update(id, { worktreePath: runnerWorkspace.path })
+          .catch(() => {})
+        await appendLogs(id, [{
+          timestamp: new Date().toISOString(),
+          type: 'info',
+          message: `⛓️ Workspace bleibt erhalten für die nächste Phase: ${runnerWorkspace.path}`,
+        }])
+        return // do NOT writeback or clean up — the next phase continues here
+      }
+
       // Writeback + outcome verification: for a LOCAL target repo, push the agent's
       // result back BEFORE the temp clone is deleted — otherwise the code is lost.
       if (success && targetRepo) {
@@ -1895,7 +1912,24 @@ export async function POST(
   }
 
   if (mode === 'claude-cli') {
-    runWithClaudeCLI(id, prompt, startTime, delegation.contract.maxBudgetUsd, delegation.contract.riskClass, delegation.targetRepo)
+    // Persistent multi-phase build: reuse the previous chain phase's workspace
+    // so this phase builds directly on top of it (no fresh clone, no npm install).
+    let chainWorkspace: RunnerWorkspace | undefined
+    if (delegation.chainedFromId) {
+      const prev = await repo.findById(delegation.chainedFromId)
+      if (prev?.worktreePath) {
+        const reused = reuseExistingWorkspace(prev.worktreePath)
+        if (reused) {
+          chainWorkspace = reused
+          await appendLogs(id, [{
+            timestamp: new Date().toISOString(),
+            type: 'info',
+            message: `⛓️ Baue auf Workspace der vorherigen Phase auf: ${prev.worktreePath}`,
+          }])
+        }
+      }
+    }
+    runWithClaudeCLI(id, prompt, startTime, delegation.contract.maxBudgetUsd, delegation.contract.riskClass, delegation.targetRepo, chainWorkspace)
     return NextResponse.json({ started: true, mode: 'claude-cli', delegationId: id })
   }
 
