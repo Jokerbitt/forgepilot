@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { ElementType } from 'react'
 import {
+  Boxes,
   Activity,
   BarChart3,
   BookOpen,
@@ -33,6 +34,14 @@ type ToolLink = {
 }
 
 const dailyTools: ToolLink[] = [
+  {
+    href: '/building-blocks',
+    title: 'Building Blocks',
+    description: 'Wiederverwendbare SaaS-Bausteine (Auth, DB, Billing, UI), die Agenten kopieren statt neu zu bauen.',
+    when: 'Nutzen, um zu sehen welche Standard-Bausteine fuer neue Apps bereitstehen.',
+    icon: Boxes,
+    tone: 'primary',
+  },
   {
     href: '/knowledge',
     title: 'Wissen',
