@@ -5,6 +5,8 @@ import { delegationLogger } from '@/lib/logger'
 import { withSpan } from '@/lib/tracing/tracer'
 import { checkRateLimit, buildRateLimitHeaders } from '@/lib/rate-limit'
 import { spawn, execSync } from 'child_process'
+import fsSync from 'fs'
+import pathMod from 'path'
 import type { Delegation, AgentLog, DelegationReport } from '@/lib/models/delegation'
 import { registerProcess, unregisterProcess } from '@/lib/process-registry'
 import { readConnectorConfigs, readStoredApiKeys } from '@/lib/connectors/config'
@@ -679,6 +681,34 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     })
   }
 
+  // Build-Gate: a phase must produce a green `npm run build` before the next
+  // chain phase may start — otherwise broken foundations cascade.
+  // Skips gracefully if the workspace has no build script (returns passed=true).
+  function runBuildGateAsync(workspacePath: string): Promise<{ passed: boolean; output: string; skipped?: boolean }> {
+    return new Promise(resolve => {
+      let hasBuild = false
+      try {
+        const pkg = JSON.parse(fsSync.readFileSync(pathMod.join(workspacePath, 'package.json'), 'utf-8')) as { scripts?: Record<string, string> }
+        hasBuild = Boolean(pkg.scripts?.build)
+      } catch { /* no package.json yet */ }
+      if (!hasBuild) { resolve({ passed: true, output: 'kein build-Script — Gate übersprungen', skipped: true }); return }
+
+      const child = spawn('npm', ['run', 'build'], {
+        cwd: workspacePath,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, NODE_ENV: 'production' },
+      })
+      let out = ''
+      child.stdout?.on('data', (c: Buffer) => { out += c.toString() })
+      child.stderr?.on('data', (c: Buffer) => { out += c.toString() })
+      const timer = setTimeout(() => { child.kill(); resolve({ passed: false, output: 'Build-Timeout nach 300s' }) }, 300_000)
+      child.on('close', (code: number | null) => {
+        clearTimeout(timer)
+        resolve({ passed: code === 0, output: out.slice(-3000) })
+      })
+    })
+  }
+
   proc.stdout?.on('data', (chunk: Buffer) => {
     sawOutput = true
     clearStartupTimer()
@@ -758,6 +788,8 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       const _chainState = await createDelegationRepository(SINGLE_TENANT_USER_ID).findById(id).catch(() => null)
       const hasNextPhase = Boolean(_chainState?.chainNextId)
       if (success && hasNextPhase) {
+        // Keep the workspace alive for the next phase. The Build-Gate already ran
+        // (before triggerChain) and confirmed this phase builds — see below.
         await createDelegationRepository(SINGLE_TENANT_USER_ID)
           .update(id, { worktreePath: runnerWorkspace.path })
           .catch(() => {})
@@ -942,9 +974,30 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       // M207: Fan-in — notify parent if this is a parallel sub-delegation
       void checkParallelCompletion(finishedDelegation)
 
-      // M230: Delegation chaining — fire-and-forget, never blocks or fails the parent
+      // M230: Delegation chaining — gated on a green build for multi-phase builds.
+      // The next phase must NOT start on a broken foundation.
       if (success) {
-        void triggerChain(finishedDelegation, fullOutput).catch(() => {})
+        if (finishedDelegation.chainNextId) {
+          const gate = await runBuildGateAsync(runnerWorkspace.path)
+          if (!gate.passed) {
+            await appendLogs(id, [{
+              timestamp: new Date().toISOString(),
+              type: 'error',
+              message: `⛔ Build-Gate fehlgeschlagen — nächste Phase wird NICHT gestartet. Build-Fehler:\n${gate.output.slice(-800)}`,
+            }], 'failed')
+            await repo.update(id, {
+              errorMessage: 'Build-Gate fehlgeschlagen: npm run build war nicht grün — Chain gestoppt um Folgefehler zu vermeiden.',
+              chainNextId: undefined,
+            }).catch(() => {})
+          } else {
+            if (!gate.skipped) {
+              await appendLogs(id, [{ timestamp: new Date().toISOString(), type: 'success', message: '✅ Build-Gate grün — nächste Phase wird gestartet.' }])
+            }
+            void triggerChain(finishedDelegation, fullOutput).catch(() => {})
+          }
+        } else {
+          void triggerChain(finishedDelegation, fullOutput).catch(() => {})
+        }
       }
 
       // Loop-Closure: in autopilot mode, auto-start the next safe delegation
