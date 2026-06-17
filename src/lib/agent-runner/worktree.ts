@@ -73,37 +73,79 @@ function isLocalPathRepo(targetRepo: string): boolean {
   return targetRepo.startsWith('/') || targetRepo.startsWith('.') || targetRepo.startsWith('~')
 }
 
+export interface WritebackResult {
+  /** Backup branch the result was pushed to */
+  branch: string
+  /** Number of files in the result tree (outcome verification — 0/low = suspect) */
+  fileCount: number
+  /** True when the result was merged into the target repo's main/default branch */
+  mergedToMain: boolean
+  /** The default branch name we merged into (or attempted) */
+  defaultBranch: string
+}
+
+function gitOut(cwd: string, args: string[]): string {
+  return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+}
+
 /**
  * Write the agent's result back to a LOCAL target repo before the temp clone is deleted.
  *
- * Without this, clone-mode work is lost: the agent commits to a temp clone that
- * cleanup() then deletes, and a local repo has no GitHub remote to receive a PR.
+ * Clone-mode work is otherwise lost: the agent commits to a temp clone that
+ * cleanup() then deletes, and a local repo has no GitHub remote for a PR.
  *
- * We push the clone's HEAD to a `forgepilot/result-<id>` branch on the origin
- * (the local repo). A new branch is always pushable even when the origin has
- * `main` checked out — the user then merges it. Returns the branch name or null.
+ * Strategy (in order):
+ *  1. Push the clone's HEAD to a `forgepilot/result-<id>` backup branch (always works).
+ *  2. Fast-forward the target repo's default branch to that result via fetch+merge.
+ *     A fresh depth-1 clone makes the agent's commits direct descendants of the
+ *     target's default branch, so an ff-merge succeeds and updates the working tree
+ *     in place — the app appears in the target repo, fully autonomous.
+ *
+ * Returns file count + whether the main merge succeeded, for outcome verification.
  */
 export function writebackLocalResult(options: {
   workspacePath: string
   targetRepo: string
   delegationId: string
-}): { branch: string } | null {
+}): WritebackResult | null {
   const { workspacePath, targetRepo, delegationId } = options
   if (!isLocalPathRepo(targetRepo)) return null
   if (!fs.existsSync(workspacePath) || !fs.existsSync(targetRepo)) return null
 
   const branch = `forgepilot/result-${sanitizeWorktreeName(delegationId).slice(0, 16)}`
+
+  // 1. Push backup branch (always allowed — it's a new ref)
   try {
-    // Push the clone's current HEAD to a fresh branch on the origin (the local repo).
-    // Pushing a NEW branch is allowed even when the origin has that branch checked out.
     execFileSync('git', ['push', 'origin', `HEAD:refs/heads/${branch}`, '--force'], {
-      cwd: workspacePath,
-      stdio: 'ignore',
+      cwd: workspacePath, stdio: 'ignore',
     })
-    return { branch }
   } catch {
     return null
   }
+
+  // Count files in the result tree (outcome signal)
+  let fileCount = 0
+  try {
+    const tree = gitOut(workspacePath, ['ls-tree', '-r', 'HEAD', '--name-only'])
+    fileCount = tree ? tree.split('\n').filter(Boolean).length : 0
+  } catch { /* keep 0 */ }
+
+  // 2. Try to fast-forward the target's default branch in place
+  let defaultBranch = 'main'
+  let mergedToMain = false
+  try {
+    defaultBranch = gitOut(targetRepo, ['rev-parse', '--abbrev-ref', 'HEAD']) || 'main'
+    // Fetch the clone's commits into the target repo without touching its working tree
+    execFileSync('git', ['fetch', workspacePath, 'HEAD'], { cwd: targetRepo, stdio: 'ignore' })
+    // Fast-forward only — safe: never rewrites history, fails cleanly if not a descendant
+    execFileSync('git', ['merge', '--ff-only', 'FETCH_HEAD'], { cwd: targetRepo, stdio: 'ignore' })
+    mergedToMain = true
+  } catch {
+    // ff-merge not possible (target default branch diverged) — backup branch still has the work
+    mergedToMain = false
+  }
+
+  return { branch, fileCount, mergedToMain, defaultBranch }
 }
 
 export function prepareRunnerWorkspace(options: {

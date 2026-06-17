@@ -752,8 +752,8 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       : undefined
 
     const cleanupRunnerWorkspace = async () => {
-      // Writeback: for a LOCAL target repo, push the agent's result to a branch on
-      // the origin BEFORE the temp clone is deleted — otherwise the code is lost.
+      // Writeback + outcome verification: for a LOCAL target repo, push the agent's
+      // result back BEFORE the temp clone is deleted — otherwise the code is lost.
       if (success && targetRepo) {
         const writeback = writebackLocalResult({
           workspacePath: runnerWorkspace.path,
@@ -761,10 +761,35 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
           delegationId: id,
         })
         if (writeback) {
+          if (writeback.mergedToMain) {
+            await appendLogs(id, [{
+              timestamp: new Date().toISOString(),
+              type: 'success',
+              message: `✅ Ergebnis autonom in ${targetRepo} (${writeback.defaultBranch}) übernommen — ${writeback.fileCount} Dateien. Backup-Branch: ${writeback.branch}`,
+            }])
+          } else {
+            await appendLogs(id, [{
+              timestamp: new Date().toISOString(),
+              type: 'info',
+              message: `⚠ Auto-Merge nicht möglich (${writeback.defaultBranch} divergiert). Ergebnis liegt im Branch \`${writeback.branch}\` (${writeback.fileCount} Dateien). Mergen mit: git merge ${writeback.branch}`,
+            }])
+          }
+          // Outcome verification: a "completed" build that wrote almost nothing is suspect
+          if (writeback.fileCount <= 1) {
+            await appendLogs(id, [{
+              timestamp: new Date().toISOString(),
+              type: 'error',
+              message: `❌ Outcome-Warnung: Der Lauf meldete Erfolg, aber das Ergebnis enthält nur ${writeback.fileCount} Datei(en). Der Agent hat vermutlich nichts Substanzielles erzeugt.`,
+            }])
+            await createDelegationRepository(SINGLE_TENANT_USER_ID)
+              .update(id, { errorMessage: `Outcome-Verifikation fehlgeschlagen: nur ${writeback.fileCount} Datei(en) im Ergebnis` })
+              .catch(() => {})
+          }
+        } else {
           await appendLogs(id, [{
             timestamp: new Date().toISOString(),
-            type: 'success',
-            message: `✅ Ergebnis zurückgeschrieben → Branch \`${writeback.branch}\` in ${targetRepo}. Mergen mit: git merge ${writeback.branch}`,
+            type: 'error',
+            message: `❌ Writeback fehlgeschlagen — Code konnte nicht ins Ziel-Repo ${targetRepo} geschrieben werden. Bitte Logs prüfen.`,
           }])
         }
       }

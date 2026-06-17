@@ -282,7 +282,7 @@ describe('writebackLocalResult', () => {
     expect(result).toBeNull()
   })
 
-  it('pushes a result branch to a local origin and returns the branch name', () => {
+  it('pushes a result branch and reports outcome fields', () => {
     execFileSyncMock.mockReturnValue('' as never)
     const result = writebackLocalResult({
       workspacePath: '/tmp',          // exists
@@ -291,19 +291,21 @@ describe('writebackLocalResult', () => {
     })
     expect(result).not.toBeNull()
     expect(result?.branch).toContain('forgepilot/result-')
-    // verify it pushed via git
-    const call = execFileSyncMock.mock.calls.find(c => c[0] === 'git')
-    expect(call?.[1]).toContain('push')
-    expect(call?.[1]).toContain('origin')
+    expect(typeof result?.fileCount).toBe('number')
+    expect(typeof result?.mergedToMain).toBe('boolean')
+    // the FIRST git call must be the backup-branch push
+    const push = execFileSyncMock.mock.calls.find(c => Array.isArray(c[1]) && c[1].includes('push'))
+    expect(push?.[1]).toContain('origin')
   })
 
-  it('returns null when git push fails', () => {
-    execFileSyncMock.mockImplementation(() => { throw new Error('push rejected') })
+  it('returns null when the backup-branch push fails', () => {
+    execFileSyncMock.mockImplementationOnce(() => { throw new Error('push rejected') })
     const result = writebackLocalResult({
       workspacePath: '/tmp',
       targetRepo: '/tmp',
-      delegationId: 'del-fail',
+      delegationId: 'del-pushfail',
     })
     expect(result).toBeNull()
   })
+
 })
