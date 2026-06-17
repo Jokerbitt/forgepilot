@@ -1025,8 +1025,35 @@ export default function DelegationDetailPage() {
               </section>
             )}
 
+            {/* ── Budget-paused: resume with more budget ──────────────────── */}
+            {d.budgetPaused && (
+              <div className="rounded-xl border border-amber-700/40 bg-amber-950/20 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl">⏸️</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-amber-200">Budget pausiert</p>
+                    <p className="text-xs text-amber-300/80 mt-1 leading-5">{d.budgetPausedReason ?? d.errorMessage}</p>
+                    <button
+                      onClick={async () => {
+                        setDelegation(prev => prev ? { ...prev, status: 'running', budgetPaused: false, updatedAt: new Date().toISOString() } : prev)
+                        await fetch(`/api/delegations/${id}/resume-budget`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ multiplier: 2 }),
+                        }).catch(() => {})
+                        setTimeout(loadDelegation, 1500)
+                      }}
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-500"
+                    >
+                      ↩️ Mit doppeltem Budget fortsetzen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ── M4/M5: Classified error card with actionable fix ────────── */}
-            <DelegationErrorCard delegation={d} />
+            {!d.budgetPaused && <DelegationErrorCard delegation={d} />}
 
             {/* ── M120: Preview & Iterate ──────────────────────────────────── */}
             <PreviewAndIteratePanel delegation={d} />

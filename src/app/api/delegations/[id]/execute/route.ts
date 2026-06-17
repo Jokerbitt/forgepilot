@@ -1965,10 +1965,24 @@ export async function POST(
   }
 
   if (mode === 'claude-cli') {
-    // Persistent multi-phase build: reuse the previous chain phase's workspace
-    // so this phase builds directly on top of it (no fresh clone, no npm install).
+    // Workspace reuse — two cases that both let the agent build on existing work
+    // instead of starting from a fresh clone:
+    //   (a) Resume: this delegation already has its own worktree (e.g. budget-paused
+    //       and resumed with more budget) — continue right where it left off.
+    //   (b) Chain: build on top of the previous chain phase's workspace.
     let chainWorkspace: RunnerWorkspace | undefined
-    if (delegation.chainedFromId) {
+    if (delegation.worktreePath) {
+      const own = reuseExistingWorkspace(delegation.worktreePath)
+      if (own) {
+        chainWorkspace = own
+        await appendLogs(id, [{
+          timestamp: new Date().toISOString(),
+          type: 'info',
+          message: `↩️ Setze im eigenen Workspace fort: ${delegation.worktreePath}`,
+        }])
+      }
+    }
+    if (!chainWorkspace && delegation.chainedFromId) {
       const prev = await repo.findById(delegation.chainedFromId)
       if (prev?.worktreePath) {
         const reused = reuseExistingWorkspace(prev.worktreePath)
