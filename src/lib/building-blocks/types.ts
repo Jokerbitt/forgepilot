@@ -15,6 +15,13 @@ export type BlockCategory =
   | 'testing'
   | 'api-crud'
   | 'deployment'
+  | 'ai-routing'
+  | 'ai-guardrails'
+  | 'settings'
+  | 'security'
+  | 'landing'
+  | 'dashboard'
+  | 'forms-toast'
 
 export type BlockStack =
   | 'nextjs'          // Next.js App Router

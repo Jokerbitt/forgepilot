@@ -8,6 +8,7 @@
 
 import path from 'path'
 import { BUILDING_BLOCKS } from './registry'
+import { matchBundle, bundleBlocks, keywordHit } from './bundles'
 import type { BuildingBlock } from './types'
 
 /** Absolute path to the building-blocks/ directory (repo root). */
@@ -19,11 +20,11 @@ export function buildingBlocksRoot(repoRoot: string = process.cwd()): string {
 function scoreBlock(block: BuildingBlock, goalLower: string): number {
   let score = 0
   for (const kw of block.keywords) {
-    if (goalLower.includes(kw)) score += 2
+    if (keywordHit(goalLower, kw)) score += 2
   }
   // Light boost for the block name words
   for (const word of block.name.toLowerCase().split(/\W+/)) {
-    if (word.length >= 4 && goalLower.includes(word)) score += 1
+    if (word.length >= 4 && keywordHit(goalLower, word)) score += 1
   }
   return score
 }
@@ -62,18 +63,27 @@ export function buildBuildingBlocksCatalog(
   context = '',
   repoRoot: string = process.cwd(),
 ): string {
-  const blocks = selectRelevantBlocks(goal, context)
+  const root = buildingBlocksRoot(repoRoot)
+
+  // If a bundle matches the app type, present its curated set; otherwise pick by keyword.
+  const bundle = matchBundle(goal, context)
+  const blocks = bundle ? bundleBlocks(bundle) : selectRelevantBlocks(goal, context)
   if (blocks.length === 0) return ''
 
-  const root = buildingBlocksRoot(repoRoot)
   const lines: string[] = [
     '',
     '## Reusable Building Blocks (do NOT reinvent the wheel)',
-    `Battle-tested SaaS scaffolds live in \`${root}\`. When a block below fits the task,`,
+    `Battle-tested scaffolds live in \`${root}\`. When a block below fits the task,`,
     'READ its files from that directory and adapt them instead of writing from scratch.',
     'Each block lists exactly when to use it. Skip blocks that do not apply.',
     '',
   ]
+
+  if (bundle) {
+    lines.push(`**Recommended bundle for this app: ${bundle.name}** — ${bundle.description}`)
+    lines.push(`Build in this order: ${bundle.blockIds.join(' → ')}`)
+    lines.push('')
+  }
 
   for (const b of blocks) {
     lines.push(`### ${b.name}  \`[${b.category}]\``)

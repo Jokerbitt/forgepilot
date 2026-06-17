@@ -16,10 +16,18 @@ interface Block {
   files: BlockFile[]
   setupSteps: string[]
 }
+interface BundleInfo {
+  id: string
+  name: string
+  description: string
+  blockIds: string[]
+  blockCount: number
+}
 interface Catalog {
   total: number
   totalFiles: number
   byCategory: Record<string, number>
+  bundles: BundleInfo[]
   blocks: Block[]
 }
 
@@ -31,6 +39,13 @@ const CATEGORY_COLORS: Record<string, string> = {
   testing: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
   'api-crud': 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
   deployment: 'bg-teal-500/15 text-teal-300 border-teal-500/30',
+  'ai-routing': 'bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30',
+  'ai-guardrails': 'bg-pink-500/15 text-pink-300 border-pink-500/30',
+  settings: 'bg-slate-500/15 text-slate-300 border-slate-500/30',
+  security: 'bg-red-500/15 text-red-300 border-red-500/30',
+  landing: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
+  dashboard: 'bg-lime-500/15 text-lime-300 border-lime-500/30',
+  'forms-toast': 'bg-orange-500/15 text-orange-300 border-orange-500/30',
 }
 
 export default function BuildingBlocksPage() {
@@ -78,7 +93,34 @@ export default function BuildingBlocksPage() {
               </div>
             </div>
 
-            <div className="mt-6 space-y-3">
+            {/* Curated bundles — pick a whole app foundation at once */}
+            {catalog.bundles && catalog.bundles.length > 0 && (
+              <div className="mt-8">
+                <h2 className="text-lg font-semibold">Bundles — Komplett-Sets pro App-Typ</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Statt einzeln zu wählen: pro App-Typ ein erprobtes Baustein-Set. ForgePilot wählt es automatisch anhand der Aufgabe.
+                </p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {catalog.bundles.map(bundle => (
+                    <div key={bundle.id} className="rounded-xl border border-violet-500/20 bg-violet-500/[0.04] p-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-violet-200">{bundle.name}</h3>
+                        <span className="text-[10px] text-slate-500">{bundle.blockCount} Bausteine</span>
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">{bundle.description}</p>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {bundle.blockIds.map(id => (
+                          <span key={id} className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-slate-400">{id}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <h2 className="mt-8 text-lg font-semibold">Alle Bausteine</h2>
+            <div className="mt-3 space-y-3">
               {catalog.blocks.map(block => {
                 const open = expanded === block.id
                 return (

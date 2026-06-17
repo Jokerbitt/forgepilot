@@ -167,6 +167,163 @@ export const BUILDING_BLOCKS: BuildingBlock[] = [
   },
 ]
 
+// ─── AI Routing (local/cloud auto-router) ───────────────────────────────────
+BUILDING_BLOCKS.push({
+  id: 'ai-routing',
+  name: 'AI Auto-Router (local/cloud)',
+  category: 'ai-routing',
+  stack: 'node',
+  summary: 'Provider-agnostic AI routing: prefer local Ollama, fall back to cloud (Anthropic), with a clean provider interface.',
+  whenToUse: 'Use for ANY app that calls an LLM. Gives you local-first inference (free, private) with automatic cloud fallback. Do NOT use for apps with no AI features.',
+  keywords: ['ai', 'llm', 'gpt', 'claude', 'ollama', 'model', 'provider', 'routing', 'chat', 'generate', 'inference', 'openai', 'anthropic'],
+  dependencies: ['@anthropic-ai/sdk'],
+  files: [
+    { src: 'ai-routing/provider-types.ts', dest: 'src/lib/ai/provider-types.ts', note: 'AIProvider interface + result types' },
+    { src: 'ai-routing/ollama-provider.ts', dest: 'src/lib/ai/ollama-provider.ts', note: 'Local Ollama provider' },
+    { src: 'ai-routing/anthropic-provider.ts', dest: 'src/lib/ai/anthropic-provider.ts', note: 'Cloud Anthropic provider' },
+    { src: 'ai-routing/auto-router.ts', dest: 'src/lib/ai/auto-router.ts', note: 'resolveProvider + generateText with fallback' },
+  ],
+  setupSteps: [
+    'Set AI_MODE=auto|local|cloud, OLLAMA_MODEL, ANTHROPIC_API_KEY in .env',
+    'Call generateText({ prompt, purpose }) from your routes',
+    'Add more providers by implementing the AIProvider interface',
+  ],
+})
+
+// ─── AI Guardrails ───────────────────────────────────────────────────────────
+BUILDING_BLOCKS.push({
+  id: 'ai-guardrails',
+  name: 'AI Guardrails (cost, rate, validation, PII)',
+  category: 'ai-guardrails',
+  stack: 'node',
+  summary: 'Safety rails for AI calls: cost caps, rate limiting, prompt-injection detection, and PII scrubbing.',
+  whenToUse: 'Use alongside the AI router for any production AI app to control spend and protect users. Skip for a throwaway prototype.',
+  keywords: ['ai', 'guardrail', 'cost', 'budget', 'rate limit', 'pii', 'injection', 'safety', 'validation', 'scrub', 'limit'],
+  dependencies: [],
+  files: [
+    { src: 'ai-guardrails/cost-guard.ts', dest: 'src/lib/ai/guards/cost-guard.ts', note: 'Cost estimate + budget cap' },
+    { src: 'ai-guardrails/rate-limit.ts', dest: 'src/lib/ai/guards/rate-limit.ts', note: 'Sliding-window rate limiter' },
+    { src: 'ai-guardrails/input-validation.ts', dest: 'src/lib/ai/guards/input-validation.ts', note: 'Prompt sanitize + injection detection' },
+    { src: 'ai-guardrails/pii-scrubber.ts', dest: 'src/lib/ai/guards/pii-scrubber.ts', note: 'Redact emails/cards/IBAN/phone' },
+  ],
+  setupSteps: [
+    'Wrap LLM calls: sanitizePrompt → checkRateLimit → checkBudget → generate',
+    'Scrub PII before logging any prompt or response',
+    'Move rate-limit + budget state to Redis/DB for multi-instance prod',
+  ],
+})
+
+// ─── Settings ────────────────────────────────────────────────────────────────
+BUILDING_BLOCKS.push({
+  id: 'settings',
+  name: 'Settings System (store + page + API)',
+  category: 'settings',
+  stack: 'nextjs',
+  summary: 'Typed app settings: file store with atomic writes, Zod schema, masked-API-key route, and a settings page.',
+  whenToUse: 'Use for any app where users configure theme, AI mode, API keys, or preferences. Almost every real app needs this.',
+  keywords: ['settings', 'config', 'preferences', 'api key', 'theme', 'options', 'configuration'],
+  dependencies: ['zod'],
+  files: [
+    { src: 'settings/settings-store.ts', dest: 'src/lib/settings/store.ts', note: 'Typed atomic JSON store' },
+    { src: 'settings/settings-schema.ts', dest: 'src/lib/settings/schema.ts', note: 'Zod schema + defaults' },
+    { src: 'settings/settings-route.ts', dest: 'src/app/api/settings/route.ts', note: 'GET (masked) + PATCH' },
+    { src: 'settings/SettingsPage.tsx', dest: 'src/app/settings/page.tsx', note: 'Settings UI' },
+  ],
+  setupSteps: [
+    'Extend the Zod schema with your app-specific settings',
+    'API keys are masked on GET — never return raw secrets to the client',
+    'Swap the file store for your database in production',
+  ],
+})
+
+// ─── Security Hardening ──────────────────────────────────────────────────────
+BUILDING_BLOCKS.push({
+  id: 'security',
+  name: 'Security Hardening',
+  category: 'security',
+  stack: 'nextjs',
+  summary: 'Production hardening: startup env validation, security headers, and a guarded API-handler wrapper.',
+  whenToUse: 'Use in EVERY production app before launch. Skip only for a local-only throwaway.',
+  keywords: ['security', 'hardening', 'headers', 'csp', 'env', 'validation', 'rate limit', 'guard', 'production', 'safe'],
+  dependencies: ['zod'],
+  files: [
+    { src: 'security/env-validation.ts', dest: 'src/lib/security/env-validation.ts', note: 'Validate env at startup' },
+    { src: 'security/security-headers.ts', dest: 'src/lib/security/headers.ts', note: 'Recommended security headers' },
+    { src: 'security/api-handler.ts', dest: 'src/lib/security/api-handler.ts', note: 'withApiGuards wrapper' },
+  ],
+  setupSteps: [
+    'Call validateEnv() in instrumentation.ts so bad config fails fast',
+    'Wire securityHeaders into next.config headers()',
+    'Wrap sensitive routes with withApiGuards (rate-limit + auth + body cap)',
+  ],
+})
+
+// ─── Landing Page ────────────────────────────────────────────────────────────
+BUILDING_BLOCKS.push({
+  id: 'landing',
+  name: 'Marketing Landing Page',
+  category: 'landing',
+  stack: 'nextjs',
+  summary: 'Conversion-ready landing sections: Hero, Features grid, and Pricing tiers — all prop-driven.',
+  whenToUse: 'Use when the app needs a public marketing/home page. Skip for an internal-only tool.',
+  keywords: ['landing', 'marketing', 'hero', 'pricing', 'features', 'home', 'public', 'cta', 'conversion'],
+  dependencies: ['lucide-react'],
+  files: [
+    { src: 'landing/Hero.tsx', dest: 'src/components/landing/Hero.tsx', note: 'Hero with CTAs' },
+    { src: 'landing/Features.tsx', dest: 'src/components/landing/Features.tsx', note: 'Feature grid' },
+    { src: 'landing/Pricing.tsx', dest: 'src/components/landing/Pricing.tsx', note: 'Pricing tiers' },
+  ],
+  setupSteps: [
+    'Compose the sections in your marketing route (e.g. app/(marketing)/page.tsx)',
+    'Pass your real copy, features and pricing tiers as props',
+    'Pair with the billing block to wire pricing CTAs to checkout',
+  ],
+})
+
+// ─── Dashboard Widgets ───────────────────────────────────────────────────────
+BUILDING_BLOCKS.push({
+  id: 'dashboard',
+  name: 'Dashboard Widgets',
+  category: 'dashboard',
+  stack: 'nextjs',
+  summary: 'Data-display building blocks: KPI StatCard, generic typed DataTable (sortable), and EmptyState.',
+  whenToUse: 'Use for any dashboard/admin/analytics view. Pairs with the app-shell from the ui-layout block.',
+  keywords: ['dashboard', 'table', 'stat', 'kpi', 'chart', 'admin', 'analytics', 'widget', 'metrics', 'data'],
+  dependencies: ['lucide-react'],
+  files: [
+    { src: 'dashboard/StatCard.tsx', dest: 'src/components/dashboard/StatCard.tsx', note: 'KPI card with delta' },
+    { src: 'dashboard/DataTable.tsx', dest: 'src/components/dashboard/DataTable.tsx', note: 'Generic sortable table' },
+    { src: 'dashboard/EmptyState.tsx', dest: 'src/components/dashboard/EmptyState.tsx', note: 'Reusable empty state' },
+  ],
+  setupSteps: [
+    'Use StatCard for top-of-dashboard KPIs',
+    'DataTable<T> is generic — define columns with optional render functions',
+    'Show EmptyState whenever a list/table has no rows',
+  ],
+})
+
+// ─── Forms, Toasts & Modals ──────────────────────────────────────────────────
+BUILDING_BLOCKS.push({
+  id: 'forms-toast',
+  name: 'Forms, Toasts & Modals',
+  category: 'forms-toast',
+  stack: 'nextjs',
+  summary: 'Interaction essentials: typed useForm hook, a toast notification system, and an accessible modal.',
+  whenToUse: 'Use in almost every app — forms, user feedback, and dialogs are universal needs.',
+  keywords: ['form', 'toast', 'modal', 'dialog', 'notification', 'validation', 'input', 'feedback', 'alert'],
+  dependencies: [],
+  files: [
+    { src: 'forms-toast/useForm.ts', dest: 'src/hooks/useForm.ts', note: 'Typed form hook with validation' },
+    { src: 'forms-toast/ToastProvider.tsx', dest: 'src/components/ToastProvider.tsx', note: 'Toast context + useToast()' },
+    { src: 'forms-toast/Modal.tsx', dest: 'src/components/Modal.tsx', note: 'Accessible modal/dialog' },
+  ],
+  setupSteps: [
+    'Wrap the app in <ToastProvider> in the root layout',
+    'Use useToast() to show success/error feedback after actions',
+    'useForm<T>({ initial, validate }) — pass a Zod-backed validate fn',
+  ],
+})
+
 export function getBlock(id: string): BuildingBlock | undefined {
   return BUILDING_BLOCKS.find(b => b.id === id)
 }

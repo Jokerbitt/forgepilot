@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { selectRelevantBlocks, buildBuildingBlocksCatalog, buildingBlocksRoot } from './catalog'
 import { BUILDING_BLOCKS, getBlock, getBlocksByCategory } from './registry'
+import { BUNDLES, getBundle, bundleBlocks, matchBundle } from './bundles'
 
 describe('registry', () => {
   it('has at least one block per declared category', () => {
@@ -75,13 +76,68 @@ describe('buildBuildingBlocksCatalog', () => {
     expect(out).toMatch(/read `.*auth.*` → write `.*`/)
   })
 
-  it('catalog is token-light — under 4000 chars for a focused goal', () => {
-    const out = buildBuildingBlocksCatalog('Add a CRUD API for todos')
+  it('catalog stays bounded even for a full SaaS bundle', () => {
+    const out = buildBuildingBlocksCatalog('Build a multi-user SaaS platform with subscriptions')
+    // a 10-block bundle is the largest case — still well under a context-blowing size
+    expect(out.length).toBeLessThan(12000)
+  })
+
+  it('a focused local-first goal yields a small catalog', () => {
+    const out = buildBuildingBlocksCatalog('Build a simple local todo tracker')
     expect(out.length).toBeLessThan(4000)
   })
 
   it('mentions the building-blocks directory path', () => {
     const out = buildBuildingBlocksCatalog('Add auth')
     expect(out).toContain('building-blocks')
+  })
+})
+
+describe('bundles', () => {
+  it('every bundle references only existing block ids', () => {
+    for (const bundle of BUNDLES) {
+      for (const id of bundle.blockIds) {
+        expect(getBlock(id), `${bundle.id} → ${id}`).toBeDefined()
+      }
+    }
+  })
+
+  it('matchBundle routes a SaaS goal to the saas-starter bundle', () => {
+    const b = matchBundle('Build a multi-user SaaS with subscription billing')
+    expect(b?.id).toBe('saas-starter')
+  })
+
+  it('matchBundle routes an AI goal to the ai-app bundle', () => {
+    const b = matchBundle('Build an AI chatbot assistant with an LLM')
+    expect(b?.id).toBe('ai-app')
+  })
+
+  it('matchBundle routes a todo goal to local-first', () => {
+    const b = matchBundle('A simple offline todo tracker with localStorage')
+    expect(b?.id).toBe('local-first')
+  })
+
+  it('bundleBlocks resolves to real BuildingBlock objects in order', () => {
+    const bundle = getBundle('ai-app')!
+    const blocks = bundleBlocks(bundle)
+    expect(blocks.length).toBe(bundle.blockIds.length)
+    expect(blocks[0].id).toBe(bundle.blockIds[0])
+  })
+
+  it('returns null for a goal that matches no bundle', () => {
+    expect(matchBundle('xyzzy plugh frobnicate')).toBeNull()
+  })
+})
+
+describe('catalog with bundles', () => {
+  it('surfaces the recommended bundle for a SaaS goal', () => {
+    const out = buildBuildingBlocksCatalog('Build a SaaS platform with billing and auth')
+    expect(out).toContain('Recommended bundle')
+    expect(out).toContain('SaaS Starter')
+  })
+
+  it('includes the new AI routing block for an AI goal', () => {
+    const out = buildBuildingBlocksCatalog('Build an LLM chatbot with cost guardrails')
+    expect(out).toContain('AI Auto-Router')
   })
 })
