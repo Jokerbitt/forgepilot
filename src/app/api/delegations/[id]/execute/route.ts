@@ -814,7 +814,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
             await appendLogs(id, [{
               timestamp: new Date().toISOString(),
               type: 'success',
-              message: `✅ Ergebnis autonom in ${targetRepo} (${writeback.defaultBranch}) übernommen — ${writeback.fileCount} Dateien. Backup-Branch: ${writeback.branch}`,
+              message: `✅ Ergebnis autonom in ${targetRepo} (${writeback.defaultBranch}) übernommen — ${writeback.fileCount} Dateien.${writeback.installed ? ' Abhängigkeiten installiert (npm install) — sofort startklar.' : ''} Backup-Branch: ${writeback.branch}`,
             }])
           } else {
             await appendLogs(id, [{

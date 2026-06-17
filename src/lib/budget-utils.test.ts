@@ -54,7 +54,7 @@ describe('estimateComplexity', () => {
   it('returns small for 1-2 DoD items and short goal', () => {
     const result = estimateComplexity(['Add button'], 'Add a submit button', undefined)
     expect(result.complexity).toBe('small')
-    expect(result.recommendedBudgetUsd).toBe(1)
+    expect(result.recommendedBudgetUsd).toBe(1.5)
     expect(result.recommendedTurns).toBe(35)
   })
 
@@ -65,7 +65,7 @@ describe('estimateComplexity', () => {
       undefined,
     )
     expect(result.complexity).toBe('medium')
-    expect(result.recommendedBudgetUsd).toBe(3)
+    expect(result.recommendedBudgetUsd).toBe(5)
   })
 
   it('returns large for 6+ DoD items', () => {

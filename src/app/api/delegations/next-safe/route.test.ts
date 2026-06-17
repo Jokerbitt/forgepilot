@@ -8,6 +8,8 @@ vi.mock('@/lib/nba-engine/nba-config', () => ({
     autopilotMaxRiskClass: 'A',
     maxConcurrentAgents: 2,
     autoStartApproved: false,
+    budgetEnforcement: 'tolerant' as const,
+    budgetTolerancePct: 20,
   })),
 }))
 

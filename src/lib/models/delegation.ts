@@ -203,6 +203,10 @@ export interface Delegation {
   inputTokens?: number
   outputTokens?: number
   cachedTokens?: number
+  /** Budget-paused: hit the cost cap but the work may be resumable with more budget.
+   *  Distinguishes a budget stop from a real failure. */
+  budgetPaused?: boolean
+  budgetPausedReason?: string
   createdAt: string
   updatedAt: string
 }

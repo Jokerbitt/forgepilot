@@ -34,10 +34,13 @@ const COMPLEXITY_TURNS: Record<TaskComplexity, number> = {
   large:  140,
 }
 
+// Calibrated against real builds: a "medium" UI phase realistically costs $3–5,
+// a "large" multi-feature phase $8–12. Headroom prevents premature budget stops;
+// the budget-enforcement setting (strict/tolerant/off) is the real safety net.
 const COMPLEXITY_BUDGET: Record<TaskComplexity, number> = {
-  small:  1.0,
-  medium: 3.0,
-  large:  8.0,
+  small:  1.5,
+  medium: 5.0,
+  large:  12.0,
 }
 
 /**

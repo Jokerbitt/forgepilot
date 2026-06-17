@@ -82,6 +82,8 @@ export interface WritebackResult {
   mergedToMain: boolean
   /** The default branch name we merged into (or attempted) */
   defaultBranch: string
+  /** True when npm install ran successfully in the target after merge */
+  installed?: boolean
 }
 
 function gitOut(cwd: string, args: string[]): string {
@@ -145,7 +147,17 @@ export function writebackLocalResult(options: {
     mergedToMain = false
   }
 
-  return { branch, fileCount, mergedToMain, defaultBranch }
+  // 3. Auto-install deps in the target so the app is immediately runnable.
+  // node_modules is (correctly) gitignored and never travels with the merge.
+  let installed = false
+  if (mergedToMain && fs.existsSync(path.join(targetRepo, 'package.json')) && !fs.existsSync(path.join(targetRepo, 'node_modules'))) {
+    try {
+      execFileSync('npm', ['install'], { cwd: targetRepo, stdio: 'ignore', timeout: 180_000 })
+      installed = true
+    } catch { /* install best-effort — user can run it manually */ }
+  }
+
+  return { branch, fileCount, mergedToMain, defaultBranch, installed }
 }
 
 /**

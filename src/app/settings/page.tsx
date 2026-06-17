@@ -1286,6 +1286,61 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
+
+            {/* Budget control */}
+            <div className="mt-4 border-t border-white/[0.06] pt-4 space-y-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Budget-Steuerung</p>
+              <div>
+                <label className="block text-xs text-gray-500 mb-2">Budget-Durchsetzung</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { v: 'strict', label: 'Strikt', hint: 'Stoppt exakt am Limit' },
+                    { v: 'tolerant', label: 'Tolerant', hint: 'Erlaubt X % Überschreitung' },
+                    { v: 'off', label: 'Aus', hint: 'Kein Budget-Limit' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.v}
+                      onClick={() => setConfig({ ...config, budgetEnforcement: opt.v })}
+                      className={`px-3 py-2 rounded-lg border text-sm font-semibold transition-colors ${
+                        config.budgetEnforcement === opt.v
+                          ? 'bg-violet-600 border-violet-500 text-white'
+                          : 'bg-gray-950 border-gray-800 text-gray-400 hover:text-white hover:border-gray-700'
+                      }`}
+                      title={opt.hint}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-600 mt-2">
+                  {config.budgetEnforcement === 'off'
+                    ? '⚠️ Kein Limit — Delegationen laufen ohne Kostendeckel. Vorsicht bei großen Builds.'
+                    : config.budgetEnforcement === 'tolerant'
+                      ? 'Stoppt erst, wenn das Limit um die eingestellte Toleranz überschritten wird.'
+                      : 'Stoppt, sobald die Kosten das Delegations-Budget erreichen.'}
+                </p>
+              </div>
+              {config.budgetEnforcement === 'tolerant' && (
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Toleranz: <span className="text-slate-300 font-mono">{config.budgetTolerancePct ?? 20}%</span> über dem Limit
+                  </label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={config.budgetTolerancePct ?? 20}
+                    onChange={e => setConfig({ ...config, budgetTolerancePct: parseInt(e.target.value) })}
+                    className="w-full accent-violet-500"
+                  />
+                  <p className="text-[11px] text-slate-600 mt-1">
+                    Beispiel: $4 Limit + {config.budgetTolerancePct ?? 20}% = bis $
+                    {(4 * (1 + (config.budgetTolerancePct ?? 20) / 100)).toFixed(2)} erlaubt
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
