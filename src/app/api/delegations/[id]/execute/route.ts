@@ -39,7 +39,7 @@ import type { MemoryCard } from '@/lib/knowledge/types'
 import { checkParallelCompletion } from '@/lib/delegation-parallel'
 import { triggerCriticRetry } from '@/lib/delegations/critic-retry'
 import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-runtime-evidence'
-import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, type RunnerWorkspace } from '@/lib/agent-runner/worktree'
+import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, writebackLocalResult, type RunnerWorkspace } from '@/lib/agent-runner/worktree'
 import { getNBAConfig } from '@/lib/nba-engine/nba-config'
 import { recordSkillOutcome, listSkills, seedBuiltinSkills } from '@/lib/skills/prompt-skill-registry'
 import { applyAutoOptimizations } from '@/lib/skills/skill-optimizer'
@@ -752,6 +752,22 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       : undefined
 
     const cleanupRunnerWorkspace = async () => {
+      // Writeback: for a LOCAL target repo, push the agent's result to a branch on
+      // the origin BEFORE the temp clone is deleted — otherwise the code is lost.
+      if (success && targetRepo) {
+        const writeback = writebackLocalResult({
+          workspacePath: runnerWorkspace.path,
+          targetRepo,
+          delegationId: id,
+        })
+        if (writeback) {
+          await appendLogs(id, [{
+            timestamp: new Date().toISOString(),
+            type: 'success',
+            message: `✅ Ergebnis zurückgeschrieben → Branch \`${writeback.branch}\` in ${targetRepo}. Mergen mit: git merge ${writeback.branch}`,
+          }])
+        }
+      }
       if (shouldKeepRunnerWorktree({ success, env: process.env })) {
         // M120: Store workspace path in delegation for preview access
         const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)

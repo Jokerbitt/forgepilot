@@ -68,6 +68,44 @@ export function getTargetRepo(
   return env.FORGEPILOT_RUNNER_TARGET_REPO?.trim() || undefined
 }
 
+/** True when the target repo is a local filesystem path (not a github.com URL). */
+function isLocalPathRepo(targetRepo: string): boolean {
+  return targetRepo.startsWith('/') || targetRepo.startsWith('.') || targetRepo.startsWith('~')
+}
+
+/**
+ * Write the agent's result back to a LOCAL target repo before the temp clone is deleted.
+ *
+ * Without this, clone-mode work is lost: the agent commits to a temp clone that
+ * cleanup() then deletes, and a local repo has no GitHub remote to receive a PR.
+ *
+ * We push the clone's HEAD to a `forgepilot/result-<id>` branch on the origin
+ * (the local repo). A new branch is always pushable even when the origin has
+ * `main` checked out — the user then merges it. Returns the branch name or null.
+ */
+export function writebackLocalResult(options: {
+  workspacePath: string
+  targetRepo: string
+  delegationId: string
+}): { branch: string } | null {
+  const { workspacePath, targetRepo, delegationId } = options
+  if (!isLocalPathRepo(targetRepo)) return null
+  if (!fs.existsSync(workspacePath) || !fs.existsSync(targetRepo)) return null
+
+  const branch = `forgepilot/result-${sanitizeWorktreeName(delegationId).slice(0, 16)}`
+  try {
+    // Push the clone's current HEAD to a fresh branch on the origin (the local repo).
+    // Pushing a NEW branch is allowed even when the origin has that branch checked out.
+    execFileSync('git', ['push', 'origin', `HEAD:refs/heads/${branch}`, '--force'], {
+      cwd: workspacePath,
+      stdio: 'ignore',
+    })
+    return { branch }
+  } catch {
+    return null
+  }
+}
+
 export function prepareRunnerWorkspace(options: {
   delegationId: string
   sourceCwd?: string

@@ -10,6 +10,7 @@ import {
   prepareRunnerWorkspace,
   sanitizeWorktreeName,
   shouldKeepRunnerWorktree,
+  writebackLocalResult,
 } from './worktree'
 
 vi.mock('child_process', () => ({
@@ -256,5 +257,53 @@ describe('prepareRunnerWorkspace — clone mode', () => {
     } finally {
       fs.rmSync(root, { recursive: true, force: true })
     }
+  })
+})
+
+describe('writebackLocalResult', () => {
+  afterEach(() => { execFileSyncMock.mockReset() })
+
+  it('returns null for github.com URLs (not a local path)', () => {
+    const result = writebackLocalResult({
+      workspacePath: '/tmp/ws',
+      targetRepo: 'https://github.com/foo/bar',
+      delegationId: 'del-1',
+    })
+    expect(result).toBeNull()
+    expect(execFileSyncMock).not.toHaveBeenCalled()
+  })
+
+  it('returns null when workspace path does not exist', () => {
+    const result = writebackLocalResult({
+      workspacePath: '/tmp/definitely-does-not-exist-xyz-123',
+      targetRepo: '/tmp',
+      delegationId: 'del-2',
+    })
+    expect(result).toBeNull()
+  })
+
+  it('pushes a result branch to a local origin and returns the branch name', () => {
+    execFileSyncMock.mockReturnValue('' as never)
+    const result = writebackLocalResult({
+      workspacePath: '/tmp',          // exists
+      targetRepo: '/tmp',             // exists + local path
+      delegationId: 'del-abc123-xyz',
+    })
+    expect(result).not.toBeNull()
+    expect(result?.branch).toContain('forgepilot/result-')
+    // verify it pushed via git
+    const call = execFileSyncMock.mock.calls.find(c => c[0] === 'git')
+    expect(call?.[1]).toContain('push')
+    expect(call?.[1]).toContain('origin')
+  })
+
+  it('returns null when git push fails', () => {
+    execFileSyncMock.mockImplementation(() => { throw new Error('push rejected') })
+    const result = writebackLocalResult({
+      workspacePath: '/tmp',
+      targetRepo: '/tmp',
+      delegationId: 'del-fail',
+    })
+    expect(result).toBeNull()
   })
 })
