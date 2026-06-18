@@ -42,6 +42,7 @@ import { checkParallelCompletion } from '@/lib/delegation-parallel'
 import { triggerCriticRetry } from '@/lib/delegations/critic-retry'
 import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-runtime-evidence'
 import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, writebackLocalResult, reuseExistingWorkspace, type RunnerWorkspace } from '@/lib/agent-runner/worktree'
+import { bootstrapRuntime, summarizeBootstrap } from '@/lib/agent-runner/runtime-bootstrap'
 import { getNBAConfig } from '@/lib/nba-engine/nba-config'
 import { recordSkillOutcome, listSkills, seedBuiltinSkills } from '@/lib/skills/prompt-skill-registry'
 import { applyAutoOptimizations } from '@/lib/skills/skill-optimizer'
@@ -816,6 +817,19 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
               type: 'success',
               message: `✅ Ergebnis autonom in ${targetRepo} (${writeback.defaultBranch}) übernommen — ${writeback.fileCount} Dateien.${writeback.installed ? ' Abhängigkeiten installiert (npm install) — sofort startklar.' : ''} Backup-Branch: ${writeback.branch}`,
             }])
+            // Runtime-Bootstrap: make the merged app actually runnable (env + DB),
+            // not just compilable. Best-effort — never fails the delegation.
+            try {
+              const bootstrap = bootstrapRuntime({ targetRepo })
+              const summary = summarizeBootstrap(bootstrap)
+              if (summary !== 'Kein Runtime-Bootstrap nötig') {
+                await appendLogs(id, [{
+                  timestamp: new Date().toISOString(),
+                  type: 'info',
+                  message: `🚀 Runtime-Bootstrap: ${summary}`,
+                }])
+              }
+            } catch { /* bootstrap is best-effort */ }
           } else {
             await appendLogs(id, [{
               timestamp: new Date().toISOString(),
