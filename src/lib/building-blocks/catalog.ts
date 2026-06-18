@@ -55,6 +55,31 @@ export function selectRelevantBlocks(
 }
 
 /**
+ * Connector blocks are opt-in integrations: only surface them when the goal
+ * actually references them, so they never bloat a build that does not need them.
+ */
+function connectorKeywordScore(block: BuildingBlock, haystack: string): number {
+  // Keyword-only — deliberately ignores block-name words so a connector is
+  // pulled in solely by explicit intent (e.g. the word "local" in a block name
+  // must never drag the storage connector into an unrelated local-first app).
+  let score = 0
+  for (const kw of block.keywords) {
+    if (keywordHit(haystack, kw)) score += 1
+  }
+  return score
+}
+
+function selectRelevantConnectors(goal: string, context = ''): BuildingBlock[] {
+  const haystack = `${goal} ${context}`.toLowerCase()
+  return BUILDING_BLOCKS
+    .filter(b => b.category.startsWith('connector-'))
+    .map(b => ({ b, score: connectorKeywordScore(b, haystack) }))
+    .filter(s => s.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map(s => s.b)
+}
+
+/**
  * Render the catalog block for the agent prompt.
  * Returns '' when no blocks are relevant.
  */
@@ -67,7 +92,13 @@ export function buildBuildingBlocksCatalog(
 
   // If a bundle matches the app type, present its curated set; otherwise pick by keyword.
   const bundle = matchBundle(goal, context)
-  const blocks = bundle ? bundleBlocks(bundle) : selectRelevantBlocks(goal, context)
+  const base = bundle ? bundleBlocks(bundle) : selectRelevantBlocks(goal, context)
+
+  // Always append connectors the goal explicitly asks for (only where needed),
+  // even on top of a curated bundle. Dedupe by id, keep bundle order first.
+  const seen = new Set(base.map(b => b.id))
+  const connectors = selectRelevantConnectors(goal, context).filter(b => !seen.has(b.id))
+  const blocks = [...base, ...connectors]
   if (blocks.length === 0) return ''
 
   const lines: string[] = [

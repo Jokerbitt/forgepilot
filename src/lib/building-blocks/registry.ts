@@ -181,6 +181,7 @@ BUILDING_BLOCKS.push({
     { src: 'ai-routing/provider-types.ts', dest: 'src/lib/ai/provider-types.ts', note: 'AIProvider interface + result types' },
     { src: 'ai-routing/ollama-provider.ts', dest: 'src/lib/ai/ollama-provider.ts', note: 'Local Ollama provider' },
     { src: 'ai-routing/anthropic-provider.ts', dest: 'src/lib/ai/anthropic-provider.ts', note: 'Cloud Anthropic provider' },
+    { src: 'ai-routing/openai-provider.ts', dest: 'src/lib/ai/openai-provider.ts', note: 'Cloud OpenAI provider (optional — npm i openai)' },
     { src: 'ai-routing/auto-router.ts', dest: 'src/lib/ai/auto-router.ts', note: 'resolveProvider + generateText with fallback' },
   ],
   setupSteps: [
@@ -321,6 +322,95 @@ BUILDING_BLOCKS.push({
     'Wrap the app in <ToastProvider> in the root layout',
     'Use useToast() to show success/error feedback after actions',
     'useForm<T>({ initial, validate }) — pass a Zod-backed validate fn',
+  ],
+})
+
+// ─── Connector: Email ─────────────────────────────────────────────────────────
+BUILDING_BLOCKS.push({
+  id: 'connector-email',
+  name: 'Email (Resend / SMTP)',
+  category: 'connector-email',
+  stack: 'node',
+  summary: 'Provider-agnostic transactional email: one sendEmail() call, swap Resend ↔ SMTP ↔ console via env.',
+  whenToUse: 'Use when the app sends email — verification, password reset, invites, notifications. Skip for apps that never email users.',
+  keywords: ['email', 'mail', 'resend', 'smtp', 'verification', 'password reset', 'invite', 'notification', 'transactional', 'nodemailer'],
+  dependencies: ['resend'],
+  files: [
+    { src: 'connector-email/provider.ts', dest: 'src/lib/email/provider.ts', note: 'EmailProvider interface + console provider' },
+    { src: 'connector-email/resend-provider.ts', dest: 'src/lib/email/resend-provider.ts', note: 'Resend implementation' },
+    { src: 'connector-email/smtp-provider.ts', dest: 'src/lib/email/smtp-provider.ts', note: 'SMTP fallback (npm i nodemailer)' },
+    { src: 'connector-email/index.ts', dest: 'src/lib/email/index.ts', note: 'resolveEmailProvider + sendEmail' },
+  ],
+  setupSteps: [
+    'Set EMAIL_PROVIDER (resend|smtp|console) + EMAIL_FROM; for Resend add RESEND_API_KEY',
+    'Call sendEmail({ to, subject, html }) from routes/actions',
+    'Default is the console provider — no setup needed in dev',
+  ],
+})
+
+// ─── Connector: OAuth Login ───────────────────────────────────────────────────
+BUILDING_BLOCKS.push({
+  id: 'connector-oauth',
+  name: 'OAuth Login (Google / GitHub)',
+  category: 'connector-oauth',
+  stack: 'nextjs',
+  summary: 'Dependency-free OAuth 2.0 social sign-in for Google + GitHub, sharing the credentials Auth block session.',
+  whenToUse: 'Use to add "Continue with Google/GitHub" alongside the credentials Auth block. Skip if email/password (or no auth) is enough.',
+  keywords: ['oauth', 'social login', 'google', 'github', 'sign in', 'sso', 'login with', 'authorization'],
+  dependencies: [],
+  files: [
+    { src: 'connector-oauth/providers.ts', dest: 'src/lib/oauth/providers.ts', note: 'Provider config + authorize/token/profile helpers' },
+    { src: 'connector-oauth/start-route.ts', dest: 'src/app/api/auth/oauth/[provider]/route.ts', note: 'Redirect to consent screen' },
+    { src: 'connector-oauth/callback-route.ts', dest: 'src/app/api/auth/oauth/[provider]/callback/route.ts', note: 'Exchange code → session (ADAPT to your auth/db)' },
+  ],
+  setupSteps: [
+    'Set OAUTH_REDIRECT_BASE + GOOGLE_/GITHUB_CLIENT_ID/SECRET',
+    'Adapt callback-route.ts: upsert user (db block) + mint session (auth block)',
+    'Add buttons linking to /api/auth/oauth/google and /github',
+  ],
+})
+
+// ─── Connector: File Storage ──────────────────────────────────────────────────
+BUILDING_BLOCKS.push({
+  id: 'connector-storage',
+  name: 'File Storage (S3 / R2 / local)',
+  category: 'connector-storage',
+  stack: 'node',
+  summary: 'Provider-agnostic object storage for uploads/attachments: storage().put/get/url, swap S3/R2 ↔ local disk via env.',
+  whenToUse: 'Use when users upload files — avatars, attachments, documents, images. Skip for apps with no file uploads.',
+  keywords: ['storage', 'upload', 'file', 'attachment', 'avatar', 'image', 's3', 'r2', 'bucket', 'document', 'media'],
+  dependencies: ['@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner'],
+  files: [
+    { src: 'connector-storage/provider.ts', dest: 'src/lib/storage/provider.ts', note: 'StorageProvider interface + safeKey' },
+    { src: 'connector-storage/local-provider.ts', dest: 'src/lib/storage/local-provider.ts', note: 'Local-disk default (zero config)' },
+    { src: 'connector-storage/s3-provider.ts', dest: 'src/lib/storage/s3-provider.ts', note: 'S3/R2/MinIO implementation' },
+    { src: 'connector-storage/index.ts', dest: 'src/lib/storage/index.ts', note: 'storage() resolver' },
+  ],
+  setupSteps: [
+    'Default is local disk — set STORAGE_LOCAL_DIR + STORAGE_PUBLIC_BASE',
+    'For S3/R2 set STORAGE_PROVIDER=s3 + S3_BUCKET/REGION/keys (+ S3_ENDPOINT for R2)',
+    'Use safeKey(prefix, filename) before put() to sanitize user filenames',
+  ],
+})
+
+// ─── Connector: Postgres / Supabase ───────────────────────────────────────────
+BUILDING_BLOCKS.push({
+  id: 'connector-supabase',
+  name: 'Postgres / Supabase DB',
+  category: 'connector-supabase',
+  stack: 'node',
+  summary: 'Move the SQLite default to Postgres/Supabase with a one-block Prisma datasource swap — models/queries unchanged.',
+  whenToUse: 'Use when the app needs hosted Postgres, multi-user cloud, Supabase Realtime/Storage, or Row-Level Security. Stay on SQLite (database block) for local-first.',
+  keywords: ['postgres', 'postgresql', 'supabase', 'cloud database', 'hosted', 'realtime', 'rls', 'pgvector', 'production database'],
+  dependencies: ['@supabase/supabase-js'],
+  files: [
+    { src: 'connector-supabase/datasource.prisma', dest: 'prisma/_datasource-postgres.prisma', note: 'Swap-in datasource block for schema.prisma' },
+    { src: 'connector-supabase/client.ts', dest: 'src/lib/supabase/client.ts', note: 'Supabase client (Storage/Realtime/RLS only)' },
+  ],
+  setupSteps: [
+    'Replace the datasource block in prisma/schema.prisma with the Postgres one',
+    'Set DATABASE_URL (pooled :6543) + DIRECT_URL (:5432) to your Supabase string',
+    'Run prisma migrate deploy && prisma generate — models stay identical',
   ],
 })
 

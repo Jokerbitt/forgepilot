@@ -22,6 +22,11 @@ export type BlockCategory =
   | 'landing'
   | 'dashboard'
   | 'forms-toast'
+  // ─── Connectors (opt-in integrations, only pulled where needed) ──────────────
+  | 'connector-email'
+  | 'connector-oauth'
+  | 'connector-storage'
+  | 'connector-supabase'
 
 export type BlockStack =
   | 'nextjs'          // Next.js App Router

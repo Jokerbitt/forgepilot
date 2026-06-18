@@ -140,4 +140,18 @@ describe('catalog with bundles', () => {
     const out = buildBuildingBlocksCatalog('Build an LLM chatbot with cost guardrails')
     expect(out).toContain('AI Auto-Router')
   })
+
+  it('appends a connector ONLY when the goal references it', () => {
+    const withEmail = buildBuildingBlocksCatalog('Build a SaaS that emails users a verification link')
+    expect(withEmail).toContain('Email (Resend / SMTP)')
+
+    const withoutEmail = buildBuildingBlocksCatalog('Build a multi-user SaaS platform with subscriptions')
+    expect(withoutEmail).not.toContain('Email (Resend / SMTP)')
+  })
+
+  it('surfaces storage + oauth connectors on top of a bundle when asked', () => {
+    const out = buildBuildingBlocksCatalog('SaaS with avatar file uploads and login with Google')
+    expect(out).toContain('File Storage')
+    expect(out).toContain('OAuth Login')
+  })
 })
