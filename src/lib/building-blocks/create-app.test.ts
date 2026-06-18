@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { planCreateApp, createApp, summarizeCreateApp } from './create-app'
-import { getBundle } from './bundles'
+import { planCreateApp, createApp, summarizeCreateApp, autoScaffoldWorkspace } from './create-app'
+import { getBundle, matchBundle } from './bundles'
 
 describe('planCreateApp', () => {
   it('plans every file of every block in a bundle', () => {
@@ -78,5 +78,43 @@ describe('createApp', () => {
     const summary = summarizeCreateApp(res)
     expect(summary).toMatch(/Dateien kopiert/)
     expect(summary).toMatch(/npm i .*aws-sdk/)
+  })
+})
+
+describe('autoScaffoldWorkspace', () => {
+  let dir: string
+  beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scaffold-')) })
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }) })
+
+  it('scaffolds a fresh workspace from the matched bundle + writes SCAFFOLD.md', () => {
+    const res = autoScaffoldWorkspace({
+      workspacePath: dir,
+      goal: 'Build a multi-user SaaS platform with subscription billing',
+      matchBundleFn: matchBundle,
+    })
+    expect(res.scaffolded).toBe(true)
+    expect(res.bundleId).toBe('saas-starter')
+    expect((res.fileCount ?? 0)).toBeGreaterThan(0)
+    expect(fs.existsSync(path.join(dir, 'SCAFFOLD.md'))).toBe(true)
+  })
+
+  it('refuses to scaffold when package.json already exists', () => {
+    fs.writeFileSync(path.join(dir, 'package.json'), '{"name":"x"}')
+    const res = autoScaffoldWorkspace({
+      workspacePath: dir,
+      goal: 'Build a SaaS platform',
+      matchBundleFn: matchBundle,
+    })
+    expect(res.scaffolded).toBe(false)
+    expect(res.reason).toMatch(/nicht leer/)
+  })
+
+  it('skips when no bundle matches the goal', () => {
+    const res = autoScaffoldWorkspace({
+      workspacePath: dir,
+      goal: 'xyzzy plugh frobnicate',
+      matchBundleFn: matchBundle,
+    })
+    expect(res.scaffolded).toBe(false)
   })
 })

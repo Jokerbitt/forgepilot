@@ -42,7 +42,9 @@ import { checkParallelCompletion } from '@/lib/delegation-parallel'
 import { triggerCriticRetry } from '@/lib/delegations/critic-retry'
 import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-runtime-evidence'
 import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, writebackLocalResult, reuseExistingWorkspace, type RunnerWorkspace } from '@/lib/agent-runner/worktree'
-import { bootstrapRuntime, summarizeBootstrap } from '@/lib/agent-runner/runtime-bootstrap'
+import { bootstrapRuntime, summarizeBootstrap, smokeTestApp } from '@/lib/agent-runner/runtime-bootstrap'
+import { autoScaffoldWorkspace } from '@/lib/building-blocks/create-app'
+import { matchBundle } from '@/lib/building-blocks/bundles'
 import { getNBAConfig } from '@/lib/nba-engine/nba-config'
 import { recordSkillOutcome, listSkills, seedBuiltinSkills } from '@/lib/skills/prompt-skill-registry'
 import { applyAutoOptimizations } from '@/lib/skills/skill-optimizer'
@@ -227,6 +229,18 @@ function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryC
 
   const { skillBlock, knowledgeBlock, codebaseBlock, buildingBlocksBlock, profile } = buildSelectiveContext(c, targetRepo)
 
+  // Local target repos (a filesystem path, not a github.com URL) have no remote
+  // to open a PR against — committing locally is the deliverable. ForgePilot is
+  // written back automatically. Tell the agent to skip the PR step cleanly
+  // instead of failing on `gh pr create` (the old "GitHub API 422" noise).
+  const isLocalTarget = Boolean(targetRepo && /^[~./]/.test(targetRepo))
+  const prStep = isLocalTarget
+    ? '7. Commit only: this is a LOCAL repo with no GitHub remote — do NOT run `gh pr create`. Your committed work is written back automatically.'
+    : `7. PR: gh pr create --title "${commitPrefix}: ${c.goal.substring(0, 60).replace(/"/g, "'")}" --body "## Summary\\n- <bullets>\\n\\n## Test plan\\n- [ ] tests pass"`
+  const smokeStep = isLocalTarget
+    ? '8. Verify the app builds: npm run build (must be green) — there is no shared smoke endpoint for a standalone app.'
+    : '8. Smoke-test: curl -sf http://localhost:3000/api/smoke-test | grep \'"ok":true\' || echo "ESCALATION: smoke-test failed — UI regression detected"'
+
   return `You are an autonomous software engineering agent working on **ForgePilot** — a local-first AI Workflow OS built with Next.js 14, TypeScript strict, Tailwind CSS, and Vitest.
 
 ## Task
@@ -251,8 +265,8 @@ ${dod}
 5. Verify: npm run test:run && npm run lint && npm run type-check
    (run type-check BEFORE build — never in parallel)
 6. Commit: git commit -m "${commitPrefix}: <description>"
-7. PR: gh pr create --title "${commitPrefix}: ${c.goal.substring(0, 60).replace(/"/g, "'")}" --body "## Summary\\n- <bullets>\\n\\n## Test plan\\n- [ ] tests pass"
-8. Smoke-test: curl -sf http://localhost:3000/api/smoke-test | grep '"ok":true' || echo "ESCALATION: smoke-test failed — UI regression detected"
+${prStep}
+${smokeStep}
 9. Final output: print DONE: <one-sentence summary>
 \`\`\`
 
@@ -451,7 +465,7 @@ async function autoMergePRIfEligible(prUrl: string, delegation: Delegation): Pro
   }
 }
 
-function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd: number, riskClass: string, targetRepo?: string, existingWorkspace?: RunnerWorkspace) {
+function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd: number, riskClass: string, targetRepo?: string, existingWorkspace?: RunnerWorkspace, scaffold?: { goal: string; context: string }) {
   const storedKeys = readStoredApiKeys()
   const anthropicKey = storedKeys.ANTHROPIC_API_KEY?.trim() || undefined
   const maxTurns = budgetToClaudeCliMaxTurns(budgetUsd)
@@ -496,6 +510,27 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     type: 'info',
     message: `Runner-Workspace vorbereitet: ${runnerWorkspace.path}`,
   }])
+
+  // Pre-scaffold a fresh workspace from the matching bundle — copies vetted
+  // block files with ZERO tokens so the agent only writes app-specific code.
+  // Guarded to fresh repos (no package.json) and first runs (not chain/resume).
+  if (scaffold && targetRepo && !existingWorkspace) {
+    try {
+      const result = autoScaffoldWorkspace({
+        workspacePath: runnerWorkspace.path,
+        goal: scaffold.goal,
+        context: scaffold.context,
+        matchBundleFn: matchBundle,
+      })
+      if (result.scaffolded) {
+        void appendLogs(id, [{
+          timestamp: new Date().toISOString(),
+          type: 'success',
+          message: `🧱 Pre-Scaffold: ${result.fileCount} Dateien aus Bundle "${result.bundleId}" ohne Tokens kopiert — Agent baut nur App-Spezifisches.`,
+        }])
+      }
+    } catch { /* pre-scaffold is best-effort */ }
+  }
 
   const proc = spawn(
     'claude',
@@ -829,7 +864,16 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
                   message: `🚀 Runtime-Bootstrap: ${summary}`,
                 }])
               }
-            } catch { /* bootstrap is best-effort */ }
+              // Live smoke test: prove the app actually BOOTS, not just compiles.
+              const smoke = await smokeTestApp({ targetRepo })
+              if (smoke.ran) {
+                await appendLogs(id, [{
+                  timestamp: new Date().toISOString(),
+                  type: smoke.ok ? 'success' : 'error',
+                  message: `${smoke.ok ? '🟢' : '🔴'} Smoke-Test: ${smoke.detail}`,
+                }])
+              }
+            } catch { /* bootstrap + smoke are best-effort */ }
           } else {
             await appendLogs(id, [{
               timestamp: new Date().toISOString(),
@@ -2010,7 +2054,7 @@ export async function POST(
         }
       }
     }
-    runWithClaudeCLI(id, prompt, startTime, delegation.contract.maxBudgetUsd, delegation.contract.riskClass, delegation.targetRepo, chainWorkspace)
+    runWithClaudeCLI(id, prompt, startTime, delegation.contract.maxBudgetUsd, delegation.contract.riskClass, delegation.targetRepo, chainWorkspace, { goal: delegation.contract.goal, context: delegation.contract.context ?? '' })
     return NextResponse.json({ started: true, mode: 'claude-cli', delegationId: id })
   }
 

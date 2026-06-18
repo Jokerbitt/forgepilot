@@ -12,6 +12,8 @@ import {
   materializeEnv,
   bootstrapRuntime,
   summarizeBootstrap,
+  detectDevPort,
+  writeLaunchJson,
 } from './runtime-bootstrap'
 
 describe('isSecretKey', () => {
@@ -117,6 +119,57 @@ describe('bootstrapRuntime', () => {
   })
 })
 
+describe('detectDevPort', () => {
+  let dir: string
+  beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-port-')) })
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }) })
+
+  it('defaults to 3000 when no dev script', () => {
+    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ scripts: {} }))
+    expect(detectDevPort(dir)).toBe(3000)
+  })
+  it('reads a -p port flag', () => {
+    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ scripts: { dev: 'next dev -p 4001' } }))
+    expect(detectDevPort(dir)).toBe(4001)
+  })
+  it('reads a PORT= prefix', () => {
+    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ scripts: { dev: 'PORT=5005 next dev' } }))
+    expect(detectDevPort(dir)).toBe(5005)
+  })
+})
+
+describe('writeLaunchJson', () => {
+  let dir: string
+  beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-launch-')) })
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }) })
+
+  it('writes a launch.json for an app with a dev script', () => {
+    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ scripts: { dev: 'next dev' } }))
+    const step = writeLaunchJson(dir)
+    expect(step.ran).toBe(true)
+    expect(step.ok).toBe(true)
+    const launch = JSON.parse(fs.readFileSync(path.join(dir, '.claude', 'launch.json'), 'utf-8')) as {
+      configurations: Array<{ name: string; port: number; runtimeArgs: string[] }>
+    }
+    expect(launch.configurations[0]!.port).toBe(3000)
+    expect(launch.configurations[0]!.runtimeArgs).toEqual(['run', 'dev'])
+  })
+
+  it('skips when no dev script exists', () => {
+    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ scripts: {} }))
+    expect(writeLaunchJson(dir).ran).toBe(false)
+  })
+
+  it('does not overwrite an existing launch.json', () => {
+    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ scripts: { dev: 'next dev' } }))
+    fs.mkdirSync(path.join(dir, '.claude'))
+    fs.writeFileSync(path.join(dir, '.claude', 'launch.json'), '{"keep":true}')
+    const step = writeLaunchJson(dir)
+    expect(step.ran).toBe(false)
+    expect(fs.readFileSync(path.join(dir, '.claude', 'launch.json'), 'utf-8')).toContain('keep')
+  })
+})
+
 describe('summarizeBootstrap', () => {
   it('joins only the steps that ran', () => {
     const s = summarizeBootstrap({
@@ -124,6 +177,7 @@ describe('summarizeBootstrap', () => {
       prismaGenerate: { ran: false, ok: true, detail: '' },
       prismaMigrate: { ran: true, ok: false, detail: 'prisma migrate deploy fehlgeschlagen: x' },
       seed: { ran: false, ok: true, detail: '' },
+      previewRegistered: { ran: true, ok: true, detail: 'Preview registriert (.claude/launch.json, Port 3000)' },
     })
     expect(s).toContain('✅ .env erzeugt')
     expect(s).toContain('⚠️ prisma migrate deploy fehlgeschlagen')

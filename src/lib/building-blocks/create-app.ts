@@ -126,6 +126,75 @@ export function createApp(options: {
   return { plan, written, skipped, missingTemplates }
 }
 
+export interface AutoScaffoldResult {
+  scaffolded: boolean
+  reason: string
+  bundleId?: string
+  fileCount?: number
+  dependencies?: string[]
+}
+
+/**
+ * Pre-scaffold a FRESH workspace from the bundle that matches a build goal —
+ * copying vetted block files with ZERO LLM tokens before the agent starts.
+ * The agent then writes only the app-specific code on top.
+ *
+ * Guard: only runs on a genuinely empty app (no package.json yet), so it never
+ * disturbs an existing codebase or a chained phase building on prior work.
+ */
+export function autoScaffoldWorkspace(options: {
+  workspacePath: string
+  goal: string
+  context?: string
+  repoRoot?: string
+  matchBundleFn: (goal: string, context?: string) => { id: string } | null
+}): AutoScaffoldResult {
+  const { workspacePath, goal, context = '', repoRoot, matchBundleFn } = options
+
+  if (fs.existsSync(path.join(workspacePath, 'package.json'))) {
+    return { scaffolded: false, reason: 'Workspace ist nicht leer (package.json existiert)' }
+  }
+  const bundle = matchBundleFn(goal, context)
+  if (!bundle) {
+    return { scaffolded: false, reason: 'Kein passendes Bundle für das Ziel' }
+  }
+
+  const result = createApp({ bundleId: bundle.id, targetDir: workspacePath, repoRoot, force: false })
+  if (result.written.length === 0) {
+    return { scaffolded: false, reason: 'Keine Dateien kopiert', bundleId: bundle.id }
+  }
+
+  // Drop a note so the exploring agent adapts the scaffold instead of recreating it.
+  const note = [
+    `# Pre-scaffolded from the "${bundle.id}" bundle`,
+    '',
+    `${result.written.length} starter files were copied in BEFORE you started.`,
+    'READ and ADAPT them — do NOT rewrite them from scratch.',
+    '',
+    '## Install these dependencies first',
+    '```',
+    `npm i ${result.plan.dependencies.join(' ')}`,
+    '```',
+    '',
+    '## Setup steps',
+    ...result.plan.setupSteps.map(s => `- ${s}`),
+    '',
+    'Files copied:',
+    ...result.written.map(f => `- ${f}`),
+  ].join('\n')
+  try {
+    fs.writeFileSync(path.join(workspacePath, 'SCAFFOLD.md'), `${note}\n`, 'utf-8')
+  } catch { /* note is best-effort */ }
+
+  return {
+    scaffolded: true,
+    reason: `Bundle "${bundle.id}" vorab kopiert`,
+    bundleId: bundle.id,
+    fileCount: result.written.length,
+    dependencies: result.plan.dependencies,
+  }
+}
+
 /** Human-readable summary for logs / CLI output. */
 export function summarizeCreateApp(result: CreateAppResult): string {
   const lines: string[] = []

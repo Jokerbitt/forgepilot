@@ -29,6 +29,7 @@ export interface RuntimeBootstrapResult {
   prismaGenerate: RuntimeBootstrapStep
   prismaMigrate: RuntimeBootstrapStep
   seed: RuntimeBootstrapStep
+  previewRegistered: RuntimeBootstrapStep
 }
 
 const SKIP: RuntimeBootstrapStep = { ran: false, ok: true, detail: 'übersprungen' }
@@ -92,6 +93,56 @@ function runStep(
   }
 }
 
+/** Detect the dev-server port from package.json's dev script, defaulting to 3000. */
+export function detectDevPort(targetRepo: string): number {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(targetRepo, 'package.json'), 'utf-8')) as {
+      scripts?: Record<string, string>
+    }
+    const dev = pkg.scripts?.dev ?? ''
+    const flag = dev.match(/(?:-p|--port)[ =](\d{2,5})/) ?? dev.match(/PORT[ =](\d{2,5})/)
+    if (flag?.[1]) return Number(flag[1])
+  } catch { /* default below */ }
+  return 3000
+}
+
+/** App framework hint for the preview launch config. */
+function devCommand(targetRepo: string): { exe: string; args: string[] } | null {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(targetRepo, 'package.json'), 'utf-8')) as {
+      scripts?: Record<string, string>
+    }
+    if (pkg.scripts?.dev) return { exe: 'npm', args: ['run', 'dev'] }
+  } catch { /* none */ }
+  return null
+}
+
+/**
+ * Register the freshly built app with the Preview tooling by writing a
+ * `.claude/launch.json` (if absent), so it can be started + previewed by name.
+ */
+export function writeLaunchJson(targetRepo: string): RuntimeBootstrapStep {
+  const cmd = devCommand(targetRepo)
+  if (!cmd) return { ...SKIP }
+  const launchPath = path.join(targetRepo, '.claude', 'launch.json')
+  if (fs.existsSync(launchPath)) return { ran: false, ok: true, detail: 'launch.json existiert bereits' }
+  try {
+    const name = path.basename(targetRepo).replace(/[^a-zA-Z0-9._-]+/g, '-') || 'app'
+    const config = {
+      version: '0.0.1',
+      configurations: [
+        { name, runtimeExecutable: cmd.exe, runtimeArgs: cmd.args, port: detectDevPort(targetRepo) },
+      ],
+    }
+    fs.mkdirSync(path.dirname(launchPath), { recursive: true })
+    fs.writeFileSync(launchPath, `${JSON.stringify(config, null, 2)}\n`, 'utf-8')
+    return { ran: true, ok: true, detail: `Preview registriert (.claude/launch.json, Port ${config.configurations[0]!.port})` }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message.slice(0, 120) : 'unbekannter Fehler'
+    return { ran: true, ok: false, detail: `Preview-Registrierung fehlgeschlagen: ${msg}` }
+  }
+}
+
 /** Does package.json declare a `seed` script or a prisma seed command? */
 function hasSeedCommand(targetRepo: string): boolean {
   try {
@@ -120,6 +171,7 @@ export function bootstrapRuntime(options: {
     prismaGenerate: { ...SKIP },
     prismaMigrate: { ...SKIP },
     seed: { ...SKIP },
+    previewRegistered: { ...SKIP },
   }
 
   if (!fs.existsSync(targetRepo)) return result
@@ -160,6 +212,9 @@ export function bootstrapRuntime(options: {
     }
   }
 
+  // 3. preview — register the app with the Preview tooling for one-click start
+  result.previewRegistered = writeLaunchJson(targetRepo)
+
   return result
 }
 
@@ -174,5 +229,75 @@ export function summarizeBootstrap(r: RuntimeBootstrapResult): string {
   add(r.prismaGenerate, 'Prisma Client generiert')
   add(r.prismaMigrate, 'DB migriert')
   add(r.seed, 'Demo-Daten geseedet')
+  add(r.previewRegistered, 'Preview registriert')
   return parts.length > 0 ? parts.join(' · ') : 'Kein Runtime-Bootstrap nötig'
+}
+
+// ─── Live smoke test ──────────────────────────────────────────────────────────
+
+export interface SmokeTestResult {
+  ran: boolean
+  ok: boolean
+  detail: string
+  /** HTTP status observed on the root route, if the server came up. */
+  status?: number
+}
+
+/**
+ * Best-effort live smoke test: start the app's dev server on an ephemeral port,
+ * poll the root route until it responds, then shut it down. Proves the built app
+ * actually BOOTS (not just compiles). Never throws; time-boxed.
+ */
+export async function smokeTestApp(options: {
+  targetRepo: string
+  port?: number
+  timeoutMs?: number
+}): Promise<SmokeTestResult> {
+  const { targetRepo } = options
+  const cmd = devCommand(targetRepo)
+  if (!cmd || !fs.existsSync(path.join(targetRepo, 'node_modules'))) {
+    return { ran: false, ok: true, detail: 'kein dev-Script oder node_modules — übersprungen' }
+  }
+  const port = options.port ?? 3987
+  const timeoutMs = options.timeoutMs ?? 30_000
+  const http = await import('http')
+  const { spawn } = await import('child_process')
+
+  const child = spawn(cmd.exe, cmd.args, {
+    cwd: targetRepo,
+    env: { ...process.env, PORT: String(port) },
+    stdio: 'ignore',
+    detached: true,
+  })
+
+  const probe = (): Promise<number | null> =>
+    new Promise(resolve => {
+      const req = http.get({ host: '127.0.0.1', port, path: '/', timeout: 3000 }, res => {
+        res.resume()
+        resolve(res.statusCode ?? null)
+      })
+      req.on('error', () => resolve(null))
+      req.on('timeout', () => { req.destroy(); resolve(null) })
+    })
+
+  const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
+  const deadline = Date.now() + timeoutMs
+  let status: number | null = null
+  try {
+    while (Date.now() < deadline) {
+      status = await probe()
+      if (status !== null) break
+      await sleep(1500)
+    }
+  } finally {
+    try { if (child.pid) process.kill(-child.pid, 'SIGTERM') } catch { /* already gone */ }
+    try { child.kill('SIGKILL') } catch { /* noop */ }
+  }
+
+  if (status === null) {
+    return { ran: true, ok: false, detail: `App kam in ${Math.round(timeoutMs / 1000)}s nicht hoch` }
+  }
+  // Any HTTP response (200 or a redirect to /login) means the server booted.
+  const ok = status < 500
+  return { ran: true, ok, detail: ok ? `App läuft (HTTP ${status} auf /)` : `App antwortet mit HTTP ${status}`, status }
 }
