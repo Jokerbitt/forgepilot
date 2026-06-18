@@ -14,6 +14,8 @@ import {
   summarizeBootstrap,
   detectDevPort,
   writeLaunchJson,
+  hasCrashSignature,
+  evaluateSmoke,
 } from './runtime-bootstrap'
 
 describe('isSecretKey', () => {
@@ -167,6 +169,54 @@ describe('writeLaunchJson', () => {
     const step = writeLaunchJson(dir)
     expect(step.ran).toBe(false)
     expect(fs.readFileSync(path.join(dir, '.claude', 'launch.json'), 'utf-8')).toContain('keep')
+  })
+})
+
+describe('hasCrashSignature', () => {
+  it('detects common runtime crash markers', () => {
+    for (const s of [
+      "Cannot read properties of undefined (reading 'findMany')",
+      'TypeError: x is not a function',
+      'PrismaClientKnownRequestError',
+      'ReferenceError: foo is not defined',
+      'Error: MODULE_NOT_FOUND',
+      'Invalid `prisma.user.findMany()`',
+    ]) {
+      expect(hasCrashSignature(s), s).toBe(true)
+    }
+  })
+  it('ignores normal dev output', () => {
+    expect(hasCrashSignature('✓ Ready in 1139ms\nGET / 200 in 30ms')).toBe(false)
+  })
+})
+
+describe('evaluateSmoke', () => {
+  it('fails when no route is reachable', () => {
+    const r = evaluateSmoke([{ path: '/', status: null }], '')
+    expect(r.ok).toBe(false)
+    expect(r.detail).toMatch(/nicht hoch/)
+  })
+  it('fails on a 5xx route', () => {
+    const r = evaluateSmoke([{ path: '/', status: 200 }, { path: '/dashboard', status: 500 }], '')
+    expect(r.ok).toBe(false)
+    expect(r.detail).toMatch(/500.*\/dashboard/)
+  })
+  it('fails on a crash signature in the log despite 2xx/3xx', () => {
+    const r = evaluateSmoke(
+      [{ path: '/', status: 200 }, { path: '/dashboard', status: 307 }],
+      "TypeError: Cannot read properties of undefined (reading 'findMany')",
+    )
+    expect(r.ok).toBe(false)
+    expect(r.detail).toMatch(/Laufzeitfehler/)
+  })
+  it('passes when routes respond and the log is clean', () => {
+    const r = evaluateSmoke([{ path: '/', status: 200 }, { path: '/login', status: 200 }, { path: '/dashboard', status: 307 }], '✓ Ready')
+    expect(r.ok).toBe(true)
+    expect(r.detail).toMatch(/App läuft/)
+  })
+  it('treats a 404 health route as non-fatal', () => {
+    const r = evaluateSmoke([{ path: '/', status: 200 }, { path: '/api/health', status: 404 }], '')
+    expect(r.ok).toBe(true)
   })
 })
 

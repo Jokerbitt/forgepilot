@@ -235,23 +235,58 @@ export function summarizeBootstrap(r: RuntimeBootstrapResult): string {
 
 // ─── Live smoke test ──────────────────────────────────────────────────────────
 
+export interface ProbeResult {
+  path: string
+  status: number | null
+}
+
 export interface SmokeTestResult {
   ran: boolean
   ok: boolean
   detail: string
-  /** HTTP status observed on the root route, if the server came up. */
-  status?: number
+  /** Per-route HTTP statuses observed once the server came up. */
+  probes?: ProbeResult[]
+}
+
+/** Routes probed by default — root, the common auth + data pages, and a health endpoint. */
+export const DEFAULT_SMOKE_PATHS = ['/', '/login', '/dashboard', '/api/health']
+
+/** Server-log signatures that indicate a runtime crash even behind an HTTP redirect. */
+export function hasCrashSignature(text: string): boolean {
+  return /TypeError|ReferenceError|Cannot read propert(?:y|ies)|is not a function|is not defined|PrismaClient(?:KnownRequest|Initialization|Validation)?Error|Unhandled(?:Promise)?Rejection|ECONNREFUSED|MODULE_NOT_FOUND|Invalid `prisma\./.test(text)
+}
+
+/**
+ * Decide overall smoke result from per-route statuses + captured server log.
+ * Pure — unit-tested. Fails on any 5xx OR a crash signature in the log.
+ */
+export function evaluateSmoke(probes: ProbeResult[], serverLog: string): { ok: boolean; detail: string } {
+  const reachable = probes.filter(p => p.status !== null)
+  if (reachable.length === 0) {
+    return { ok: false, detail: 'App kam nicht hoch (keine Route antwortete)' }
+  }
+  const server5xx = reachable.find(p => (p.status ?? 0) >= 500)
+  if (server5xx) {
+    return { ok: false, detail: `Server-Fehler ${server5xx.status} auf ${server5xx.path}` }
+  }
+  if (hasCrashSignature(serverLog)) {
+    return { ok: false, detail: 'Laufzeitfehler im Server-Log (z.B. Prisma/TypeError) trotz HTTP-Antwort' }
+  }
+  const summary = reachable.map(p => `${p.path} ${p.status}`).join(', ')
+  return { ok: true, detail: `App läuft — ${summary}` }
 }
 
 /**
  * Best-effort live smoke test: start the app's dev server on an ephemeral port,
- * poll the root route until it responds, then shut it down. Proves the built app
- * actually BOOTS (not just compiles). Never throws; time-boxed.
+ * probe several routes (root + auth/data pages), scan the server log for runtime
+ * crashes, then shut it down. Proves the built app actually BOOTS and serves —
+ * not just compiles. Never throws; time-boxed.
  */
 export async function smokeTestApp(options: {
   targetRepo: string
   port?: number
   timeoutMs?: number
+  paths?: string[]
 }): Promise<SmokeTestResult> {
   const { targetRepo } = options
   const cmd = devCommand(targetRepo)
@@ -259,20 +294,27 @@ export async function smokeTestApp(options: {
     return { ran: false, ok: true, detail: 'kein dev-Script oder node_modules — übersprungen' }
   }
   const port = options.port ?? 3987
-  const timeoutMs = options.timeoutMs ?? 30_000
+  const timeoutMs = options.timeoutMs ?? 35_000
+  const paths = options.paths ?? DEFAULT_SMOKE_PATHS
   const http = await import('http')
   const { spawn } = await import('child_process')
 
   const child = spawn(cmd.exe, cmd.args, {
     cwd: targetRepo,
     env: { ...process.env, PORT: String(port) },
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'],
     detached: true,
   })
 
-  const probe = (): Promise<number | null> =>
+  // Capture a bounded tail of the server output to scan for runtime crashes.
+  let serverLog = ''
+  const capture = (buf: Buffer) => { serverLog = (serverLog + buf.toString()).slice(-8000) }
+  child.stdout?.on('data', capture)
+  child.stderr?.on('data', capture)
+
+  const probe = (p: string): Promise<number | null> =>
     new Promise(resolve => {
-      const req = http.get({ host: '127.0.0.1', port, path: '/', timeout: 3000 }, res => {
+      const req = http.get({ host: '127.0.0.1', port, path: p, timeout: 4000 }, res => {
         res.resume()
         resolve(res.statusCode ?? null)
       })
@@ -282,22 +324,29 @@ export async function smokeTestApp(options: {
 
   const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
   const deadline = Date.now() + timeoutMs
-  let status: number | null = null
+  const probes: ProbeResult[] = []
   try {
+    // Wait for the server to answer the root route at all.
+    let up: number | null = null
     while (Date.now() < deadline) {
-      status = await probe()
-      if (status !== null) break
+      up = await probe('/')
+      if (up !== null) break
       await sleep(1500)
+    }
+    if (up === null) {
+      return { ran: true, ok: false, detail: `App kam in ${Math.round(timeoutMs / 1000)}s nicht hoch` }
+    }
+    // Probe the full route set (first-hit dev compile can be slow → one retry).
+    for (const p of paths) {
+      let status = await probe(p)
+      if (status === null) { await sleep(1200); status = await probe(p) }
+      probes.push({ path: p, status })
     }
   } finally {
     try { if (child.pid) process.kill(-child.pid, 'SIGTERM') } catch { /* already gone */ }
     try { child.kill('SIGKILL') } catch { /* noop */ }
   }
 
-  if (status === null) {
-    return { ran: true, ok: false, detail: `App kam in ${Math.round(timeoutMs / 1000)}s nicht hoch` }
-  }
-  // Any HTTP response (200 or a redirect to /login) means the server booted.
-  const ok = status < 500
-  return { ran: true, ok, detail: ok ? `App läuft (HTTP ${status} auf /)` : `App antwortet mit HTTP ${status}`, status }
+  const verdict = evaluateSmoke(probes, serverLog)
+  return { ran: true, ok: verdict.ok, detail: verdict.detail, probes }
 }
