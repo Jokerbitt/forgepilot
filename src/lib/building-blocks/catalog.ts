@@ -79,25 +79,29 @@ function selectRelevantConnectors(goal: string, context = ''): BuildingBlock[] {
     .map(s => s.b)
 }
 
+/** The blocks every phase-1 needs regardless of app type — cheap, always reused. */
+const FOUNDATION_BLOCK_IDS = ['testing-vitest', 'ui-app-shell']
+
 /**
- * Block ids to PRE-SCAFFOLD for a build goal — scoped to need, not the whole
- * bundle. The A/B finding (full-bundle scaffold cost +18%) showed that copying
- * blocks the phase never uses just makes the agent read + adapt dead weight.
+ * Block ids to PRE-SCAFFOLD for a build goal — FOUNDATION ONLY.
  *
- * Returns the always-needed foundation (testing + app shell) plus only the
- * bundle blocks whose keywords the goal/context actually hits. Empty when the
- * goal is not an app build (no bundle match).
+ * Earlier attempts copied the whole bundle (cost +18%) or scoped by goal+context
+ * (but a multi-phase phase-1 context describes the whole app, so nearly every
+ * block matched → 37 files, no saving). The fix: pre-scaffold only the blocks a
+ * phase-1 foundation ALWAYS needs — test harness + app shell (+ landing when the
+ * goal itself is about a marketing surface). Feature blocks (db/auth/ai/billing)
+ * are NOT copied; the agent pulls those from the catalog when their phase runs,
+ * so phase 1 never wades through files it won't touch yet.
+ *
+ * `context` is intentionally ignored for selection — only the bundle gate uses it.
+ * Empty when the goal is not an app build.
  */
 export function scopedScaffoldBlockIds(goal: string, context = ''): string[] {
-  const bundle = matchBundle(goal, context)
-  if (!bundle) return []
-  const hay = `${goal} ${context}`.toLowerCase()
-  const always = new Set(['testing-vitest', 'ui-app-shell'])
-  return bundle.blockIds.filter(id => {
-    if (always.has(id)) return true
-    const block = BUILDING_BLOCKS.find(b => b.id === id)
-    return block ? block.keywords.some(kw => keywordHit(hay, kw)) : false
-  })
+  if (!matchBundle(goal, context)) return []
+  const g = goal.toLowerCase()
+  const ids = [...FOUNDATION_BLOCK_IDS]
+  if (/\bland(ing)?\b|marketing|\bhero\b|home ?page/.test(g)) ids.push('landing')
+  return ids.filter(id => BUILDING_BLOCKS.some(b => b.id === id))
 }
 
 /**

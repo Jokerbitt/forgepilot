@@ -118,12 +118,29 @@ describe('autoScaffoldWorkspace', () => {
     expect(res.scaffolded).toBe(false)
   })
 
-  it('uses scopedScaffoldBlockIds to copy only what the goal needs', () => {
-    // A pure-foundation goal must NOT drag in billing/auth blocks.
+  it('uses scopedScaffoldBlockIds to copy only the foundation', () => {
     const ids = scopedScaffoldBlockIds('Scaffold the Next.js foundation and app shell, landing page')
     expect(ids).toContain('ui-app-shell')
     expect(ids).toContain('testing-vitest')
+    expect(ids).toContain('landing')
     expect(ids).not.toContain('billing-stripe')
     expect(ids).not.toContain('auth-credentials')
+  })
+
+  it('stays foundation-only even when the goal/context describes a full AI SaaS', () => {
+    // The previous bug: a rich phase-1 description matched nearly every block.
+    const ids = scopedScaffoldBlockIds(
+      'Scaffold AI Content Studio, an AI content SaaS with billing, auth, database, generation history',
+      'Full app: AI routing, guardrails, usage credits, Stripe billing, login, prisma',
+    )
+    expect(ids).not.toContain('billing-stripe')
+    expect(ids).not.toContain('auth-credentials')
+    expect(ids).not.toContain('ai-routing')
+    expect(ids).not.toContain('db-prisma-postgres')
+    expect(ids.length).toBeLessThanOrEqual(3)
+  })
+
+  it('returns nothing for a non-app goal', () => {
+    expect(scopedScaffoldBlockIds('xyzzy plugh frobnicate')).toEqual([])
   })
 })
