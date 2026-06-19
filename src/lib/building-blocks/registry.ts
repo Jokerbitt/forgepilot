@@ -414,6 +414,94 @@ BUILDING_BLOCKS.push({
   ],
 })
 
+// ─── Connector: Notifications ─────────────────────────────────────────────────
+BUILDING_BLOCKS.push({
+  id: 'connector-notify',
+  name: 'Notifications (Slack / Webhook)',
+  category: 'connector-notify',
+  stack: 'node',
+  summary: 'Provider-agnostic outbound notifications: one notify() call, route to Slack, a signed webhook, or console via env.',
+  whenToUse: 'Use for ops alerts, signup/churn pings, or job/build completion notices. Skip if the app never notifies external channels.',
+  keywords: ['notify', 'notification', 'slack', 'webhook', 'alert', 'ping', 'ops', 'channel'],
+  dependencies: [],
+  files: [
+    { src: 'connector-notify/provider.ts', dest: 'src/lib/notify/provider.ts', note: 'Notifier interface + console provider' },
+    { src: 'connector-notify/slack.ts', dest: 'src/lib/notify/slack.ts', note: 'Slack incoming webhook' },
+    { src: 'connector-notify/webhook.ts', dest: 'src/lib/notify/webhook.ts', note: 'Generic webhook + HMAC signature' },
+    { src: 'connector-notify/index.ts', dest: 'src/lib/notify/index.ts', note: 'resolveNotifyProvider + notify()' },
+  ],
+  setupSteps: [
+    'Set NOTIFY_PROVIDER (slack|webhook|console); for Slack add SLACK_WEBHOOK_URL',
+    'Call notify({ title, level, context }) from routes/actions',
+    'Default is the console provider — no setup in dev',
+  ],
+})
+
+// ─── Connector: Realtime (SSE) ────────────────────────────────────────────────
+BUILDING_BLOCKS.push({
+  id: 'connector-realtime',
+  name: 'Realtime (Server-Sent Events)',
+  category: 'connector-realtime',
+  stack: 'nextjs',
+  summary: 'Push live updates to the browser via SSE — zero-dep in-process pub/sub broker + stream route + client hook.',
+  whenToUse: 'Use for live boards/dashboards, presence, or instant notifications. Skip for fully static or request/response-only apps.',
+  keywords: ['realtime', 'live', 'sse', 'server-sent events', 'stream', 'presence', 'push', 'subscribe', 'websocket'],
+  dependencies: [],
+  files: [
+    { src: 'connector-realtime/broker.ts', dest: 'src/lib/realtime/broker.ts', note: 'In-process pub/sub (hot-reload safe)' },
+    { src: 'connector-realtime/sse-route.ts', dest: 'src/app/api/realtime/[channel]/route.ts', note: 'SSE stream endpoint' },
+    { src: 'connector-realtime/useEventStream.ts', dest: 'src/lib/realtime/useEventStream.ts', note: 'Client hook' },
+  ],
+  setupSteps: [
+    'After a mutation: broker.publish(channel, type, data)',
+    'Client: useEventStream(url, eventType) to receive',
+    'Auth + authorize the channel in the route; back publish() with Redis for multi-instance',
+  ],
+})
+
+// ─── Connector: Analytics ─────────────────────────────────────────────────────
+BUILDING_BLOCKS.push({
+  id: 'connector-analytics',
+  name: 'Product Analytics (PostHog)',
+  category: 'connector-analytics',
+  stack: 'node',
+  summary: 'Provider-agnostic product analytics: track()/identify() via PostHog HTTP API (EU host by default) or console.',
+  whenToUse: 'Use to measure feature usage, funnels, and retention. Skip for an internal tool or a privacy-only app with no tracking.',
+  keywords: ['analytics', 'tracking', 'posthog', 'plausible', 'metrics', 'events', 'funnel', 'retention', 'telemetry'],
+  dependencies: [],
+  files: [
+    { src: 'connector-analytics/provider.ts', dest: 'src/lib/analytics/provider.ts', note: 'Analytics interface + console provider' },
+    { src: 'connector-analytics/posthog.ts', dest: 'src/lib/analytics/posthog.ts', note: 'PostHog HTTP capture (no SDK)' },
+    { src: 'connector-analytics/index.ts', dest: 'src/lib/analytics/index.ts', note: 'analytics() resolver' },
+  ],
+  setupSteps: [
+    'Set ANALYTICS_PROVIDER (posthog|console); for PostHog add POSTHOG_KEY (+ POSTHOG_HOST)',
+    'Call analytics().track({ name, distinctId, properties }) server-side',
+    'Default is the console provider — no setup in dev',
+  ],
+})
+
+// ─── Connector: Scheduled Jobs / Cron ─────────────────────────────────────────
+BUILDING_BLOCKS.push({
+  id: 'connector-jobs',
+  name: 'Scheduled Jobs / Cron',
+  category: 'connector-jobs',
+  stack: 'nextjs',
+  summary: 'Named background jobs behind a Bearer-secured cron endpoint: register a job, schedule it, run by name.',
+  whenToUse: 'Use for recurring work — expiring invites, digests, usage rollups, cleanup, retries. Skip if nothing runs on a schedule.',
+  keywords: ['cron', 'job', 'scheduled', 'background', 'recurring', 'digest', 'cleanup', 'rollup', 'task queue'],
+  dependencies: [],
+  files: [
+    { src: 'connector-jobs/registry.ts', dest: 'src/lib/jobs/registry.ts', note: 'registerJob/getJob/listJobs' },
+    { src: 'connector-jobs/route.ts', dest: 'src/app/api/cron/[job]/route.ts', note: 'Bearer-secured runner (GET+POST)' },
+  ],
+  setupSteps: [
+    'Register jobs: registerJob({ name, schedule, run })',
+    'Set CRON_SECRET; schedule each job (vercel.json crons or external pinger)',
+    'Hit /api/cron/<job> with Authorization: Bearer CRON_SECRET',
+  ],
+})
+
 export function getBlock(id: string): BuildingBlock | undefined {
   return BUILDING_BLOCKS.find(b => b.id === id)
 }

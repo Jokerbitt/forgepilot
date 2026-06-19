@@ -27,6 +27,10 @@ export type BlockCategory =
   | 'connector-oauth'
   | 'connector-storage'
   | 'connector-supabase'
+  | 'connector-notify'
+  | 'connector-realtime'
+  | 'connector-analytics'
+  | 'connector-jobs'
 
 export type BlockStack =
   | 'nextjs'          // Next.js App Router

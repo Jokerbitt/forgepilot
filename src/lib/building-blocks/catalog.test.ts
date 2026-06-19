@@ -162,4 +162,16 @@ describe('catalog with bundles', () => {
     expect(out).toContain('File Storage')
     expect(out).toContain('OAuth Login')
   })
+
+  it('surfaces tier-2 connectors only when the goal references them', () => {
+    const out = buildBuildingBlocksCatalog('SaaS with realtime board updates, Slack notifications, PostHog analytics and a cron digest job')
+    expect(out).toContain('Realtime')
+    expect(out).toContain('Notifications')
+    expect(out).toContain('Product Analytics')
+    expect(out).toContain('Scheduled Jobs')
+
+    const plain = buildBuildingBlocksCatalog('Build a multi-user SaaS platform with subscriptions')
+    expect(plain).not.toContain('Product Analytics')
+    expect(plain).not.toContain('Scheduled Jobs')
+  })
 })
