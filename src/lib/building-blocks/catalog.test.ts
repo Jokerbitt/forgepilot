@@ -174,4 +174,15 @@ describe('catalog with bundles', () => {
     expect(plain).not.toContain('Product Analytics')
     expect(plain).not.toContain('Scheduled Jobs')
   })
+
+  it('surfaces tier-3 connectors (search, sms, pdf) when referenced', () => {
+    const out = buildBuildingBlocksCatalog('SaaS with full-text search, SMS 2FA codes and PDF invoice export')
+    expect(out).toContain('Full-Text Search')
+    expect(out).toContain('SMS')
+    expect(out).toContain('PDF Generation')
+
+    const plain = buildBuildingBlocksCatalog('Build a simple local todo tracker')
+    expect(plain).not.toContain('PDF Generation')
+    expect(plain).not.toContain('Full-Text Search')
+  })
 })

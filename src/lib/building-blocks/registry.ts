@@ -502,6 +502,72 @@ BUILDING_BLOCKS.push({
   ],
 })
 
+// ─── Connector: Search ────────────────────────────────────────────────────────
+BUILDING_BLOCKS.push({
+  id: 'connector-search',
+  name: 'Full-Text Search (Meilisearch / in-memory)',
+  category: 'connector-search',
+  stack: 'node',
+  summary: 'Provider-agnostic full-text search: index() + search() over your docs, in-memory TF-IDF by default or Meilisearch via env.',
+  whenToUse: 'Use when users need to search across records (tasks, docs, products). Skip if a simple DB WHERE/LIKE is enough.',
+  keywords: ['search', 'full-text', 'fulltext', 'meilisearch', 'index', 'query', 'find', 'autocomplete', 'fuzzy'],
+  dependencies: [],
+  files: [
+    { src: 'connector-search/provider.ts', dest: 'src/lib/search/provider.ts', note: 'SearchProvider interface + tokenize' },
+    { src: 'connector-search/memory-provider.ts', dest: 'src/lib/search/memory-provider.ts', note: 'Zero-dep TF-IDF default' },
+    { src: 'connector-search/meilisearch.ts', dest: 'src/lib/search/meilisearch.ts', note: 'Meilisearch HTTP provider' },
+    { src: 'connector-search/index.ts', dest: 'src/lib/search/index.ts', note: 'search() resolver' },
+  ],
+  setupSteps: [
+    'Set SEARCH_PROVIDER (memory|meilisearch); for Meili add MEILI_HOST + MEILI_KEY',
+    'Index after writes: search().index(namespace, docs)',
+    'Default is in-memory — no setup in dev; consider SQLite FTS5 for DB-native search',
+  ],
+})
+
+// ─── Connector: SMS ───────────────────────────────────────────────────────────
+BUILDING_BLOCKS.push({
+  id: 'connector-sms',
+  name: 'SMS (Twilio)',
+  category: 'connector-sms',
+  stack: 'node',
+  summary: 'Provider-agnostic SMS for OTP codes, alerts and reminders: one sendSms() call, Twilio REST or console via env.',
+  whenToUse: 'Use for phone verification / 2FA codes or SMS alerts. Skip if the app has no phone-based flows.',
+  keywords: ['sms', 'text message', 'twilio', 'otp', 'two-factor', '2fa', 'phone', 'verification code'],
+  dependencies: [],
+  files: [
+    { src: 'connector-sms/provider.ts', dest: 'src/lib/sms/provider.ts', note: 'SmsProvider interface + console provider' },
+    { src: 'connector-sms/twilio.ts', dest: 'src/lib/sms/twilio.ts', note: 'Twilio REST (no SDK)' },
+    { src: 'connector-sms/index.ts', dest: 'src/lib/sms/index.ts', note: 'sendSms() resolver' },
+  ],
+  setupSteps: [
+    'Set SMS_PROVIDER (twilio|console); for Twilio add TWILIO_ACCOUNT_SID/AUTH_TOKEN/FROM',
+    'Call sendSms({ to, body }) with E.164 numbers',
+    'Default is the console provider — no setup in dev',
+  ],
+})
+
+// ─── Connector: PDF ───────────────────────────────────────────────────────────
+BUILDING_BLOCKS.push({
+  id: 'connector-pdf',
+  name: 'PDF Generation (invoices / reports)',
+  category: 'connector-pdf',
+  stack: 'node',
+  summary: 'Generate invoices, receipts and reports as real PDFs (title, meta, table, totals) with pdf-lib — no headless browser.',
+  whenToUse: 'Use when the app issues invoices, receipts, or downloadable reports. Skip if no documents are generated.',
+  keywords: ['pdf', 'invoice', 'receipt', 'report', 'document', 'download', 'export', 'billing document'],
+  dependencies: ['pdf-lib'],
+  files: [
+    { src: 'connector-pdf/document.ts', dest: 'src/lib/pdf/document.ts', note: 'renderPdf(spec) → PDF bytes' },
+    { src: 'connector-pdf/route.ts', dest: 'src/app/api/documents/[id]/pdf/route.ts', note: 'Example download route (adapt)' },
+  ],
+  setupSteps: [
+    'npm i pdf-lib',
+    'Map your record into a PdfDocSpec and call renderPdf()',
+    'Stream as application/pdf or archive via the storage connector',
+  ],
+})
+
 export function getBlock(id: string): BuildingBlock | undefined {
   return BUILDING_BLOCKS.find(b => b.id === id)
 }
