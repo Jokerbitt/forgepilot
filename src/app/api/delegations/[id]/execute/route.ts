@@ -44,7 +44,7 @@ import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-run
 import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, writebackLocalResult, reuseExistingWorkspace, type RunnerWorkspace } from '@/lib/agent-runner/worktree'
 import { bootstrapRuntime, summarizeBootstrap, smokeTestApp } from '@/lib/agent-runner/runtime-bootstrap'
 import { autoScaffoldWorkspace } from '@/lib/building-blocks/create-app'
-import { matchBundle } from '@/lib/building-blocks/bundles'
+import { scopedScaffoldBlockIds } from '@/lib/building-blocks/catalog'
 import { getNBAConfig } from '@/lib/nba-engine/nba-config'
 import { recordSkillOutcome, listSkills, seedBuiltinSkills } from '@/lib/skills/prompt-skill-registry'
 import { applyAutoOptimizations } from '@/lib/skills/skill-optimizer'
@@ -525,7 +525,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
         workspacePath: runnerWorkspace.path,
         goal: scaffold.goal,
         context: scaffold.context,
-        matchBundleFn: matchBundle,
+        resolveBlockIds: scopedScaffoldBlockIds,
       })
       if (result.scaffolded) {
         void appendLogs(id, [{

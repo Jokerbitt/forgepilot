@@ -80,6 +80,27 @@ function selectRelevantConnectors(goal: string, context = ''): BuildingBlock[] {
 }
 
 /**
+ * Block ids to PRE-SCAFFOLD for a build goal — scoped to need, not the whole
+ * bundle. The A/B finding (full-bundle scaffold cost +18%) showed that copying
+ * blocks the phase never uses just makes the agent read + adapt dead weight.
+ *
+ * Returns the always-needed foundation (testing + app shell) plus only the
+ * bundle blocks whose keywords the goal/context actually hits. Empty when the
+ * goal is not an app build (no bundle match).
+ */
+export function scopedScaffoldBlockIds(goal: string, context = ''): string[] {
+  const bundle = matchBundle(goal, context)
+  if (!bundle) return []
+  const hay = `${goal} ${context}`.toLowerCase()
+  const always = new Set(['testing-vitest', 'ui-app-shell'])
+  return bundle.blockIds.filter(id => {
+    if (always.has(id)) return true
+    const block = BUILDING_BLOCKS.find(b => b.id === id)
+    return block ? block.keywords.some(kw => keywordHit(hay, kw)) : false
+  })
+}
+
+/**
  * Render the catalog block for the agent prompt.
  * Returns '' when no blocks are relevant.
  */

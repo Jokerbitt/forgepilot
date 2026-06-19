@@ -135,9 +135,13 @@ export interface AutoScaffoldResult {
 }
 
 /**
- * Pre-scaffold a FRESH workspace from the bundle that matches a build goal —
+ * Pre-scaffold a FRESH workspace from the blocks a build goal actually needs —
  * copying vetted block files with ZERO LLM tokens before the agent starts.
  * The agent then writes only the app-specific code on top.
+ *
+ * `resolveBlockIds(goal, context)` decides WHICH blocks to copy. Scope it to the
+ * goal (not the whole bundle): the A/B finding showed full-bundle scaffolds cost
+ * MORE because the agent must read + adapt dead-weight files. Return [] to skip.
  *
  * Guard: only runs on a genuinely empty app (no package.json yet), so it never
  * disturbs an existing codebase or a chained phase building on prior work.
@@ -147,26 +151,26 @@ export function autoScaffoldWorkspace(options: {
   goal: string
   context?: string
   repoRoot?: string
-  matchBundleFn: (goal: string, context?: string) => { id: string } | null
+  resolveBlockIds: (goal: string, context?: string) => string[]
 }): AutoScaffoldResult {
-  const { workspacePath, goal, context = '', repoRoot, matchBundleFn } = options
+  const { workspacePath, goal, context = '', repoRoot, resolveBlockIds } = options
 
   if (fs.existsSync(path.join(workspacePath, 'package.json'))) {
     return { scaffolded: false, reason: 'Workspace ist nicht leer (package.json existiert)' }
   }
-  const bundle = matchBundleFn(goal, context)
-  if (!bundle) {
-    return { scaffolded: false, reason: 'Kein passendes Bundle für das Ziel' }
+  const blockIds = resolveBlockIds(goal, context)
+  if (blockIds.length === 0) {
+    return { scaffolded: false, reason: 'Keine bedarfsgerechten Blöcke für das Ziel' }
   }
 
-  const result = createApp({ bundleId: bundle.id, targetDir: workspacePath, repoRoot, force: false })
+  const result = createApp({ blockIds, targetDir: workspacePath, repoRoot, force: false })
   if (result.written.length === 0) {
-    return { scaffolded: false, reason: 'Keine Dateien kopiert', bundleId: bundle.id }
+    return { scaffolded: false, reason: 'Keine Dateien kopiert' }
   }
 
   // Drop a note so the exploring agent adapts the scaffold instead of recreating it.
   const note = [
-    `# Pre-scaffolded from the "${bundle.id}" bundle`,
+    `# Pre-scaffolded blocks: ${blockIds.join(', ')}`,
     '',
     `${result.written.length} starter files were copied in BEFORE you started.`,
     'READ and ADAPT them — do NOT rewrite them from scratch.',
@@ -188,8 +192,7 @@ export function autoScaffoldWorkspace(options: {
 
   return {
     scaffolded: true,
-    reason: `Bundle "${bundle.id}" vorab kopiert`,
-    bundleId: bundle.id,
+    reason: `${blockIds.length} Blöcke bedarfsgerecht vorab kopiert`,
     fileCount: result.written.length,
     dependencies: result.plan.dependencies,
   }

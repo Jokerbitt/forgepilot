@@ -3,7 +3,8 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { planCreateApp, createApp, summarizeCreateApp, autoScaffoldWorkspace } from './create-app'
-import { getBundle, matchBundle } from './bundles'
+import { getBundle } from './bundles'
+import { scopedScaffoldBlockIds } from './catalog'
 
 describe('planCreateApp', () => {
   it('plans every file of every block in a bundle', () => {
@@ -86,14 +87,13 @@ describe('autoScaffoldWorkspace', () => {
   beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scaffold-')) })
   afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }) })
 
-  it('scaffolds a fresh workspace from the matched bundle + writes SCAFFOLD.md', () => {
+  it('scaffolds a fresh workspace from the resolved blocks + writes SCAFFOLD.md', () => {
     const res = autoScaffoldWorkspace({
       workspacePath: dir,
-      goal: 'Build a multi-user SaaS platform with subscription billing',
-      matchBundleFn: matchBundle,
+      goal: 'Build a foundation',
+      resolveBlockIds: () => ['testing-vitest', 'ui-app-shell'],
     })
     expect(res.scaffolded).toBe(true)
-    expect(res.bundleId).toBe('saas-starter')
     expect((res.fileCount ?? 0)).toBeGreaterThan(0)
     expect(fs.existsSync(path.join(dir, 'SCAFFOLD.md'))).toBe(true)
   })
@@ -103,18 +103,27 @@ describe('autoScaffoldWorkspace', () => {
     const res = autoScaffoldWorkspace({
       workspacePath: dir,
       goal: 'Build a SaaS platform',
-      matchBundleFn: matchBundle,
+      resolveBlockIds: () => ['ui-app-shell'],
     })
     expect(res.scaffolded).toBe(false)
     expect(res.reason).toMatch(/nicht leer/)
   })
 
-  it('skips when no bundle matches the goal', () => {
+  it('skips when the resolver returns no blocks', () => {
     const res = autoScaffoldWorkspace({
       workspacePath: dir,
       goal: 'xyzzy plugh frobnicate',
-      matchBundleFn: matchBundle,
+      resolveBlockIds: () => [],
     })
     expect(res.scaffolded).toBe(false)
+  })
+
+  it('uses scopedScaffoldBlockIds to copy only what the goal needs', () => {
+    // A pure-foundation goal must NOT drag in billing/auth blocks.
+    const ids = scopedScaffoldBlockIds('Scaffold the Next.js foundation and app shell, landing page')
+    expect(ids).toContain('ui-app-shell')
+    expect(ids).toContain('testing-vitest')
+    expect(ids).not.toContain('billing-stripe')
+    expect(ids).not.toContain('auth-credentials')
   })
 })
