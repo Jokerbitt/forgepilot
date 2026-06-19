@@ -511,15 +511,14 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     message: `Runner-Workspace vorbereitet: ${runnerWorkspace.path}`,
   }])
 
-  // Pre-scaffold a fresh workspace from the matching bundle — copies vetted
-  // block files with ZERO tokens so the agent only writes app-specific code.
-  // Guarded to fresh repos (no package.json) and first runs (not chain/resume).
+  // Pre-scaffold a fresh workspace with the FOUNDATION blocks — copies vetted
+  // test + app-shell (+ landing) files with ZERO tokens so the agent only writes
+  // app-specific code. Guarded to fresh repos (no package.json) and first runs.
   //
-  // OFF by default: an A/B measurement (2026-06-19) showed copying the WHOLE
-  // bundle in costs ~18% MORE, because the agent must read + adapt every generic
-  // file. Re-enable with FORGEPILOT_PRESCAFFOLD=true once the scaffold is scoped
-  // to the goal's actual blocks (not the entire bundle). See finding memo.
-  if (scaffold && targetRepo && !existingWorkspace && process.env.FORGEPILOT_PRESCAFFOLD === 'true') {
+  // ON by default (opt out with FORGEPILOT_PRESCAFFOLD=false). The full-bundle
+  // scaffold cost +18%, but the foundation-only scaffold measured CHEAPER than
+  // no scaffold ($2.99 vs $3.16) and -35% vs the full one. See finding memo.
+  if (scaffold && targetRepo && !existingWorkspace && process.env.FORGEPILOT_PRESCAFFOLD !== 'false') {
     try {
       const result = autoScaffoldWorkspace({
         workspacePath: runnerWorkspace.path,
