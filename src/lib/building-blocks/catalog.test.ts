@@ -112,6 +112,14 @@ describe('bundles', () => {
     expect(b?.id).toBe('ai-app')
   })
 
+  it('matchBundle routes a full AI SaaS goal to the ai-saas bundle', () => {
+    const b = matchBundle('Build an AI content generation SaaS with usage billing and generation history')
+    expect(b?.id).toBe('ai-saas')
+    expect(b?.blockIds).toContain('auth-credentials')
+    expect(b?.blockIds).toContain('billing-stripe')
+    expect(b?.blockIds).toContain('ai-routing')
+  })
+
   it('matchBundle routes a todo goal to local-first', () => {
     const b = matchBundle('A simple offline todo tracker with localStorage')
     expect(b?.id).toBe('local-first')

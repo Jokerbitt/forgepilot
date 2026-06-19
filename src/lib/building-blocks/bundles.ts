@@ -28,10 +28,17 @@ export const BUNDLES: Bundle[] = [
     blockIds: ['testing-vitest', 'security', 'ui-app-shell', 'db-prisma-postgres', 'auth-credentials', 'settings', 'api-crud-resource', 'billing-stripe', 'landing', 'deploy-vercel-docker'],
   },
   {
+    id: 'ai-saas',
+    name: 'AI SaaS',
+    description: 'Production AI SaaS: local/cloud AI routing + guardrails (cost/rate/PII), auth, database, usage billing, settings, app shell, landing + tests. Everything a professional AI web app needs.',
+    keywords: ['ai saas', 'ai-powered saas', 'ai platform', 'ai product', 'ai studio', 'content generation', 'ai writing', 'ai content', 'generation history', 'usage billing', 'credits', 'ai web app'],
+    blockIds: ['testing-vitest', 'security', 'ui-app-shell', 'db-prisma-postgres', 'auth-credentials', 'ai-routing', 'ai-guardrails', 'settings', 'api-crud-resource', 'forms-toast', 'billing-stripe', 'landing', 'deploy-vercel-docker'],
+  },
+  {
     id: 'ai-app',
     name: 'AI App',
-    description: 'AI-powered app: local/cloud auto-routing, guardrails (cost/rate/PII), settings, app shell + tests.',
-    keywords: ['ai', 'llm', 'chatbot', 'gpt', 'assistant', 'copilot', 'agent', 'generate', 'rag', 'ml'],
+    description: 'Lightweight AI-powered app: local/cloud auto-routing, guardrails (cost/rate/PII), settings, app shell + tests. No auth/db/billing — use ai-saas for a full product.',
+    keywords: ['ai', 'llm', 'chatbot', 'gpt', 'assistant', 'copilot', 'agent', 'rag', 'ml'],
     blockIds: ['testing-vitest', 'security', 'ui-app-shell', 'ai-routing', 'ai-guardrails', 'settings', 'forms-toast', 'api-crud-resource'],
   },
   {
