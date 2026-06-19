@@ -531,7 +531,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
         void appendLogs(id, [{
           timestamp: new Date().toISOString(),
           type: 'success',
-          message: `🧱 Pre-Scaffold: ${result.fileCount} Dateien aus Bundle "${result.bundleId}" ohne Tokens kopiert — Agent baut nur App-Spezifisches.`,
+          message: `🧱 Pre-Scaffold: ${result.fileCount} Dateien (${result.reason}) ohne Tokens kopiert — Agent baut nur App-Spezifisches.`,
         }])
       }
     } catch { /* pre-scaffold is best-effort */ }
