@@ -13,6 +13,7 @@ function report(over: Partial<ReverseReport> = {}): ReverseReport {
     databaseEngines: ['Microsoft SQL Server'],
     modules: ['App.Core', 'App.UI'],
     security: ['Mögliche hartkodierte Zugangsdaten'],
+    securityFindings: [],
     techDebt: [],
     summary: '',
     ...over,

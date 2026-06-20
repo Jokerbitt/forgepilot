@@ -13,6 +13,7 @@
 import { execFileSync } from 'child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
 import { join, extname } from 'path'
+import { scanSecurityDeep, findingsToStrings, type SecurityFinding } from './security-scan'
 
 export type Platform = 'windows' | 'cross-platform' | 'unknown'
 
@@ -32,8 +33,10 @@ export interface ReverseReport {
   databaseEngines: string[]
   /** Sub-projects / apps inside the codebase (e.g. .csproj names, workspace packages). */
   modules: string[]
-  /** Potential security findings worth a closer look. */
+  /** Potential security findings worth a closer look (plain strings). */
   security: string[]
+  /** Structured security findings with severity + sample file. */
+  securityFindings: SecurityFinding[]
   /** Heuristic tech-debt / modernization signals. */
   techDebt: string[]
   /** Plain-German narrative summary. */
@@ -185,20 +188,6 @@ export function findModules(files: string[]): string[] {
   return Array.from(modules).slice(0, 40)
 }
 
-/** Heuristic security probes (read-only). Flags patterns, never logs the secret. */
-function scanSecurity(root: string): string[] {
-  const out: string[] = []
-  const hits = grepAny(root, [
-    'Password=', 'password=', 'pwd=', 'BEGIN RSA PRIVATE KEY', 'BEGIN PRIVATE KEY', 'AKIA',
-    'SELECT .* + ', ' exec(', 'eval(',
-  ])
-  if (hits.has('Password=') || hits.has('password=') || hits.has('pwd=')) out.push('Mögliche hartkodierte Zugangsdaten / Connection-Strings mit Passwort — prüfen & in Secrets auslagern')
-  if (hits.has('BEGIN RSA PRIVATE KEY') || hits.has('BEGIN PRIVATE KEY')) out.push('Privater Schlüssel im Code gefunden — sofort entfernen & rotieren')
-  if (hits.has('AKIA')) out.push('Möglicher AWS-Access-Key im Code — prüfen & rotieren')
-  if (hits.has('SELECT .* + ')) out.push('String-konkatenierte SQL-Abfragen — Risiko für SQL-Injection, auf Parameter umstellen')
-  if (hits.has('exec(') || hits.has('eval(')) out.push('Dynamische Code-/Shell-Ausführung (exec/eval) — auf Injection prüfen')
-  return out
-}
 
 function appNameFrom(root: string, files: string[]): string {
   const sln = files.find(f => f.toLowerCase().endsWith('.sln'))
@@ -237,7 +226,7 @@ export function analyzeForReverse(rootPath: string): ReverseReport {
     const empty: Omit<ReverseReport, 'summary'> = {
       rootPath, appName: rootPath.split('/').filter(Boolean).pop() ?? 'app',
       languages: [], frameworks: [], platform: 'unknown', platformReasons: [],
-      databaseEngines: [], modules: [], security: [], techDebt: ['Pfad nicht gefunden oder kein Verzeichnis'],
+      databaseEngines: [], modules: [], security: [], securityFindings: [], techDebt: ['Pfad nicht gefunden oder kein Verzeichnis'],
     }
     return { ...empty, summary: 'Pfad nicht gefunden — keine Analyse möglich.' }
   }
@@ -246,7 +235,8 @@ export function analyzeForReverse(rootPath: string): ReverseReport {
   const languages = countLanguages(files)
   const { frameworks, platform, platformReasons, databaseEngines } = detectStack(rootPath, files)
   const modules = findModules(files)
-  const security = scanSecurity(rootPath)
+  const securityFindings = scanSecurityDeep(rootPath)
+  const security = findingsToStrings(securityFindings)
 
   const techDebt: string[] = []
   if (truncated) techDebt.push(`Sehr großes Projekt (>${MAX_FILES} Dateien) — Analyse gekürzt`)
@@ -259,7 +249,7 @@ export function analyzeForReverse(rootPath: string): ReverseReport {
 
   const partial: Omit<ReverseReport, 'summary'> = {
     rootPath, appName: appNameFrom(rootPath, files),
-    languages, frameworks, platform, platformReasons, databaseEngines, modules, security, techDebt,
+    languages, frameworks, platform, platformReasons, databaseEngines, modules, security, securityFindings, techDebt,
   }
   return { ...partial, summary: buildSummary(partial) }
 }
