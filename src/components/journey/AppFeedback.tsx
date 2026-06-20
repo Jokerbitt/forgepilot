@@ -16,6 +16,29 @@ export function AppFeedback({ targetRepo }: { targetRepo: string }) {
   const [info, setInfo] = useState('')
   const [error, setError] = useState('')
 
+  const blocks: Array<{ id: string; label: string; emoji: string }> = [
+    { id: 'login', label: 'Login & Registrierung', emoji: '🔑' },
+    { id: 'payments', label: 'Zahlungen', emoji: '💳' },
+    { id: 'email', label: 'E-Mail-Versand', emoji: '✉️' },
+    { id: 'notifications', label: 'Benachrichtigungen', emoji: '🔔' },
+    { id: 'file-upload', label: 'Datei-Upload', emoji: '📎' },
+    { id: 'search', label: 'Suche', emoji: '🔎' },
+  ]
+
+  async function addBlock(blockId: string, label: string) {
+    setError(''); setInfo(''); setSending(true)
+    try {
+      const res = await fetch('/api/journey/block', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blockId, targetRepo }),
+      })
+      const data = await res.json() as { delegationIds?: string[]; error?: string }
+      if (!res.ok) { setError(data.error ?? 'Konnte den Baustein nicht hinzufügen'); return }
+      setInfo(`„${label}" wird hinzugefügt …`)
+      setFollowIds(data.delegationIds ?? [])
+    } catch { setError('Netzwerkfehler') } finally { setSending(false) }
+  }
+
   async function send() {
     setError(''); setInfo(''); setSending(true)
     try {
@@ -41,6 +64,17 @@ export function AppFeedback({ targetRepo }: { targetRepo: string }) {
         🚀 App live schalten
       </Link>
 
+      <p className="mt-4 text-xs font-medium text-slate-300">Fertige Bausteine hinzufügen:</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {blocks.map(b => (
+          <button key={b.id} onClick={() => addBlock(b.id, b.label)} disabled={sending}
+            className="rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-slate-200 transition hover:border-indigo-500 disabled:opacity-50">
+            {b.emoji} {b.label}
+          </button>
+        ))}
+      </div>
+
+      <p className="mt-4 text-xs font-medium text-slate-300">…oder in eigenen Worten beschreiben:</p>
       <textarea
         className="mt-3 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
         rows={2}
