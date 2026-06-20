@@ -5,6 +5,21 @@ import Link from 'next/link'
 
 interface Suggestion { id: string; title: string; description: string }
 
+interface StepCostEstimate {
+  step: { title: string }
+  isLocal: boolean
+  isFree: boolean
+  estimatedCostEur: number
+  plainText: string
+}
+interface PlanCostEstimate {
+  steps: StepCostEstimate[]
+  totalCostEur: number
+  localCount: number
+  cloudCount: number
+  summary: string
+}
+
 interface CodebaseAnalysis {
   appName: string
   stack: string[]
@@ -33,9 +48,30 @@ export default function SuggestionsPage() {
   const [building, setBuilding] = useState(false)
   const [result, setResult] = useState<{ planId: string; phaseCount: number; delegationIds?: string[] } | null>(null)
   const [error, setError] = useState('')
+  const [cost, setCost] = useState<PlanCostEstimate | null>(null)
+  const [costing, setCosting] = useState(false)
 
   function switchMode(next: Mode) {
-    setMode(next); setError(''); setResult(null); setSuggestions([]); setSelected(new Set()); setAnalysis(null)
+    setMode(next); setError(''); setResult(null); setSuggestions([]); setSelected(new Set()); setAnalysis(null); setCost(null)
+  }
+
+  function chosenSteps() {
+    const steps = suggestions.filter(s => selected.has(s.id)).map(s => ({ title: s.title, description: s.description }))
+    if (custom.trim()) steps.push({ title: 'Eigener Schritt', description: custom.trim() })
+    return steps
+  }
+
+  async function previewCost() {
+    setError(''); setCost(null); setCosting(true)
+    try {
+      const res = await fetch('/api/cost-routing', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ steps: chosenSteps() }),
+      })
+      const data = await res.json() as PlanCostEstimate & { error?: string }
+      if (!res.ok) { setError(data.error ?? 'Kostenschätzung fehlgeschlagen'); return }
+      setCost(data)
+    } catch { setError('Netzwerkfehler') } finally { setCosting(false) }
   }
 
   async function generate() {
@@ -71,6 +107,7 @@ export default function SuggestionsPage() {
 
   function toggle(id: string) {
     setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+    setCost(null) // selection changed → previous estimate is stale
   }
 
   async function build() {
@@ -159,8 +196,29 @@ export default function SuggestionsPage() {
 
       <section className="mt-4">
         <label className="text-sm font-medium text-slate-300">Sonstiges — selbst beschreiben</label>
-        <textarea className={`${inputCls} mt-1`} rows={2} placeholder="Eigener Schritt, der zusätzlich gebaut werden soll …" value={custom} onChange={e => setCustom(e.target.value)} />
+        <textarea className={`${inputCls} mt-1`} rows={2} placeholder="Eigener Schritt, der zusätzlich gebaut werden soll …" value={custom} onChange={e => { setCustom(e.target.value); setCost(null) }} />
       </section>
+
+      {(selected.size > 0 || custom.trim().length > 0) && (
+        <section className="mt-4">
+          <button onClick={previewCost} disabled={costing}
+            className="rounded-lg border border-slate-600 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 disabled:opacity-50">
+            {costing ? 'Schätze Kosten …' : '💶 Was kostet das? (lokal/Cloud schätzen)'}
+          </button>
+          {cost && (
+            <div className="mt-3 rounded-xl border border-slate-700 bg-slate-900/60 p-4">
+              <p className="text-sm font-semibold text-slate-200">{cost.summary}</p>
+              <ul className="mt-2 space-y-1 text-xs text-slate-400">
+                {cost.steps.map((c, i) => (
+                  <li key={i}>
+                    <span className={c.isFree || c.isLocal ? 'text-emerald-400' : 'text-amber-300'}>{c.isFree || c.isLocal ? '○ lokal' : '☁ Cloud'}</span>{' '}{c.plainText}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
 
       {error && <p className="mt-4 rounded-lg border border-amber-700/40 bg-amber-950/20 p-3 text-sm text-amber-300">{error}</p>}
 
