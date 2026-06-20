@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { BuildProgress } from '@/components/journey/BuildProgress'
+import { AppFeedback } from '@/components/journey/AppFeedback'
 
 interface ReverseReport {
   appName: string
@@ -235,6 +236,7 @@ export default function ReversePage() {
           </ol>
           {result.delegationIds && result.delegationIds.length > 0 && <BuildProgress delegationIds={result.delegationIds} />}
           <Link href="/delegations" className="mt-3 inline-block rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500">Details ansehen →</Link>
+          {result.targetRepo && <AppFeedback targetRepo={result.targetRepo} />}
         </section>
       )}
     </main>

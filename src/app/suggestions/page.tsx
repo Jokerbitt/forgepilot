@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { BuildProgress } from '@/components/journey/BuildProgress'
+import { AppFeedback } from '@/components/journey/AppFeedback'
 
 interface Suggestion { id: string; title: string; description: string }
 
@@ -47,7 +48,7 @@ export default function SuggestionsPage() {
   const [custom, setCustom] = useState('')
   const [loading, setLoading] = useState(false)
   const [building, setBuilding] = useState(false)
-  const [result, setResult] = useState<{ planId: string; phaseCount: number; delegationIds?: string[] } | null>(null)
+  const [result, setResult] = useState<{ planId: string; phaseCount: number; delegationIds?: string[]; targetRepo?: string } | null>(null)
   const [error, setError] = useState('')
   const [cost, setCost] = useState<PlanCostEstimate | null>(null)
   const [costing, setCosting] = useState(false)
@@ -119,9 +120,9 @@ export default function SuggestionsPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ goal, context, targetRepo: targetRepo || undefined, selected: selectedSuggestions, custom }),
       })
-      const data = await res.json() as { planId?: string; phaseCount?: number; delegationIds?: string[]; error?: string }
+      const data = await res.json() as { planId?: string; phaseCount?: number; delegationIds?: string[]; targetRepo?: string; error?: string }
       if (!res.ok || !data.planId) { setError(data.error ?? 'Build-Start fehlgeschlagen'); return }
-      setResult({ planId: data.planId, phaseCount: data.phaseCount ?? 0, delegationIds: data.delegationIds })
+      setResult({ planId: data.planId, phaseCount: data.phaseCount ?? 0, delegationIds: data.delegationIds, targetRepo: data.targetRepo })
     } catch { setError('Netzwerkfehler') } finally { setBuilding(false) }
   }
 
@@ -234,6 +235,7 @@ export default function SuggestionsPage() {
           <p className="mt-1 text-xs text-emerald-300/80">Plan {result.planId.slice(0, 8)} · jede Phase muss grün bauen + Tests bestehen, bevor die nächste startet.</p>
           {result.delegationIds && result.delegationIds.length > 0 && <BuildProgress delegationIds={result.delegationIds} />}
           <Link href="/delegations" className="mt-3 inline-block rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500">Details ansehen →</Link>
+          {result.targetRepo && <AppFeedback targetRepo={result.targetRepo} />}
         </section>
       )}
     </main>
