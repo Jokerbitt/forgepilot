@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { BuildProgress } from './BuildProgress'
 import { DataImport } from './DataImport'
+import { Snapshots } from './Snapshots'
 
 /**
  * Journey Companion — Phase 1.3: try the app + change it in plain language.
@@ -93,6 +94,7 @@ export function AppFeedback({ targetRepo }: { targetRepo: string }) {
       {followIds.length > 0 && <BuildProgress delegationIds={followIds} />}
 
       <DataImport targetRepo={targetRepo} />
+      <Snapshots targetRepo={targetRepo} />
     </div>
   )
 }
