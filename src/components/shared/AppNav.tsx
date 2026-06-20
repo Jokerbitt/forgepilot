@@ -65,6 +65,7 @@ const navItems: NavItem[] = [
   { href: '/suggestions',      key: 'suggestions',     icon: Lightbulb,  group: 'workflow', isNew: true },
   { href: '/concept',          key: 'conceptAnalyzer', icon: ScanText,   group: 'workflow', isNew: true },
   { href: '/deploy',           key: 'deploy',          icon: Rocket,     group: 'workflow', isNew: true },
+  { href: '/reverse',          key: 'reverse',         icon: ScanText,   group: 'workflow', isNew: true },
 
   // ── Werkzeuge (collapsed — /tools hub links to everything else) ─────────
   { href: '/tools',  key: 'tools',  icon: Wrench,   group: 'expert' },

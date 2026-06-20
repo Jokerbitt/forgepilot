@@ -44,6 +44,7 @@ type NavKey =
   | 'suggestions'
   | 'ideaStudio'
   | 'deploy'
+  | 'reverse'
 
 type UiKey =
   | 'workspace'
@@ -157,6 +158,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
       suggestions: { label: 'Vorschläge', short: 'Ideen' },
       ideaStudio: { label: 'Idea Studio', short: 'Studio' },
       deploy: { label: 'Live schalten', short: 'Deploy' },
+      reverse: { label: 'Reverse Engineering', short: 'Reverse' },
     },
     ui: {
       workspace: 'Workspace',
@@ -265,6 +267,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
       suggestions: { label: 'Suggestions', short: 'Ideas' },
       ideaStudio: { label: 'Idea Studio', short: 'Studio' },
       deploy: { label: 'Go Live', short: 'Deploy' },
+      reverse: { label: 'Reverse Engineering', short: 'Reverse' },
     },
     ui: {
       workspace: 'Workspace',
