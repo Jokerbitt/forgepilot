@@ -31,13 +31,17 @@ Reichweite. Arbeitsweise wie gehabt: additiv, getestet, Commit + Push pro Schrit
 | 3.2 | **Wartung: Security-Scan + Dependency-Updates** (on-demand + wöchentlicher Cron) | `src/lib/journey/maintenance.ts`, `/api/journey/maintenance`, `/api/cron/journey-maintenance` (vercel.json), `Maintenance` | ✅ |
 | 3.3 | **App per Link teilen** (Validierung + localhost-Warnung) | `src/lib/journey/share.ts`, `ShareLink` | ✅ |
 
-## Zusatzideen (eingeplant, Priorität nach Bedarf)
+## Zusatzideen ✅ ABGESCHLOSSEN (2026-06-20)
 
-- **Vorlagen-Galerie** (CRM, Buchungstool, Shop …) — Start bei einem Beispiel statt bei null.
-- **Qualitäts-Report in Klartext** — „mit 24 Tests geprüft, alles grün" nach dem Build.
-- **App-Export/Backup** — Code + Daten herunterladen (kein Lock-in).
-- **Dashboard-Assistent „Was als Nächstes?"** — schlägt den nächsten sinnvollen Schritt vor.
-- **Zahlungen/E-Mail als Klick-Baustein** (Stripe, Mail) — teils via Connectoren vorhanden.
+- ✅ **Vorlagen-Galerie** — `src/lib/journey/templates.ts`, `/api/journey/template`, Galerie in `/suggestions`.
+- ✅ **Qualitäts-Report in Klartext** — `src/lib/journey/quality.ts`, `/api/journey/quality`, `QualityReport`.
+- ✅ **App-Export/Backup** — `src/lib/journey/export.ts` (git archive), `/api/journey/export`, Backup-Button.
+- ✅ **Dashboard-Assistent „Was als Nächstes?"** — `src/lib/journey/next-action.ts`, `/api/journey/next-action`, `NextSteps`.
+- ✅ **Zahlungen/E-Mail als Klick-Baustein** — über die Phase-2.1-Bausteine (`blocks.ts`) abgedeckt.
+
+---
+
+**Gesamtstatus: alle 3 Phasen + alle Zusatzideen umgesetzt (2026-06-20).**
 
 ## Reuse-Prinzip
 Jeder Schritt baut auf Bestehendem auf: Delegation-/Plan-Executor (Status, chainPosition/
