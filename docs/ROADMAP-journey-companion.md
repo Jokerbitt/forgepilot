@@ -7,13 +7,13 @@ ist da (Studio, Suggestions, Repo-Auto, Build, Deploy, Kosten, Reverse-Engineeri
 Diese Roadmap schließt alles **danach** — Vertrauen, Iteration, produktive Nutzung,
 Reichweite. Arbeitsweise wie gehabt: additiv, getestet, Commit + Push pro Schritt.
 
-## Phase 1 — Vertrauen & Loop (höchster Hebel, **zuerst**)
+## Phase 1 — Vertrauen & Loop ✅ ABGESCHLOSSEN (2026-06-20)
 
-| # | Feature | Kern-Module (geplant) | Status |
-|---|---------|----------------------|--------|
-| 1.1 | **Klartext-Live-Fortschritt** — „Schritt 2 von 5: Datenbank wird gebaut …" statt Delegations-Logs | `src/lib/journey/progress.ts` (humanize), `/api/journey/progress`, UI-Komponente | 🟡 in Arbeit |
-| 1.2 | **Klartext-Fehler + sichtbare Selbstheilung** — „Hat nicht geklappt, ForgePilot versucht Variante B" statt Stacktrace | `explainError` in `journey/progress.ts`, Retry-Sichtbarkeit | 🟡 in Arbeit (mit 1.1) |
-| 1.3 | **Ausprobieren + Feedback in natürlicher Sprache** — App im Browser zeigen, „Button nach oben" → nächste Änderung | `src/lib/journey/feedback.ts`, Preview-Anbindung, `/api/journey/feedback` → suggestions/build | ⬜ offen |
+| # | Feature | Module | Status |
+|---|---------|--------|--------|
+| 1.1 | **Klartext-Live-Fortschritt** — „Schritt 2 von 5 läuft …" | `src/lib/journey/progress.ts`, `/api/journey/progress`, `BuildProgress` | ✅ |
+| 1.2 | **Klartext-Fehler + sichtbare Selbstheilung** | `explainError` + Retry-Sichtbarkeit in `progress.ts` | ✅ |
+| 1.3 | **Ausprobieren + Feedback in natürlicher Sprache** | `src/lib/journey/feedback.ts`, `/api/journey/feedback`, `AppFeedback` (in /suggestions + /reverse) | ✅ |
 
 ## Phase 2 — Apps echt machen
 
