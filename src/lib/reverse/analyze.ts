@@ -14,6 +14,7 @@ import { execFileSync } from 'child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
 import { join, extname } from 'path'
 import { scanSecurityDeep, findingsToStrings, type SecurityFinding } from './security-scan'
+import { assessCriticality, type CriticalityAssessment } from './criticality'
 
 export type Platform = 'windows' | 'cross-platform' | 'unknown'
 
@@ -39,6 +40,8 @@ export interface ReverseReport {
   securityFindings: SecurityFinding[]
   /** Heuristic tech-debt / modernization signals. */
   techDebt: string[]
+  /** Safety/criticality assessment — gates autonomous rebuild. */
+  criticality: CriticalityAssessment
   /** Plain-German narrative summary. */
   summary: string
 }
@@ -214,6 +217,7 @@ function buildSummary(r: Omit<ReverseReport, 'summary'>): string {
     r.databaseEngines.length ? `Datenbank: ${r.databaseEngines.join(', ')}.` : 'Keine Datenbank eindeutig erkannt.',
     r.modules.length ? `${r.modules.length} Teil-Modul(e)/App(s) erkannt (z. B. ${r.modules.slice(0, 5).join(', ')}).` : '',
     r.security.length ? `⚠ ${r.security.length} Sicherheitshinweis(e) gefunden.` : 'Keine offensichtlichen Sicherheitslücken im Schnellscan.',
+    r.criticality.level === 'critical' ? '⛔ Kritische Steuerungssoftware erkannt — kein autonomer Nachbau ohne ausdrückliche Bestätigung.' : '',
     'Hinweis: Ein Nachbau ist eine Annäherung — „Logik 1:1" muss per Paritäts-Test gegen das Original bewiesen werden.',
   ]
   return lines.filter(Boolean).join(' ')
@@ -227,6 +231,7 @@ export function analyzeForReverse(rootPath: string): ReverseReport {
       rootPath, appName: rootPath.split('/').filter(Boolean).pop() ?? 'app',
       languages: [], frameworks: [], platform: 'unknown', platformReasons: [],
       databaseEngines: [], modules: [], security: [], securityFindings: [], techDebt: ['Pfad nicht gefunden oder kein Verzeichnis'],
+      criticality: { level: 'normal', reasons: [] },
     }
     return { ...empty, summary: 'Pfad nicht gefunden — keine Analyse möglich.' }
   }
@@ -247,9 +252,12 @@ export function analyzeForReverse(rootPath: string): ReverseReport {
     techDebt.push('C#-Code ohne eindeutig erkannte DB-Anbindung — Datenzugriff manuell prüfen')
   }
 
+  const appName = appNameFrom(rootPath, files)
+  const criticality = assessCriticality(appName, rootPath)
+
   const partial: Omit<ReverseReport, 'summary'> = {
-    rootPath, appName: appNameFrom(rootPath, files),
-    languages, frameworks, platform, platformReasons, databaseEngines, modules, security, securityFindings, techDebt,
+    rootPath, appName,
+    languages, frameworks, platform, platformReasons, databaseEngines, modules, security, securityFindings, techDebt, criticality,
   }
   return { ...partial, summary: buildSummary(partial) }
 }

@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   const authError = await requireAuth()
   if (authError) return authError
 
-  let body: { rootPath?: string; options?: RebuildOptions; targetRepo?: string }
+  let body: { rootPath?: string; options?: RebuildOptions; targetRepo?: string; acknowledgeCritical?: boolean }
   try {
     body = (await req.json()) as typeof body
   } catch {
@@ -35,6 +35,16 @@ export async function POST(req: NextRequest) {
   if (!rootPath) return NextResponse.json({ error: 'rootPath ist erforderlich' }, { status: 400 })
 
   const report = analyzeForReverse(rootPath)
+
+  // Safety guardrail: never auto-rebuild safety-/mission-critical control software
+  // without an explicit acknowledgement (Leitrechner/SCADA/PLC/…).
+  if (report.criticality.level === 'critical' && !body.acknowledgeCritical) {
+    return NextResponse.json({
+      error: 'Kritische Steuerungssoftware erkannt — autonomer Nachbau gesperrt.',
+      criticality: report.criticality,
+      requiresAcknowledgement: true,
+    }, { status: 409 })
+  }
   const steps = reportToRebuildSteps(report, body.options ?? {})
   if (steps.length === 0) return NextResponse.json({ error: 'Keine Nachbau-Schritte ableitbar' }, { status: 422 })
 

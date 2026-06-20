@@ -13,6 +13,7 @@ interface ReverseReport {
   modules: string[]
   security: string[]
   techDebt: string[]
+  criticality: { level: 'normal' | 'sensitive' | 'critical'; reasons: string[] }
   summary: string
 }
 
@@ -42,6 +43,7 @@ export default function ReversePage() {
   const [custom, setCustom] = useState('')
   const [targetRepo, setTargetRepo] = useState('')
   const [building, setBuilding] = useState(false)
+  const [acknowledgeCritical, setAcknowledgeCritical] = useState(false)
   const [result, setResult] = useState<RebuildResult | null>(null)
 
   async function analyze() {
@@ -85,6 +87,7 @@ export default function ReversePage() {
         body: JSON.stringify({
           rootPath,
           targetRepo: targetRepo || undefined,
+          acknowledgeCritical,
           options: {
             targetStack: targetStack || undefined,
             migrateDatabase: migrateDatabase || undefined,
@@ -134,6 +137,16 @@ export default function ReversePage() {
       {report && (
         <section className="mt-6 rounded-xl border border-slate-700 bg-slate-900/60 p-4">
           <h2 className="text-sm font-semibold text-slate-200">Analyse-Report — {report.appName}</h2>
+          {report.criticality.level === 'critical' && (
+            <p className="mt-2 rounded-lg border border-red-700/50 bg-red-950/30 p-3 text-xs font-medium text-red-300">
+              ⛔ Kritische Steuerungssoftware erkannt ({report.criticality.reasons.join('; ')}). Kein autonomer Nachbau ohne ausdrückliche Bestätigung — nur Analyse/Teilmodernisierung unter menschlicher Verifikation.
+            </p>
+          )}
+          {report.criticality.level === 'sensitive' && (
+            <p className="mt-2 rounded-lg border border-amber-700/40 bg-amber-950/20 p-3 text-xs text-amber-300">
+              ⚠ Sensible Domäne ({report.criticality.reasons.join('; ')}) — Nachbau besonders sorgfältig validieren.
+            </p>
+          )}
           <p className="mt-2 text-xs text-slate-300">{report.summary}</p>
           <div className="mt-3 flex flex-wrap gap-1.5">
             {report.languages.map(l => <span key={l.name} className="rounded-md bg-slate-800 px-2 py-0.5 text-xs text-slate-300">{l.name} · {l.fileCount}</span>)}
@@ -169,7 +182,13 @@ export default function ReversePage() {
           </div>
           <textarea className={inputCls} rows={2} placeholder="Sonstiges (optional) — eigener Nachbau-Schritt …" value={custom} onChange={e => setCustom(e.target.value)} />
           <input className={inputCls} placeholder="Ziel-Repo (optional) — wird sonst automatisch angelegt" value={targetRepo} onChange={e => setTargetRepo(e.target.value)} />
-          <button onClick={rebuild} disabled={building}
+          {report.criticality.level === 'critical' && (
+            <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-red-700/50 bg-red-950/20 p-3 text-sm text-red-200">
+              <input type="checkbox" checked={acknowledgeCritical} onChange={e => setAcknowledgeCritical(e.target.checked)} className="mt-0.5 h-4 w-4 accent-red-500" />
+              <span>Ich verstehe: Dies ist kritische Steuerungssoftware. Der Nachbau ist eine Annäherung und darf <strong>nicht ungeprüft produktiv</strong> eingesetzt werden. Ich übernehme die Verifikation.</span>
+            </label>
+          )}
+          <button onClick={rebuild} disabled={building || (report.criticality.level === 'critical' && !acknowledgeCritical)}
             className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50">
             {building ? 'Plane & starte Nachbau …' : 'Nachbau planen & starten'}
           </button>

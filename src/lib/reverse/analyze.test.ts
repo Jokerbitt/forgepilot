@@ -60,6 +60,8 @@ describe('analyzeForReverse — C# WinForms + MSSQL (Svens Fall)', () => {
     expect(r.techDebt.some(d => d.includes('PostgreSQL'))).toBe(true)
     expect(r.summary).toContain('Leitrechner')
     expect(r.summary).toMatch(/1:1/)
+    // Safety guardrail: a "Leitrechner" is flagged critical.
+    expect(r.criticality.level).toBe('critical')
   })
 
   it('detectStack flags WinForms framework + windows reasons', () => {

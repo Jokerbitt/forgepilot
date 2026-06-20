@@ -15,6 +15,7 @@ function report(over: Partial<ReverseReport> = {}): ReverseReport {
     security: ['Mögliche hartkodierte Zugangsdaten'],
     securityFindings: [],
     techDebt: [],
+    criticality: { level: 'normal', reasons: [] },
     summary: '',
     ...over,
   }
