@@ -43,6 +43,7 @@ type NavKey =
   | 'conceptAnalyzer'
   | 'suggestions'
   | 'ideaStudio'
+  | 'deploy'
 
 type UiKey =
   | 'workspace'
@@ -155,6 +156,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
       conceptAnalyzer: { label: 'Konzept analysieren', short: 'Konzept' },
       suggestions: { label: 'Vorschläge', short: 'Ideen' },
       ideaStudio: { label: 'Idea Studio', short: 'Studio' },
+      deploy: { label: 'Live schalten', short: 'Deploy' },
     },
     ui: {
       workspace: 'Workspace',
@@ -262,6 +264,7 @@ export const dictionaries: Record<Locale, Dictionary> = {
       conceptAnalyzer: { label: 'Concept Analyzer', short: 'Concept' },
       suggestions: { label: 'Suggestions', short: 'Ideas' },
       ideaStudio: { label: 'Idea Studio', short: 'Studio' },
+      deploy: { label: 'Go Live', short: 'Deploy' },
     },
     ui: {
       workspace: 'Workspace',

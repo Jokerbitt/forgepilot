@@ -20,6 +20,7 @@ import {
   Map,
   ScanText,
   Sun,
+  Rocket,
 } from 'lucide-react'
 import type { DelegationStats } from '@/app/api/delegations/stats/route'
 import type { AttentionItem } from '@/lib/models/attention'
@@ -63,6 +64,7 @@ const navItems: NavItem[] = [
   { href: '/delegations/plan', key: 'planMode',        icon: Map,        group: 'workflow', isNew: true },
   { href: '/suggestions',      key: 'suggestions',     icon: Lightbulb,  group: 'workflow', isNew: true },
   { href: '/concept',          key: 'conceptAnalyzer', icon: ScanText,   group: 'workflow', isNew: true },
+  { href: '/deploy',           key: 'deploy',          icon: Rocket,     group: 'workflow', isNew: true },
 
   // ── Werkzeuge (collapsed — /tools hub links to everything else) ─────────
   { href: '/tools',  key: 'tools',  icon: Wrench,   group: 'expert' },
