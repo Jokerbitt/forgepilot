@@ -12,6 +12,9 @@
  * with an explicit acknowledgement.
  */
 import { execFileSync } from 'child_process'
+import { SCAN_EXCLUDE_DIRS } from './security-scan'
+
+const EXCLUDE_ARGS = SCAN_EXCLUDE_DIRS.map(d => `--exclude-dir=${d}`)
 
 export type CriticalityLevel = 'normal' | 'sensitive' | 'critical'
 
@@ -38,7 +41,7 @@ const SIGNALS: Signal[] = [
 
 function grepMatches(root: string, pattern: string): boolean {
   try {
-    execFileSync('grep', ['-rIliEq', '-e', pattern, root], { timeout: 5000, maxBuffer: 4 * 1024 * 1024 })
+    execFileSync('grep', ['-rIliEq', ...EXCLUDE_ARGS, '-e', pattern, root], { timeout: 5000, maxBuffer: 4 * 1024 * 1024 })
     return true
   } catch {
     return false // exit 1 = no match; other errors fail-open

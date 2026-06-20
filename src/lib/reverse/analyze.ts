@@ -13,7 +13,7 @@
 import { execFileSync } from 'child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
 import { join, extname } from 'path'
-import { scanSecurityDeep, findingsToStrings, type SecurityFinding } from './security-scan'
+import { scanSecurityDeep, findingsToStrings, SCAN_EXCLUDE_DIRS, type SecurityFinding } from './security-scan'
 import { assessCriticality, type CriticalityAssessment } from './criticality'
 import { suggestStackTranslations, type StackTranslation } from './stack-translation'
 
@@ -49,7 +49,7 @@ export interface ReverseReport {
   summary: string
 }
 
-const IGNORE_DIRS = new Set(['node_modules', '.git', '.next', 'dist', 'build', 'bin', 'obj', '.vs', '.idea', 'vendor', '__pycache__', 'packages'])
+const IGNORE_DIRS = new Set(['node_modules', '.git', '.next', 'dist', 'build', 'bin', 'obj', '.vs', '.idea', 'vendor', '__pycache__', 'packages', 'var', 'coverage', 'tmp', '.turbo'])
 const MAX_FILES = 4000
 
 const EXT_LANGUAGE: Record<string, string> = {
@@ -112,7 +112,7 @@ function grepAny(root: string, patterns: string[]): Set<string> {
   const hit = new Set<string>()
   for (const pattern of patterns) {
     try {
-      execFileSync('grep', ['-rIlq', '-e', pattern, root], { timeout: 5000, maxBuffer: 4 * 1024 * 1024 })
+      execFileSync('grep', ['-rIlq', ...SCAN_EXCLUDE_DIRS.map(d => `--exclude-dir=${d}`), '-e', pattern, root], { timeout: 5000, maxBuffer: 4 * 1024 * 1024 })
       hit.add(pattern)
     } catch {
       // exit 1 = no match; other errors fail-open (treated as no match)

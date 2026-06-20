@@ -11,6 +11,10 @@
  */
 import { execFileSync } from 'child_process'
 
+/** Directories excluded from scans — build output, deps, data/artifact dirs. */
+export const SCAN_EXCLUDE_DIRS = ['node_modules', '.git', '.next', 'dist', 'build', 'coverage', 'var', 'tmp', '.turbo']
+const EXCLUDE_ARGS = SCAN_EXCLUDE_DIRS.map(d => `--exclude-dir=${d}`)
+
 export type Severity = 'high' | 'medium' | 'low'
 
 export interface SecurityFinding {
@@ -48,7 +52,7 @@ function grepFiles(root: string, pattern: string, max = 1): string[] {
   try {
     const out = execFileSync(
       'grep',
-      ['-rIlE', '--include=*.cs', '--include=*.ts', '--include=*.tsx', '--include=*.js', '--include=*.jsx',
+      ['-rIlE', ...EXCLUDE_ARGS, '--include=*.cs', '--include=*.ts', '--include=*.tsx', '--include=*.js', '--include=*.jsx',
         '--include=*.py', '--include=*.java', '--include=*.go', '--include=*.php', '--include=*.config', '--include=*.json',
         '-e', pattern, root],
       { timeout: 5000, maxBuffer: 4 * 1024 * 1024, encoding: 'utf8' },
