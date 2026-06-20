@@ -36,6 +36,15 @@ interface CodebaseAnalysis {
 
 type Mode = 'new' | 'improve'
 
+const TEMPLATES: Array<{ id: string; name: string; emoji: string; description: string }> = [
+  { id: 'crm', name: 'CRM / Kundenverwaltung', emoji: '👥', description: 'Kontakte, Firmen, Notizen und Aufgaben.' },
+  { id: 'booking', name: 'Buchungstool', emoji: '📅', description: 'Termine/Ressourcen mit Kalenderübersicht.' },
+  { id: 'shop', name: 'Online-Shop', emoji: '🛒', description: 'Produkte, Warenkorb und Bestellungen.' },
+  { id: 'blog', name: 'Blog / CMS', emoji: '📝', description: 'Artikel schreiben und veröffentlichen.' },
+  { id: 'tasks', name: 'Aufgaben-Board', emoji: '✅', description: 'Kanban mit Spalten und Drag & Drop.' },
+  { id: 'inventory', name: 'Bestandsverwaltung', emoji: '📦', description: 'Artikel, Bestände und Bewegungen.' },
+]
+
 export default function SuggestionsPage() {
   const [mode, setMode] = useState<Mode>('new')
   const [goal, setGoal] = useState('')
@@ -112,6 +121,19 @@ export default function SuggestionsPage() {
     setCost(null) // selection changed → previous estimate is stale
   }
 
+  async function startTemplate(templateId: string) {
+    setError(''); setResult(null); setLoading(true)
+    try {
+      const res = await fetch('/api/journey/template', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateId, targetRepo: targetRepo || undefined }),
+      })
+      const data = await res.json() as { planId?: string; phaseCount?: number; delegationIds?: string[]; targetRepo?: string; error?: string }
+      if (!res.ok || !data.planId) { setError(data.error ?? 'Vorlage-Start fehlgeschlagen'); return }
+      setResult({ planId: data.planId, phaseCount: data.phaseCount ?? 0, delegationIds: data.delegationIds, targetRepo: data.targetRepo })
+    } catch { setError('Netzwerkfehler') } finally { setLoading(false) }
+  }
+
   async function build() {
     setError(''); setBuilding(true)
     try {
@@ -154,6 +176,19 @@ export default function SuggestionsPage() {
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50">
             {loading ? 'Generiere …' : 'Vorschläge generieren'}
           </button>
+
+          <div className="pt-2">
+            <p className="text-xs font-medium text-slate-300">…oder starte mit einer Vorlage:</p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {TEMPLATES.map(t => (
+                <button key={t.id} onClick={() => startTemplate(t.id)} disabled={loading}
+                  className="rounded-xl border border-slate-700 bg-slate-900 p-3 text-left transition hover:border-indigo-500 disabled:opacity-50">
+                  <span className="block text-sm font-semibold">{t.emoji} {t.name}</span>
+                  <span className="mt-0.5 block text-xs text-slate-400">{t.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </section>
       ) : (
         <section className="mt-4 space-y-3">
