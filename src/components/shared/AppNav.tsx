@@ -60,6 +60,7 @@ const navItems: NavItem[] = [
   { href: '/live',             key: 'liveView',        icon: Monitor,    group: 'workflow' },
   { href: '/projects',         key: 'plan',            icon: FolderOpen, group: 'workflow' },
   { href: '/delegations/plan', key: 'planMode',        icon: Map,        group: 'workflow', isNew: true },
+  { href: '/suggestions',      key: 'suggestions',     icon: Lightbulb,  group: 'workflow', isNew: true },
   { href: '/concept',          key: 'conceptAnalyzer', icon: ScanText,   group: 'workflow', isNew: true },
 
   // ── Werkzeuge (collapsed — /tools hub links to everything else) ─────────
