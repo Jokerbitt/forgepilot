@@ -91,6 +91,21 @@ function gitOut(cwd: string, args: string[]): string {
 }
 
 /**
+ * Decide whether to run `npm install` in the target after a writeback merge.
+ * Pure + unit-tested. Installs when there is a package.json AND either deps are
+ * missing OR the merge changed package.json (a feature added a new dependency —
+ * the gap that left pdf-lib uninstalled and broke the build).
+ */
+export function shouldRunInstall(opts: {
+  hasPackageJson: boolean
+  hasNodeModules: boolean
+  packageJsonChanged: boolean
+}): boolean {
+  if (!opts.hasPackageJson) return false
+  return !opts.hasNodeModules || opts.packageJsonChanged
+}
+
+/**
  * Write the agent's result back to a LOCAL target repo before the temp clone is deleted.
  *
  * Clone-mode work is otherwise lost: the agent commits to a temp clone that
@@ -135,22 +150,35 @@ export function writebackLocalResult(options: {
   // 2. Try to fast-forward the target's default branch in place
   let defaultBranch = 'main'
   let mergedToMain = false
+  let packageJsonChanged = false
   try {
     defaultBranch = gitOut(targetRepo, ['rev-parse', '--abbrev-ref', 'HEAD']) || 'main'
+    const beforeSha = gitOut(targetRepo, ['rev-parse', 'HEAD'])
     // Fetch the clone's commits into the target repo without touching its working tree
     execFileSync('git', ['fetch', workspacePath, 'HEAD'], { cwd: targetRepo, stdio: 'ignore' })
     // Fast-forward only — safe: never rewrites history, fails cleanly if not a descendant
     execFileSync('git', ['merge', '--ff-only', 'FETCH_HEAD'], { cwd: targetRepo, stdio: 'ignore' })
     mergedToMain = true
+    // Did the merge touch package.json? (a feature adding a new dependency)
+    try {
+      const changed = gitOut(targetRepo, ['diff', '--name-only', `${beforeSha}..HEAD`])
+      packageJsonChanged = changed.split('\n').some(f => f === 'package.json' || f.endsWith('/package.json'))
+    } catch { /* keep false */ }
   } catch {
     // ff-merge not possible (target default branch diverged) — backup branch still has the work
     mergedToMain = false
   }
 
   // 3. Auto-install deps in the target so the app is immediately runnable.
-  // node_modules is (correctly) gitignored and never travels with the merge.
+  // node_modules is (correctly) gitignored and never travels; AND a feature may
+  // have added a new dependency to package.json that isn't installed yet.
   let installed = false
-  if (mergedToMain && fs.existsSync(path.join(targetRepo, 'package.json')) && !fs.existsSync(path.join(targetRepo, 'node_modules'))) {
+  const doInstall = mergedToMain && shouldRunInstall({
+    hasPackageJson: fs.existsSync(path.join(targetRepo, 'package.json')),
+    hasNodeModules: fs.existsSync(path.join(targetRepo, 'node_modules')),
+    packageJsonChanged,
+  })
+  if (doInstall) {
     try {
       execFileSync('npm', ['install'], { cwd: targetRepo, stdio: 'ignore', timeout: 180_000 })
       installed = true

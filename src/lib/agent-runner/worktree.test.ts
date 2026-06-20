@@ -12,6 +12,7 @@ import {
   shouldKeepRunnerWorktree,
   writebackLocalResult,
   reuseExistingWorkspace,
+  shouldRunInstall,
 } from './worktree'
 
 vi.mock('child_process', () => ({
@@ -122,6 +123,21 @@ describe('runner worktree helpers', () => {
       env: { FORGEPILOT_KEEP_FAILED_RUNNER_WORKTREES: 'false' },
     })).toBe(false)
     expect(shouldKeepRunnerWorktree({ success: true, env: {} })).toBe(false)
+  })
+})
+
+describe('shouldRunInstall', () => {
+  it('skips when there is no package.json', () => {
+    expect(shouldRunInstall({ hasPackageJson: false, hasNodeModules: false, packageJsonChanged: true })).toBe(false)
+  })
+  it('installs when node_modules is missing', () => {
+    expect(shouldRunInstall({ hasPackageJson: true, hasNodeModules: false, packageJsonChanged: false })).toBe(true)
+  })
+  it('installs when package.json changed even if node_modules exists (new dependency)', () => {
+    expect(shouldRunInstall({ hasPackageJson: true, hasNodeModules: true, packageJsonChanged: true })).toBe(true)
+  })
+  it('skips when deps exist and package.json did not change', () => {
+    expect(shouldRunInstall({ hasPackageJson: true, hasNodeModules: true, packageJsonChanged: false })).toBe(false)
   })
 })
 
