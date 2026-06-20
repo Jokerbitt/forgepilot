@@ -51,6 +51,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   // ── Core — daily-use loop (main's lean structure + our loop pages) ──────
   { href: '/',            key: 'commandCenter',    icon: LayoutDashboard, group: 'core' },
+  { href: '/studio',      key: 'ideaStudio',       icon: Sparkles,        group: 'core', isNew: true },
   { href: '/morning',     key: 'briefing',         icon: Sun,             group: 'core' },
   { href: '/idea',        key: 'ideaToProduction', icon: Lightbulb,       group: 'core', isNew: true },
   { href: '/delegations', key: 'execute',          icon: ListChecks,      group: 'core' },
