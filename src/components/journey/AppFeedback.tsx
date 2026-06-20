@@ -8,6 +8,7 @@ import { Snapshots } from './Snapshots'
 import { MobileCheck } from './MobileCheck'
 import { ShareLink } from './ShareLink'
 import { Maintenance } from './Maintenance'
+import { NextSteps } from './NextSteps'
 
 /**
  * Journey Companion — Phase 1.3: try the app + change it in plain language.
@@ -68,6 +69,8 @@ export function AppFeedback({ targetRepo }: { targetRepo: string }) {
       <Link href="/deploy" className="mt-2 inline-block rounded-lg border border-slate-600 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-500">
         🚀 App live schalten
       </Link>
+
+      <div className="mt-4"><NextSteps targetRepo={targetRepo} /></div>
 
       <p className="mt-4 text-xs font-medium text-slate-300">Fertige Bausteine hinzufügen:</p>
       <div className="mt-2 flex flex-wrap gap-2">
