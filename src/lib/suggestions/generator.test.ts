@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { parseSuggestions, generateSuggestions } from './generator'
+import { parseSuggestions, generateSuggestions, generateImprovementSuggestions } from './generator'
+import type { CodebaseAnalysis } from './codebase-analyzer'
 
 describe('parseSuggestions', () => {
   it('parses a clean JSON array', () => {
@@ -49,6 +50,50 @@ describe('generateSuggestions', () => {
   it('falls back to [] when the generator throws', async () => {
     const boom = async () => { throw new Error('no provider') }
     const out = await generateSuggestions({ goal: 'x', generate: boom })
+    expect(out).toEqual([])
+  })
+})
+
+describe('generateImprovementSuggestions', () => {
+  const analysis: CodebaseAnalysis = {
+    repoPath: '/tmp/app',
+    appName: 'demo',
+    stack: ['TypeScript', 'Next.js'],
+    dependencies: ['zod'],
+    sourceDirs: ['src'],
+    hasTests: false,
+    hasTypeScript: true,
+    hasCI: false,
+    hasReadme: true,
+    signals: ['No tests detected — test coverage is a high-value improvement'],
+  }
+
+  it('feeds the analysis into the prompt and returns parsed suggestions', async () => {
+    let seenPrompt = ''
+    const fake = async (opts: { prompt: string }) => {
+      seenPrompt = opts.prompt
+      return { text: '[{"title":"Add Vitest","description":"Cover core logic"}]', provider: 'mock', model: 'm' }
+    }
+    const out = await generateImprovementSuggestions({ analysis, generate: fake })
+    expect(out).toHaveLength(1)
+    expect(out[0]!.title).toBe('Add Vitest')
+    expect(seenPrompt).toContain('demo')
+    expect(seenPrompt).toContain('No tests detected')
+  })
+
+  it('includes the focus when provided', async () => {
+    let seenPrompt = ''
+    const fake = async (opts: { prompt: string }) => {
+      seenPrompt = opts.prompt
+      return { text: '[]', provider: 'mock', model: 'm' }
+    }
+    await generateImprovementSuggestions({ analysis, focus: 'performance', generate: fake })
+    expect(seenPrompt).toContain('performance')
+  })
+
+  it('falls back to [] when the generator throws', async () => {
+    const boom = async () => { throw new Error('no provider') }
+    const out = await generateImprovementSuggestions({ analysis, generate: boom })
     expect(out).toEqual([])
   })
 })

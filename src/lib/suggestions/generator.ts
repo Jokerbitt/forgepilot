@@ -6,6 +6,8 @@
  * AI-backed via generateText, with tolerant JSON parsing and a safe fallback.
  */
 import { generateText } from '@/lib/ai/text-generation'
+import type { CodebaseAnalysis } from './codebase-analyzer'
+import { analysisToContext } from './codebase-analyzer'
 
 export interface Suggestion {
   id: string
@@ -73,6 +75,44 @@ export async function generateSuggestions(options: {
   ].filter(Boolean).join('\n')
   try {
     const result = await gen({ system: SYSTEM, prompt, maxTokens: 900, purpose: 'fast' })
+    return parseSuggestions(result.text, count)
+  } catch {
+    return []
+  }
+}
+
+const IMPROVE_SYSTEM = [
+  'You are a senior engineer auditing an EXISTING application and proposing concrete improvements.',
+  'You are given a factual analysis of the codebase (stack, dependencies, structure, risk signals).',
+  'Propose distinct, high-impact improvements that fit THIS app — each independently buildable by an AI agent in one focused build.',
+  'Ground every suggestion in the analysis: prefer fixing the named signals (missing tests, no TypeScript, no CI, TODOs, docs gaps) and strengthening the detected stack.',
+  'Do NOT propose a full rewrite or anything that requires throwing the app away.',
+  'Return ONLY a JSON array of objects: [{"title": string, "description": string}]. No prose, no fences.',
+  'Titles are short (<=6 words). Descriptions are one sentence on the value + scope.',
+].join('\n')
+
+/**
+ * Generate context-aware improvement suggestions for an EXISTING app, grounded
+ * in a CodebaseAnalysis. `focus` optionally biases the suggestions (e.g.
+ * "performance", "testing"). `generate` is injectable for testing.
+ * Returns [] when generation fails — the caller decides on a fallback.
+ */
+export async function generateImprovementSuggestions(options: {
+  analysis: CodebaseAnalysis
+  focus?: string
+  count?: number
+  generate?: typeof generateText
+}): Promise<Suggestion[]> {
+  const { analysis, focus = '', count = 5 } = options
+  const gen = options.generate ?? generateText
+  const prompt = [
+    'Codebase analysis:',
+    analysisToContext(analysis),
+    focus ? `\nFocus the suggestions on: ${focus}` : '',
+    `\nPropose ${count} concrete improvements as a JSON array.`,
+  ].filter(Boolean).join('\n')
+  try {
+    const result = await gen({ system: IMPROVE_SYSTEM, prompt, maxTokens: 900, purpose: 'fast' })
     return parseSuggestions(result.text, count)
   } catch {
     return []

@@ -5,10 +5,27 @@ import Link from 'next/link'
 
 interface Suggestion { id: string; title: string; description: string }
 
+interface CodebaseAnalysis {
+  appName: string
+  stack: string[]
+  dependencies: string[]
+  sourceDirs: string[]
+  hasTests: boolean
+  hasTypeScript: boolean
+  hasCI: boolean
+  hasReadme: boolean
+  signals: string[]
+}
+
+type Mode = 'new' | 'improve'
+
 export default function SuggestionsPage() {
+  const [mode, setMode] = useState<Mode>('new')
   const [goal, setGoal] = useState('')
   const [context, setContext] = useState('')
   const [targetRepo, setTargetRepo] = useState('')
+  const [focus, setFocus] = useState('')
+  const [analysis, setAnalysis] = useState<CodebaseAnalysis | null>(null)
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [custom, setCustom] = useState('')
@@ -16,6 +33,10 @@ export default function SuggestionsPage() {
   const [building, setBuilding] = useState(false)
   const [result, setResult] = useState<{ planId: string; phaseCount: number; delegationIds?: string[] } | null>(null)
   const [error, setError] = useState('')
+
+  function switchMode(next: Mode) {
+    setMode(next); setError(''); setResult(null); setSuggestions([]); setSelected(new Set()); setAnalysis(null)
+  }
 
   async function generate() {
     setError(''); setResult(null); setLoading(true); setSuggestions([]); setSelected(new Set())
@@ -28,6 +49,23 @@ export default function SuggestionsPage() {
       if (!res.ok) { setError(data.error ?? 'Fehler'); return }
       setSuggestions(data.suggestions ?? [])
       if ((data.suggestions ?? []).length === 0) setError('Keine Vorschläge generiert — beschreibe selbst, was gebaut werden soll.')
+    } catch { setError('Netzwerkfehler') } finally { setLoading(false) }
+  }
+
+  async function analyze() {
+    setError(''); setResult(null); setLoading(true); setSuggestions([]); setSelected(new Set()); setAnalysis(null)
+    try {
+      const res = await fetch('/api/suggestions/analyze', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetRepo, focus: focus || undefined }),
+      })
+      const data = await res.json() as { analysis?: CodebaseAnalysis; suggestions?: Suggestion[]; error?: string }
+      if (!res.ok) { setError(data.error ?? 'Fehler'); return }
+      setAnalysis(data.analysis ?? null)
+      setSuggestions(data.suggestions ?? [])
+      // Use the analyzed app name as the build goal so the plan reads naturally.
+      if (data.analysis?.appName) setGoal(`Verbesserungen für ${data.analysis.appName}`)
+      if ((data.suggestions ?? []).length === 0) setError('Keine Vorschläge generiert — beschreibe selbst, was verbessert werden soll.')
     } catch { setError('Netzwerkfehler') } finally { setLoading(false) }
   }
 
@@ -55,17 +93,57 @@ export default function SuggestionsPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-10 text-slate-100">
       <h1 className="text-2xl font-semibold">Next-Step Suggestions</h1>
-      <p className="mt-1 text-sm text-slate-400">Ziel beschreiben → Vorschläge wählen (oder eigene) → wird sequenziell geplant, gebaut und validiert.</p>
+      <p className="mt-1 text-sm text-slate-400">Vorschläge wählen (oder eigene) → wird sequenziell geplant, gebaut und validiert.</p>
 
-      <section className="mt-6 space-y-3">
-        <textarea className={inputCls} rows={2} placeholder="Ziel / App, z.B. „ProjectFlow zum KI-nativen Projekt-OS ausbauen“" value={goal} onChange={e => setGoal(e.target.value)} />
-        <textarea className={inputCls} rows={2} placeholder="Kontext (optional) — Stack, bestehende Features …" value={context} onChange={e => setContext(e.target.value)} />
-        <input className={inputCls} placeholder="Ziel-Repo (optional), z.B. /Users/you/dev/projectflow-saas" value={targetRepo} onChange={e => setTargetRepo(e.target.value)} />
-        <button onClick={generate} disabled={!goal.trim() || loading}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50">
-          {loading ? 'Generiere …' : 'Vorschläge generieren'}
+      <div className="mt-5 inline-flex rounded-lg border border-slate-700 bg-slate-900 p-1 text-sm">
+        <button onClick={() => switchMode('new')}
+          className={`rounded-md px-3 py-1.5 font-medium transition ${mode === 'new' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white'}`}>
+          Neue Idee
         </button>
-      </section>
+        <button onClick={() => switchMode('improve')}
+          className={`rounded-md px-3 py-1.5 font-medium transition ${mode === 'improve' ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white'}`}>
+          Bestehende App verbessern
+        </button>
+      </div>
+
+      {mode === 'new' ? (
+        <section className="mt-4 space-y-3">
+          <textarea className={inputCls} rows={2} placeholder="Ziel / App, z.B. „ProjectFlow zum KI-nativen Projekt-OS ausbauen“" value={goal} onChange={e => setGoal(e.target.value)} />
+          <textarea className={inputCls} rows={2} placeholder="Kontext (optional) — Stack, bestehende Features …" value={context} onChange={e => setContext(e.target.value)} />
+          <input className={inputCls} placeholder="Ziel-Repo (optional), z.B. /Users/you/dev/projectflow-saas" value={targetRepo} onChange={e => setTargetRepo(e.target.value)} />
+          <button onClick={generate} disabled={!goal.trim() || loading}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50">
+            {loading ? 'Generiere …' : 'Vorschläge generieren'}
+          </button>
+        </section>
+      ) : (
+        <section className="mt-4 space-y-3">
+          <p className="text-xs text-slate-400">Pfad zu einer bestehenden App angeben — ForgePilot analysiert Stack, Struktur und Schwachstellen und schlägt passende Verbesserungen vor.</p>
+          <input className={inputCls} placeholder="Repo-Pfad der App, z.B. /Users/you/dev/meine-app" value={targetRepo} onChange={e => setTargetRepo(e.target.value)} />
+          <input className={inputCls} placeholder="Fokus (optional), z.B. Tests, Performance, Sicherheit" value={focus} onChange={e => setFocus(e.target.value)} />
+          <button onClick={analyze} disabled={!targetRepo.trim() || loading}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50">
+            {loading ? 'Analysiere …' : 'App analysieren & Vorschläge'}
+          </button>
+        </section>
+      )}
+
+      {analysis && (
+        <section className="mt-5 rounded-xl border border-slate-700 bg-slate-900/60 p-4">
+          <h2 className="text-sm font-semibold text-slate-200">Analyse — {analysis.appName}</h2>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {analysis.stack.map(s => <span key={s} className="rounded-md bg-slate-800 px-2 py-0.5 text-xs text-slate-300">{s}</span>)}
+            <span className={`rounded-md px-2 py-0.5 text-xs ${analysis.hasTests ? 'bg-emerald-900/40 text-emerald-300' : 'bg-amber-900/40 text-amber-300'}`}>Tests: {analysis.hasTests ? 'ja' : 'nein'}</span>
+            <span className={`rounded-md px-2 py-0.5 text-xs ${analysis.hasCI ? 'bg-emerald-900/40 text-emerald-300' : 'bg-amber-900/40 text-amber-300'}`}>CI: {analysis.hasCI ? 'ja' : 'nein'}</span>
+            <span className={`rounded-md px-2 py-0.5 text-xs ${analysis.hasReadme ? 'bg-emerald-900/40 text-emerald-300' : 'bg-amber-900/40 text-amber-300'}`}>README: {analysis.hasReadme ? 'ja' : 'nein'}</span>
+          </div>
+          {analysis.signals.length > 0 && (
+            <ul className="mt-3 space-y-1 text-xs text-slate-400">
+              {analysis.signals.map((sig, i) => <li key={i}>• {sig}</li>)}
+            </ul>
+          )}
+        </section>
+      )}
 
       {suggestions.length > 0 && (
         <section className="mt-6 space-y-2">
