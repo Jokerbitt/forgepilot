@@ -23,13 +23,13 @@ Reichweite. Arbeitsweise wie gehabt: additiv, getestet, Commit + Push pro Schrit
 | 2.2 | **Daten-Import (CSV/TSV) + Seed** (Excel via CSV-Export) | `src/lib/journey/data-import.ts`, `/api/journey/import` (preview+build), `DataImport` | ✅ |
 | 2.3 | **Snapshots / sicheres Undo** (git, non-destruktiv) | `src/lib/journey/snapshot.ts`, `/api/journey/snapshot`, `Snapshots` | ✅ |
 
-## Phase 3 — Reichweite & Wartung
+## Phase 3 — Reichweite & Wartung ✅ ABGESCHLOSSEN (2026-06-20)
 
-| # | Feature | Ansatz | Status |
+| # | Feature | Module | Status |
 |---|---------|--------|--------|
-| 3.1 | **Mobil/Responsive-Check** | automatisierter Viewport-Check via Preview, Klartext-Report | ⬜ |
-| 3.2 | **Periodischer Security-Scan + Dependency-Updates** | reuse `reverse/security-scan` als Cron + Update-PR-Vorschlag | ⬜ |
-| 3.3 | **App per Link teilen** | Deploy-URL (Task 2) + read-only Share-Ansicht | ⬜ |
+| 3.1 | **Mobil/Responsive-Check** (statische Heuristik + 1-Klick-Fix) | `src/lib/journey/responsive-check.ts`, `/api/journey/responsive`, `MobileCheck` | ✅ |
+| 3.2 | **Wartung: Security-Scan + Dependency-Updates** (on-demand + wöchentlicher Cron) | `src/lib/journey/maintenance.ts`, `/api/journey/maintenance`, `/api/cron/journey-maintenance` (vercel.json), `Maintenance` | ✅ |
+| 3.3 | **App per Link teilen** (Validierung + localhost-Warnung) | `src/lib/journey/share.ts`, `ShareLink` | ✅ |
 
 ## Zusatzideen (eingeplant, Priorität nach Bedarf)
 
