@@ -1,8 +1,15 @@
 # ADR-002: Reverse-Engineering-Epic — Upload → Analyse → Nachbau
 
 **Date:** 2026-06-20
-**Status:** Proposed
+**Status:** Accepted (Sven-Freigabe 2026-06-20) — Slices 1–3 implementiert, Slice 4 offen
 **Risk Class:** C (requires ADR + Sven-Freigabe)
+
+> **Umsetzungsstand 2026-06-20:** Slice 1 (Analyse-Report, multi-language inkl.
+> C#/.NET), Slice 2 (Nachbau-Plan mit Logik-1:1-Paritätstest, DB-Migration,
+> Security-/Bug-Fix, Redesign, cross-platform) und Slice 3 (sicherer ZIP-Upload)
+> sind gebaut, getestet und gepusht. Slice 4 (Desktop-Tiefe, dann PLC) sowie die
+> Zusatzideen sind offen. **Leitrechner/Critical:** kein autonomer Nachbau —
+> nur Analyse/Teilmodernisierung unter menschlicher Verifikation.
 
 ## Context
 
