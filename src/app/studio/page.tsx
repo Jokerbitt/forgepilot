@@ -5,6 +5,8 @@ import Link from 'next/link'
 
 interface Suggestion { id: string; title: string; description: string }
 interface Refinement { goal: string; appName: string; appType: string; directions: string[] }
+interface Concept { overview: string; appType: string; recommendations: string[]; considerations: string[] }
+interface Critique { pros: string[]; cons: string[]; considerations: string[]; verdict: string; hasFeedback: boolean }
 
 const inputCls = 'w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none'
 
@@ -18,6 +20,13 @@ export default function StudioPage() {
   const [goal, setGoal] = useState('')
   const [appName, setAppName] = useState('')
   const [directions, setDirections] = useState<string[]>([])
+
+  // Step 2 — blueprint (human-in-the-loop) + critic
+  const [concept, setConcept] = useState<Concept | null>(null)
+  const [feedback, setFeedback] = useState('')
+  const [critique, setCritique] = useState<Critique | null>(null)
+  const [conceptBusy, setConceptBusy] = useState(false)
+  const [criticBusy, setCriticBusy] = useState(false)
 
   // Step 2 — features
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
@@ -36,6 +45,31 @@ export default function StudioPage() {
       setGoal(data.goal); setAppName(data.appName); setDirections(data.directions ?? [])
       setStep(2)
     } catch { setError('Netzwerkfehler') } finally { setBusy(false) }
+  }
+
+  async function makeConcept(withFeedback?: string) {
+    setError(''); setConceptBusy(true); setCritique(null)
+    try {
+      const res = await fetch('/api/studio/concept', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goal, feedback: withFeedback, previousOverview: concept?.overview }),
+      })
+      const data = await res.json() as Concept & { error?: string }
+      if (!res.ok) { setError(data.error ?? 'Fehler'); return }
+      setConcept(data); setFeedback('')
+    } catch { setError('Netzwerkfehler') } finally { setConceptBusy(false) }
+  }
+
+  async function runCritic() {
+    if (!concept) return
+    setError(''); setCriticBusy(true)
+    try {
+      const res = await fetch('/api/studio/critique', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goal, overview: concept.overview, features: suggestions.map(s => s.title) }),
+      })
+      setCritique(await res.json() as Critique)
+    } catch { setError('Netzwerkfehler') } finally { setCriticBusy(false) }
   }
 
   async function getFeatures() {
@@ -103,6 +137,40 @@ export default function StudioPage() {
               </div>
             </div>
           )}
+          <div className="rounded-xl border border-slate-700 bg-slate-900/50 p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-slate-200">Blueprint — verfeinere das Konzept, bis es passt</p>
+              {!concept && <button onClick={() => makeConcept()} disabled={!goal.trim() || conceptBusy} className="rounded-lg bg-slate-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-600 disabled:opacity-50">{conceptBusy ? 'Erstelle …' : 'Blueprint erstellen'}</button>}
+            </div>
+            {concept && (
+              <div className="mt-3 space-y-3">
+                <p className="text-sm text-slate-300">{concept.overview}</p>
+                {concept.recommendations.length > 0 && (
+                  <div><p className="text-xs font-semibold text-emerald-300">Empfehlungen</p><ul className="mt-1 list-disc pl-5 text-xs text-slate-400">{concept.recommendations.map((r, i) => <li key={i}>{r}</li>)}</ul></div>
+                )}
+                {concept.considerations.length > 0 && (
+                  <div><p className="text-xs font-semibold text-amber-300">Zu beachten</p><ul className="mt-1 list-disc pl-5 text-xs text-slate-400">{concept.considerations.map((c, i) => <li key={i}>{c}</li>)}</ul></div>
+                )}
+                <div className="rounded-lg border border-slate-700 bg-slate-900 p-2">
+                  <textarea className={inputCls} rows={2} placeholder="Was möchtest du ändern oder ergänzen? (Human-in-the-Loop)" value={feedback} onChange={e => setFeedback(e.target.value)} />
+                  <div className="mt-2 flex gap-2">
+                    <button onClick={() => makeConcept(feedback)} disabled={!feedback.trim() || conceptBusy} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">{conceptBusy ? 'Passe an …' : 'Konzept anpassen ↻'}</button>
+                    <button onClick={runCritic} disabled={criticBusy} className="rounded-lg bg-slate-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-600 disabled:opacity-50">{criticBusy ? 'Kritiker prüft …' : '🔍 Kritiker drüberschauen lassen'}</button>
+                  </div>
+                </div>
+                {critique && (
+                  <div className="rounded-lg border border-slate-700 bg-slate-950 p-3 text-xs">
+                    {critique.verdict && <p className="font-semibold text-slate-200">Kritiker: {critique.verdict}</p>}
+                    {!critique.hasFeedback && <p className="text-slate-400">Keine Einwände — das Konzept ist solide.</p>}
+                    {critique.pros.length > 0 && <div className="mt-1"><span className="text-emerald-300">Pro:</span> <span className="text-slate-400">{critique.pros.join(' · ')}</span></div>}
+                    {critique.cons.length > 0 && <div className="mt-1"><span className="text-red-300">Contra:</span> <span className="text-slate-400">{critique.cons.join(' · ')}</span></div>}
+                    {critique.considerations.length > 0 && <div className="mt-1"><span className="text-amber-300">Beachten:</span> <span className="text-slate-400">{critique.considerations.join(' · ')}</span></div>}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <button onClick={getFeatures} disabled={!goal.trim() || busy} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">{busy ? 'Erstelle Konzept …' : 'Funktionen vorschlagen →'}</button>
 
           {suggestions.length > 0 && (
