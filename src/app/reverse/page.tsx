@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { BuildProgress } from '@/components/journey/BuildProgress'
 
 interface ReverseReport {
   appName: string
@@ -18,7 +19,7 @@ interface ReverseReport {
   summary: string
 }
 
-interface RebuildResult { planId: string; phaseCount: number; steps: Array<{ title: string }>; targetRepo?: string }
+interface RebuildResult { planId: string; phaseCount: number; steps: Array<{ title: string }>; targetRepo?: string; delegationIds?: string[] }
 
 const PLATFORM_LABEL: Record<ReverseReport['platform'], string> = {
   windows: 'Windows-gebunden',
@@ -232,7 +233,8 @@ export default function ReversePage() {
           <ol className="mt-2 list-decimal space-y-0.5 pl-5 text-xs text-emerald-300/80">
             {result.steps.map((s, i) => <li key={i}>{s.title}</li>)}
           </ol>
-          <Link href="/delegations" className="mt-3 inline-block rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500">Fortschritt ansehen →</Link>
+          {result.delegationIds && result.delegationIds.length > 0 && <BuildProgress delegationIds={result.delegationIds} />}
+          <Link href="/delegations" className="mt-3 inline-block rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500">Details ansehen →</Link>
         </section>
       )}
     </main>

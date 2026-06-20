@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { BuildProgress } from '@/components/journey/BuildProgress'
 
 interface Suggestion { id: string; title: string; description: string }
 
@@ -231,7 +232,8 @@ export default function SuggestionsPage() {
         <section className="mt-6 rounded-xl border border-emerald-700/40 bg-emerald-950/20 p-4">
           <p className="text-sm font-semibold text-emerald-200">✅ {result.phaseCount} Schritt(e) geplant — werden jetzt nacheinander gebaut & validiert.</p>
           <p className="mt-1 text-xs text-emerald-300/80">Plan {result.planId.slice(0, 8)} · jede Phase muss grün bauen + Tests bestehen, bevor die nächste startet.</p>
-          <Link href="/delegations" className="mt-3 inline-block rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500">Fortschritt ansehen →</Link>
+          {result.delegationIds && result.delegationIds.length > 0 && <BuildProgress delegationIds={result.delegationIds} />}
+          <Link href="/delegations" className="mt-3 inline-block rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500">Details ansehen →</Link>
         </section>
       )}
     </main>
