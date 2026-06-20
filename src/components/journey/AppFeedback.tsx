@@ -45,6 +45,22 @@ export function AppFeedback({ targetRepo }: { targetRepo: string }) {
     } catch { setError('Netzwerkfehler') } finally { setSending(false) }
   }
 
+  async function downloadBackup() {
+    setError('')
+    try {
+      const res = await fetch('/api/journey/export', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetRepo }),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})) as { error?: string }; setError(d.error ?? 'Backup fehlgeschlagen'); return }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = 'app-backup.zip'; a.click()
+      URL.revokeObjectURL(url)
+    } catch { setError('Netzwerkfehler') }
+  }
+
   async function send() {
     setError(''); setInfo(''); setSending(true)
     try {
@@ -66,9 +82,14 @@ export function AppFeedback({ targetRepo }: { targetRepo: string }) {
       <p className="mt-1 text-xs text-slate-400">
         Schalte die App live, um sie auszuprobieren, und sag in eigenen Worten, was geändert werden soll.
       </p>
-      <Link href="/deploy" className="mt-2 inline-block rounded-lg border border-slate-600 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-500">
-        🚀 App live schalten
-      </Link>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Link href="/deploy" className="inline-block rounded-lg border border-slate-600 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-500">
+          🚀 App live schalten
+        </Link>
+        <button onClick={downloadBackup} className="rounded-lg border border-slate-600 bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-500">
+          💾 Backup (.zip)
+        </button>
+      </div>
 
       <div className="mt-4"><NextSteps targetRepo={targetRepo} /></div>
 
