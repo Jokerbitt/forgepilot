@@ -15,13 +15,13 @@ Reichweite. Arbeitsweise wie gehabt: additiv, getestet, Commit + Push pro Schrit
 | 1.2 | **Klartext-Fehler + sichtbare Selbstheilung** | `explainError` + Retry-Sichtbarkeit in `progress.ts` | ✅ |
 | 1.3 | **Ausprobieren + Feedback in natürlicher Sprache** | `src/lib/journey/feedback.ts`, `/api/journey/feedback`, `AppFeedback` (in /suggestions + /reverse) | ✅ |
 
-## Phase 2 — Apps echt machen
+## Phase 2 — Apps echt machen ✅ ABGESCHLOSSEN (2026-06-20)
 
-| # | Feature | Ansatz | Status |
+| # | Feature | Module | Status |
 |---|---------|--------|--------|
-| 2.1 | **Login/Nutzer per Klick** | Auth-Baustein (reuse Building-Blocks/Connectoren: oauth/supabase) als wählbarer Schritt | ⬜ |
-| 2.2 | **Daten-Import (CSV/Excel) + Seed** | Upload → Schema-Erkennung → Seed-Skript; reuse `reverse/ingest` Sicherheitsmuster | ⬜ |
-| 2.3 | **Snapshots / Undo** | Git-Tag/Commit-Snapshot pro Build-Phase + „zurück zur letzten grünen Version" | ⬜ |
+| 2.1 | **Bausteine per Klick** (Login, Zahlungen, E-Mail, Benachrichtigungen, Upload, Suche) | `src/lib/journey/blocks.ts`, `/api/journey/block`, Block-Picker in `AppFeedback` | ✅ |
+| 2.2 | **Daten-Import (CSV/TSV) + Seed** (Excel via CSV-Export) | `src/lib/journey/data-import.ts`, `/api/journey/import` (preview+build), `DataImport` | ✅ |
+| 2.3 | **Snapshots / sicheres Undo** (git, non-destruktiv) | `src/lib/journey/snapshot.ts`, `/api/journey/snapshot`, `Snapshots` | ✅ |
 
 ## Phase 3 — Reichweite & Wartung
 
