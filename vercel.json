@@ -6,6 +6,10 @@
   "framework": "nextjs",
   "crons": [
     {
+      "path": "/api/cron/journey-maintenance",
+      "schedule": "0 3 * * 1"
+    },
+    {
       "path": "/api/cron/retention",
       "schedule": "0 2 * * *"
     },

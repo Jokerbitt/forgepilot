@@ -5,6 +5,9 @@ import Link from 'next/link'
 import { BuildProgress } from './BuildProgress'
 import { DataImport } from './DataImport'
 import { Snapshots } from './Snapshots'
+import { MobileCheck } from './MobileCheck'
+import { ShareLink } from './ShareLink'
+import { Maintenance } from './Maintenance'
 
 /**
  * Journey Companion — Phase 1.3: try the app + change it in plain language.
@@ -94,7 +97,10 @@ export function AppFeedback({ targetRepo }: { targetRepo: string }) {
       {followIds.length > 0 && <BuildProgress delegationIds={followIds} />}
 
       <DataImport targetRepo={targetRepo} />
+      <MobileCheck targetRepo={targetRepo} />
+      <Maintenance targetRepo={targetRepo} />
       <Snapshots targetRepo={targetRepo} />
+      <ShareLink />
     </div>
   )
 }
