@@ -16,6 +16,7 @@ import fs from 'fs'
 import { requireAuth } from '@/lib/auth/require-auth'
 import { analyzeForReverse } from '@/lib/reverse/analyze'
 import { reportToRebuildSteps, type RebuildOptions } from '@/lib/reverse/to-rebuild-plan'
+import { deriveTargetStack } from '@/lib/reverse/stack-translation'
 import { suggestionsToPlan } from '@/lib/suggestions/to-plan'
 import { savePlan } from '@/lib/delegations/plan-generator'
 import { ensureTargetRepo } from '@/lib/repo/create-repo'
@@ -45,7 +46,10 @@ export async function POST(req: NextRequest) {
       requiresAcknowledgement: true,
     }, { status: 409 })
   }
-  const steps = reportToRebuildSteps(report, body.options ?? {})
+  // Pre-fill the target stack from the translation map when the user didn't specify one.
+  const options: RebuildOptions = { ...(body.options ?? {}) }
+  if (!options.targetStack) options.targetStack = deriveTargetStack(report.stackTranslations)
+  const steps = reportToRebuildSteps(report, options)
   if (steps.length === 0) return NextResponse.json({ error: 'Keine Nachbau-Schritte ableitbar' }, { status: 422 })
 
   const goal = `Nachbau von ${report.appName}`

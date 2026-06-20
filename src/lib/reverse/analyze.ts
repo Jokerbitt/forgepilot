@@ -15,6 +15,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
 import { join, extname } from 'path'
 import { scanSecurityDeep, findingsToStrings, type SecurityFinding } from './security-scan'
 import { assessCriticality, type CriticalityAssessment } from './criticality'
+import { suggestStackTranslations, type StackTranslation } from './stack-translation'
 
 export type Platform = 'windows' | 'cross-platform' | 'unknown'
 
@@ -42,6 +43,8 @@ export interface ReverseReport {
   techDebt: string[]
   /** Safety/criticality assessment — gates autonomous rebuild. */
   criticality: CriticalityAssessment
+  /** Old → new technology recommendations for a cross-platform rebuild. */
+  stackTranslations: StackTranslation[]
   /** Plain-German narrative summary. */
   summary: string
 }
@@ -147,8 +150,11 @@ export function detectStack(root: string, files: string[]): DetectionResult {
     'net48', 'net472', 'netframework', 'TargetFramework>net6', 'TargetFramework>net7', 'TargetFramework>net8', 'netstandard',
     'System.Data.SqlClient', 'Microsoft.Data.SqlClient', 'Npgsql', 'MySql.Data', 'Microsoft.EntityFrameworkCore', 'mongodb', 'sqlite',
     'next', 'react', 'express',
+    // Cross-platform desktop frameworks
+    'electron', '@tauri-apps', 'Microsoft.Maui', 'Avalonia', 'javafx', 'QApplication',
   ])
   const matched = (p: string) => probes.has(p)
+  const hasTauriDir = files.some(f => f.startsWith('src-tauri/') || f.includes('/src-tauri/'))
 
   // Platform binding
   if (matched('System.Windows.Forms')) { frameworks.add('WinForms'); windowsScore += 2; platformReasons.push('WinForms (System.Windows.Forms) — Windows-only') }
@@ -157,6 +163,14 @@ export function detectStack(root: string, files: string[]): DetectionResult {
   if (matched('net48') || matched('net472') || matched('netframework')) { windowsScore += 2; platformReasons.push('.NET Framework (net4x) — praktisch Windows-only') }
   if (matched('TargetFramework>net6') || matched('TargetFramework>net7') || matched('TargetFramework>net8') || matched('netstandard')) { crossScore += 2; platformReasons.push('.NET 6/7/8 / netstandard — cross-platform-fähig') }
   if (hasFile('package.json') || matched('next') || matched('react') || matched('express')) crossScore += 2
+
+  // Cross-platform desktop frameworks — these run on Windows/Mac/Linux alike.
+  if (matched('electron')) { frameworks.add('Electron'); crossScore += 2; platformReasons.push('Electron — cross-platform Desktop') }
+  if (matched('@tauri-apps') || hasTauriDir) { frameworks.add('Tauri'); crossScore += 2; platformReasons.push('Tauri — cross-platform Desktop') }
+  if (matched('Microsoft.Maui')) { frameworks.add('.NET MAUI'); crossScore += 2; platformReasons.push('.NET MAUI — cross-platform') }
+  if (matched('Avalonia')) { frameworks.add('Avalonia'); crossScore += 2; platformReasons.push('Avalonia — cross-platform .NET-UI') }
+  if (matched('javafx')) { frameworks.add('JavaFX'); crossScore += 1; platformReasons.push('JavaFX — cross-platform Desktop') }
+  if (matched('QApplication')) { frameworks.add('Qt'); crossScore += 1; platformReasons.push('Qt — cross-platform Desktop') }
 
   // Frameworks
   if (matched('Microsoft.EntityFrameworkCore')) frameworks.add('Entity Framework Core')
@@ -231,7 +245,7 @@ export function analyzeForReverse(rootPath: string): ReverseReport {
       rootPath, appName: rootPath.split('/').filter(Boolean).pop() ?? 'app',
       languages: [], frameworks: [], platform: 'unknown', platformReasons: [],
       databaseEngines: [], modules: [], security: [], securityFindings: [], techDebt: ['Pfad nicht gefunden oder kein Verzeichnis'],
-      criticality: { level: 'normal', reasons: [] },
+      criticality: { level: 'normal', reasons: [] }, stackTranslations: [],
     }
     return { ...empty, summary: 'Pfad nicht gefunden — keine Analyse möglich.' }
   }
@@ -255,9 +269,11 @@ export function analyzeForReverse(rootPath: string): ReverseReport {
   const appName = appNameFrom(rootPath, files)
   const criticality = assessCriticality(appName, rootPath)
 
-  const partial: Omit<ReverseReport, 'summary'> = {
+  const base = {
     rootPath, appName,
     languages, frameworks, platform, platformReasons, databaseEngines, modules, security, securityFindings, techDebt, criticality,
   }
+  const stackTranslations = suggestStackTranslations({ ...base, stackTranslations: [], summary: '' })
+  const partial: Omit<ReverseReport, 'summary'> = { ...base, stackTranslations }
   return { ...partial, summary: buildSummary(partial) }
 }

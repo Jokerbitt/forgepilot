@@ -82,6 +82,24 @@ describe('analyzeForReverse — cross-platform Node app', () => {
   })
 })
 
+describe('detectStack — cross-platform desktop', () => {
+  it('detects Electron as a cross-platform framework', () => {
+    write('package.json', JSON.stringify({ name: 'desk', dependencies: { electron: '30' } }))
+    write('main.js', 'const { app } = require("electron")')
+    const { files } = walkFiles(dir)
+    const d = detectStack(dir, files)
+    expect(d.frameworks).toContain('Electron')
+    expect(d.platform).toBe('cross-platform')
+  })
+
+  it('detects Tauri via src-tauri dir', () => {
+    write('src-tauri/tauri.conf.json', '{}')
+    write('package.json', JSON.stringify({ name: 't' }))
+    const { files } = walkFiles(dir)
+    expect(detectStack(dir, files).frameworks).toContain('Tauri')
+  })
+})
+
 describe('analyzeForReverse — missing path', () => {
   it('returns a safe report', () => {
     const r = analyzeForReverse(join(dir, 'nope'))

@@ -14,6 +14,7 @@ interface ReverseReport {
   security: string[]
   techDebt: string[]
   criticality: { level: 'normal' | 'sensitive' | 'critical'; reasons: string[] }
+  stackTranslations: Array<{ from: string; to: string; rationale: string }>
   summary: string
 }
 
@@ -79,6 +80,23 @@ export default function ReversePage() {
     } catch { setError('Netzwerkfehler') } finally { setUploading(false) }
   }
 
+  async function downloadReport() {
+    try {
+      const res = await fetch('/api/reverse/report', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rootPath }),
+      })
+      if (!res.ok) { setError('Report-Download fehlgeschlagen'); return }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `reverse-report.md`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch { setError('Netzwerkfehler') }
+  }
+
   async function rebuild() {
     setError(''); setResult(null); setBuilding(true)
     try {
@@ -136,7 +154,10 @@ export default function ReversePage() {
 
       {report && (
         <section className="mt-6 rounded-xl border border-slate-700 bg-slate-900/60 p-4">
-          <h2 className="text-sm font-semibold text-slate-200">Analyse-Report — {report.appName}</h2>
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-sm font-semibold text-slate-200">Analyse-Report — {report.appName}</h2>
+            <button onClick={downloadReport} className="shrink-0 rounded-md border border-slate-600 bg-slate-900 px-2.5 py-1 text-xs text-slate-300 transition hover:border-slate-500">📄 Report (.md)</button>
+          </div>
           {report.criticality.level === 'critical' && (
             <p className="mt-2 rounded-lg border border-red-700/50 bg-red-950/30 p-3 text-xs font-medium text-red-300">
               ⛔ Kritische Steuerungssoftware erkannt ({report.criticality.reasons.join('; ')}). Kein autonomer Nachbau ohne ausdrückliche Bestätigung — nur Analyse/Teilmodernisierung unter menschlicher Verifikation.
@@ -164,6 +185,16 @@ export default function ReversePage() {
             <ul className="mt-2 space-y-1 text-xs text-slate-400">
               {report.techDebt.map((s, i) => <li key={i}>• {s}</li>)}
             </ul>
+          )}
+          {report.stackTranslations.length > 0 && (
+            <div className="mt-3">
+              <p className="text-xs font-medium text-slate-300">Empfohlene Modernisierung:</p>
+              <ul className="mt-1 space-y-1 text-xs text-slate-400">
+                {report.stackTranslations.map((t, i) => (
+                  <li key={i}><span className="text-slate-300">{t.from}</span> → <span className="text-emerald-400">{t.to}</span> <span className="text-slate-500">— {t.rationale}</span></li>
+                ))}
+              </ul>
+            </div>
           )}
         </section>
       )}

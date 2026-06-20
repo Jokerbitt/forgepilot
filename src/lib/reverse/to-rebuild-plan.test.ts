@@ -16,6 +16,7 @@ function report(over: Partial<ReverseReport> = {}): ReverseReport {
     securityFindings: [],
     techDebt: [],
     criticality: { level: 'normal', reasons: [] },
+    stackTranslations: [],
     summary: '',
     ...over,
   }
