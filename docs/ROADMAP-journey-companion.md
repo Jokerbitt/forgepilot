@@ -41,7 +41,20 @@ Reichweite. Arbeitsweise wie gehabt: additiv, getestet, Commit + Push pro Schrit
 
 ---
 
-**Gesamtstatus: alle 3 Phasen + alle Zusatzideen umgesetzt (2026-06-20).**
+**Gesamtstatus Phasen 1–3 + Zusatzideen: umgesetzt (2026-06-20).**
+
+## Phase 4 — Vertrauen, Betrieb & Reichweite (geplant 2026-06-20)
+
+Nächste Stufe, nach Hebel priorisiert. Arbeitsweise wie gehabt: additiv, getestet, Commit pro Schritt.
+
+| # | Feature | Ansatz | Status |
+|---|---------|--------|--------|
+| 4.1 | **Funktionsbeweis** (höchster Hebel) | Nach dem Build App starten + Kernpfade durchklicken (Preview-Infra vorhanden) → Klartext-Beweis + Screenshot „funktioniert". Verwandelt „sollte gehen" in „nachweislich getestet". | ⬜ |
+| 4.2 | **Real-Kosten-Rückblick** | Ist-Kosten nach dem Build (vs. Schätzung aus Phase-3-Kostenrouting), Budget-Warnungen. `actualCostUsd` liegt schon im Delegation-Modell. | ⬜ |
+| 4.3 | **Betriebs-Monitoring** | Health-/Fehler-Check für live geschaltete Apps in Klartext; macht ForgePilot vom Generator zum Betreiber. | ⬜ |
+| 4.4 | **Mobile / PWA-Apps** | Apps auch fürs Handy (PWA-Manifest/Service-Worker bzw. React Native/Expo) — Reichweiten-Sprung über Web hinaus. | ⬜ |
+
+Empfehlung: 4.1 zuerst (Vertrauen > alles), dann 4.2.
 
 ## Reuse-Prinzip
 Jeder Schritt baut auf Bestehendem auf: Delegation-/Plan-Executor (Status, chainPosition/
