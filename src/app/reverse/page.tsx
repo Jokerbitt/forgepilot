@@ -28,6 +28,7 @@ export default function ReversePage() {
   const [rootPath, setRootPath] = useState('')
   const [report, setReport] = useState<ReverseReport | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
 
   // rebuild options
@@ -52,12 +53,28 @@ export default function ReversePage() {
       })
       const data = await res.json() as ReverseReport & { error?: string }
       if (!res.ok) { setError(data.error ?? 'Analyse fehlgeschlagen'); return }
-      setReport(data)
-      // Sensible defaults from the analysis.
-      if (data.databaseEngines.includes('Microsoft SQL Server')) setMigrateDatabase('PostgreSQL')
-      if (data.platform === 'windows') setCrossPlatform(true)
-      if (data.security.length > 0) setFixSecurity(true)
+      applyReport(data)
     } catch { setError('Netzwerkfehler') } finally { setAnalyzing(false) }
+  }
+
+  function applyReport(data: ReverseReport) {
+    setReport(data)
+    if (data.databaseEngines.includes('Microsoft SQL Server')) setMigrateDatabase('PostgreSQL')
+    if (data.platform === 'windows') setCrossPlatform(true)
+    if (data.security.length > 0) setFixSecurity(true)
+  }
+
+  async function upload(file: File) {
+    setError(''); setReport(null); setResult(null); setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/reverse/upload', { method: 'POST', body: fd })
+      const data = await res.json() as { report?: ReverseReport; workspacePath?: string; error?: string }
+      if (!res.ok || !data.report) { setError(data.error ?? 'Upload fehlgeschlagen'); return }
+      if (data.workspacePath) setRootPath(data.workspacePath) // so rebuild runs on the extracted files
+      applyReport(data.report)
+    } catch { setError('Netzwerkfehler') } finally { setUploading(false) }
   }
 
   async function rebuild() {
@@ -97,10 +114,19 @@ export default function ReversePage() {
 
       <section className="mt-6 space-y-3">
         <input className={inputCls} placeholder="Pfad zur bestehenden App, z.B. /Users/you/dev/leitrechner" value={rootPath} onChange={e => setRootPath(e.target.value)} />
-        <button onClick={analyze} disabled={!rootPath.trim() || analyzing}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50">
-          {analyzing ? 'Analysiere …' : 'Analysieren'}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button onClick={analyze} disabled={!rootPath.trim() || analyzing}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50">
+            {analyzing ? 'Analysiere …' : 'Pfad analysieren'}
+          </button>
+          <span className="text-xs text-slate-500">oder</span>
+          <label className="cursor-pointer rounded-lg border border-slate-600 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500">
+            {uploading ? 'Lade hoch …' : '📦 ZIP hochladen'}
+            <input type="file" accept=".zip,application/zip" className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = '' }} disabled={uploading} />
+          </label>
+        </div>
+        <p className="text-xs text-slate-500">Lade die komplette App als ZIP hoch (max. 50 MB) — sie wird sicher entpackt und analysiert.</p>
       </section>
 
       {error && <p className="mt-5 rounded-lg border border-amber-700/40 bg-amber-950/20 p-3 text-sm text-amber-300">{error}</p>}
