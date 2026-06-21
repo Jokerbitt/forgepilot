@@ -36,6 +36,8 @@ export interface DelegationPlan {
   goal: string
   context: string
   targetRepo?: string
+  /** Optional overall budget (USD) split across phases by effort (see budget-allocation). */
+  totalBudgetUsd?: number
   overview: string
   phases: PlanPhase[]
   maxPhases: number

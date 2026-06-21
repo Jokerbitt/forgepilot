@@ -19,6 +19,8 @@ export interface ToPlanInput {
   newId: () => string
   /** ISO timestamp (inject in tests — the route passes new Date().toISOString()). */
   now: string
+  /** Optional overall budget (USD) split across phases by effort (budget-allocation). */
+  totalBudgetUsd?: number
 }
 
 /** Standard validation gate appended to every phase's Definition of Done. */
@@ -50,6 +52,7 @@ export function suggestionsToPlan(input: ToPlanInput): DelegationPlan {
     goal: input.goal,
     context: input.context ?? '',
     targetRepo: input.targetRepo,
+    totalBudgetUsd: input.totalBudgetUsd,
     overview: `Build ${phases.length} selected next step(s) sequentially, validating each (build + tests + types) before the next.`,
     phases,
     maxPhases: phases.length,

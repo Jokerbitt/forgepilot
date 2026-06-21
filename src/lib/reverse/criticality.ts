@@ -33,6 +33,7 @@ interface Signal {
 const SIGNALS: Signal[] = [
   { pattern: 'leitrechner|scada|\\bplc\\b|\\bsps\\b|prozessleit|process[ -]?control|control[ -]?system', level: 'critical', reason: 'Hinweise auf Leit-/Steuerungssoftware (SCADA/PLC/Leitrechner)' },
   { pattern: 'modbus|opc[ -]?ua|\\bopcua\\b|profibus|profinet|ethercat|\\bs7\\b|siemens|beckhoff|canopen|iec[ -]?61131', level: 'critical', reason: 'Industrielle Feldbus-/Automatisierungsprotokolle erkannt' },
+  { pattern: 'codesys|tia[ -]?portal|step[ -]?7|simatic|twincat|sysmac|gx[ -]?works|structured[ -]?text|ladder[ -]?logic|\\bgrafcet\\b|kontaktplan|iec[ -]?61499', level: 'critical', reason: 'PLC-/SPS-Programmierumgebung oder -Sprache erkannt (Codesys/TIA/Step7/Structured Text/Ladder Logic)' },
   { pattern: 'safety[ -]?critical|fail[ -]?safe|emergency[ -]?stop|not[ -]?aus|interlock|sil[ -]?[0-9]', level: 'critical', reason: 'Sicherheitsfunktionen (Safety/Not-Aus/Interlock) erkannt' },
   { pattern: 'real[ -]?time|echtzeit|deterministic|hard[ -]?rt', level: 'sensitive', reason: 'Echtzeit-/deterministische Anforderungen' },
   { pattern: 'pacemaker|medical[ -]?device|infusion|radiation|avionic|flight[ -]?control', level: 'critical', reason: 'Medizin-/Luftfahrt-Domäne — regulatorisch kritisch' },

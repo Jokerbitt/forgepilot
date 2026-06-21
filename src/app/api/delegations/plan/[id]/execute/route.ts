@@ -14,6 +14,7 @@ import {
   SINGLE_TENANT_USER_ID,
 } from '@/lib/repositories/delegationRepository'
 import { randomUUID } from 'crypto'
+import { allocateBudget } from '@/lib/delegations/budget-allocation'
 
 export async function POST(
   _request: Request,
@@ -41,10 +42,18 @@ export async function POST(
 
   const createdIds: string[] = []
 
+  // Budget: if the plan carries an overall budget, split it across phases by
+  // effort; otherwise fall back to a fixed per-phase tier.
+  const tierBudget = (turns: number) => (turns <= 40 ? 2 : turns <= 80 ? 3 : 5)
+  const allocation = plan.totalBudgetUsd && plan.totalBudgetUsd > 0
+    ? allocateBudget(plan.totalBudgetUsd, plan.phases)
+    : null
+
   for (let i = 0; i < plan.phases.length; i++) {
     const phase = plan.phases[i]!
     const id = ids[i]!
     const nextId = ids[i + 1] ?? null
+    const phaseBudget = allocation?.perPhaseUsd[i] ?? tierBudget(phase.estimatedTurns)
 
     const dodList = phase.dodItems.length > 0
       ? phase.dodItems
@@ -72,7 +81,7 @@ export async function POST(
         taskType: 'feature',
         definitionOfDone: dodList,
         riskClass: phase.riskClass,
-        maxBudgetUsd: phase.estimatedTurns <= 40 ? 2 : phase.estimatedTurns <= 80 ? 3 : 5,
+        maxBudgetUsd: phaseBudget,
         allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
         branchStrategy: 'feature',
         requiresApproval: phase.riskClass === 'C',
@@ -82,7 +91,7 @@ export async function POST(
       },
       status: canStartImmediately ? 'approved' : 'pending',
       executionRoute: 'local-agent',
-      costEstimateUsd: phase.estimatedTurns <= 40 ? 2 : phase.estimatedTurns <= 80 ? 3 : 5,
+      costEstimateUsd: phaseBudget,
       chainNextId: nextId ?? undefined,
       chainPosition: i + 1,
       chainTotal: plan.phases.length,

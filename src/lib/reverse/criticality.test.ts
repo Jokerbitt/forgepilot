@@ -32,6 +32,16 @@ describe('assessCriticality', () => {
     const a = assessCriticality('App', '/x', probeFrom('real-time SCADA control'))
     expect(a.level).toBe('critical')
   })
+
+  it('flags PLC programming environments / IEC languages as critical', () => {
+    const a = assessCriticality('App', '/x', probeFrom('Project built in CODESYS using Structured Text and Ladder Logic'))
+    expect(a.level).toBe('critical')
+    expect(a.reasons.some(r => r.includes('PLC'))).toBe(true)
+  })
+
+  it('flags a TIA-Portal / Step 7 / Simatic project as critical', () => {
+    expect(assessCriticality('App', '/x', probeFrom('exported from TIA Portal, Simatic S7-1500')).level).toBe('critical')
+  })
 })
 
 describe('criticalityNote', () => {

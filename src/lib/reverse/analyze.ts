@@ -16,6 +16,7 @@ import { join, extname } from 'path'
 import { scanSecurityDeep, findingsToStrings, SCAN_EXCLUDE_DIRS, type SecurityFinding } from './security-scan'
 import { assessCriticality, type CriticalityAssessment } from './criticality'
 import { suggestStackTranslations, type StackTranslation } from './stack-translation'
+import { ingestDocs, type DocHints } from './doc-ingest'
 
 export type Platform = 'windows' | 'cross-platform' | 'unknown'
 
@@ -45,6 +46,8 @@ export interface ReverseReport {
   criticality: CriticalityAssessment
   /** Old → new technology recommendations for a cross-platform rebuild. */
   stackTranslations: StackTranslation[]
+  /** Plain-language hints extracted from the app's own docs (README etc.). */
+  documentation?: DocHints
   /** Plain-German narrative summary. */
   summary: string
 }
@@ -290,6 +293,7 @@ export function analyzeForReverse(rootPath: string): ReverseReport {
     languages, frameworks, platform, platformReasons, databaseEngines, modules, security, securityFindings, techDebt, criticality,
   }
   const stackTranslations = suggestStackTranslations({ ...base, stackTranslations: [], summary: '' })
-  const partial: Omit<ReverseReport, 'summary'> = { ...base, stackTranslations }
+  const documentation = ingestDocs(rootPath)
+  const partial: Omit<ReverseReport, 'summary'> = { ...base, stackTranslations, documentation }
   return { ...partial, summary: buildSummary(partial) }
 }
