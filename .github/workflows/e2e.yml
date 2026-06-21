@@ -37,7 +37,7 @@ jobs:
           NEXTAUTH_SECRET: ci-test-secret-32-chars-minimum
           FORGEPILOT_AUTH_DISABLED: 'true'
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
