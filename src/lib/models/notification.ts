@@ -13,6 +13,7 @@ export type NotificationType =
   | 'delegation_approved'
   | 'brief_ready'
   | 'system'
+  | 'loop_complete'
 export type NotificationSeverity = 'info' | 'warning' | 'critical'
 
 export interface Notification {

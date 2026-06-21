@@ -7,7 +7,9 @@ node_modules/
 /config/
 !/config/.gitkeep
 dist/
-build/
+# Anchored with / so it only ignores a root-level build/ output dir — NOT API
+# routes like src/app/api/suggestions/build/ (a real route, must be committed).
+/build/
 .next/
 tsconfig.tsbuildinfo
 *.log

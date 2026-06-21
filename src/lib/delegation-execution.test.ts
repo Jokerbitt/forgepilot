@@ -1,6 +1,15 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { buildSubTaskPrompt, buildSkillBlock, buildRetryContext } from './delegation-execution'
 import type { Delegation } from '@/lib/models/delegation'
+
+const mockReadKnowledgeCards = vi.fn().mockReturnValue([])
+vi.mock('@/lib/knowledge/knowledge-card', () => ({
+  readKnowledgeCards: () => mockReadKnowledgeCards(),
+}))
+
+beforeEach(() => {
+  mockReadKnowledgeCards.mockReturnValue([])
+})
 
 function makeDelegation(overrides: Partial<Delegation['contract']> = {}): Delegation {
   return {
@@ -176,5 +185,72 @@ describe('buildRetryContext', () => {
     const ctx = buildRetryContext(d)
     const errorLine = ctx.split('\n').find(l => l.startsWith('- '))!
     expect(errorLine.length).toBeLessThanOrEqual(202) // "- " + 200 chars
+  })
+
+  it('includes critic feedback block when criticScore is present', () => {
+    const d: Delegation = {
+      ...makeDelegationWithLogs([
+        { timestamp: new Date().toISOString(), type: 'error', message: 'tests failed' },
+      ]),
+      criticScore: {
+        correctness: 45,
+        efficiency: 60,
+        drift: 30,
+        verdict: 'needs-revision',
+        summary: 'Tests were missing',
+        runAt: new Date().toISOString(),
+      },
+    }
+    const ctx = buildRetryContext(d)
+    expect(ctx).toContain('Critic Feedback')
+    expect(ctx).toContain('needs-revision')
+    expect(ctx).toContain('Tests were missing')
+  })
+
+  it('includes failure lessons from past runs when knowledge cards have matching tags', () => {
+    mockReadKnowledgeCards.mockReturnValue([
+      {
+        id: 'old-lesson',
+        title: '[FAILED] similar task',
+        content: '- avoid using any types',
+        tags: ['failure-lesson', '/my-repo', 'B', 'local-agent'],
+        sourceId: 'other-del',
+        source: 'delegation',
+        createdAt: new Date(Date.now() - 60000).toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ])
+
+    const d: Delegation = {
+      ...makeDelegationWithLogs([
+        { timestamp: new Date().toISOString(), type: 'error', message: 'compile error' },
+      ]),
+      targetRepo: '/my-repo',
+    }
+    const ctx = buildRetryContext(d)
+    expect(ctx).toContain('Lessons from Similar Past Failures')
+    expect(ctx).toContain('avoid using any types')
+  })
+
+  it('does NOT include lessons from the same delegation (no self-injection)', () => {
+    mockReadKnowledgeCards.mockReturnValue([
+      {
+        id: 'self-lesson',
+        title: '[FAILED] same task',
+        content: '- self lesson',
+        tags: ['failure-lesson', 'unknown', 'B'],
+        sourceId: 'd1', // same as the delegation id in makeDelegationWithLogs
+        source: 'delegation',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ])
+
+    const d = makeDelegationWithLogs([
+      { timestamp: new Date().toISOString(), type: 'error', message: 'compile error' },
+    ])
+    const ctx = buildRetryContext(d)
+    // Self-lessons are excluded
+    expect(ctx).not.toContain('Lessons from Similar Past Failures')
   })
 })

@@ -1,0 +1,22 @@
+// Adaptive Prisma datasource — the ONE change to move SQLite ↔ Postgres/Supabase.
+//
+// Local-first default (SQLite):
+//   datasource db { provider = "sqlite"; url = env("DATABASE_URL") }   // file:./dev.db
+//
+// Production (Postgres / Supabase) — swap to this block and set DATABASE_URL to
+// your Supabase "Connection string" (use the pooled :6543 URL for serverless):
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // optional: non-pooled, for migrations
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Your models are unchanged across both providers. A few Postgres-only niceties
+// you can opt into once on Postgres:
+//   - @db.Uuid / dbgenerated("gen_random_uuid()") for UUID PKs
+//   - Json columns (native jsonb)
+//   - full-text search + pgvector (see the search/realtime connectors)

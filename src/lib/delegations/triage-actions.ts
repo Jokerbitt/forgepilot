@@ -21,11 +21,13 @@ const DEFAULT_BATCH_SIZE = 2
 
 export function buildFailedDelegationActionPlan(
   triage: FailedDelegationTriageSummary,
+  options: { batchSize?: number } = {},
 ): FailedDelegationActionPlan {
+  const batchSize = Math.max(0, Math.min(5, options.batchSize ?? DEFAULT_BATCH_SIZE))
   const retryable = triage.topItems.filter(item => item.category === 'retryable' && item.retryable)
   const missingFeedback = triage.topItems.filter(item => item.category === 'missing-feedback')
   const manualReview = triage.topItems.filter(item => item.category === 'human-review' || item.category === 'known-cause')
-  const retryBatch = retryable.slice(0, DEFAULT_BATCH_SIZE)
+  const retryBatch = retryable.slice(0, batchSize)
   const warnings: string[] = []
 
   if (triage.missingFeedback > 0) {

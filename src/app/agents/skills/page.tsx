@@ -31,6 +31,8 @@ const AGENT_COLOR: Record<string, string> = {
   'claude-code':  'bg-violet-900/40 text-violet-300 border-violet-700/60',
   'codex':        'bg-sky-900/40 text-sky-300 border-sky-700/60',
   'antigravity':  'bg-pink-900/40 text-pink-300 border-pink-700/60',
+  'hermes':       'bg-emerald-900/40 text-emerald-300 border-emerald-700/60',
+  'openclaw':     'bg-amber-900/40 text-amber-300 border-amber-700/60',
   'general':      'bg-slate-700/60 text-slate-300 border-slate-600',
 }
 

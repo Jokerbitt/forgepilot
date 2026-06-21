@@ -153,6 +153,80 @@ export async function writebackExecutionInsights(
   }
 }
 
+/**
+ * After a FAILED delegation execution, store a failure lesson as a KnowledgeCard.
+ * These cards feed back into the Scout (codebase-scout.ts) for future agent runs —
+ * closing the memory component of the Scout→Execute→Critic→Memory loop.
+ *
+ * Never throws. Called fire-and-forget after failed execution.
+ */
+export async function writeFailureLessonCard(
+  delegation: Delegation,
+): Promise<WritebackDelegationResult> {
+  try {
+    // Dedup: skip if a failure-lesson card already exists for this delegation
+    const existing = findKnowledgeCardsBySource(delegation.id)
+    if (existing.some(c => c.tags.includes('failure-lesson'))) {
+      return { written: false, reason: 'Failure card already exists for this delegation' }
+    }
+
+    const riskClass = delegation.contract.riskClass ?? 'B'
+    const mode = delegation.executionRoute ?? 'unknown'
+    const targetRepo = delegation.targetRepo ?? 'unknown'
+    const cardTitle = `[FAILED] ${delegation.title || delegation.contract.goal.slice(0, 80)}`
+
+    const errorLogs = (delegation.logs ?? [])
+      .filter(l => l.type === 'error')
+      .slice(-3)
+      .map(l => `- ${l.message.slice(0, 200)}`)
+      .join('\n')
+
+    const errorSummary = delegation.errorMessage?.slice(0, 300) ?? 'Unknown error'
+    const rawContent = `**Goal:** ${delegation.contract.goal.slice(0, 200)}\n**Error:** ${errorSummary}\n**Last error logs:**\n${errorLogs || '(none)'}`
+
+    let content: string
+    try {
+      const result = await generateText({
+        system: 'You are a failure analysis assistant. Respond ONLY with Markdown bullet points.',
+        prompt: `Analysiere diesen fehlgeschlagenen Agent-Run in 3-5 Bullet Points:\nTitel: ${cardTitle}\nFehler: ${errorSummary}\nLog-Auszug:\n${errorLogs || '(keine Fehler-Logs)'}\n\nAntworte NUR mit Markdown-Bullet-Points: Was ist schiefgelaufen? Was sollte beim nächsten Versuch vermieden werden?`,
+        maxTokens: 300,
+        purpose: 'fast',
+      })
+      content = result.text.trim()
+    } catch {
+      content = rawContent
+    }
+
+    const card = writeKnowledgeCard({
+      title: cardTitle,
+      content,
+      source: 'delegation',
+      sourceId: delegation.id,
+      briefId: delegation.briefId,
+      tags: ['failure-lesson', targetRepo, riskClass, mode],
+      qualityScore: 60,
+    })
+
+    aiLogger.info(
+      { event: 'knowledge.writeback.failure', delegationId: delegation.id, cardId: card.id, targetRepo },
+      'Failure lesson card written',
+    )
+
+    writeKnowledgeCardToNas(card)
+    return { written: true, cardId: card.id }
+  } catch (error) {
+    aiLogger.error(
+      {
+        event: 'knowledge.writeback.failure.error',
+        delegationId: delegation.id,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Failure lesson card write failed',
+    )
+    return { written: false, reason: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 function extractInsights(delegation: Delegation): CreateKnowledgeCardInput[] {
   const insights: CreateKnowledgeCardInput[] = []
   const score = delegation.criticScore!

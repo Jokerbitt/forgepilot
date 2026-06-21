@@ -43,13 +43,13 @@ describe('POST /api/policy', () => {
     expect(body.verdict).toBe('allow')
   })
 
-  it('returns 403 when policy verdict is deny', async () => {
+  it('returns 200 with deny verdict so the UI can render a policy result', async () => {
     evaluatePolicy.mockReturnValueOnce({ verdict: 'deny', reason: 'Risk too high' })
     const { POST } = await import('./route')
     const res = await POST(
       makePostRequest({ id: 'con-001', goal: 'Delete production data', riskClass: 'C' }),
     )
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(200)
     const body = await res.json() as { verdict: string; reason: string }
     expect(body.verdict).toBe('deny')
     expect(body.reason).toBe('Risk too high')

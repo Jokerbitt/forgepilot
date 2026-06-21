@@ -131,4 +131,14 @@ describe('buildDailyAssistantBlockers', () => {
     ])
     expect(blockers[0].severity).toBe('critical')
   })
+
+  it('points directly to the blocking delegation when exactly one failure is visible', () => {
+    const blockers = buildDailyAssistantBlockers(
+      { ...base, failed: 1 },
+      [{ id: 'failed-1', title: 'Budget stopped PR', status: 'failed', riskClass: 'A', updatedAt: '2026-01-01T00:00:00.000Z' }],
+    )
+
+    expect(blockers[0].href).toBe('/delegations/failed-1')
+    expect(blockers[0].detail).toContain('Budget stopped PR')
+  })
 })

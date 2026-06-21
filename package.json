@@ -27,6 +27,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:backfill": "tsx scripts/backfill-json-to-postgres.ts",
+    "db:backfill-ledger": "tsx scripts/backfill-processing-ledger-to-postgres.ts",
     "db:backfill-supabase": "tsx scripts/backfill-json-to-pg.ts",
     "db:verify-cutover": "tsx scripts/verify-postgres-cutover.ts",
     "critic:backfill": "tsx scripts/backfill-critic-scores.ts",
