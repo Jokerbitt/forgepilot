@@ -3,6 +3,6 @@ import { NextResponse } from 'next/server'
 import { runRetentionCleanup } from '@/lib/dsgvo/processing-ledger'
 
 export async function POST() {
-  const result = runRetentionCleanup()
+  const result = await runRetentionCleanup()
   return NextResponse.json(result)
 }

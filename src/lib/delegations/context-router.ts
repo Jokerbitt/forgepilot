@@ -1,0 +1,111 @@
+/**
+ * context-router.ts — Token-efficient context assembly.
+ *
+ * Builds only the context blocks actually needed for a given task type,
+ * reducing prompt overhead from ~6000 to ~1500 tokens for non-feature tasks.
+ */
+
+import { buildKnowledgeBlock } from './knowledge-packages'
+import { buildCodebaseContextBlock } from './codebase-scout'
+import { assembleSkillBlock, seedBuiltinSkills } from '@/lib/skills/prompt-skill-registry'
+import { buildBuildingBlocksCatalog } from '@/lib/building-blocks/catalog'
+import type { TaskContract } from '@/lib/models/delegation'
+
+export type ContextProfile = 'feature' | 'bug-fix' | 'test' | 'ui-component' | 'review' | 'refactor' | 'docs' | 'infra'
+
+export interface ContextBlocks {
+  skillBlock: string
+  knowledgeBlock: string
+  codebaseBlock: string
+  /** Reusable SaaS building-block catalog (empty for non-building task types) */
+  buildingBlocksBlock: string
+  /** Estimated token cost of all blocks combined */
+  estimatedTokens: number
+  /** Which profile was used */
+  profile: ContextProfile
+}
+
+/**
+ * Maps taskType from TaskContract to a ContextProfile.
+ * Falls back to 'feature' for unknown types.
+ */
+export function resolveContextProfile(contract: Pick<TaskContract, 'taskType' | 'skillCategory'>): ContextProfile {
+  const t = contract.taskType?.toLowerCase() ?? ''
+  const s = contract.skillCategory ?? ''
+
+  if (t === 'test' || s === 'test') return 'test'
+  if (t === 'bug' || t === 'bug-fix' || t === 'fix') return 'bug-fix'
+  if (t === 'ui' || s === 'ui-component') return 'ui-component'
+  if (t === 'review' || t === 'code-review') return 'review'
+  if (t === 'refactor' || s === 'refactor') return 'refactor'
+  if (t === 'docs' || t === 'documentation' || s === 'documentation') return 'docs'
+  if (t === 'infra' || t === 'infrastructure' || s === 'infrastructure') return 'infra'
+  return 'feature'
+}
+
+/**
+ * Profile configuration: which blocks to include for each task type.
+ * true = full block, false = skip, 'minimal' = reduced depth
+ */
+const PROFILE_CONFIG: Record<ContextProfile, {
+  skill: boolean
+  knowledge: boolean
+  codebase: boolean | 'minimal'
+  /** Inject the reusable SaaS building-block catalog — only for build-heavy profiles */
+  buildingBlocks: boolean
+}> = {
+  'feature':      { skill: true,  knowledge: true,  codebase: true,      buildingBlocks: true  },
+  'bug-fix':      { skill: true,  knowledge: false, codebase: 'minimal', buildingBlocks: false },
+  'test':         { skill: true,  knowledge: false, codebase: 'minimal', buildingBlocks: false },
+  'ui-component': { skill: true,  knowledge: true,  codebase: 'minimal', buildingBlocks: true  },
+  'review':       { skill: false, knowledge: false, codebase: false,     buildingBlocks: false },
+  'refactor':     { skill: true,  knowledge: false, codebase: 'minimal', buildingBlocks: false },
+  'docs':         { skill: false, knowledge: false, codebase: 'minimal', buildingBlocks: false },
+  'infra':        { skill: true,  knowledge: true,  codebase: true,      buildingBlocks: true  },
+}
+
+function roughTokens(s: string): number {
+  return Math.ceil(s.length / 4)
+}
+
+/**
+ * Builds only the context blocks needed for the given task type.
+ * Pass targetRepo for remote repos, omit for local (uses cwd).
+ */
+export function buildSelectiveContext(
+  contract: Pick<TaskContract, 'taskType' | 'skillCategory' | 'goal' | 'context' | 'allowedFilePatterns'>,
+  targetRepo?: string,
+): ContextBlocks {
+  const profile = resolveContextProfile(contract)
+  const cfg = PROFILE_CONFIG[profile]
+
+  if (cfg.skill) seedBuiltinSkills()
+  const skillBlock = cfg.skill
+    ? (contract.allowedFilePatterns?.length
+        ? `\n## Allowed file patterns (scope constraint)\nOnly touch files matching: ${contract.allowedFilePatterns.join(', ')}\nAny changes outside these patterns = scope drift → ESCALATE.\n`
+        : '') + assembleSkillBlock('global')
+    : ''
+
+  const knowledgeBlock = cfg.knowledge
+    ? buildKnowledgeBlock(contract.goal, contract.context ?? '', contract.skillCategory)
+    : ''
+
+  const codebaseBlock = cfg.codebase && targetRepo
+    ? buildCodebaseContextBlock(
+        contract.goal,
+        contract.context ?? '',
+        targetRepo,
+        cfg.codebase === 'minimal', // pass minimal flag — saves ~800 tokens for bug-fix/test/refactor
+      )
+    : ''
+
+  // Building-block catalog: lightweight (metadata only), agent reads files on demand
+  const buildingBlocksBlock = cfg.buildingBlocks
+    ? buildBuildingBlocksCatalog(contract.goal, contract.context ?? '')
+    : ''
+
+  const estimatedTokens = roughTokens(skillBlock) + roughTokens(knowledgeBlock)
+    + roughTokens(codebaseBlock) + roughTokens(buildingBlocksBlock)
+
+  return { skillBlock, knowledgeBlock, codebaseBlock, buildingBlocksBlock, estimatedTokens, profile }
+}

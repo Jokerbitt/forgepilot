@@ -20,6 +20,7 @@ function relativeTime(iso: string): string {
 
 const TYPE_ICON: Record<NotificationType, string> = {
   run_complete: '✅',
+  loop_complete: '🔁',
   run_failed: '❌',
   delegation_approved: '✓',
   delegation_pending: '⏳',

@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
-import { readProcessingLedger } from '@/lib/dsgvo/processing-ledger'
+import { readProcessingLedgerAsync } from '@/lib/dsgvo/processing-ledger'
 import { readDelegations } from '@/lib/delegations/queue'
 import { calculateCallCost } from '@/lib/delegations/cost-tracker'
 import type { CostAnalytics } from '@/lib/analytics/cost-types'
@@ -28,7 +28,7 @@ function buildDateRange(days: number): string[] {
 
 export async function GET(): Promise<NextResponse> {
   try {
-    const records = readProcessingLedger(2000)
+    const records = await readProcessingLedgerAsync(2000)
     const delegations = readDelegations()
 
     // ── per-provider aggregation ──────────────────────────────────────

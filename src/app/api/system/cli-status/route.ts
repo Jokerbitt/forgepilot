@@ -1,6 +1,7 @@
 import { execSync } from 'child_process'
 import { NextResponse } from 'next/server'
 import { readStoredApiKeys } from '@/lib/connectors/config'
+import { getCachedOrShallowRunnerReadiness } from '@/lib/system/runner-readiness'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,6 +11,7 @@ interface ToolStatus {
   available: boolean
   version: string | null
   authenticated: boolean | null
+  headlessReady?: boolean
   detail: string
 }
 
@@ -83,25 +85,31 @@ function buildToolStatus(binary: 'claude' | 'codex'): ToolStatus {
 }
 
 export async function GET(): Promise<NextResponse<CliStatusResponse>> {
+  const readiness = getCachedOrShallowRunnerReadiness()
   const claude = buildToolStatus('claude')
   const codex = buildToolStatus('codex')
   const { ANTHROPIC_API_KEY, OPENAI_API_KEY } = readStoredApiKeys()
   const claudeApiKeySet = Boolean(ANTHROPIC_API_KEY?.trim())
   const openAiApiKeySet = Boolean(OPENAI_API_KEY?.trim())
-  const zeroKeyReady = claude.available || codex.available
+  claude.headlessReady = readiness.claude.headlessReady
+  codex.headlessReady = readiness.codex.headlessReady
+  if (claude.headlessReady) claude.detail = readiness.claude.detail
+  if (codex.headlessReady) codex.detail = readiness.codex.detail
 
-  const activeMode: ActiveMode = claude.available
-    ? 'claude-cli'
-    : codex.available
-      ? 'codex-cli'
-      : claudeApiKeySet
-        ? 'claude-api'
-        : openAiApiKeySet
-          ? 'openai-api'
-          : 'simulation'
+  const zeroKeyReady = readiness.zeroKeyReady
 
-  const recommendation = zeroKeyReady
-    ? 'Zero-Key-Ausführung ist möglich. API-Keys bleiben optional.'
+  const activeMode: ActiveMode = readiness.ready
+    ? readiness.activeMode
+    : claudeApiKeySet
+      ? 'claude-api'
+      : openAiApiKeySet
+        ? 'openai-api'
+        : 'simulation'
+
+  const recommendation = readiness.zeroKeyReady
+    ? readiness.recommendation
+    : claude.available || codex.available
+    ? 'Zero-Key-CLI ist installiert, aber noch nicht headless bestaetigt. Starte Deep Readiness, bevor autonom Code ausgefuehrt wird.'
     : 'Installiere und authentifiziere Claude Code oder Codex CLI, um ohne API-Key echten Code auszuführen.'
 
   return NextResponse.json({

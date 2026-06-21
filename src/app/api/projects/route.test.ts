@@ -10,8 +10,11 @@ vi.mock('@/lib/agents/orchestrated-run', () => ({
   getRun: vi.fn(),
   reapStaleRuns: vi.fn(),
 }))
-vi.mock('@/lib/delegations/queue', () => ({
-  readDelegations: vi.fn(),
+vi.mock('@/lib/repositories/delegationRepository', () => ({
+  SINGLE_TENANT_USER_ID: 'user-1',
+  createDelegationRepository: vi.fn(() => ({
+    listByStatus: vi.fn(async () => []),
+  })),
 }))
 vi.mock('@/lib/knowledge/milestone-store', () => ({
   getMilestonesByBriefId: vi.fn(),
@@ -26,12 +29,14 @@ describe('GET /api/projects', () => {
   it('returns empty array when no project briefs', async () => {
     const { readProjectBriefs } = await import('@/lib/project-briefs')
     const { readIdeaHistory } = await import('@/lib/pilot/idea-history-store')
-    const { readDelegations } = await import('@/lib/delegations/queue')
+    const { createDelegationRepository } = await import('@/lib/repositories/delegationRepository')
     const { getMilestonesByBriefId, getWorkPackagesByBriefId } = await import('@/lib/knowledge/milestone-store')
 
     vi.mocked(readProjectBriefs).mockReturnValue([])
     vi.mocked(readIdeaHistory).mockReturnValue([])
-    vi.mocked(readDelegations).mockReturnValue([])
+    vi.mocked(createDelegationRepository).mockReturnValue({
+      listByStatus: vi.fn(async () => []),
+    } as unknown as ReturnType<typeof createDelegationRepository>)
     vi.mocked(getMilestonesByBriefId).mockReturnValue([])
     vi.mocked(getWorkPackagesByBriefId).mockReturnValue([])
 
@@ -46,7 +51,7 @@ describe('GET /api/projects', () => {
   it('returns project summaries with planning metrics', async () => {
     const { readProjectBriefs } = await import('@/lib/project-briefs')
     const { readIdeaHistory } = await import('@/lib/pilot/idea-history-store')
-    const { readDelegations } = await import('@/lib/delegations/queue')
+    const { createDelegationRepository } = await import('@/lib/repositories/delegationRepository')
     const { getMilestonesByBriefId, getWorkPackagesByBriefId } = await import('@/lib/knowledge/milestone-store')
 
     vi.mocked(readProjectBriefs).mockReturnValue([{
@@ -54,7 +59,9 @@ describe('GET /api/projects', () => {
       createdAt: '2024-01-01T00:00:00.000Z',
     }] as ReturnType<typeof readProjectBriefs>)
     vi.mocked(readIdeaHistory).mockReturnValue([])
-    vi.mocked(readDelegations).mockReturnValue([])
+    vi.mocked(createDelegationRepository).mockReturnValue({
+      listByStatus: vi.fn(async () => []),
+    } as unknown as ReturnType<typeof createDelegationRepository>)
     vi.mocked(getMilestonesByBriefId).mockReturnValue([])
     vi.mocked(getWorkPackagesByBriefId).mockReturnValue([])
 

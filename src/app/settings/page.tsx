@@ -35,6 +35,7 @@ import { AIProviderStatus } from '@/components/settings/AIProviderStatus'
 import { SystemReadinessPanel } from '@/components/settings/SystemReadinessPanel'
 import { StorageCutoverPanel } from '@/components/settings/StorageCutoverPanel'
 import { ProviderAutoRouterPanel } from '@/components/settings/ProviderAutoRouterPanel'
+import { RunnerReadinessBanner } from '@/components/shared/RunnerReadinessBanner'
 
 const panelClassName = 'rounded-lg border border-white/[0.07] bg-white/[0.035] p-4 shadow-sm shadow-black/10'
 const inputClassName = 'w-full rounded-md border border-white/[0.09] bg-[#080912] px-3 py-2 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/25'
@@ -704,6 +705,12 @@ export default function SettingsPage() {
 
         <SystemReadinessPanel />
 
+        {/* M4: Runner Readiness — comprehensive tool/credential check */}
+        <section className="space-y-3">
+          <SectionHeading icon={Zap} title="Betriebsbereitschaft (Runner Health)" />
+          <RunnerReadinessBanner detailed />
+        </section>
+
         {/* Claude CLI Auth Section */}
         <section className="space-y-4">
           <SectionHeading
@@ -1279,6 +1286,61 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
+
+            {/* Budget control */}
+            <div className="mt-4 border-t border-white/[0.06] pt-4 space-y-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Budget-Steuerung</p>
+              <div>
+                <label className="block text-xs text-gray-500 mb-2">Budget-Durchsetzung</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { v: 'strict', label: 'Strikt', hint: 'Stoppt exakt am Limit' },
+                    { v: 'tolerant', label: 'Tolerant', hint: 'Erlaubt X % Überschreitung' },
+                    { v: 'off', label: 'Aus', hint: 'Kein Budget-Limit' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.v}
+                      onClick={() => setConfig({ ...config, budgetEnforcement: opt.v })}
+                      className={`px-3 py-2 rounded-lg border text-sm font-semibold transition-colors ${
+                        config.budgetEnforcement === opt.v
+                          ? 'bg-violet-600 border-violet-500 text-white'
+                          : 'bg-gray-950 border-gray-800 text-gray-400 hover:text-white hover:border-gray-700'
+                      }`}
+                      title={opt.hint}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-slate-600 mt-2">
+                  {config.budgetEnforcement === 'off'
+                    ? '⚠️ Kein Limit — Delegationen laufen ohne Kostendeckel. Vorsicht bei großen Builds.'
+                    : config.budgetEnforcement === 'tolerant'
+                      ? 'Stoppt erst, wenn das Limit um die eingestellte Toleranz überschritten wird.'
+                      : 'Stoppt, sobald die Kosten das Delegations-Budget erreichen.'}
+                </p>
+              </div>
+              {config.budgetEnforcement === 'tolerant' && (
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Toleranz: <span className="text-slate-300 font-mono">{config.budgetTolerancePct ?? 20}%</span> über dem Limit
+                  </label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={config.budgetTolerancePct ?? 20}
+                    onChange={e => setConfig({ ...config, budgetTolerancePct: parseInt(e.target.value) })}
+                    className="w-full accent-violet-500"
+                  />
+                  <p className="text-[11px] text-slate-600 mt-1">
+                    Beispiel: $4 Limit + {config.budgetTolerancePct ?? 20}% = bis $
+                    {(4 * (1 + (config.budgetTolerancePct ?? 20) / 100)).toFixed(2)} erlaubt
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
@@ -1836,6 +1898,45 @@ export default function SettingsPage() {
                 <p>/notif — ungelesene Benachrichtigungen</p>
               </div>
             </details>
+          </div>
+        </section>
+
+        {/* Erweiterte Tools — Schnellzugriff auf Spezial-Seiten */}
+        <section className="space-y-4 pt-4 border-t border-white/[0.06]">
+          <SectionHeading icon={SettingsIcon} title="Erweiterte Konfiguration" badge={<StatusPill>Spezial-Tools</StatusPill>} />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <a href="/model-router"
+              className="flex items-start gap-3 rounded-lg border border-white/[0.07] bg-white/[0.02] p-4 transition-colors hover:border-violet-500/30 hover:bg-violet-500/[0.04]">
+              <Zap className="mt-0.5 h-5 w-5 shrink-0 text-violet-400" />
+              <div>
+                <p className="text-sm font-semibold text-slate-200">Model Router</p>
+                <p className="mt-0.5 text-xs text-slate-500">Routing-Regeln, Provider-Auswahl, Cost-vs-Performance</p>
+              </div>
+            </a>
+            <a href="/governance"
+              className="flex items-start gap-3 rounded-lg border border-white/[0.07] bg-white/[0.02] p-4 transition-colors hover:border-violet-500/30 hover:bg-violet-500/[0.04]">
+              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-violet-400" />
+              <div>
+                <p className="text-sm font-semibold text-slate-200">Governance Hub</p>
+                <p className="mt-0.5 text-xs text-slate-500">Risk-Klassen, Approval-Policies, Audit Trail</p>
+              </div>
+            </a>
+            <a href="/dev/health"
+              className="flex items-start gap-3 rounded-lg border border-white/[0.07] bg-white/[0.02] p-4 transition-colors hover:border-violet-500/30 hover:bg-violet-500/[0.04]">
+              <Activity className="mt-0.5 h-5 w-5 shrink-0 text-violet-400" />
+              <div>
+                <p className="text-sm font-semibold text-slate-200">System Health</p>
+                <p className="mt-0.5 text-xs text-slate-500">Execute-Loop-Status, n8n Webhook, Diagnose-Checks</p>
+              </div>
+            </a>
+            <a href="/readiness"
+              className="flex items-start gap-3 rounded-lg border border-white/[0.07] bg-white/[0.02] p-4 transition-colors hover:border-violet-500/30 hover:bg-violet-500/[0.04]">
+              <Rocket className="mt-0.5 h-5 w-5 shrink-0 text-violet-400" />
+              <div>
+                <p className="text-sm font-semibold text-slate-200">SaaS Readiness</p>
+                <p className="mt-0.5 text-xs text-slate-500">Readiness-Score, Gap-Analyse, Solo vs. SaaS</p>
+              </div>
+            </a>
           </div>
         </section>
 

@@ -7,8 +7,9 @@ import { PendingApprovalsBar } from './PendingApprovalsBar'
 export function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const isLogin = pathname === '/login' || pathname.startsWith('/login/')
+  const isStandalonePreview = pathname.startsWith('/demo/')
 
-  if (isLogin) {
+  if (isLogin || isStandalonePreview) {
     return <>{children}</>
   }
 

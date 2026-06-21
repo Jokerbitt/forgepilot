@@ -58,19 +58,24 @@ describe('CommandPalette', () => {
   it('command list includes all expected navigation items', () => {
     const commands = [
       { id: 'nav-home', label: 'Command Center', group: 'Navigation' },
-      { id: 'nav-briefs', label: 'Project Briefs', group: 'Navigation' },
-      { id: 'nav-delegations', label: 'Delegations', group: 'Navigation' },
-      { id: 'nav-settings', label: 'Settings', group: 'Navigation' },
-      { id: 'nav-governance', label: 'Governance', group: 'Navigation' },
-      { id: 'nav-analytics', label: 'Analytics', group: 'Navigation' },
-      { id: 'action-new-brief', label: 'New Project Brief', group: 'Actions' },
+      { id: 'nav-idea', label: 'Plan Mode', group: 'Navigation' },
+      { id: 'nav-projects', label: 'Projects', group: 'Navigation' },
+      { id: 'nav-delegations', label: 'Execute', group: 'Navigation' },
+      { id: 'nav-live', label: 'Live View', group: 'Navigation' },
+      { id: 'nav-tools', label: 'Werkzeuge', group: 'Tools' },
+      { id: 'nav-branches', label: 'Branches', group: 'Tools' },
+      { id: 'nav-knowledge', label: 'Knowledge', group: 'Tools' },
+      { id: 'nav-settings', label: 'Settings', group: 'Tools' },
+      { id: 'action-new-idea', label: 'Neue Idee planen', group: 'Actions' },
     ]
 
     const navItems = commands.filter(c => c.group === 'Navigation')
+    const toolItems = commands.filter(c => c.group === 'Tools')
     const actionItems = commands.filter(c => c.group === 'Actions')
 
-    expect(navItems).toHaveLength(6)
+    expect(navItems).toHaveLength(5)
+    expect(toolItems).toHaveLength(4)
     expect(actionItems).toHaveLength(1)
-    expect(actionItems[0].id).toBe('action-new-brief')
+    expect(actionItems[0].id).toBe('action-new-idea')
   })
 })

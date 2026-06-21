@@ -19,6 +19,8 @@ const ROLE_LABEL: Record<AgentRole, string> = {
   'qa-reviewer':           'QA Reviewer',
   'devops-automation':     'DevOps / Automation',
   'knowledge-curator':     'Knowledge Curator',
+  'critic-reviewer':       'Critic Reviewer',
+  'external-coding-agent': 'External Coding Agent',
 }
 
 const ROLE_ICON: Record<AgentRole, string> = {
@@ -30,6 +32,8 @@ const ROLE_ICON: Record<AgentRole, string> = {
   'qa-reviewer':           'QA',
   'devops-automation':     'DO',
   'knowledge-curator':     'KC',
+  'critic-reviewer':       'CR',
+  'external-coding-agent': 'EA',
 }
 
 const ROLE_SECTION: Record<AgentRole, string> = {
@@ -41,6 +45,8 @@ const ROLE_SECTION: Record<AgentRole, string> = {
   'qa-reviewer':           'Quality',
   'devops-automation':     'Ops',
   'knowledge-curator':     'Knowledge',
+  'critic-reviewer':       'Quality',
+  'external-coding-agent': 'Execute',
 }
 
 const AVAIL_COLOR: Record<AgentAvailability, string> = {

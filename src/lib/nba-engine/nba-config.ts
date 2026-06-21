@@ -25,6 +25,10 @@ export interface NBAConfig {
   maxConcurrentAgents: number
   autoStartApproved: boolean
   autoPmAgent?: boolean
+  /** Budget enforcement: 'strict' = stop at limit, 'tolerant' = allow overage %, 'off' = no cap */
+  budgetEnforcement: 'strict' | 'tolerant' | 'off'
+  /** When budgetEnforcement = 'tolerant', allow this many % over the limit before stopping */
+  budgetTolerancePct: number
 }
 
 const CONFIG_PATH = path.join(process.cwd(), 'config', 'nba-settings.json')
@@ -48,6 +52,8 @@ const DEFAULT_CONFIG: NBAConfig = {
   localFastModel: 'llama3.2:3b',
   maxConcurrentAgents: 2,
   autoStartApproved: false,
+  budgetEnforcement: 'tolerant',
+  budgetTolerancePct: 20,
 }
 
 export function getNBAConfig(): NBAConfig {
@@ -70,6 +76,8 @@ export function getNBAConfig(): NBAConfig {
       localFastModel: parsed.localFastModel ?? DEFAULT_CONFIG.localFastModel,
       maxConcurrentAgents: parsed.maxConcurrentAgents ?? DEFAULT_CONFIG.maxConcurrentAgents,
       autoStartApproved: parsed.autoStartApproved ?? DEFAULT_CONFIG.autoStartApproved,
+      budgetEnforcement: parsed.budgetEnforcement ?? DEFAULT_CONFIG.budgetEnforcement,
+      budgetTolerancePct: parsed.budgetTolerancePct ?? DEFAULT_CONFIG.budgetTolerancePct,
     }
   } catch (error) {
     return DEFAULT_CONFIG

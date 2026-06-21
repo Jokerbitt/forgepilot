@@ -60,5 +60,6 @@ describe('M183 — Drizzle migrations', () => {
     expect(sql).toContain('ADD COLUMN "context_snapshot" jsonb')
     expect(sql).toContain('ADD COLUMN "started_at" timestamp with time zone')
     expect(sql).toContain('ADD COLUMN "completed_at" timestamp with time zone')
+    expect(sql).toContain('ADD COLUMN "quality_check" jsonb')
   })
 })

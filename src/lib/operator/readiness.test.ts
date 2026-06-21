@@ -24,6 +24,8 @@ const config: NBAConfig = {
   localFastModel: 'llama3.2:3b',
   maxConcurrentAgents: 2,
   autoStartApproved: false,
+    budgetEnforcement: 'tolerant' as const,
+    budgetTolerancePct: 20,
 }
 
 const connectors: ConnectorHealthView[] = [

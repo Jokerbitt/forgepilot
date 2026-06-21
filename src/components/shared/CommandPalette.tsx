@@ -14,15 +14,14 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: 'Command Center', href: '/', section: 'Navigate', keywords: ['home', 'dashboard', 'overview'] },
-  { label: 'Inbox', href: '/inbox', section: 'Navigate', keywords: ['attention', 'alerts', 'notifications'] },
-  { label: 'Agent Board', href: '/board', section: 'Navigate', keywords: ['kanban', 'board', 'overview'] },
-  { label: 'Active Runs', href: '/active', section: 'Navigate', keywords: ['running', 'live', 'agents'] },
-  { label: 'Delegation Queue', href: '/delegations', section: 'Navigate', keywords: ['queue', 'tasks', 'delegate'] },
-  { label: 'Project Briefs', href: '/project-briefs', section: 'Navigate', keywords: ['briefs', 'projects'] },
-  { label: 'Work Items', href: '/work-items', section: 'Navigate', keywords: ['linear', 'issues', 'tickets'] },
-  { label: 'Agent Runs', href: '/agent-runs', section: 'Navigate', keywords: ['history', 'traces', 'logs'] },
-  { label: 'Knowledge Center', href: '/knowledge', section: 'Navigate', keywords: ['memory', 'cards', 'knowledge'] },
-  { label: 'Settings', href: '/settings', section: 'Navigate', keywords: ['config', 'keys', 'api'] },
+  { label: 'Plan Mode', href: '/idea', section: 'Navigate', keywords: ['idea', 'plan', 'brief'] },
+  { label: 'Projects', href: '/projects', section: 'Navigate', keywords: ['projects', 'apps', 'portfolio'] },
+  { label: 'Execute', href: '/delegations', section: 'Navigate', keywords: ['queue', 'tasks', 'delegate', 'run'] },
+  { label: 'Live View', href: '/live', section: 'Navigate', keywords: ['running', 'live', 'agents', 'status'] },
+  { label: 'Werkzeuge', href: '/tools', section: 'Tools', keywords: ['tools', 'expert', 'debug', 'settings'] },
+  { label: 'Knowledge', href: '/knowledge', section: 'Tools', keywords: ['memory', 'cards', 'knowledge'] },
+  { label: 'Branches', href: '/branches', section: 'Tools', keywords: ['git', 'github', 'pr', 'merge'] },
+  { label: 'Settings', href: '/settings', section: 'Tools', keywords: ['config', 'keys', 'api', 'provider'] },
 ]
 
 function matchScore(item: NavItem, query: string): number {
