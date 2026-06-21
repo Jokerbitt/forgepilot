@@ -6,6 +6,7 @@ import { BuildProgress } from './BuildProgress'
 import { DataImport } from './DataImport'
 import { Snapshots } from './Snapshots'
 import { MobileCheck } from './MobileCheck'
+import { PwaSetup } from './PwaSetup'
 import { ShareLink } from './ShareLink'
 import { FunctionProof } from './FunctionProof'
 import { Monitoring } from './Monitoring'
@@ -124,6 +125,7 @@ export function AppFeedback({ targetRepo }: { targetRepo: string }) {
 
       <DataImport targetRepo={targetRepo} />
       <MobileCheck targetRepo={targetRepo} />
+      <PwaSetup targetRepo={targetRepo} />
       <Maintenance targetRepo={targetRepo} />
       <Snapshots targetRepo={targetRepo} />
       <FunctionProof />
