@@ -63,6 +63,7 @@ export default function SuggestionsPage() {
   const [error, setError] = useState('')
   const [cost, setCost] = useState<PlanCostEstimate | null>(null)
   const [costing, setCosting] = useState(false)
+  const [totalBudget, setTotalBudget] = useState('')
 
   function switchMode(next: Mode) {
     setMode(next); setError(''); setResult(null); setSuggestions([]); setSelected(new Set()); setAnalysis(null); setCost(null)
@@ -142,7 +143,7 @@ export default function SuggestionsPage() {
       const selectedSuggestions = suggestions.filter(s => selected.has(s.id))
       const res = await fetch('/api/suggestions/build', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goal, context, targetRepo: targetRepo || undefined, selected: selectedSuggestions, custom }),
+        body: JSON.stringify({ goal, context, targetRepo: targetRepo || undefined, selected: selectedSuggestions, custom, totalBudgetUsd: totalBudget.trim() ? Number(totalBudget) : undefined }),
       })
       const data = await res.json() as { planId?: string; phaseCount?: number; delegationIds?: string[]; targetRepo?: string; error?: string }
       if (!res.ok || !data.planId) { setError(data.error ?? 'Build-Start fehlgeschlagen'); return }
@@ -261,8 +262,16 @@ export default function SuggestionsPage() {
 
       {error && <p className="mt-4 rounded-lg border border-amber-700/40 bg-amber-950/20 p-3 text-sm text-amber-300">{error}</p>}
 
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        <label className="text-xs text-slate-400" htmlFor="total-budget">Gesamtbudget (USD, optional):</label>
+        <input id="total-budget" type="number" min="0" step="0.5" inputMode="decimal"
+          className="w-28 rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+          placeholder="z.B. 10" value={totalBudget} onChange={e => setTotalBudget(e.target.value)} />
+        <span className="text-[11px] text-slate-500">leer = Standard-Budget je Phase · sonst nach Aufwand verteilt</span>
+      </div>
+
       <button onClick={build} disabled={!canBuild}
-        className="mt-5 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50">
+        className="mt-3 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50">
         {building ? 'Plane & starte …' : `Planen & bauen${selected.size + (custom.trim() ? 1 : 0) > 0 ? ` (${selected.size + (custom.trim() ? 1 : 0)})` : ''}`}
       </button>
 

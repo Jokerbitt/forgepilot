@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   const authError = await requireAuth()
   if (authError) return authError
 
-  let body: { rootPath?: string; options?: RebuildOptions; targetRepo?: string; acknowledgeCritical?: boolean }
+  let body: { rootPath?: string; options?: RebuildOptions; targetRepo?: string; acknowledgeCritical?: boolean; totalBudgetUsd?: number }
   try {
     body = (await req.json()) as typeof body
   } catch {
@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
     context,
     targetRepo,
     selected: steps.map((s, i) => ({ id: `r${i + 1}`, title: s.title, description: s.description })),
+    totalBudgetUsd: typeof body.totalBudgetUsd === 'number' && body.totalBudgetUsd > 0 ? body.totalBudgetUsd : undefined,
     newId: () => randomUUID(),
     now: new Date().toISOString(),
   })

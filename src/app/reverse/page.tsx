@@ -22,6 +22,7 @@ interface ReverseReport {
 }
 
 interface RebuildResult { planId: string; phaseCount: number; steps: Array<{ title: string }>; targetRepo?: string; delegationIds?: string[] }
+interface ParityData { score: number; headline: string; checks: Array<{ aspect: string; status: 'ok' | 'partial' | 'open'; detail: string }> }
 
 const PLATFORM_LABEL: Record<ReverseReport['platform'], string> = {
   windows: 'Windows-gebunden',
@@ -49,6 +50,9 @@ export default function ReversePage() {
   const [building, setBuilding] = useState(false)
   const [acknowledgeCritical, setAcknowledgeCritical] = useState(false)
   const [result, setResult] = useState<RebuildResult | null>(null)
+  const [totalBudget, setTotalBudget] = useState('')
+  const [parity, setParity] = useState<ParityData | null>(null)
+  const [parityBusy, setParityBusy] = useState(false)
 
   async function analyze() {
     setError(''); setReport(null); setResult(null); setAnalyzing(true)
@@ -109,6 +113,7 @@ export default function ReversePage() {
           rootPath,
           targetRepo: targetRepo || undefined,
           acknowledgeCritical,
+          totalBudgetUsd: totalBudget.trim() ? Number(totalBudget) : undefined,
           options: {
             targetStack: targetStack || undefined,
             migrateDatabase: migrateDatabase || undefined,
@@ -121,6 +126,18 @@ export default function ReversePage() {
       if (!res.ok || !data.planId) { setError(data.error ?? 'Nachbau-Start fehlgeschlagen'); return }
       setResult(data)
     } catch { setError('Netzwerkfehler') } finally { setBuilding(false) }
+  }
+
+  async function checkParity() {
+    if (!result?.targetRepo) return
+    setParityBusy(true); setParity(null)
+    try {
+      const res = await fetch('/api/reverse/parity', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ originalPath: rootPath, rebuiltPath: result.targetRepo, migrateDatabase: migrateDatabase || undefined }),
+      })
+      if (res.ok) setParity(await res.json() as ParityData)
+    } catch { /* non-critical */ } finally { setParityBusy(false) }
   }
 
   const inputCls = 'w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none'
@@ -216,6 +233,7 @@ export default function ReversePage() {
           </div>
           <textarea className={inputCls} rows={2} placeholder="Sonstiges (optional) — eigener Nachbau-Schritt …" value={custom} onChange={e => setCustom(e.target.value)} />
           <input className={inputCls} placeholder="Ziel-Repo (optional) — wird sonst automatisch angelegt" value={targetRepo} onChange={e => setTargetRepo(e.target.value)} />
+          <input className={inputCls} type="number" min="0" step="0.5" inputMode="decimal" placeholder="Gesamtbudget USD (optional) — leer = Standard je Phase, sonst nach Aufwand verteilt" value={totalBudget} onChange={e => setTotalBudget(e.target.value)} />
           {report.criticality.level === 'critical' && (
             <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-red-700/50 bg-red-950/20 p-3 text-sm text-red-200">
               <input type="checkbox" checked={acknowledgeCritical} onChange={e => setAcknowledgeCritical(e.target.checked)} className="mt-0.5 h-4 w-4 accent-red-500" />
@@ -238,6 +256,23 @@ export default function ReversePage() {
           {result.delegationIds && result.delegationIds.length > 0 && <BuildProgress delegationIds={result.delegationIds} />}
           {result.delegationIds && result.delegationIds.length > 0 && <QualityReport delegationIds={result.delegationIds} />}
           <Link href="/delegations" className="mt-3 inline-block rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500">Details ansehen →</Link>
+          {result.targetRepo && (
+            <div className="mt-3">
+              <button onClick={checkParity} disabled={parityBusy}
+                className="rounded-lg border border-slate-600 bg-slate-900 px-3 py-1.5 text-xs text-slate-200 hover:border-slate-500 disabled:opacity-50">
+                {parityBusy ? 'Prüfe …' : '📊 Paritäts-Check (Original vs. Nachbau)'}
+              </button>
+              <span className="ml-2 text-[11px] text-slate-500">am besten nach Abschluss des Nachbaus</span>
+              {parity && (
+                <div className={`mt-2 rounded-lg border p-3 ${parity.score >= 90 ? 'border-emerald-700/40 bg-emerald-950/20' : parity.score >= 60 ? 'border-amber-700/40 bg-amber-950/20' : 'border-red-700/40 bg-red-950/20'}`}>
+                  <p className="text-xs font-semibold text-slate-200">{parity.headline}</p>
+                  <ul className="mt-1 space-y-0.5 text-[11px] text-slate-400">
+                    {parity.checks.map((c, i) => <li key={i}>{c.status === 'ok' ? '✓' : c.status === 'partial' ? '◐' : '✗'} {c.aspect} — {c.detail}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
           {result.targetRepo && <AppFeedback targetRepo={result.targetRepo} />}
         </section>
       )}

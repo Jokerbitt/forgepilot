@@ -56,4 +56,12 @@ describe('suggestionsToPlan', () => {
     const blank = suggestionsToPlan({ goal: 'g', selected: [{ id: 's1', title: 'A', description: 'a' }], custom: '   ', newId: idFactory(), now: NOW })
     expect(blank.phases).toHaveLength(1)
   })
+
+  it('passes through an optional overall budget', () => {
+    const withBudget = suggestionsToPlan({ goal: 'g', selected: [{ id: 's1', title: 'A', description: 'a' }], totalBudgetUsd: 12, newId: idFactory(), now: NOW })
+    expect(withBudget.totalBudgetUsd).toBe(12)
+
+    const without = suggestionsToPlan({ goal: 'g', selected: [{ id: 's1', title: 'A', description: 'a' }], newId: idFactory(), now: NOW })
+    expect(without.totalBudgetUsd).toBeUndefined()
+  })
 })
