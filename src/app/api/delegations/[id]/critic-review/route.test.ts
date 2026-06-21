@@ -25,7 +25,10 @@ const getCriticProviderPlan = vi.fn(() => 'mock-plan')
 const mapGrokResultToCriticScore = vi.fn(() => ({ correctness: 85, efficiency: 80, drift: 90, verdict: 'approved', summary: 'ok', runAt: '' }))
 
 vi.mock('@/lib/eval/grok-critic', () => ({ runGrokCritic, runGrokCodeReview, getCriticProviderPlan }))
-vi.mock('@/lib/eval/auto-grok-critic', () => ({ mapGrokResultToCriticScore }))
+vi.mock('@/lib/eval/auto-grok-critic', () => ({
+  mapGrokResultToCriticScore,
+  buildCriticAgentOutput: (_report: unknown, fallback: string) => fallback,
+}))
 
 // ── Fixture ────────────────────────────────────────────────────────────────────
 

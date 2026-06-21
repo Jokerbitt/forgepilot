@@ -1,4 +1,5 @@
 import type { AgentLog, Delegation, TaskContract } from '@/lib/models/delegation'
+import { readKnowledgeCards } from '@/lib/knowledge/knowledge-card'
 
 // ─── Prompt helpers ───────────────────────────────────────────────────────────
 
@@ -141,6 +142,35 @@ export function buildRetryContext(delegation: Delegation): string {
     .filter(l => l.type === 'error')
     .slice(-5)
   if (errorLogs.length === 0) return ''
+
   const lines = errorLogs.map(l => `- ${l.message.slice(0, 200)}`).join('\n')
-  return `\n## Previous Attempt Failed\nThe last execution failed. Avoid these errors in the new attempt:\n${lines}\n`
+
+  // Inject critic score feedback if available
+  let criticBlock = ''
+  if (delegation.criticScore) {
+    const s = delegation.criticScore
+    criticBlock = `\n## Critic Feedback (previous run)\nVerdict: ${s.verdict} | Correctness: ${s.correctness}/100 | Efficiency: ${s.efficiency}/100 | Drift: ${s.drift}/100\nSummary: ${s.summary?.slice(0, 300) ?? 'n/a'}\n`
+  }
+
+  // Inject similar failure lessons from past runs to help the retry avoid known pitfalls
+  let lessonsBlock = ''
+  try {
+    const targetRepo = delegation.targetRepo ?? 'unknown'
+    const allCards = readKnowledgeCards()
+    const lessons = allCards
+      .filter(c => c.tags.includes('failure-lesson') && c.sourceId !== delegation.id)
+      .filter(c => c.tags.includes(targetRepo) || targetRepo === 'unknown')
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 3)
+    if (lessons.length > 0) {
+      const lessonLines = lessons
+        .map(c => `### ${c.title}\n${c.content.slice(0, 300)}`)
+        .join('\n\n')
+      lessonsBlock = `\n## Lessons from Similar Past Failures\n${lessonLines}\n`
+    }
+  } catch {
+    // Knowledge store read is best-effort
+  }
+
+  return `\n## Previous Attempt Failed\nThe last execution failed. Avoid these errors in the new attempt:\n${lines}\n${criticBlock}${lessonsBlock}`
 }

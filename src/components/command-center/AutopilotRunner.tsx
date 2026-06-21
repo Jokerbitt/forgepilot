@@ -4,19 +4,15 @@ import { useEffect, useRef, useState } from 'react'
 import type { NBAConfig } from '@/lib/nba-engine/nba-config'
 
 const TICK_INTERVAL_MS = 12000
-// M291: Run watchdog every 5 ticks (~1 minute) to reap stuck delegations
-const WATCHDOG_EVERY_N_TICKS = 5
 
 /**
- * Silent background component: polls /api/autopilot/tick when approvalMode === 'autopilot'.
- * Every 5 ticks also calls /api/autopilot/watchdog to reap stuck delegations.
+ * Silent background component: runs the Daily Assistant autonomy cycle when approvalMode === 'autopilot'.
  * Renders a small indicator badge when active; nothing when disabled.
  */
 export function AutopilotRunner() {
   const [active, setActive] = useState(false)
   const [lastTriggered, setLastTriggered] = useState(0)
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const tickCount = useRef(0)
 
   useEffect(() => {
     // Load settings once to know if autopilot is on
@@ -35,20 +31,18 @@ export function AutopilotRunner() {
     }
 
     const tick = async () => {
-      tickCount.current++
       try {
-        const res = await fetch('/api/autopilot/tick', { method: 'POST' })
+        const res = await fetch('/api/daily-assistant/autonomy-cycle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force: false }),
+        })
         if (res.ok) {
-          const data = await res.json() as { triggered: string[]; count: number }
-          if (data.count > 0) setLastTriggered(data.count)
+          const data = await res.json() as { started?: boolean }
+          if (data.started) setLastTriggered(value => value + 1)
         }
       } catch {
         // silent
-      }
-
-      // M291: periodically reap stuck delegations
-      if (tickCount.current % WATCHDOG_EVERY_N_TICKS === 0) {
-        fetch('/api/autopilot/watchdog', { method: 'POST' }).catch(() => {})
       }
     }
 

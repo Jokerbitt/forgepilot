@@ -2,14 +2,21 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { execSync } from 'child_process'
 import { readStoredApiKeys } from '@/lib/connectors/config'
+import { getCachedOrShallowRunnerReadiness } from '@/lib/system/runner-readiness'
 
 export async function GET() {
   const checks: Record<string, { ok: boolean; detail: string }> = {}
+  const runnerReadiness = getCachedOrShallowRunnerReadiness()
 
   // Check 1: Claude CLI available
   try {
     const version = execSync('claude --version', { timeout: 3000 }).toString().trim()
-    checks.claudeCli = { ok: true, detail: version }
+    checks.claudeCli = {
+      ok: runnerReadiness.claude.headlessReady,
+      detail: runnerReadiness.claude.headlessReady
+        ? runnerReadiness.claude.detail
+        : `${version} installiert, aber Headless-Ausfuehrung noch nicht bestaetigt.`,
+    }
   } catch {
     checks.claudeCli = { ok: false, detail: 'claude CLI not found in PATH' }
   }
@@ -17,7 +24,12 @@ export async function GET() {
   // Check 2: Codex CLI available
   try {
     const version = execSync('codex --version', { timeout: 3000 }).toString().trim()
-    checks.codexCli = { ok: true, detail: version || 'codex CLI available' }
+    checks.codexCli = {
+      ok: runnerReadiness.codex.headlessReady,
+      detail: runnerReadiness.codex.headlessReady
+        ? runnerReadiness.codex.detail
+        : `${version || 'codex CLI'} installiert, aber Headless-Ausfuehrung noch nicht bestaetigt.`,
+    }
   } catch {
     checks.codexCli = { ok: false, detail: 'codex CLI not found in PATH' }
   }
@@ -51,22 +63,22 @@ export async function GET() {
     detail: 'POST /api/intake ready',
   }
 
-  const hasExecutableAgent = checks.claudeCli.ok || checks.codexCli.ok || hasAnthropicKey || hasOpenAiKey
+  const hasExecutableAgent = runnerReadiness.ready
   const requiredChecksOk = checks.githubCli.ok && checks.git.ok && checks.intakeWebhook.ok && hasExecutableAgent
-  const mode = checks.claudeCli.ok
-    ? 'claude-cli (full agentic execution)'
-    : checks.codexCli.ok
-      ? 'codex-cli (full agentic execution)'
-      : hasAnthropicKey
+  const mode = runnerReadiness.activeMode === 'claude-cli'
+    ? 'claude-cli (headless verified)'
+    : runnerReadiness.activeMode === 'codex-cli'
+      ? 'codex-cli (headless verified)'
+      : runnerReadiness.activeMode === 'claude-api'
         ? 'claude-api (API fallback)'
-        : hasOpenAiKey
+        : runnerReadiness.activeMode === 'openai-api'
           ? 'openai-api (API fallback)'
           : 'simulation (no executable agent configured)'
 
   return NextResponse.json({
     ready: requiredChecksOk,
     executionMode: mode,
-    zeroKeyReady: checks.claudeCli.ok || checks.codexCli.ok,
+    zeroKeyReady: runnerReadiness.zeroKeyReady,
     apiKeysOptional: true,
     checks,
     n8nPayload: {

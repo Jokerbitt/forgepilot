@@ -1,7 +1,6 @@
 export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
-import type { AgentLog } from '@/lib/models/delegation'
-import { buildRetryPlan } from '@/lib/delegations/retry'
+import { buildRetryDelegationPatch, buildRetryPlan } from '@/lib/delegations/retry'
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 
 export async function POST(
@@ -37,27 +36,7 @@ export async function POST(
     )
   }
 
-  const now = new Date().toISOString()
-  const retryLog: AgentLog = {
-    timestamp: now,
-    type: 'info' as const,
-    message: `🔁 Erneut eingereicht (Retry #${plan.retryCount + 1}) — ${plan.diagnosticMessage}`,
-  }
-
-  await repo.update(id, {
-    status: 'pending',
-    startedAt: undefined,
-    completedAt: undefined,
-    errorMessage: undefined,
-    summaryReport: undefined,
-    criticScore: undefined,
-    actualCostUsd: undefined,
-    contract: {
-      ...delegation.contract,
-      context: plan.additionalContext,
-    },
-    logs: [...(delegation.logs ?? []), retryLog],
-  })
+  await repo.update(id, buildRetryDelegationPatch(delegation, plan))
 
   return NextResponse.json({
     retried: true,

@@ -69,6 +69,19 @@ async function runPRStatusSync(): Promise<SyncResult> {
           to: status.state,
         })
         updated++
+
+        // Loop-Closure: PR just merged → trigger next safe delegation in autopilot mode
+        if (status.state === 'merged') {
+          try {
+            const { getNBAConfig } = await import('@/lib/nba-engine/nba-config')
+            const config = getNBAConfig()
+            if (config.approvalMode === 'autopilot') {
+              const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+              fetch(`${baseUrl}/api/delegations/next-safe`, { method: 'POST' }).catch(() => {})
+              logger.info({ event: 'cron.pr_sync.loop_next_triggered', delegationId: d.id })
+            }
+          } catch { /* non-critical */ }
+        }
       }
     } catch (err) {
       logger.error({ event: 'cron.pr_sync.error', delegationId: d.id, error: String(err) })

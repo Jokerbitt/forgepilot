@@ -33,6 +33,14 @@ const DelegationInputSchema = z.object({
 }).passthrough()  // allow extra fields from existing clients
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const DEFAULT_VISIBLE_DELEGATION_STATUSES: Delegation['status'][] = [
+  'pending',
+  'approved',
+  'running',
+  'completed',
+  'failed',
+  'rejected',
+]
 
 function backfillTitle(d: Delegation): Delegation {
   if (d.title) return d
@@ -58,10 +66,12 @@ export async function GET(request: NextRequest) {
   await reapStaleDelegations(repo)
 
   // Optional status filter: ?statuses=pending,approved,running
+  // By default, keep archived/cancelled delegations out of regular work surfaces.
+  // They remain available through explicit filters such as ?statuses=cancelled.
   const statusesParam = request.nextUrl.searchParams.get('statuses')
   const statusFilter = statusesParam
     ? (statusesParam.split(',').map(s => s.trim()) as Parameters<typeof repo.listByStatus>[0])
-    : undefined
+    : DEFAULT_VISIBLE_DELEGATION_STATUSES
 
   let delegations = (await repo.listByStatus(statusFilter)).map(backfillTitle)
 

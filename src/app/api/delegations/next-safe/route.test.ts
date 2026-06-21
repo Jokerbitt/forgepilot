@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { pickNextSafe } from './route'
+import { pickNextSafe } from '@/lib/delegations/next-safe'
 import type { Delegation } from '@/lib/models/delegation'
 
 vi.mock('@/lib/nba-engine/nba-config', () => ({
@@ -8,6 +8,8 @@ vi.mock('@/lib/nba-engine/nba-config', () => ({
     autopilotMaxRiskClass: 'A',
     maxConcurrentAgents: 2,
     autoStartApproved: false,
+    budgetEnforcement: 'tolerant' as const,
+    budgetTolerancePct: 20,
   })),
 }))
 

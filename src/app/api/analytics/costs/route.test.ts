@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { ProcessingRecord } from '@/lib/dsgvo/processing-ledger'
 
 vi.mock('@/lib/dsgvo/processing-ledger', () => ({
-  readProcessingLedger: vi.fn(),
+  readProcessingLedgerAsync: vi.fn(),
 }))
 vi.mock('@/lib/delegations/queue', () => ({
   readDelegations: vi.fn(),
@@ -19,11 +19,11 @@ vi.mock('@/lib/delegations/cost-tracker', () => ({
 }))
 vi.mock('@/lib/logger', () => ({ apiLogger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }))
 
-import { readProcessingLedger } from '@/lib/dsgvo/processing-ledger'
+import { readProcessingLedgerAsync } from '@/lib/dsgvo/processing-ledger'
 import { readDelegations } from '@/lib/delegations/queue'
 import { GET } from './route'
 
-const mockReadLedger = vi.mocked(readProcessingLedger)
+const mockReadLedger = vi.mocked(readProcessingLedgerAsync)
 const mockReadDelegations = vi.mocked(readDelegations)
 
 /** Build a minimal valid ProcessingRecord for test fixtures */
@@ -51,7 +51,7 @@ beforeEach(() => {
 
 describe('GET /api/analytics/costs', () => {
   it('returns empty analytics when no ledger records', async () => {
-    mockReadLedger.mockReturnValue([])
+    mockReadLedger.mockResolvedValue([])
     const res = await GET()
     const data = await res.json()
     expect(data.totals.costUsd).toBe(0)
@@ -62,7 +62,7 @@ describe('GET /api/analytics/costs', () => {
   })
 
   it('calculates total cost from input tokens (1000 tokens × $0.00025/1k = $0.00025)', async () => {
-    mockReadLedger.mockReturnValue([
+    mockReadLedger.mockResolvedValue([
       makeRecord({ id: 'r1', providerId: 'anthropic', inputTokens: 1000 }),
     ])
     const res = await GET()
@@ -72,7 +72,7 @@ describe('GET /api/analytics/costs', () => {
   })
 
   it('aggregates by provider correctly', async () => {
-    mockReadLedger.mockReturnValue([
+    mockReadLedger.mockResolvedValue([
       makeRecord({ id: 'r1', purpose: 'a', processor: 'anthropic', providerId: 'anthropic', inputTokens: 2000 }),
       makeRecord({ id: 'r2', purpose: 'b', processor: 'groq', dataResidency: 'us', providerId: 'groq', inputTokens: 1000 }),
     ])
@@ -85,7 +85,7 @@ describe('GET /api/analytics/costs', () => {
   })
 
   it('aggregates by purpose correctly', async () => {
-    mockReadLedger.mockReturnValue([
+    mockReadLedger.mockResolvedValue([
       makeRecord({ id: 'r1', purpose: 'delegation.execute', providerId: 'anthropic', inputTokens: 500 }),
       makeRecord({ id: 'r2', purpose: 'delegation.execute', providerId: 'anthropic', inputTokens: 500 }),
       makeRecord({ id: 'r3', purpose: 'context.build', providerId: 'anthropic', inputTokens: 200 }),
@@ -98,7 +98,7 @@ describe('GET /api/analytics/costs', () => {
   })
 
   it('fills all 30 days in dailyTrend even with no data', async () => {
-    mockReadLedger.mockReturnValue([])
+    mockReadLedger.mockResolvedValue([])
     const res = await GET()
     const data = await res.json()
     expect(data.dailyTrend).toHaveLength(30)
@@ -110,7 +110,7 @@ describe('GET /api/analytics/costs', () => {
       { id: 'd1', title: 'x', contract: { id: 'd1', workItemId: 'WI-1', goal: '', context: '', definitionOfDone: [], riskClass: 'low', maxBudgetUsd: 1, allowedTools: [], branchStrategy: 'feature', requiresApproval: false, privacyMode: 'local', createdAt: '' }, status: 'completed', executionRoute: 'runner', costEstimateUsd: 0.5, actualCostUsd: 2, priority: 3, createdAt: '', updatedAt: '' },
       { id: 'd2', title: 'y', contract: { id: 'd2', workItemId: 'WI-2', goal: '', context: '', definitionOfDone: [], riskClass: 'low', maxBudgetUsd: 5, allowedTools: [], branchStrategy: 'feature', requiresApproval: false, privacyMode: 'local', createdAt: '' }, status: 'completed', executionRoute: 'runner', costEstimateUsd: 0.5, actualCostUsd: 1, priority: 3, createdAt: '', updatedAt: '' },
     ] as never)
-    mockReadLedger.mockReturnValue([])
+    mockReadLedger.mockResolvedValue([])
     const res = await GET()
     const data = await res.json()
     expect(data.budgetUtilization.delegationsWithBudget).toBe(2)
@@ -119,7 +119,7 @@ describe('GET /api/analytics/costs', () => {
   })
 
   it('handles unknown provider gracefully (cost = 0)', async () => {
-    mockReadLedger.mockReturnValue([
+    mockReadLedger.mockResolvedValue([
       makeRecord({ id: 'r1', purpose: 'test', processor: 'ollama', dataResidency: 'local', providerId: 'ollama', inputTokens: 5000 }),
     ])
     const res = await GET()

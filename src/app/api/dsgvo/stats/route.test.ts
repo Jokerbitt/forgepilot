@@ -15,6 +15,7 @@ vi.mock('fs', () => ({ default: fsMock, ...fsMock }))
 
 // Supabase not available in tests
 vi.mock('@/lib/supabase/client', () => ({ getSupabaseClient: () => null }))
+vi.mock('@/db/index', () => ({ isDatabaseConfigured: () => false }))
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 

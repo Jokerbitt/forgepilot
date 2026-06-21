@@ -18,7 +18,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="de">
+    <html lang="de" suppressHydrationWarning>
       {/* eslint-disable-next-line @next/next/no-sync-scripts */}
       <head>
         {/* Blocking theme script — prevents flash of wrong theme */}

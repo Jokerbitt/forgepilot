@@ -28,6 +28,13 @@ function preview(overrides: Record<string, unknown> = {}) {
     draft: false,
     mergeable: true,
     headSha: 'abc123',
+    additions: 24,
+    deletions: 6,
+    changedFiles: 2,
+    checks: { state: 'success', items: [] },
+    files: [
+      { filename: 'src/app/page.tsx', status: 'modified', additions: 24, deletions: 6, changes: 30 },
+    ],
     mergeRecommendation: {
       status: 'ready',
       reasons: ['PR ist offen, mergebar und Checks sind gruen.'],
@@ -89,5 +96,20 @@ describe('POST /api/github/pull-requests/[number]/merge', () => {
       sha: 'abc123',
       title: 'Safe PR',
     }))
+  })
+
+  it('blocks auto-merge without delegation risk context', async () => {
+    vi.mocked(getGitHubPullRequestPreview).mockResolvedValue(preview() as never)
+
+    const response = await POST(request({ auto: true, sha: 'abc123' }), params)
+
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({
+      error: 'Pull request is not merge-ready',
+      safety: {
+        status: 'blocked',
+      },
+    })
+    expect(mergeGitHubPullRequest).not.toHaveBeenCalled()
   })
 })

@@ -1,11 +1,15 @@
 import Link from 'next/link'
-import { ArrowRight, Bot, FolderOpen, Radio, Settings, Sparkles } from 'lucide-react'
+import { ArrowRight, Bot, FolderOpen, Map, Radio, Rocket, Settings, Sparkles } from 'lucide-react'
 import { ConnectorHealthBar } from '@/components/command-center/ConnectorHealthBar'
 import { DailyAssistantPanel } from '@/components/command-center/DailyAssistantPanel'
+import { TodayStatsBar } from '@/components/command-center/TodayStatsBar'
+import { AppBuilderCard } from '@/components/command-center/AppBuilderCard'
+import { AutonomousLoopPanel } from '@/components/command-center/AutonomousLoopPanel'
 import { ApiKeysBanner } from '@/components/shared/ApiKeysBanner'
 import { NoAIProviderBanner } from '@/components/shared/NoAIProviderBanner'
 import { OnboardingBanner as OnboardingWizardBanner } from '@/components/onboarding/OnboardingBanner'
 import { buttonClassName } from '@/components/ui/primitives'
+import { AgentWorkbenchSummary } from '@/components/workbench/AgentWorkbenchSummary'
 
 const assistantSteps = [
   {
@@ -24,6 +28,12 @@ const assistantSteps = [
 
 const quickLinks = [
   {
+    href: '/delegations/plan',
+    title: 'Plan Mode',
+    body: 'Große Features in Phasen aufteilen und autonom ausführen.',
+    icon: Map,
+  },
+  {
     href: '/projects',
     title: 'Projekte',
     body: 'Alle Ideen, Pläne und Delegationen pro Produkt.',
@@ -34,6 +44,12 @@ const quickLinks = [
     title: 'Live View',
     body: 'Was Agenten gerade tun, was fertig ist und was blockiert.',
     icon: Radio,
+  },
+  {
+    href: '/demo/todo-planner',
+    title: 'App-Vorschau',
+    body: 'Die aktuelle ToDo Planner Demo direkt öffnen und testen.',
+    icon: Rocket,
   },
   {
     href: '/settings',
@@ -67,6 +83,8 @@ export default function Home() {
                 id="prompt"
                 name="prompt"
                 rows={5}
+                // eslint-disable-next-line jsx-a11y/no-autofocus
+                autoFocus
                 placeholder="z.B. Baue eine kleine ToDo Planner WebApp mit Projekten, Prioritäten, Tagesansicht und lokaler Speicherung..."
                 className="w-full resize-none rounded-xl border border-white/[0.08] bg-black/30 px-4 py-3 text-sm leading-6 text-white outline-none transition-colors placeholder:text-slate-600 focus:border-violet-400/60"
               />
@@ -80,6 +98,10 @@ export default function Home() {
                 </Link>
               </div>
             </form>
+
+            <div className="mt-6">
+              <AppBuilderCard />
+            </div>
 
             <div className="mt-6 grid gap-3 md:grid-cols-3">
               {assistantSteps.map((step, index) => (
@@ -95,11 +117,18 @@ export default function Home() {
           </div>
 
           <aside className="space-y-5">
+            <AutonomousLoopPanel />
             <DailyAssistantPanel />
+            <AgentWorkbenchSummary compact />
           </aside>
         </section>
 
-        <section className="mt-5 grid gap-3 md:grid-cols-3">
+        {/* Today's activity — live stats bar */}
+        <section className="mt-5">
+          <TodayStatsBar />
+        </section>
+
+        <section className="mt-5 grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
           {quickLinks.map(item => {
             const Icon = item.icon
             return (

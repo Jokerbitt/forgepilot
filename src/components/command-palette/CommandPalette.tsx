@@ -35,14 +35,17 @@ export function CommandPalette() {
 
   const commands: CommandItem[] = [
     // Navigation
-    { id: 'nav-home', label: 'Command Center', description: 'Go to home', action: () => navigate('/'), group: 'Navigation' },
-    { id: 'nav-briefs', label: 'Project Briefs', description: 'Manage briefs', action: () => navigate('/project-briefs'), group: 'Navigation' },
-    { id: 'nav-delegations', label: 'Delegations', description: 'Delegation queue', action: () => navigate('/delegations'), group: 'Navigation' },
-    { id: 'nav-settings', label: 'Settings', description: 'App settings', action: () => navigate('/settings'), group: 'Navigation' },
-    { id: 'nav-governance', label: 'Governance', description: 'DSGVO & audit', action: () => navigate('/governance'), group: 'Navigation' },
-    { id: 'nav-analytics', label: 'Analytics', description: 'Performance metrics', action: () => navigate('/analytics'), group: 'Navigation' },
+    { id: 'nav-home', label: 'Command Center', description: 'Daily overview', action: () => navigate('/'), group: 'Navigation' },
+    { id: 'nav-idea', label: 'Plan Mode', description: 'Turn an idea into a plan', action: () => navigate('/idea'), group: 'Navigation' },
+    { id: 'nav-projects', label: 'Projects', description: 'Projects and delegations', action: () => navigate('/projects'), group: 'Navigation' },
+    { id: 'nav-delegations', label: 'Execute', description: 'Delegation queue', action: () => navigate('/delegations'), group: 'Navigation' },
+    { id: 'nav-live', label: 'Live View', description: 'Watch agents and app status', action: () => navigate('/live'), group: 'Navigation' },
+    { id: 'nav-tools', label: 'Werkzeuge', description: 'Useful tools, expert mode and debug', action: () => navigate('/tools'), group: 'Tools' },
+    { id: 'nav-branches', label: 'Branches', description: 'Review PRs and changes', action: () => navigate('/branches'), group: 'Tools' },
+    { id: 'nav-knowledge', label: 'Knowledge', description: 'Saved learnings', action: () => navigate('/knowledge'), group: 'Tools' },
+    { id: 'nav-settings', label: 'Settings', description: 'Connections and providers', action: () => navigate('/settings'), group: 'Tools' },
     // Actions
-    { id: 'action-new-brief', label: 'New Project Brief', description: 'Create a project brief', shortcut: 'N', action: () => navigate('/project-briefs/new'), group: 'Actions' },
+    { id: 'action-new-idea', label: 'Neue Idee planen', description: 'Start the guided app builder', shortcut: 'N', action: () => navigate('/idea'), group: 'Actions' },
   ]
 
   if (!open) return null
@@ -66,7 +69,7 @@ export function CommandPalette() {
             <Command.Empty className="py-6 text-center text-sm text-gray-500">
               No results found.
             </Command.Empty>
-            {['Navigation', 'Actions'].map(group => {
+            {['Navigation', 'Tools', 'Actions'].map(group => {
               const items = commands.filter(c => c.group === group)
               return (
                 <Command.Group key={group} heading={group} className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-gray-500 [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider">
