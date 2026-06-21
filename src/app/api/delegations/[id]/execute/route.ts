@@ -35,6 +35,7 @@ import { notifyExecutionResult, notifyBudgetWarning } from '@/lib/notifications'
 import { checkBudget, getBudgetLimit, wouldExceedBudget } from '@/lib/budget/guard'
 import { triggerChain } from '@/lib/delegations/chaining'
 import { decidePhaseGate } from '@/lib/delegations/phase-gate'
+import { resolveVerifyScripts, verifyCommand } from '@/lib/delegations/verify-scripts'
 
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import { buildContextPackage } from '@/lib/knowledge/context-package'
@@ -204,6 +205,16 @@ function parseTestsPassed(fullOutput: string): number | undefined {
   return undefined
 }
 
+/** Read a repo/workspace's package.json scripts (undefined if missing/invalid). */
+function readWorkspaceScripts(workspacePath: string): Record<string, string> | undefined {
+  try {
+    const pkg = JSON.parse(fsSync.readFileSync(pathMod.join(workspacePath, 'package.json'), 'utf-8')) as { scripts?: Record<string, string> }
+    return pkg.scripts
+  } catch {
+    return undefined
+  }
+}
+
 function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryContext?: string, targetRepo?: string): string {
   const c = delegation.contract
   const slug = (c.workItemId ?? delegation.id).replace(/[^a-z0-9-]/gi, '-').toLowerCase()
@@ -235,6 +246,16 @@ function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryC
   // written back automatically. Tell the agent to skip the PR step cleanly
   // instead of failing on `gh pr create` (the old "GitHub API 422" noise).
   const isLocalTarget = Boolean(targetRepo && /^[~./]/.test(targetRepo))
+
+  // An external local target is a standalone app, NOT ForgePilot itself: don't
+  // assume ForgePilot's stack/scripts — derive the verify command from the
+  // target's own package.json so the agent runs scripts that actually exist.
+  const verifyCmd = isLocalTarget && targetRepo
+    ? verifyCommand(readWorkspaceScripts(targetRepo))
+    : 'npm run test:run && npm run lint && npm run type-check'
+  const intro = isLocalTarget && targetRepo
+    ? `You are an autonomous software engineering agent working on the project at \`${targetRepo}\`. FIRST read its CLAUDE.md / README.md and package.json to learn its stack, scripts and conventions — do NOT assume ForgePilot's stack.`
+    : 'You are an autonomous software engineering agent working on **ForgePilot** — a local-first AI Workflow OS built with Next.js 14, TypeScript strict, Tailwind CSS, and Vitest.'
   const prStep = isLocalTarget
     ? '7. Commit only: this is a LOCAL repo with no GitHub remote — do NOT run `gh pr create`. Your committed work is written back automatically.'
     : `7. PR: gh pr create --title "${commitPrefix}: ${c.goal.substring(0, 60).replace(/"/g, "'")}" --body "## Summary\\n- <bullets>\\n\\n## Test plan\\n- [ ] tests pass"`
@@ -242,7 +263,7 @@ function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryC
     ? '8. Verify the app builds: npm run build (must be green) — there is no shared smoke endpoint for a standalone app.'
     : '8. Smoke-test: curl -sf http://localhost:3000/api/smoke-test | grep \'"ok":true\' || echo "ESCALATION: smoke-test failed — UI regression detected"'
 
-  return `You are an autonomous software engineering agent working on **ForgePilot** — a local-first AI Workflow OS built with Next.js 14, TypeScript strict, Tailwind CSS, and Vitest.
+  return `${intro}
 
 ## Task
 ${c.goal}
@@ -263,7 +284,7 @@ ${dod}
 2. git checkout -b ${branch}
 3. Explore: read relevant source files before writing any code
 4. Implement: small, focused changes — one concern per commit
-5. Verify: npm run test:run && npm run lint && npm run type-check
+5. Verify: ${verifyCmd}
    (run type-check BEFORE build — never in parallel)
 6. Commit: git commit -m "${commitPrefix}: <description>"
 ${prStep}
@@ -703,9 +724,11 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
   // M107/M109: Async test runner — used both during checkpoints and post-execution.
   // Guard against concurrent runs: if a test is already running for this workspace, skip.
   let checkpointTestRunning = false
-  function runPostExecutionTestsAsync(workspacePath: string): Promise<{ passed: boolean; output: string; timedOut?: boolean }> {
+  function runPostExecutionTestsAsync(workspacePath: string): Promise<{ passed: boolean; output: string; timedOut?: boolean; skipped?: boolean }> {
+    const testScript = resolveVerifyScripts(readWorkspaceScripts(workspacePath)).test
+    if (!testScript) return Promise.resolve({ passed: true, output: 'kein Test-Script — übersprungen', skipped: true })
     return new Promise(resolve => {
-      const child = spawn('npm', ['run', 'test:run'], { cwd: workspacePath, stdio: ['ignore', 'pipe', 'pipe'] })
+      const child = spawn('npm', ['run', testScript], { cwd: workspacePath, stdio: ['ignore', 'pipe', 'pipe'] })
       let out = ''
       child.stdout?.on('data', (chunk: Buffer) => { out += chunk.toString() })
       child.stderr?.on('data', (chunk: Buffer) => { out += chunk.toString() })
@@ -754,12 +777,8 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
   // before the next chain phase starts. Skips gracefully when there is no
   // test:run script. A timeout is an infra signal (handled by decidePhaseGate).
   function runTestGateAsync(workspacePath: string): Promise<{ passed: boolean; output: string; timedOut?: boolean; skipped?: boolean }> {
-    let hasTest = false
-    try {
-      const pkg = JSON.parse(fsSync.readFileSync(pathMod.join(workspacePath, 'package.json'), 'utf-8')) as { scripts?: Record<string, string> }
-      hasTest = Boolean(pkg.scripts?.['test:run'])
-    } catch { /* no package.json yet */ }
-    if (!hasTest) return Promise.resolve({ passed: true, output: 'kein test:run-Script — Test-Gate übersprungen', skipped: true })
+    // runPostExecutionTestsAsync resolves the repo's real test script
+    // (test:run ?? test ?? …) and skips gracefully when there is none.
     return runPostExecutionTestsAsync(workspacePath)
   }
 
