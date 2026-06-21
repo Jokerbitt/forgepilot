@@ -34,6 +34,7 @@ import { writebackExecutionInsights, writebackDelegationKnowledge, writeFailureL
 import { notifyExecutionResult, notifyBudgetWarning } from '@/lib/notifications'
 import { checkBudget, getBudgetLimit, wouldExceedBudget } from '@/lib/budget/guard'
 import { triggerChain } from '@/lib/delegations/chaining'
+import { decidePhaseGate } from '@/lib/delegations/phase-gate'
 
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import { buildContextPackage } from '@/lib/knowledge/context-package'
@@ -749,6 +750,19 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     })
   }
 
+  // Test-Gate: after a green build, a phase must also pass `npm run test:run`
+  // before the next chain phase starts. Skips gracefully when there is no
+  // test:run script. A timeout is an infra signal (handled by decidePhaseGate).
+  function runTestGateAsync(workspacePath: string): Promise<{ passed: boolean; output: string; timedOut?: boolean; skipped?: boolean }> {
+    let hasTest = false
+    try {
+      const pkg = JSON.parse(fsSync.readFileSync(pathMod.join(workspacePath, 'package.json'), 'utf-8')) as { scripts?: Record<string, string> }
+      hasTest = Boolean(pkg.scripts?.['test:run'])
+    } catch { /* no package.json yet */ }
+    if (!hasTest) return Promise.resolve({ passed: true, output: 'kein test:run-Script — Test-Gate übersprungen', skipped: true })
+    return runPostExecutionTestsAsync(workspacePath)
+  }
+
   proc.stdout?.on('data', (chunk: Buffer) => {
     sawOutput = true
     clearStartupTimer()
@@ -1040,20 +1054,33 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       // The next phase must NOT start on a broken foundation.
       if (success) {
         if (finishedDelegation.chainNextId) {
-          const gate = await runBuildGateAsync(runnerWorkspace.path)
-          if (!gate.passed) {
+          // Gate the next phase on a green build AND green tests — a phase must
+          // not start on a broken foundation. Test timeouts are an infra signal.
+          const buildGate = await runBuildGateAsync(runnerWorkspace.path)
+          const testGate = buildGate.passed
+            ? await runTestGateAsync(runnerWorkspace.path)
+            : { passed: false, output: '', skipped: true }
+          const decision = decidePhaseGate({
+            buildPassed: buildGate.passed,
+            buildSkipped: buildGate.skipped,
+            testPassed: testGate.passed,
+            testTimedOut: testGate.timedOut,
+            testSkipped: testGate.skipped,
+          })
+          if (!decision.proceed) {
+            const failOutput = (buildGate.passed ? testGate.output : buildGate.output).slice(-800)
             await appendLogs(id, [{
               timestamp: new Date().toISOString(),
               type: 'error',
-              message: `⛔ Build-Gate fehlgeschlagen — nächste Phase wird NICHT gestartet. Build-Fehler:\n${gate.output.slice(-800)}`,
+              message: `⛔ ${decision.reason} Nächste Phase wird NICHT gestartet.\n${failOutput}`,
             }], 'failed')
             await repo.update(id, {
-              errorMessage: 'Build-Gate fehlgeschlagen: npm run build war nicht grün — Chain gestoppt um Folgefehler zu vermeiden.',
+              errorMessage: decision.reason,
               chainNextId: undefined,
             }).catch(() => {})
           } else {
-            if (!gate.skipped) {
-              await appendLogs(id, [{ timestamp: new Date().toISOString(), type: 'success', message: '✅ Build-Gate grün — nächste Phase wird gestartet.' }])
+            if (!(buildGate.skipped && testGate.skipped)) {
+              await appendLogs(id, [{ timestamp: new Date().toISOString(), type: 'success', message: `✅ ${decision.reason}` }])
             }
             void triggerChain(finishedDelegation, fullOutput).catch(() => {})
           }
