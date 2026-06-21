@@ -52,6 +52,34 @@ describe('scanSecurityDeep', () => {
     write('clean.ts', 'export const x = 1')
     expect(scanSecurityDeep(dir)).toEqual([])
   })
+
+  it('flags a PHP-style hardcoded password variable (case-insensitive)', () => {
+    write('config.php', '<?php $db_pass = "admin123"; ?>')
+    expect(scanSecurityDeep(dir).some(f => f.category === 'Hardcoded Secret')).toBe(true)
+  })
+
+  it('flags an exposed Stripe key', () => {
+    // Synthetic token: assembled at runtime so it matches the rule but is not a
+    // real secret in source (avoids tripping secret-scanning push protection).
+    const fakeStripeKey = 'sk_live_' + 'x'.repeat(24)
+    write('config.php', `<?php $api_key = "${fakeStripeKey}"; ?>`)
+    expect(scanSecurityDeep(dir).some(f => f.category === 'Exposed API Key')).toBe(true)
+  })
+
+  it('flags raw mysql_query with an interpolated variable (PHP SQLi)', () => {
+    write('login.php', "<?php $r = mysql_query(\"SELECT * FROM users WHERE u = '$user'\"); ?>")
+    expect(scanSecurityDeep(dir).some(f => f.category === 'SQL Injection')).toBe(true)
+  })
+
+  it('flags lowercase md5() weak crypto', () => {
+    write('hash.php', '<?php $h = md5($_POST["p"]); ?>')
+    expect(scanSecurityDeep(dir).some(f => f.category === 'Weak Crypto')).toBe(true)
+  })
+
+  it('de-duplicates multiple rules of the same category', () => {
+    write('q.php', "<?php $a = \"SELECT x FROM t WHERE id=\" + $id; $b = mysql_query(\"SELECT * FROM u WHERE x='$y'\"); ?>")
+    expect(scanSecurityDeep(dir).filter(f => f.category === 'SQL Injection')).toHaveLength(1)
+  })
 })
 
 describe('findingsToStrings', () => {

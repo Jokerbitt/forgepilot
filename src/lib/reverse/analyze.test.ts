@@ -100,6 +100,24 @@ describe('detectStack — cross-platform desktop', () => {
   })
 })
 
+describe('detectStack — web frameworks (Python/PHP)', () => {
+  it('detects Flask + PostgreSQL for a Python app', () => {
+    write('app.py', 'from flask import Flask\nfrom flask_sqlalchemy import SQLAlchemy\napp.config["URI"] = "postgresql://localhost/db"')
+    write('requirements.txt', 'flask==3.0.0\npsycopg2-binary==2.9.9')
+    const { files } = walkFiles(dir)
+    const d = detectStack(dir, files)
+    expect(d.frameworks).toContain('Flask')
+    expect(d.databaseEngines).toContain('PostgreSQL')
+    expect(d.platform).toBe('cross-platform')
+  })
+
+  it('detects Laravel for a PHP app', () => {
+    write('composer.json', JSON.stringify({ require: { 'laravel/framework': '^11' } }))
+    const { files } = walkFiles(dir)
+    expect(detectStack(dir, files).frameworks).toContain('Laravel')
+  })
+})
+
 describe('analyzeForReverse — missing path', () => {
   it('returns a safe report', () => {
     const r = analyzeForReverse(join(dir, 'nope'))

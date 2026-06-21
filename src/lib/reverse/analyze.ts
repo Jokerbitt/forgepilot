@@ -152,6 +152,9 @@ export function detectStack(root: string, files: string[]): DetectionResult {
     'next', 'react', 'express',
     // Cross-platform desktop frameworks
     'electron', '@tauri-apps', 'Microsoft.Maui', 'Avalonia', 'javafx', 'QApplication',
+    // Web frameworks (Python/PHP/Ruby/Java) + their DB drivers
+    'flask', 'django', 'fastapi', 'springframework', 'spring-boot', 'laravel', 'symfony', 'rails',
+    'psycopg2', 'postgresql', 'pymysql', 'mysqlclient', 'pymongo',
   ])
   const matched = (p: string) => probes.has(p)
   const hasTauriDir = files.some(f => f.startsWith('src-tauri/') || f.includes('/src-tauri/'))
@@ -178,12 +181,25 @@ export function detectStack(root: string, files: string[]): DetectionResult {
   if (matched('react')) frameworks.add('React')
   if (matched('express')) frameworks.add('Express')
 
+  // Web frameworks (Python/PHP/Ruby/Java) — all cross-platform server stacks.
+  if (matched('flask')) { frameworks.add('Flask'); crossScore += 1 }
+  if (matched('django')) { frameworks.add('Django'); crossScore += 1 }
+  if (matched('fastapi')) { frameworks.add('FastAPI'); crossScore += 1 }
+  if (matched('springframework') || matched('spring-boot')) { frameworks.add('Spring'); crossScore += 1 }
+  if (matched('laravel')) { frameworks.add('Laravel'); crossScore += 1 }
+  if (matched('symfony')) { frameworks.add('Symfony'); crossScore += 1 }
+  if (matched('rails')) { frameworks.add('Ruby on Rails'); crossScore += 1 }
+
   // Database engines
   if (matched('System.Data.SqlClient') || matched('Microsoft.Data.SqlClient')) databaseEngines.add('Microsoft SQL Server')
   if (matched('Npgsql')) databaseEngines.add('PostgreSQL')
   if (matched('MySql.Data')) databaseEngines.add('MySQL')
   if (matched('mongodb')) databaseEngines.add('MongoDB')
   if (matched('sqlite')) databaseEngines.add('SQLite')
+  // Python/other DB drivers + connection-string scheme.
+  if (matched('psycopg2') || matched('postgresql')) databaseEngines.add('PostgreSQL')
+  if (matched('pymysql') || matched('mysqlclient')) databaseEngines.add('MySQL')
+  if (matched('pymongo')) databaseEngines.add('MongoDB')
 
   let platform: Platform = 'unknown'
   if (windowsScore > crossScore && windowsScore > 0) platform = 'windows'
