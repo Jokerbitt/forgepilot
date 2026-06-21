@@ -54,6 +54,7 @@ import { detectKnownError, classifyError, extractErrorSnippet } from '@/lib/runn
 import { quickPreflightCheck } from '@/lib/runner-health/runner-detector'
 import { getCachedOrShallowRunnerReadiness, getRunnerReadiness, writeCachedRunnerReadiness } from '@/lib/system/runner-readiness'
 import { selectDelegationExecutionMode } from '@/lib/delegations/execution-mode'
+import { resolveCliAnthropicKey } from '@/lib/delegations/runner-auth'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
@@ -489,12 +490,20 @@ async function autoMergePRIfEligible(prUrl: string, delegation: Delegation): Pro
 
 function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd: number, riskClass: string, targetRepo?: string, existingWorkspace?: RunnerWorkspace, scaffold?: { goal: string; context: string }) {
   const storedKeys = readStoredApiKeys()
-  const anthropicKey = storedKeys.ANTHROPIC_API_KEY?.trim() || undefined
+  // Prefer the Max OAuth token (from `claude setup-token`, supplied via
+  // CLAUDE_CODE_OAUTH_TOKEN) for zero-credit headless auth. The CLI gives
+  // ANTHROPIC_API_KEY precedence OVER the OAuth token, so a credit-less key
+  // would shadow it and 401 — only inject the stored key when no OAuth token
+  // is present to defer to.
+  const anthropicKey = resolveCliAnthropicKey({
+    oauthToken: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+    storedKey: storedKeys.ANTHROPIC_API_KEY,
+  })
   const maxTurns = budgetToClaudeCliMaxTurns(budgetUsd)
 
   // Strip ANTHROPIC_API_KEY from inherited env so Claude CLI uses its own
-  // session auth (Max subscription). Only re-inject if a key is explicitly
-  // configured via the Settings UI — that key takes precedence.
+  // session auth (Max OAuth token / subscription). Only re-inject if a key is
+  // configured AND no OAuth token is present (see resolveCliAnthropicKey).
   const { ANTHROPIC_API_KEY: _stripped, ...baseEnv } = process.env
   // Ensure GH_TOKEN reaches the subprocess so agents can run `gh pr create`
   const ghToken = storedKeys.GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim() || process.env.GITHUB_TOKEN?.trim()
