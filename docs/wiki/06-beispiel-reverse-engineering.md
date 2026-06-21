@@ -135,6 +135,7 @@ Wenn der Nachbau steht, klick in `/reverse` (im Ergebnis-Bereich) auf **„📊 
 | **Sicherheit** | Hardcoded Secrets, Provider-Tokens (Stripe/GitHub/…), SQL-Injection, schwache Krypto (md5/sha1), unsichere Deserialisierung, deaktiviertes TLS |
 | **Kritikalität** | normal / sensitive / critical (Leitrechner, SCADA, PLC, PLC-Programmierumgebungen wie Codesys/TIA/Step 7, Medizin, Luftfahrt, Zahlung) |
 | **Doku-Hinweise** | liest README/ARCHITECTURE der Alt-App und zieht Feature-/Domänen-Hinweise heraus (ergänzt den reinen Code-Scan) |
+| **Screenshot-Hinweise** | optional: ein UI-Screenshot wird von einer Vision-KI beschrieben (Screens, Funktionen, UI-Elemente) und ergänzt den Nachbau — der Code-Scan sieht keine UI-Absicht |
 
 > Hinweis: Die Sprach-/Sicherheits-Erkennung wird laufend erweitert (z.B. wurden PHP-Security-Muster und Python-Frameworks am 2026-06-21 ergänzt). Den jeweils aktuellen Stand zeigt der [CHANGELOG](CHANGELOG.md).
 
