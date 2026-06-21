@@ -15,7 +15,7 @@ Beim Analysieren prüft ForgePilot, ob eine App nach **sicherheits-/missionskrit
 |---|---|---|
 | **normal** | unkritisch | Nachbau möglich |
 | **sensitive** | z.B. Zahlungen, Echtzeit, Banking | Nachbau möglich, „mit besonderer Sorgfalt" |
-| **critical** | Leitrechner, SCADA, PLC/SPS, Modbus/OPC-UA/Profibus, Not-Aus/Interlock, Medizin, Luftfahrt | **Autonomer Nachbau gesperrt** |
+| **critical** | Leitrechner, SCADA, PLC/SPS, Modbus/OPC-UA/Profibus, Not-Aus/Interlock, Medizin, Luftfahrt, **PLC-Programmierumgebungen** (Codesys/TIA/Step 7/Simatic, Structured Text, Ladder Logic) | **Autonomer Nachbau gesperrt** |
 
 Bei **critical** liefert `POST /api/reverse/rebuild` **HTTP 409** und baut nichts — bis ein Mensch ausdrücklich bestätigt (`acknowledgeCritical: true`, in der UI die rote Checkbox). Der Guardrail ist **fail-safe**: Im Zweifel stuft er eher kritisch ein. Erkannt werden Signale case-insensitiv im Code **und** im App-Namen. → siehe [RE-Beispiel 2](06-beispiel-reverse-engineering.md).
 

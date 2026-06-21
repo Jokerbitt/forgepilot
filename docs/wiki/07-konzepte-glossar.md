@@ -56,6 +56,10 @@ Wiederverwendbare **Bausteine** (Login, Zahlungen, E-Mail, Upload, Suche, Connec
 `src/lib/model-router/` · `src/lib/cost-routing/`
 Entscheidet **pro Schritt**, welches Modell läuft: einfache/günstige Schritte lokal (Ollama, kostenlos), anspruchsvolle in der Cloud. `POST /api/cost-routing` liefert die Klartext-Schätzung („X lokal, Y Cloud"), die du vor dem Bauen siehst.
 
+## Budget-Verteilung (phasenübergreifend)
+`src/lib/delegations/budget-allocation.ts`
+Ein Plan kann ein **Gesamtbudget** (`totalBudgetUsd`) tragen. `allocateBudget()` verteilt es dann **gewichtet nach Aufwand** (`estimatedTurns`) auf die Phasen — eine größere Phase bekommt mehr, die Summe bleibt im Rahmen. Ist kein Gesamtbudget gesetzt, bekommt jede Phase wie bisher einen festen Tarif.
+
 ## Knowledge / Memory Cards
 `src/lib/knowledge/` · `src/lib/delegations/knowledge-packages.ts`
 ForgePilot speichert **Memory Cards** (Erkenntnisse, Entscheidungen, Risiken) und indexiert Markdown/NAS-Wissen. Vor einem Agentenlauf wird relevantes Domänenwissen in den Prompt injiziert; nach einem Lauf werden neue Lessons zurückgeschrieben (Lern-Schleife).

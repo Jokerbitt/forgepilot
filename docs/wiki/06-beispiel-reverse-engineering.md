@@ -114,6 +114,16 @@ Erst wenn du die Checkbox aktivierst —
 
 ---
 
+## Nach dem Nachbau: Paritäts-Report
+
+Wenn der Nachbau steht, vergleicht der **Paritäts-Report** (`POST /api/reverse/parity`, Body `{ originalPath, rebuiltPath, migrateDatabase? }`) die Alt-App mit dem Nachbau und sagt in Klartext, welche Modernisierungsziele **nachweislich** erreicht sind:
+
+> 🟡 *„App v2: Paritäts-Check 80/100 — überwiegend erreicht, 1 Punkt(e) offen."* mit Einzelprüfungen: Plattformunabhängigkeit · Datenbank-Migration → PostgreSQL · Sicherheitslücken behoben (Original 2 → Nachbau 0) · Moderner Stack · Substanz.
+
+> **Wichtig:** Das ist ein **struktureller** Überblick (was modernisiert wurde) — **kein** Ersatz für den „Logik 1:1"-**Paritäts-Test** im Build, der das tatsächliche Verhalten gegen das Original prüft.
+
+---
+
 ## Was ForgePilot beim Analysieren erkennt
 
 | Kategorie | Beispiele |
@@ -123,7 +133,8 @@ Erst wenn du die Checkbox aktivierst —
 | **Datenbanken** | MS SQL Server, PostgreSQL, MySQL, MongoDB, SQLite |
 | **Plattform** | Windows-gebunden vs. cross-platform (mit Begründung) |
 | **Sicherheit** | Hardcoded Secrets, Provider-Tokens (Stripe/GitHub/…), SQL-Injection, schwache Krypto (md5/sha1), unsichere Deserialisierung, deaktiviertes TLS |
-| **Kritikalität** | normal / sensitive / critical (Leitrechner, SCADA, PLC, Medizin, Luftfahrt, Zahlung) |
+| **Kritikalität** | normal / sensitive / critical (Leitrechner, SCADA, PLC, PLC-Programmierumgebungen wie Codesys/TIA/Step 7, Medizin, Luftfahrt, Zahlung) |
+| **Doku-Hinweise** | liest README/ARCHITECTURE der Alt-App und zieht Feature-/Domänen-Hinweise heraus (ergänzt den reinen Code-Scan) |
 
 > Hinweis: Die Sprach-/Sicherheits-Erkennung wird laufend erweitert (z.B. wurden PHP-Security-Muster und Python-Frameworks am 2026-06-21 ergänzt). Den jeweils aktuellen Stand zeigt der [CHANGELOG](CHANGELOG.md).
 
