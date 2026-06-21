@@ -84,6 +84,13 @@ Rules:
 - If you cannot proceed (missing context, blocked by a safety rule, unclear scope), respond with TASK_BLOCKED and explain why.
 - Never commit secrets. Never run destructive commands (rm -rf, force push to main).`
 
+/**
+ * Max consecutive turns with NO tool call and no TASK_COMPLETE before we give up.
+ * A model that only talks (or returns empty) produced nothing — we nudge it to act
+ * and fail honestly after this many empty turns instead of reporting false success.
+ */
+const MAX_NO_PROGRESS_TURNS = 3
+
 function parseTextToolCall(content: string): OllamaToolCall[] {
   const trimmed = content.trim()
   if (!trimmed) return []
@@ -176,6 +183,7 @@ export class OllamaAgentRunner {
     this.emit(this.nowLog('info', `🦙 Ollama-Runner gestartet (Modell: ${this.model}, max ${maxTurns} Turns)`))
 
     let turns = 0
+    let noProgressTurns = 0
     let lastAssistantText = ''
     let totalPromptTokens = 0
     let totalCompletionTokens = 0
@@ -247,9 +255,23 @@ export class OllamaAgentRunner {
       }
 
       if (toolCalls.length === 0) {
-        this.emit(this.nowLog('success', `✅ Run beendet nach ${turns} Turns`))
-        return makeResult(true, lastAssistantText.trim() || 'Run beendet ohne Tool-Calls')
+        // No tool call AND no TASK_COMPLETE/TASK_BLOCKED marker = the model did not
+        // act. Reporting success here is wrong — it produced nothing (an empty reply
+        // would otherwise "succeed" without touching a single file). Nudge it to use
+        // the tools, and fail honestly after a few unproductive turns.
+        noProgressTurns += 1
+        if (noProgressTurns >= MAX_NO_PROGRESS_TURNS) {
+          this.emit(this.nowLog('error', `⛔ Abgebrochen: Modell lieferte ${noProgressTurns}× keinen Tool-Call und kein TASK_COMPLETE — nichts umgesetzt.`))
+          return makeResult(false, lastAssistantText.trim() || 'Keine Tool-Calls — das Modell hat nicht gehandelt.')
+        }
+        this.emit(this.nowLog('info', `↻ Kein Tool-Call — fordere das Modell zum Handeln auf (${noProgressTurns}/${MAX_NO_PROGRESS_TURNS}).`))
+        messages.push({
+          role: 'user',
+          content: 'Du hast keinen Tool-Call ausgeführt. Du MUSST die Tools (bash_exec, read_file, write_file, list_dir) nutzen, um die Aufgabe tatsächlich umzusetzen — beschreibe sie nicht nur. Mache JETZT den nächsten konkreten Schritt als Tool-Call. Wenn ALLES erledigt und verifiziert ist, antworte mit TASK_COMPLETE und kurzer Zusammenfassung. Bist du blockiert, antworte mit TASK_BLOCKED und Begründung.',
+        })
+        continue
       }
+      noProgressTurns = 0
 
       for (const call of toolCalls) {
         const { name } = call.function
