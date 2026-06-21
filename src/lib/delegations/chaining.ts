@@ -30,6 +30,89 @@ export async function triggerChain(
   executionOutput: string,
 ): Promise<ChainResult> {
   try {
+    // New plan-mode chaining: chainNextId points to a pre-created pending delegation
+    const { chainNextId } = completedDelegation
+    if (chainNextId) {
+      const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+      const next = await repo.findById(chainNextId)
+
+      if (!next || next.status !== 'pending') {
+        return { created: false, skipped: true, reason: 'chainNextId delegation not found or not pending' }
+      }
+
+      // Set chainedFromId so the next phase can reuse this phase's persistent
+      // workspace (build directly on top instead of re-scaffolding from scratch).
+      await repo.update(chainNextId, { status: 'approved', chainedFromId: completedDelegation.id })
+
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+      fetch(`${baseUrl}/api/delegations/${chainNextId}/execute`, { method: 'POST' }).catch(() => {})
+
+      const phaseLabel = completedDelegation.chainPosition != null
+        ? `Phase ${completedDelegation.chainPosition + 1}`
+        : 'next phase'
+      const existingLogs = completedDelegation.logs ?? []
+      await repo.update(completedDelegation.id, {
+        logs: [
+          ...existingLogs,
+          {
+            timestamp: new Date().toISOString(),
+            type: 'info' as const,
+            message: `⛓️ Chain: ${phaseLabel} gestartet → Delegation ${chainNextId}`,
+          },
+        ],
+      })
+
+      return { created: true, delegationId: chainNextId, skipped: false, reason: 'chainNextId triggered' }
+    }
+
+    // Plan phase fan-in: check if any pending phases are now unblocked
+    const planTag = completedDelegation.tags?.find(t => t.startsWith('plan:'))
+    if (planTag) {
+      const planId = planTag.slice('plan:'.length)
+      const phaseTag = completedDelegation.tags?.find(t => t.startsWith('phase:'))
+      const completedPhaseNum = phaseTag ? parseInt(phaseTag.slice('phase:'.length), 10) : null
+
+      if (completedPhaseNum !== null) {
+        const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+        // listByStatus() without args returns all delegations
+        const allDelegations = await repo.listByStatus()
+        const fullPlanTag = `plan:${planId}`
+        const planDelegations = allDelegations.filter(d => d.tags?.includes(fullPlanTag))
+
+        for (const pending of planDelegations) {
+          if (pending.status !== 'pending') continue
+          // Check if all dependencies are completed
+          const depTags = pending.tags?.filter(t => t.startsWith('depends:')) ?? []
+          const depPhaseIds = depTags.map(t => t.slice('depends:'.length))
+
+          const allDepsComplete = depPhaseIds.every(depId => {
+            const depPhaseNum = parseInt(depId.replace(/\D/g, ''), 10)
+            return planDelegations.some(d =>
+              d.tags?.includes(`phase:${depPhaseNum}`) &&
+              d.status === 'completed'
+            )
+          })
+
+          if (allDepsComplete) {
+            await repo.update(pending.id, { status: 'approved' })
+            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+            fetch(`${baseUrl}/api/delegations/${pending.id}/execute`, { method: 'POST' }).catch(() => {})
+            const existingLogs = completedDelegation.logs ?? []
+            await repo.update(completedDelegation.id, {
+              logs: [
+                ...existingLogs,
+                {
+                  timestamp: new Date().toISOString(),
+                  type: 'info' as const,
+                  message: `⚡ Parallel Phase freigeschaltet → ${pending.title}`,
+                },
+              ],
+            })
+          }
+        }
+      }
+    }
+
     const { chainConfig } = completedDelegation
 
     if (!chainConfig) {

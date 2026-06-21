@@ -17,10 +17,13 @@
 import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
+import { desc, lt } from 'drizzle-orm'
 import { getDataDir } from '@/lib/config/paths'
 import { getSupabaseClient } from '@/lib/supabase/client'
 import { dsgvoLogger } from '@/lib/logger'
 import type { PIIFinding } from '@/lib/context/pii-scrubber'
+import { getDb, isDatabaseConfigured } from '@/db/index'
+import { processingLedger } from '@/db/schema'
 
 export type LegalBasis =
   | 'legitimate-interest'   // Art. 6(1)(f) — most agent tasks
@@ -70,6 +73,48 @@ function writeLedger(records: ProcessingRecord[]): void {
   const tmp = getLedgerPath() + '.tmp'
   fs.writeFileSync(tmp, JSON.stringify(records, null, 2), 'utf-8')
   fs.renameSync(tmp, getLedgerPath())
+}
+
+function fromDbRecord(record: typeof processingLedger.$inferSelect): ProcessingRecord {
+  return {
+    id: record.id,
+    purpose: record.purpose,
+    dataTypes: record.dataTypes,
+    processor: record.processor,
+    legalBasis: record.legalBasis,
+    dataSubjectId: record.dataSubjectId ?? undefined,
+    piiDetected: record.piiDetected,
+    piiCategories: record.piiCategories,
+    piiRedacted: record.piiRedacted,
+    piiCount: record.piiCount,
+    dataResidency: record.dataResidency,
+    providerId: record.providerId ?? undefined,
+    modelId: record.modelId ?? undefined,
+    inputTokens: record.inputTokens ?? undefined,
+    retentionDays: record.retentionDays,
+    processedAt: record.processedAt.toISOString(),
+  }
+}
+
+function toDbRecord(record: ProcessingRecord): typeof processingLedger.$inferInsert {
+  return {
+    id: record.id,
+    purpose: record.purpose,
+    dataTypes: record.dataTypes,
+    processor: record.processor,
+    legalBasis: record.legalBasis,
+    dataSubjectId: record.dataSubjectId,
+    piiDetected: record.piiDetected,
+    piiCategories: record.piiCategories,
+    piiRedacted: record.piiRedacted,
+    piiCount: record.piiCount,
+    dataResidency: record.dataResidency,
+    providerId: record.providerId,
+    modelId: record.modelId,
+    inputTokens: record.inputTokens,
+    retentionDays: record.retentionDays,
+    processedAt: new Date(record.processedAt),
+  }
 }
 
 export interface LogProcessingInput {
@@ -132,6 +177,21 @@ export async function logProcessing(input: LogProcessingInput): Promise<void> {
     return
   }
 
+  if (isDatabaseConfigured()) {
+    try {
+      await getDb()
+        .insert(processingLedger)
+        .values(toDbRecord(record))
+        .onConflictDoNothing()
+      return
+    } catch (err) {
+      dsgvoLogger.error(
+        { event: 'ledger.postgres_insert_error', error: err instanceof Error ? err.message : String(err) },
+        'Failed to insert processing ledger record to Postgres; falling back to JSON',
+      )
+    }
+  }
+
   // JSON fallback: cap at 10_000 entries (5 years * ~5/day)
   const records = readLedger()
   records.unshift(record)
@@ -140,6 +200,25 @@ export async function logProcessing(input: LogProcessingInput): Promise<void> {
 
 export function readProcessingLedger(limit = 100): ProcessingRecord[] {
   return readLedger().slice(0, limit)
+}
+
+export async function readProcessingLedgerAsync(limit = 100): Promise<ProcessingRecord[]> {
+  if (isDatabaseConfigured()) {
+    try {
+      const rows = await getDb()
+        .select()
+        .from(processingLedger)
+        .orderBy(desc(processingLedger.processedAt))
+        .limit(limit)
+      return rows.map(fromDbRecord)
+    } catch (err) {
+      dsgvoLogger.error(
+        { event: 'ledger.postgres_read_error', error: err instanceof Error ? err.message : String(err) },
+        'Failed to read processing ledger from Postgres; falling back to JSON',
+      )
+    }
+  }
+  return readProcessingLedger(limit)
 }
 
 export function getLedgerStats(): {
@@ -167,8 +246,42 @@ export function getLedgerStats(): {
   }
 }
 
+export async function getLedgerStatsAsync(): Promise<ReturnType<typeof getLedgerStats>> {
+  const all = await readProcessingLedgerAsync(10_000)
+  const cutoff = new Date(Date.now() - 86_400_000).toISOString()
+
+  return {
+    total:       all.length,
+    piiDetected: all.filter(r => r.piiDetected).length,
+    piiRedacted: all.filter(r => r.piiRedacted).length,
+    byProvider:  Object.fromEntries(
+      Array.from(new Set(all.map(r => r.processor))).map(p => [p, all.filter(r => r.processor === p).length])
+    ),
+    byResidency: Object.fromEntries(
+      (['eu', 'us', 'local', 'unknown'] as DataResidency[]).map(r => [r, all.filter(e => e.dataResidency === r).length])
+    ),
+    last24h:     all.filter(r => r.processedAt > cutoff).length,
+  }
+}
+
 /** Cleanup entries older than their retention period */
-export function runRetentionCleanup(): { deleted: number } {
+export async function runRetentionCleanup(): Promise<{ deleted: number }> {
+  if (isDatabaseConfigured()) {
+    try {
+      const cutoff = new Date(Date.now() - LEDGER_RETENTION_DAYS * 86_400_000)
+      const deleted = await getDb()
+        .delete(processingLedger)
+        .where(lt(processingLedger.processedAt, cutoff))
+        .returning({ id: processingLedger.id })
+      return { deleted: deleted.length }
+    } catch (err) {
+      dsgvoLogger.error(
+        { event: 'ledger.postgres_cleanup_error', error: err instanceof Error ? err.message : String(err) },
+        'Failed to clean processing ledger in Postgres; falling back to JSON',
+      )
+    }
+  }
+
   const records = readLedger()
   const now     = Date.now()
   const kept    = records.filter(r => {

@@ -22,7 +22,9 @@ describe('OllamaAgentRunner', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('completes successfully when the model returns no tool_calls', async () => {
+  it('does NOT report false success when the model only talks (no tool_calls, no TASK_COMPLETE)', async () => {
+    // A model that never calls a tool produced nothing — reporting success would be
+    // a lie. It must be nudged, then fail honestly after MAX_NO_PROGRESS_TURNS.
     const fetcher = vi.fn().mockImplementation(() =>
       Promise.resolve(
         makeResponse({
@@ -40,13 +42,36 @@ describe('OllamaAgentRunner', () => {
 
     const result = await runner.run('do nothing', 5)
 
-    expect(result.success).toBe(true)
-    expect(result.turns).toBe(1)
-    expect(fetcher).toHaveBeenCalledTimes(1)
-    expect(logs.some(l => l.includes('Run beendet'))).toBe(true)
+    expect(result.success).toBe(false)
+    expect(result.turns).toBe(3) // nudged on turns 1 & 2, gave up on the 3rd empty turn
+    expect(fetcher).toHaveBeenCalledTimes(3)
+    expect(logs.some(l => l.includes('zum Handeln auf'))).toBe(true) // nudge emitted
+    expect(logs.some(l => l.includes('Abgebrochen'))).toBe(true)     // honest failure
   })
 
-  it('stops immediately when the model emits TASK_COMPLETE', async () => {
+  it('recovers when a nudge gets the model to finally act (tool call, then complete)', async () => {
+    const file = path.join(tmpDir, 'hello.txt')
+    fs.writeFileSync(file, 'world', 'utf-8')
+    const responses: OllamaChatResponse[] = [
+      { model: 'qwen2.5-coder:14b', message: { role: 'assistant', content: 'Let me think...' }, done: true },
+      { model: 'qwen2.5-coder:14b', message: { role: 'assistant', content: '', tool_calls: [{ function: { name: 'read_file', arguments: { path: 'hello.txt' } } }] }, done: true },
+      { model: 'qwen2.5-coder:14b', message: { role: 'assistant', content: 'TASK_COMPLETE — fertig.' }, done: true },
+    ]
+    const fetcher = vi.fn().mockImplementation(() => Promise.resolve(makeResponse(responses.shift()!)))
+    const runner = new OllamaAgentRunner('del-nudge-recover', 'qwen2.5-coder:14b', tmpDir, {
+      fetcher: fetcher as unknown as typeof fetch,
+    })
+
+    const result = await runner.run('go', 5)
+
+    expect(result.success).toBe(true)
+    expect(result.turns).toBe(3) // empty → nudge, tool call, then TASK_COMPLETE
+    expect(fetcher).toHaveBeenCalledTimes(3)
+  })
+
+  it('rejects premature TASK_COMPLETE when no tools were executed (nudges, then fails)', async () => {
+    // Claiming completion without a single tool call = nothing was done. The loop
+    // must not accept it as success — nudge, then fail honestly.
     const fetcher = vi.fn().mockImplementation(() =>
       Promise.resolve(
         makeResponse({
@@ -56,12 +81,15 @@ describe('OllamaAgentRunner', () => {
         }),
       ),
     )
+    const logs: string[] = []
     const runner = new OllamaAgentRunner('del-2', 'qwen2.5-coder:14b', tmpDir, {
       fetcher: fetcher as unknown as typeof fetch,
+      onLog: entries => entries.forEach(e => logs.push(e.message)),
     })
     const result = await runner.run('go', 10)
-    expect(result.success).toBe(true)
-    expect(result.turns).toBe(1)
+    expect(result.success).toBe(false)
+    expect(result.turns).toBe(3)
+    expect(logs.some(l => l.includes('ohne Änderungen'))).toBe(true)
   })
 
   it('executes a tool_call and loops until done', async () => {

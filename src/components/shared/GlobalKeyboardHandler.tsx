@@ -7,12 +7,11 @@ import { KeyboardShortcutsHelp } from './KeyboardShortcutsHelp'
 
 const GO_SHORTCUTS: Record<string, string> = {
   i: '/idea',
-  b: '/project-briefs',
-  a: '/active',
+  p: '/projects',
   d: '/delegations',
-  k: '/knowledge',
-  m: '/monitor',
+  l: '/live',
   h: '/',
+  t: '/tools',
   s: '/settings',
 }
 
@@ -96,7 +95,7 @@ export function GlobalKeyboardHandler() {
       {gMode && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 rounded border border-slate-700 bg-slate-900/90 px-3 py-1.5 text-xs text-slate-300 backdrop-blur">
           <kbd className="font-mono font-bold text-sky-400">G</kbd>
-          <span className="ml-1.5 text-slate-500">{'→ i·d·k·b·m·h·s'}</span>
+          <span className="ml-1.5 text-slate-500">{'→ h·i·p·d·l·t·s'}</span>
         </div>
       )}
       <CommandPalette open={paletteOpen} onClose={closePalette} />

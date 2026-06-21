@@ -12,6 +12,5 @@ export async function POST(req: NextRequest) {
   const contract = body as unknown as TaskContract
   const decision = evaluatePolicy(contract)
 
-  const status = decision.verdict === 'deny' ? 403 : 200
-  return NextResponse.json(decision, { status })
+  return NextResponse.json(decision)
 }

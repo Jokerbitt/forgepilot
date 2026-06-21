@@ -12,7 +12,7 @@ import { NextResponse } from 'next/server'
 import { readProjectBriefs } from '@/lib/project-briefs'
 import { readIdeaHistory } from '@/lib/pilot/idea-history-store'
 import { getRun } from '@/lib/agents/orchestrated-run'
-import { readDelegations } from '@/lib/delegations/queue'
+import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import { getMilestonesByBriefId, getWorkPackagesByBriefId } from '@/lib/knowledge/milestone-store'
 import type { ProjectBrief } from '@/lib/models/project-brief'
 import type { Delegation } from '@/lib/models/delegation'
@@ -106,7 +106,8 @@ export interface ProjectSummary {
 export async function GET() {
   const briefs = readProjectBriefs()
   const history = readIdeaHistory(50)
-  const delegations = readDelegations()
+  const delegationRepo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+  const delegations = await delegationRepo.listByStatus()
 
   // Index history by briefId for O(1) lookup
   const historyByBriefId = new Map<string, IdeaHistoryEntry>()

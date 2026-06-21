@@ -216,16 +216,16 @@ describe('budgetToMaxTurns', () => {
     expect(budgetToMaxTurns(0.5)).toBe(8)
   })
 
-  it('uses a production-safe minimum for Claude CLI turns', async () => {
+  it('uses a production-safe minimum for Claude CLI turns (M110: min 40)', async () => {
     const { budgetToClaudeCliMaxTurns } = await import('@/lib/budget-utils')
-    expect(budgetToClaudeCliMaxTurns(0.5)).toBe(35)
-    expect(budgetToClaudeCliMaxTurns(5)).toBe(60)
+    expect(budgetToClaudeCliMaxTurns(0.5)).toBe(40)
+    expect(budgetToClaudeCliMaxTurns(5)).toBe(200)
   })
 
-  it('keeps a $1 Claude CLI task at the 35-turn floor while budgetToMaxTurns(1) stays 15', async () => {
+  it('keeps a $1 Claude CLI task at the 40-turn floor (M110) while budgetToMaxTurns(1) stays 15', async () => {
     const { budgetToMaxTurns, budgetToClaudeCliMaxTurns } = await import('@/lib/budget-utils')
     expect(budgetToMaxTurns(1)).toBe(15)
-    expect(budgetToClaudeCliMaxTurns(1)).toBeGreaterThanOrEqual(35)
-    expect(budgetToClaudeCliMaxTurns(1)).toBe(35)
+    expect(budgetToClaudeCliMaxTurns(1)).toBeGreaterThanOrEqual(40)
+    expect(budgetToClaudeCliMaxTurns(1)).toBe(40)
   })
 })

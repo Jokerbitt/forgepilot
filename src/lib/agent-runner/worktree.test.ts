@@ -10,6 +10,9 @@ import {
   prepareRunnerWorkspace,
   sanitizeWorktreeName,
   shouldKeepRunnerWorktree,
+  writebackLocalResult,
+  reuseExistingWorkspace,
+  shouldRunInstall,
 } from './worktree'
 
 vi.mock('child_process', () => ({
@@ -123,6 +126,21 @@ describe('runner worktree helpers', () => {
   })
 })
 
+describe('shouldRunInstall', () => {
+  it('skips when there is no package.json', () => {
+    expect(shouldRunInstall({ hasPackageJson: false, hasNodeModules: false, packageJsonChanged: true })).toBe(false)
+  })
+  it('installs when node_modules is missing', () => {
+    expect(shouldRunInstall({ hasPackageJson: true, hasNodeModules: false, packageJsonChanged: false })).toBe(true)
+  })
+  it('installs when package.json changed even if node_modules exists (new dependency)', () => {
+    expect(shouldRunInstall({ hasPackageJson: true, hasNodeModules: true, packageJsonChanged: true })).toBe(true)
+  })
+  it('skips when deps exist and package.json did not change', () => {
+    expect(shouldRunInstall({ hasPackageJson: true, hasNodeModules: true, packageJsonChanged: false })).toBe(false)
+  })
+})
+
 describe('getTargetRepo', () => {
   it('returns undefined when env var is not set', () => {
     expect(getTargetRepo({})).toBeUndefined()
@@ -166,6 +184,56 @@ describe('prepareRunnerWorkspace — clone mode', () => {
         expect.objectContaining({ stdio: 'ignore' }),
       )
       expect(workspace.path).toContain('del-clone-test')
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('symlinks node_modules from a LOCAL target after clone so the agent can build', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-clone-local-root-'))
+    const target = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-clone-local-target-'))
+    fs.mkdirSync(path.join(target, 'node_modules'))
+    const workspacePath = path.join(root, sanitizeWorktreeName('del-local-clone'))
+    // Mocked git clone is a no-op — simulate it creating the workspace directory.
+    execFileSyncMock.mockImplementation(((_cmd: unknown, args: unknown) => {
+      if (Array.isArray(args) && args.includes('clone')) {
+        fs.mkdirSync(workspacePath, { recursive: true })
+      }
+      return Buffer.from('')
+    }) as typeof execFileSync)
+
+    try {
+      const workspace = prepareRunnerWorkspace({
+        delegationId: 'del-local-clone',
+        env: { FORGEPILOT_RUNNER_ROOT: root },
+        targetRepo: target,
+      })
+
+      expect(fs.existsSync(path.join(workspace.path, 'node_modules'))).toBe(true)
+      expect(fs.lstatSync(path.join(workspace.path, 'node_modules')).isSymbolicLink()).toBe(true)
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+      fs.rmSync(target, { recursive: true, force: true })
+    }
+  })
+
+  it('does NOT symlink node_modules for a remote URL target (no local deps to link)', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-clone-remote-root-'))
+    const workspacePath = path.join(root, sanitizeWorktreeName('del-remote-clone'))
+    execFileSyncMock.mockImplementation(((_cmd: unknown, args: unknown) => {
+      if (Array.isArray(args) && args.includes('clone')) {
+        fs.mkdirSync(workspacePath, { recursive: true })
+      }
+      return Buffer.from('')
+    }) as typeof execFileSync)
+
+    try {
+      const workspace = prepareRunnerWorkspace({
+        delegationId: 'del-remote-clone',
+        env: { FORGEPILOT_RUNNER_ROOT: root },
+        targetRepo: 'https://github.com/owner/target-repo.git',
+      })
+      expect(fs.existsSync(path.join(workspace.path, 'node_modules'))).toBe(false)
     } finally {
       fs.rmSync(root, { recursive: true, force: true })
     }
@@ -255,6 +323,84 @@ describe('prepareRunnerWorkspace — clone mode', () => {
       expect(fs.existsSync(workspace.path)).toBe(true)
     } finally {
       fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('writebackLocalResult', () => {
+  afterEach(() => { execFileSyncMock.mockReset() })
+
+  it('returns null for github.com URLs (not a local path)', () => {
+    const result = writebackLocalResult({
+      workspacePath: '/tmp/ws',
+      targetRepo: 'https://github.com/foo/bar',
+      delegationId: 'del-1',
+    })
+    expect(result).toBeNull()
+    expect(execFileSyncMock).not.toHaveBeenCalled()
+  })
+
+  it('returns null when workspace path does not exist', () => {
+    const result = writebackLocalResult({
+      workspacePath: '/tmp/definitely-does-not-exist-xyz-123',
+      targetRepo: '/tmp',
+      delegationId: 'del-2',
+    })
+    expect(result).toBeNull()
+  })
+
+  it('pushes a result branch and reports outcome fields', () => {
+    execFileSyncMock.mockReturnValue('' as never)
+    const result = writebackLocalResult({
+      workspacePath: '/tmp',          // exists
+      targetRepo: '/tmp',             // exists + local path
+      delegationId: 'del-abc123-xyz',
+    })
+    expect(result).not.toBeNull()
+    expect(result?.branch).toContain('forgepilot/result-')
+    expect(typeof result?.fileCount).toBe('number')
+    expect(typeof result?.mergedToMain).toBe('boolean')
+    // the FIRST git call must be the backup-branch push
+    const push = execFileSyncMock.mock.calls.find(c => Array.isArray(c[1]) && c[1].includes('push'))
+    expect(push?.[1]).toContain('origin')
+  })
+
+  it('returns null when the backup-branch push fails', () => {
+    execFileSyncMock.mockImplementationOnce(() => { throw new Error('push rejected') })
+    const result = writebackLocalResult({
+      workspacePath: '/tmp',
+      targetRepo: '/tmp',
+      delegationId: 'del-pushfail',
+    })
+    expect(result).toBeNull()
+  })
+
+})
+
+describe('reuseExistingWorkspace', () => {
+  it('returns null for a non-existent path', () => {
+    expect(reuseExistingWorkspace('/tmp/does-not-exist-xyz-123')).toBeNull()
+  })
+
+  it('returns null when path exists but is not a git repo', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-reuse-nogit-'))
+    try {
+      expect(reuseExistingWorkspace(dir)).toBeNull()
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('reuses a directory that contains a .git folder', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-reuse-git-'))
+    try {
+      fs.mkdirSync(path.join(dir, '.git'))
+      const ws = reuseExistingWorkspace(dir)
+      expect(ws).not.toBeNull()
+      expect(ws?.path).toBe(dir)
+      expect(typeof ws?.cleanup).toBe('function')
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
     }
   })
 })

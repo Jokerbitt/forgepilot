@@ -46,6 +46,25 @@ vi.mock('@/lib/project-briefs', () => ({
   saveProjectBrief: mockSaveProjectBrief,
 }))
 
+const mockBriefFindById = vi.fn()
+const mockBriefCreate = vi.fn()
+const mockBriefUpdate = vi.fn()
+vi.mock('@/lib/repositories/projectBriefRepository', () => ({
+  createProjectBriefRepository: vi.fn(() => ({
+    findById: mockBriefFindById,
+    create: mockBriefCreate,
+    update: mockBriefUpdate,
+  })),
+}))
+
+const mockDelegationCreate = vi.fn()
+vi.mock('@/lib/repositories/delegationRepository', () => ({
+  SINGLE_TENANT_USER_ID: 'user-1',
+  createDelegationRepository: vi.fn(() => ({
+    create: mockDelegationCreate,
+  })),
+}))
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function makeRequest(body: unknown): Request {
@@ -98,6 +117,10 @@ describe('POST /api/pilot/idea-to-production', () => {
 
     mockBuildProjectBrief.mockReturnValue(MOCK_BRIEF)
     mockSaveProjectBrief.mockReturnValue(MOCK_BRIEF)
+    mockBriefFindById.mockResolvedValue(null)
+    mockBriefCreate.mockResolvedValue(MOCK_BRIEF)
+    mockBriefUpdate.mockResolvedValue(MOCK_BRIEF)
+    mockDelegationCreate.mockImplementation(async delegation => delegation)
     mockDecomposeWithAI.mockResolvedValue(MOCK_TASKS)
     mockCreateRun.mockReturnValue(MOCK_RUN)
   })
@@ -292,7 +315,7 @@ describe('POST /api/pilot/idea-to-production', () => {
     expect(written[written.length - 1].title).toBe('Existing task')
   })
 
-  it('persists delegation to delegations.json', async () => {
+  it('persists delegation through the delegation repository', async () => {
     mockGenerateText.mockResolvedValue({
       text: JSON.stringify([
         { title: 'Deploy service', type: 'ticket', priority: 1, estimatedMinutes: 60, risk: 'A' },
@@ -304,14 +327,10 @@ describe('POST /api/pilot/idea-to-production', () => {
     const { POST } = await import('./route')
     await POST(makeRequest({ idea: 'Deploy a microservice' }))
 
-    const writeCall = fsMock.writeFileSync.mock.calls.find(
-      (c) => String(c[0]).includes('delegations')
-    )
-    expect(writeCall).toBeTruthy()
-    const written = JSON.parse(String(writeCall![1])) as Array<{ id: string; status: string }>
-    expect(written.length).toBeGreaterThan(0)
-    expect(written[0].status).toBe('approved')
-    expect(written[0].id).toMatch(/^[0-9a-f-]{36}$/)
+    expect(mockDelegationCreate).toHaveBeenCalledOnce()
+    const created = mockDelegationCreate.mock.calls[0][0] as { id: string; status: string }
+    expect(created.status).toBe('approved')
+    expect(created.id).toMatch(/^[0-9a-f-]{36}$/)
   })
 
   it('calls decomposeWithAI with goal and context', async () => {
@@ -331,5 +350,45 @@ describe('POST /api/pilot/idea-to-production', () => {
     expect(typeof goal).toBe('string')
     expect(goal.length).toBeGreaterThan(0)
     expect(typeof context).toBe('string')
+  })
+
+  it('rejects off-topic AI work items for todo projects and uses the todo fallback', async () => {
+    mockBuildProjectBrief.mockReturnValue({
+      ...MOCK_BRIEF,
+      title: 'Todo-App',
+      problemStatement: 'Eine strukturierte To Do App fuer den taeglichen Gebrauch',
+      desiredOutcome: 'Aufgaben planen, priorisieren und erledigen',
+    })
+    mockGenerateText
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          title: 'Todo-App',
+          rawIdea: 'Todo app',
+          problemStatement: 'Eine strukturierte To Do App',
+          targetAudience: 'Nutzer',
+          desiredOutcome: 'Aufgaben planen',
+          constraints: [],
+          scope: 'minimal',
+          researchMode: 'quick',
+          privacyMode: 'local',
+        }),
+        provider: 'anthropic',
+        model: 'claude-haiku-4-5',
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify([
+          { title: 'Überprüfe E-Mails', type: 'ticket', priority: 1, estimatedMinutes: 45, risk: 'A' },
+        ]),
+        provider: 'anthropic',
+        model: 'claude-haiku-4-5',
+      })
+
+    const { POST } = await import('./route')
+    const res = await POST(makeRequest({ idea: 'Baue eine Todo App wie Todoist' }))
+    const data = await res.json() as { topItem: { title: string }; workItemCount: number }
+
+    expect(res.status).toBe(201)
+    expect(data.topItem.title).toBe('Todo-MVP Grundgeruest bauen')
+    expect(data.workItemCount).toBeGreaterThanOrEqual(3)
   })
 })

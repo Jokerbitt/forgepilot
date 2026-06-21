@@ -101,6 +101,23 @@ export const OLLAMA_TOOLS: OllamaTool[] = [
   {
     type: 'function',
     function: {
+      name: 'edit_file',
+      description:
+        'Make a SURGICAL edit: replace an exact, unique snippet in an existing file with new text. PREFER this over write_file when changing an existing file — it preserves everything else. old_string must appear EXACTLY ONCE; include enough surrounding context to be unique.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'File path (absolute or relative to cwd)' },
+          old_string: { type: 'string', description: 'Exact text to replace (must be unique in the file)' },
+          new_string: { type: 'string', description: 'Replacement text' },
+        },
+        required: ['path', 'old_string', 'new_string'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'list_dir',
       description: 'List entries of a directory. Returns one entry per line.',
       parameters: {
@@ -167,6 +184,26 @@ export function writeFileTool(p: string, content: string, cwd: string): ToolExec
   }
 }
 
+export function editFileTool(p: string, oldString: string, newString: string, cwd: string): ToolExecutionResult {
+  try {
+    if (oldString === '') return { ok: false, output: 'edit_file: old_string must not be empty (use write_file to create a new file).' }
+    const full = resolveWithin(cwd, p)
+    const content = fs.readFileSync(full, 'utf-8')
+    const idx = content.indexOf(oldString)
+    if (idx === -1) {
+      return { ok: false, output: `edit_file: old_string not found in ${p}. Read the file again and copy the EXACT text to replace.` }
+    }
+    if (content.indexOf(oldString, idx + oldString.length) !== -1) {
+      return { ok: false, output: `edit_file: old_string is not unique in ${p} — include more surrounding context so it matches exactly once.` }
+    }
+    const updated = content.slice(0, idx) + newString + content.slice(idx + oldString.length)
+    fs.writeFileSync(full, updated, 'utf-8')
+    return { ok: true, output: `Edited ${p}: replaced ${oldString.length} chars with ${newString.length} chars (file now ${updated.length} chars).` }
+  } catch (err) {
+    return { ok: false, output: `Edit failed: ${(err as Error).message}` }
+  }
+}
+
 export function listDirTool(p: string, cwd: string): ToolExecutionResult {
   try {
     const full = resolveWithin(cwd, p)
@@ -193,6 +230,12 @@ export function executeToolCall(call: OllamaToolCall, cwd: string): ToolExecutio
       const p = typeof args.path === 'string' ? args.path : ''
       const content = typeof args.content === 'string' ? args.content : ''
       return writeFileTool(p, content, cwd)
+    }
+    case 'edit_file': {
+      const p = typeof args.path === 'string' ? args.path : ''
+      const oldString = typeof args.old_string === 'string' ? args.old_string : ''
+      const newString = typeof args.new_string === 'string' ? args.new_string : ''
+      return editFileTool(p, oldString, newString, cwd)
     }
     case 'list_dir': {
       const p = typeof args.path === 'string' ? args.path : ''

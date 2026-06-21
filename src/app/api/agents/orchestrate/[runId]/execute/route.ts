@@ -20,7 +20,7 @@ import { updateIdeaHistoryStatus } from '@/lib/pilot/idea-history-store'
 import { orchestrationLogger } from '@/lib/logger'
 import crypto from 'crypto'
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
 
 function buildInternalHeaders(req: Request, includeJson = false): HeadersInit {
   const headers: Record<string, string> = includeJson ? { 'Content-Type': 'application/json' } : {}
@@ -47,9 +47,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ runId: 
   updateRunStatus(runId, 'running')
   const jsonHeaders = buildInternalHeaders(req, true)
   const authHeaders = buildInternalHeaders(req)
+  const baseUrl = new URL(req.url).origin || DEFAULT_BASE_URL
 
   // Fire-and-forget — respond immediately, execution happens async
-  executeRunAsync(runId, skipFailed, jsonHeaders, authHeaders).catch((err: unknown) => {
+  executeRunAsync(runId, skipFailed, jsonHeaders, authHeaders, baseUrl).catch((err: unknown) => {
     orchestrationLogger.error({ event: 'orchestration.error', runId: runId, error: String(err) }, 'Async run failed')
   })
 
@@ -61,6 +62,7 @@ async function executeRunAsync(
   skipFailed: boolean,
   jsonHeaders: HeadersInit,
   authHeaders: HeadersInit,
+  baseUrl: string,
 ): Promise<void> {
   const run = getRun(runId)
   if (!run) return
@@ -107,7 +109,7 @@ async function executeRunAsync(
       }
 
       // Save delegation
-      await fetch(`${BASE_URL}/api/delegations`, {
+      await fetch(`${baseUrl}/api/delegations`, {
         method: 'POST',
         headers: jsonHeaders,
         body: JSON.stringify(delegationPayload),
@@ -120,7 +122,7 @@ async function executeRunAsync(
       setTaskAgentId(runId, task.id, delegationPayload.id)
 
       // 2. Execute delegation
-      await fetch(`${BASE_URL}/api/delegations/${delegationPayload.id}/execute`, {
+      await fetch(`${baseUrl}/api/delegations/${delegationPayload.id}/execute`, {
         method: 'POST',
         headers: authHeaders,
       }).then(async (res) => {
@@ -131,7 +133,7 @@ async function executeRunAsync(
       })
 
       // 3. Poll for completion (max 10 min)
-      const result = await pollDelegationCompletion(delegationPayload.id, 600_000, authHeaders)
+      const result = await pollDelegationCompletion(baseUrl, delegationPayload.id, 600_000, authHeaders)
 
       const durationMinutes = Math.round((Date.now() - startedAt) / 60_000)
 
@@ -232,6 +234,7 @@ function writeRunKnowledgeCard(runId: string): void {
 }
 
 async function pollDelegationCompletion(
+  baseUrl: string,
   delegationId: string,
   timeoutMs: number,
   authHeaders: HeadersInit,
@@ -242,7 +245,7 @@ async function pollDelegationCompletion(
   while (Date.now() < deadline) {
     await sleep(pollInterval)
     try {
-      const res = await fetch(`${BASE_URL}/api/delegations/${delegationId}`, { headers: authHeaders })
+      const res = await fetch(`${baseUrl}/api/delegations/${delegationId}`, { headers: authHeaders })
       if (!res.ok) continue
       const d = await res.json() as { status: string; summaryReport?: { filesModified?: string[]; filesAdded?: string[]; testsPassed?: number; warnings?: string[] } }
 

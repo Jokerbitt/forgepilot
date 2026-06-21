@@ -25,6 +25,7 @@ import { buildProjectBrief, saveProjectBrief } from '@/lib/project-briefs'
 import type { IdeaIntakeInput, PersistenceStrategy, PlanningMode, TargetPlatform } from '@/lib/models/project-brief'
 import type { WorkItem } from '@/lib/models/work-item'
 import type { Delegation } from '@/lib/models/delegation'
+import { createProjectBriefRepository } from '@/lib/repositories/projectBriefRepository'
 import { decomposeWithAI } from '@/lib/agents/ai-decomposer'
 import { createRun } from '@/lib/agents/orchestrated-run'
 import { generateText, stripJsonCodeFence } from '@/lib/ai/text-generation'
@@ -151,9 +152,17 @@ Regeln:
 - risk ist immer "A" (niedriges Risiko für autonome Ausführung)`
 
   const now = new Date().toISOString()
-  const fallback: WorkItem[] = [
-    { id: crypto.randomUUID(), source: 'local', type: 'ticket', title: `Implementiere: ${brief.title}`, url: '', status: 'todo', priority: 1, blocked: false, risk: 'A', aiDelegable: true, estimatedMinutes: 60, projectId: briefId, createdAt: now, updatedAt: now },
-  ]
+  const sourceText = `${brief.title} ${brief.problemStatement} ${brief.desiredOutcome}`.toLowerCase()
+  const isTodoProject = /\b(todo|to-do|aufgabe|aufgaben|planner|planer|task)\b/.test(sourceText)
+  const fallback: WorkItem[] = isTodoProject
+    ? [
+        { id: crypto.randomUUID(), source: 'local', type: 'ticket', title: 'Todo-MVP Grundgeruest bauen', url: '', status: 'todo', priority: 1, blocked: false, risk: 'A', aiDelegable: true, estimatedMinutes: 60, projectId: briefId, createdAt: now, updatedAt: now },
+        { id: crypto.randomUUID(), source: 'local', type: 'ticket', title: 'Todo-Interaktionen und Filter umsetzen', url: '', status: 'todo', priority: 2, blocked: false, risk: 'A', aiDelegable: true, estimatedMinutes: 45, projectId: briefId, createdAt: now, updatedAt: now },
+        { id: crypto.randomUUID(), source: 'local', type: 'ticket', title: 'Todo-Persistenz und Reload-Verhalten anbinden', url: '', status: 'todo', priority: 3, blocked: false, risk: 'B', aiDelegable: true, estimatedMinutes: 60, projectId: briefId, createdAt: now, updatedAt: now },
+      ]
+    : [
+        { id: crypto.randomUUID(), source: 'local', type: 'ticket', title: `Implementiere MVP fuer: ${brief.title}`, url: '', status: 'todo', priority: 1, blocked: false, risk: 'A', aiDelegable: true, estimatedMinutes: 60, projectId: briefId, createdAt: now, updatedAt: now },
+      ]
 
   try {
     const result = await generateText({ system, prompt, maxTokens: 1500, purpose: 'fast' })
@@ -161,7 +170,7 @@ Regeln:
     const match = result.text.match(/\[[\s\S]*\]/)
     const parsed = JSON.parse(json || (match?.[0] ?? '[]')) as Array<{ title: string; type: string; priority: number; estimatedMinutes: number; risk: string }>
 
-    return parsed.map(item => ({
+    const items = parsed.map(item => ({
       id: crypto.randomUUID(),
       source: 'local' as const,
       type: 'ticket' as const,
@@ -177,6 +186,10 @@ Regeln:
       createdAt: now,
       updatedAt: now,
     }))
+    if (!isTodoProject) return items
+    const relevantTerms = ['todo', 'to-do', 'aufgabe', 'aufgaben', 'task', 'planner', 'liste', 'priorität', 'filter', 'persistenz', 'mvp']
+    const relevant = items.some(item => relevantTerms.some(term => item.title.toLowerCase().includes(term)))
+    return relevant ? items : fallback
   } catch {
     return fallback
   }
@@ -200,6 +213,14 @@ export async function POST(req: Request) {
   // Step 2: Build + save Project Brief
   const brief = buildProjectBrief(intakeInput)
   saveProjectBrief(brief)
+  try {
+    const briefRepo = createProjectBriefRepository()
+    const existing = await briefRepo.findById(brief.id)
+    if (existing) await briefRepo.update(brief.id, brief)
+    else await briefRepo.create(brief)
+  } catch {
+    // JSON fallback already saved the brief; PostgreSQL sync is best-effort here.
+  }
 
   // Step 3: Generate Work Items from brief
   const newItems = await generateWorkItems(brief, brief.id)
