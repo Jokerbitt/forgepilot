@@ -55,6 +55,7 @@ import { quickPreflightCheck } from '@/lib/runner-health/runner-detector'
 import { getCachedOrShallowRunnerReadiness, getRunnerReadiness, writeCachedRunnerReadiness } from '@/lib/system/runner-readiness'
 import { selectDelegationExecutionMode } from '@/lib/delegations/execution-mode'
 import { resolveCliAnthropicKey } from '@/lib/delegations/runner-auth'
+import { buildOllamaTaskPrompt } from '@/lib/delegations/ollama-prompt'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
@@ -1401,6 +1402,43 @@ async function finalizeOllamaExternalResult(opts: {
   }
 }
 
+/**
+ * Build-gate for the Ollama path: run the target's REAL build script in the agent's
+ * workspace BEFORE writing back. A local 14B model can produce broken code (qwen has
+ * replaced whole components with stubs and dropped `export`); without this gate that
+ * breakage would be merged into the target repo. Resolves true only if the build
+ * actually passes (or the repo has no build script to gate on).
+ */
+function runWorkspaceBuildGate(id: string, workspacePath: string): Promise<boolean> {
+  const buildScript = resolveVerifyScripts(readWorkspaceScripts(workspacePath)).build
+  if (!buildScript) return Promise.resolve(true)
+  void appendLogs(id, [{ timestamp: new Date().toISOString(), type: 'info', message: `🔍 Build-Gate: npm run ${buildScript} …` }])
+  return new Promise(resolve => {
+    const child = spawn('npm', ['run', buildScript], { cwd: workspacePath, stdio: ['ignore', 'pipe', 'pipe'] })
+    let out = ''
+    const cap = (d: Buffer) => { out = (out + d.toString()).slice(-4000) }
+    child.stdout.on('data', cap)
+    child.stderr.on('data', cap)
+    let done = false
+    const finish = (passed: boolean, note: string) => {
+      if (done) return
+      done = true
+      clearTimeout(timer)
+      void appendLogs(id, [{
+        timestamp: new Date().toISOString(),
+        type: passed ? 'success' : 'error',
+        message: passed
+          ? `🟢 Build-Gate bestanden.`
+          : `🔴 Build-Gate fehlgeschlagen (${note}) — Ergebnis wird NICHT ins Ziel-Repo übernommen.\n${out.slice(-600)}`,
+      }])
+      resolve(passed)
+    }
+    const timer = setTimeout(() => { child.kill('SIGKILL'); finish(false, 'Timeout 300s') }, 300_000)
+    child.on('close', code => finish(code === 0, `exit ${code}`))
+    child.on('error', err => finish(false, err.message))
+  })
+}
+
 async function runWithOllamaAgent(
   id: string,
   prompt: string,
@@ -1461,14 +1499,23 @@ async function runWithOllamaAgent(
   try {
     const result = await runner.run(prompt, maxTurns)
     const elapsed = Math.round((Date.now() - startTime.getTime()) / 60000)
+
+    // Build-gate for external targets: never write broken code back to the target.
+    const buildPassed = result.success && targetRepo && runnerWorkspace
+      ? await runWorkspaceBuildGate(id, runnerWorkspace.path)
+      : true
+    const success = result.success && buildPassed
+
     const finalLog: AgentLog = {
       timestamp: new Date().toISOString(),
-      type: result.success ? 'success' : 'error',
-      message: result.success
+      type: success ? 'success' : 'error',
+      message: success
         ? `✅ Ollama-Run abgeschlossen (${result.turns} Turns)`
-        : `❌ Ollama-Run fehlgeschlagen nach ${result.turns} Turns`,
+        : !buildPassed
+          ? `❌ Ollama-Run: Build-Gate fehlgeschlagen — Ergebnis nicht ins Ziel übernommen`
+          : `❌ Ollama-Run fehlgeschlagen nach ${result.turns} Turns`,
     }
-    const report: DelegationReport | undefined = result.success
+    const report: DelegationReport | undefined = success
       ? {
           keyPoints: [`Ollama-Run abgeschlossen mit ${model}`, result.summary.slice(0, 200)],
           changes: [],
@@ -1477,14 +1524,14 @@ async function runWithOllamaAgent(
         }
       : undefined
 
-    await appendLogs(id, [finalLog], result.success ? 'completed' : 'failed', report)
+    await appendLogs(id, [finalLog], success ? 'completed' : 'failed', report)
 
     const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
     const finished = await repo.findById(id)
     if (finished) {
       // External target: write the agent's workspace result back to the target repo
       // (A2 — the Ollama runner now honors targetRepo via workspace + writeback).
-      if (result.success && targetRepo && runnerWorkspace) {
+      if (success && targetRepo && runnerWorkspace) {
         await finalizeOllamaExternalResult({
           id,
           workspacePath: runnerWorkspace.path,
@@ -1494,8 +1541,8 @@ async function runWithOllamaAgent(
       }
 
       recordRuntimeExecuteLoopEvidence(finished, {
-        blocker: result.success ? undefined : `Ollama run failed after ${result.turns} turns`,
-        notes: result.success
+        blocker: success ? undefined : `Ollama run failed after ${result.turns} turns`,
+        notes: success
           ? 'Ollama execution evidence recorded after runner completed.'
           : 'Ollama execution evidence recorded after runner failed.',
       })
@@ -1504,13 +1551,13 @@ async function runWithOllamaAgent(
       void checkParallelCompletion(finished)
 
       // M230: Delegation chaining — fire-and-forget
-      if (result.success) {
+      if (success) {
         void triggerChain(finished, result.summary).catch(() => {})
       }
 
       // Auto-PR: only for ForgePilot self-runs (no external target — those use the
       // writeback above). Opens a PR from git changes in ForgePilot's own cwd.
-      if (result.success && !targetRepo) {
+      if (success && !targetRepo) {
         const prUrl = tryCreatePrFromGitChanges({
           workdir: process.cwd(),
           branchName: `ollama/${id.slice(0, 8)}-${Date.now()}`,
@@ -1537,10 +1584,10 @@ async function runWithOllamaAgent(
         : ''
       upsertAttentionItem({
         id: `completion:${id}`,
-        type: result.success ? 'delegation_completed' : 'delegation_failed',
-        severity: result.success ? 'info' : 'critical',
-        title: result.success ? `✅ Abgeschlossen: ${label}` : `❌ Fehlgeschlagen: ${label}`,
-        body: result.success
+        type: success ? 'delegation_completed' : 'delegation_failed',
+        severity: success ? 'info' : 'critical',
+        title: success ? `✅ Abgeschlossen: ${label}` : `❌ Fehlgeschlagen: ${label}`,
+        body: success
           ? `Ollama-Run abgeschlossen · ${result.turns} Turns · ${model}${tokensStr}${savedStr}`
           : `Run nach ${result.turns} Turns abgebrochen`,
         delegationId: id,
@@ -1549,7 +1596,7 @@ async function runWithOllamaAgent(
       })
 
       // M204: fire-and-forget execution notification
-      void notifyExecutionResult({ delegation: finished, event: result.success ? 'completed' : 'failed' })
+      void notifyExecutionResult({ delegation: finished, event: success ? 'completed' : 'failed' })
     }
   } catch (err) {
     const msg = (err as Error).message
@@ -2215,7 +2262,10 @@ export async function POST(
 
   if (mode === 'ollama-agent') {
     const model = delegation.contract.llmModel?.trim() || 'qwen2.5-coder:14b'
-    void runWithOllamaAgent(id, prompt, startTime, delegation.contract.maxBudgetUsd, model, delegation.targetRepo)
+    // Local models choke on the full buildPrompt — use a lean, focused task prompt.
+    // (Orchestrated sub-tasks keep their dedicated prompt.)
+    const ollamaPrompt = delegation.contract.orchestratedRunId ? prompt : buildOllamaTaskPrompt(delegation.contract)
+    void runWithOllamaAgent(id, ollamaPrompt, startTime, delegation.contract.maxBudgetUsd, model, delegation.targetRepo)
     return NextResponse.json({ started: true, mode: 'ollama-agent', delegationId: id, model })
   }
 
