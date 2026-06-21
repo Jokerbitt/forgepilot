@@ -17,6 +17,6 @@ export function buildOllamaTaskPrompt(contract: {
     `TASK: ${contract.goal}`,
     contract.context?.trim() ? `\nCONTEXT:\n${contract.context.trim()}` : '',
     dod.length ? `\nDEFINITION OF DONE:\n${dod.map(d => `- ${d}`).join('\n')}` : '',
-    `\nYou are in the project's working directory. Use the tools NOW: read the relevant file(s) with read_file, make the smallest change with write_file, verify with bash_exec ("npm run build"), then commit with bash_exec ("git add -A && git commit -m ..."). Reply TASK_COMPLETE with a one-line summary when done, or TASK_BLOCKED with the reason if you truly cannot proceed. Do not just describe — act with tool calls.`,
+    `\nYou are in the project's working directory. Use the tools NOW: read the relevant file with read_file, then change it with edit_file (surgical replace — NEVER write_file on an existing file, that deletes the rest). Verify with bash_exec ("npm run build"), then commit with bash_exec ("git add -A && git commit -m ..."). Reply TASK_COMPLETE with a one-line summary when done, or TASK_BLOCKED with the reason if you truly cannot proceed. Do not just describe — act with tool calls.`,
   ].filter(Boolean).join('\n')
 }
