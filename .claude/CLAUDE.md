@@ -79,6 +79,7 @@ Ausnahmen — immer stoppen und fragen:
 - Treat `config/*.json` as runtime state unless the task is explicitly about fixtures/defaults.
 - RiskClass C always needs human approval AND an ADR in docs/adr/.
 - Keep meaningful decisions and handoffs in the NAS SSOT.
+- **Wiki-Pflicht:** After ANY user-visible change (new/changed page, button, feature, behavior, security rule), update the operator wiki via the `/wiki-sync` command — keep `docs/wiki/` and `docs/wiki/CHANGELOG.md` in sync so nothing stays undocumented. The wiki is the user-facing manual; treat it like tests.
 
 ## Verification
 
