@@ -90,7 +90,7 @@ jobs:
           fi
 
       - name: Post PR comment
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           ESLINT_STATUS: ${{ env.ESLINT_STATUS }}
           TSC_STATUS: ${{ env.TSC_STATUS }}
