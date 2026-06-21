@@ -18,6 +18,7 @@ import {
 import { LiveAgentActivityPanel } from '@/components/live/LiveAgentActivityPanel'
 import { buttonClassName, cx } from '@/components/ui/primitives'
 import { AgentWorkbenchSummary } from '@/components/workbench/AgentWorkbenchSummary'
+import { AutonomousLoopPanel } from '@/components/command-center/AutonomousLoopPanel'
 
 type Tone = 'ready' | 'attention' | 'blocked' | 'neutral'
 
@@ -1246,6 +1247,8 @@ export default function LiveViewPage() {
             )}
           </div>
         </section>
+
+        <AutonomousLoopPanel />
 
         <LiveAgentActivityPanel />
 

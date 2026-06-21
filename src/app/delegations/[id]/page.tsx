@@ -17,6 +17,8 @@ import { AgentRunReplayView } from '@/components/delegation/AgentRunReplayView'
 import { GrokCriticCard } from '@/components/delegation/GrokCriticCard'
 import { DelegationPipelineBreadcrumb } from '@/components/delegation/DelegationPipelineBreadcrumb'
 import { KnowledgeWritebackPanel } from '@/components/delegation/KnowledgeWritebackPanel'
+import { PreviewAndIteratePanel } from '@/components/delegation/PreviewAndIteratePanel'
+import { DelegationErrorCard } from '@/components/delegation/DelegationErrorCard'
 import { KnowledgeCardList } from '@/components/knowledge'
 import { DelegationLiveLog } from '@/components/delegation/DelegationLiveLog'
 import { DelegationNextActionPanel } from '@/components/delegation/DelegationNextActionPanel'
@@ -1023,6 +1025,39 @@ export default function DelegationDetailPage() {
               </section>
             )}
 
+            {/* ── Budget-paused: resume with more budget ──────────────────── */}
+            {d.budgetPaused && (
+              <div className="rounded-xl border border-amber-700/40 bg-amber-950/20 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl">⏸️</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-amber-200">Budget pausiert</p>
+                    <p className="text-xs text-amber-300/80 mt-1 leading-5">{d.budgetPausedReason ?? d.errorMessage}</p>
+                    <button
+                      onClick={async () => {
+                        setDelegation(prev => prev ? { ...prev, status: 'running', budgetPaused: false, updatedAt: new Date().toISOString() } : prev)
+                        await fetch(`/api/delegations/${id}/resume-budget`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ multiplier: 2 }),
+                        }).catch(() => {})
+                        setTimeout(loadDelegation, 1500)
+                      }}
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-500"
+                    >
+                      ↩️ Mit doppeltem Budget fortsetzen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── M4/M5: Classified error card with actionable fix ────────── */}
+            {!d.budgetPaused && <DelegationErrorCard delegation={d} />}
+
+            {/* ── M120: Preview & Iterate ──────────────────────────────────── */}
+            <PreviewAndIteratePanel delegation={d} />
+
             {/* ── Knowledge Writeback ───────────────────────────────────────── */}
             {(d.status === 'completed' || d.status === 'failed') && (
           <KnowledgeWritebackPanel delegationId={id} delegation={d} />
@@ -1325,6 +1360,17 @@ export default function DelegationDetailPage() {
                   <div className="flex justify-between gap-2">
                     <dt className="text-gray-500">Tatsächlich</dt>
                     <dd className="text-yellow-400 font-mono">${d.actualCostUsd.toFixed(4)}</dd>
+                  </div>
+                )}
+                {(d.inputTokens != null || d.outputTokens != null) && (
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-gray-500">Tokens</dt>
+                    <dd className="text-slate-300 font-mono text-xs">
+                      {d.inputTokens != null ? `${(d.inputTokens / 1000).toFixed(1)}k in` : ''}
+                      {d.inputTokens != null && d.outputTokens != null ? ' / ' : ''}
+                      {d.outputTokens != null ? `${(d.outputTokens / 1000).toFixed(1)}k out` : ''}
+                      {d.cachedTokens != null && d.cachedTokens > 0 ? ` / ${(d.cachedTokens / 1000).toFixed(1)}k cached` : ''}
+                    </dd>
                   </div>
                 )}
               </dl>

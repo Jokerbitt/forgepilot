@@ -1,0 +1,40 @@
+// schema.prisma — Prisma schema for a Postgres-backed SaaS app.
+// Dest: prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Application user. `passwordHash` stores a bcrypt hash (see auth block).
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations to your domain models go here, e.g.:
+  // projects Project[]
+}
+
+// ---------------------------------------------------------------------------
+// Example domain model — copy this pattern for your own entities.
+// Uncomment and adapt as needed.
+// ---------------------------------------------------------------------------
+//
+// model Project {
+//   id        String   @id @default(cuid())
+//   name      String
+//   ownerId   String
+//   owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+//   createdAt DateTime @default(now())
+//   updatedAt DateTime @updatedAt
+//
+//   @@index([ownerId])
+// }

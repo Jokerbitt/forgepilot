@@ -5,6 +5,8 @@ import { delegationLogger } from '@/lib/logger'
 import { withSpan } from '@/lib/tracing/tracer'
 import { checkRateLimit, buildRateLimitHeaders } from '@/lib/rate-limit'
 import { spawn, execSync } from 'child_process'
+import fsSync from 'fs'
+import pathMod from 'path'
 import type { Delegation, AgentLog, DelegationReport } from '@/lib/models/delegation'
 import { registerProcess, unregisterProcess } from '@/lib/process-registry'
 import { readConnectorConfigs, readStoredApiKeys } from '@/lib/connectors/config'
@@ -18,9 +20,9 @@ import {
   buildSimulationBudgetLog,
   getExecutionStartBlocker,
   buildSubTaskPrompt,
-  buildSkillBlock,
   buildRetryContext,
 } from '@/lib/delegation-execution'
+import { buildSelectiveContext } from '@/lib/delegations/context-router'
 import { OllamaAgentRunner, isOllamaReachable } from '@/lib/agent-runner/ollama-runner'
 import { budgetToClaudeCliMaxTurns, budgetToMaxTurns } from '@/lib/budget-utils'
 import { scoreWork } from '@/lib/agents/work-quality'
@@ -28,10 +30,11 @@ import { recordOutcome } from '@/lib/agents/skill-evolver'
 import { runWithToolUse } from '@/lib/agents/tool-use-runner'
 import { extractKnowledge } from '@/lib/knowledge/extraction'
 import { persistGrokCriticForDelegation } from '@/lib/eval/auto-grok-critic'
-import { writebackExecutionInsights, writebackDelegationKnowledge } from '@/lib/knowledge/writeback'
+import { writebackExecutionInsights, writebackDelegationKnowledge, writeFailureLessonCard } from '@/lib/knowledge/writeback'
 import { notifyExecutionResult, notifyBudgetWarning } from '@/lib/notifications'
 import { checkBudget, getBudgetLimit, wouldExceedBudget } from '@/lib/budget/guard'
 import { triggerChain } from '@/lib/delegations/chaining'
+import { decidePhaseGate } from '@/lib/delegations/phase-gate'
 
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import { buildContextPackage } from '@/lib/knowledge/context-package'
@@ -39,7 +42,15 @@ import type { MemoryCard } from '@/lib/knowledge/types'
 import { checkParallelCompletion } from '@/lib/delegation-parallel'
 import { triggerCriticRetry } from '@/lib/delegations/critic-retry'
 import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-runtime-evidence'
-import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, type RunnerWorkspace } from '@/lib/agent-runner/worktree'
+import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, writebackLocalResult, reuseExistingWorkspace, type RunnerWorkspace } from '@/lib/agent-runner/worktree'
+import { bootstrapRuntime, summarizeBootstrap, smokeTestApp } from '@/lib/agent-runner/runtime-bootstrap'
+import { autoScaffoldWorkspace } from '@/lib/building-blocks/create-app'
+import { scopedScaffoldBlockIds } from '@/lib/building-blocks/catalog'
+import { getNBAConfig } from '@/lib/nba-engine/nba-config'
+import { recordSkillOutcome, listSkills, seedBuiltinSkills } from '@/lib/skills/prompt-skill-registry'
+import { applyAutoOptimizations } from '@/lib/skills/skill-optimizer'
+import { detectKnownError, classifyError, extractErrorSnippet } from '@/lib/runner-health/error-classifier'
+import { quickPreflightCheck } from '@/lib/runner-health/runner-detector'
 import { getCachedOrShallowRunnerReadiness, getRunnerReadiness, writeCachedRunnerReadiness } from '@/lib/system/runner-readiness'
 import { selectDelegationExecutionMode } from '@/lib/delegations/execution-mode'
 
@@ -53,6 +64,45 @@ async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Dele
     logs: [...(current.logs ?? []), ...newLogs],
   })
 }
+
+/**
+ * Compact retry prompt — replaces the full buildPrompt() on auto-retry runs.
+ * Saves ~70% tokens by omitting skill/knowledge/codebase blocks already in the agent's context.
+ * Includes ONLY: goal, DoD, branch, and the specific test failure output.
+ */
+function buildRetryPrompt(
+  delegation: Delegation,
+  retryN: number,
+  maxRetries: number,
+  testOutput: string,
+): string {
+  const c = delegation.contract
+  const slug = (c.workItemId ?? delegation.id).replace(/[^a-z0-9-]/gi, '-').toLowerCase()
+  const branch = `${c.branchStrategy ?? 'feature'}/${slug}-task`
+  const dod = (c.definitionOfDone ?? [])
+    .filter(Boolean)
+    .map(d => `- [ ] ${d}`)
+    .join('\n') || '- [ ] Task erfolgreich abgeschlossen'
+
+  return `You are continuing work on the same task. DO NOT re-read files you already have in context.
+
+## Task (reminder)
+${c.goal}
+
+## Branch: \`${branch}\`
+
+## Definition of Done
+${dod}
+
+## Auto-Retry ${retryN}/${maxRetries} — Fix these test failures
+Do not break passing tests. Only fix what is failing:
+\`\`\`
+${testOutput.slice(-2500)}
+\`\`\`
+
+Run \`npm run test:run\` to verify your fix. Then commit.`
+}
+
 
 function buildClaudeCliSummaryReport(fullOutput: string, elapsed: number, prUrl?: string): DelegationReport {
   const prMetadata = prUrl ? readPrMetadata(prUrl) : null
@@ -154,10 +204,12 @@ function parseTestsPassed(fullOutput: string): number | undefined {
   return undefined
 }
 
-function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryContext?: string): string {
+function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryContext?: string, targetRepo?: string): string {
   const c = delegation.contract
   const slug = (c.workItemId ?? delegation.id).replace(/[^a-z0-9-]/gi, '-').toLowerCase()
-  const branch = `${c.branchStrategy ?? 'feature'}/${slug}-task`
+  // Unique suffix prevents branch/PR collisions when the same workItemId runs twice
+  const uniq = delegation.id.replace(/-/g, '').slice(0, 6)
+  const branch = `${c.branchStrategy ?? 'feature'}/${slug}-${uniq}`
   const commitPrefix = c.taskType || 'feat'
   const maxTurns = budgetToClaudeCliMaxTurns(c.maxBudgetUsd)
   const checkpointTurn = Math.max(10, Math.floor(maxTurns * 0.4))
@@ -176,7 +228,19 @@ function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryC
     ? `\n## Context\n${c.context.trim()}\n${contextCardsBlock}${retryContext ?? ''}`
     : `${contextCardsBlock}${retryContext ?? ''}`
 
-  const skillBlock = buildSkillBlock(c.skillCategory, c.allowedFilePatterns)
+  const { skillBlock, knowledgeBlock, codebaseBlock, buildingBlocksBlock, profile } = buildSelectiveContext(c, targetRepo)
+
+  // Local target repos (a filesystem path, not a github.com URL) have no remote
+  // to open a PR against — committing locally is the deliverable. ForgePilot is
+  // written back automatically. Tell the agent to skip the PR step cleanly
+  // instead of failing on `gh pr create` (the old "GitHub API 422" noise).
+  const isLocalTarget = Boolean(targetRepo && /^[~./]/.test(targetRepo))
+  const prStep = isLocalTarget
+    ? '7. Commit only: this is a LOCAL repo with no GitHub remote — do NOT run `gh pr create`. Your committed work is written back automatically.'
+    : `7. PR: gh pr create --title "${commitPrefix}: ${c.goal.substring(0, 60).replace(/"/g, "'")}" --body "## Summary\\n- <bullets>\\n\\n## Test plan\\n- [ ] tests pass"`
+  const smokeStep = isLocalTarget
+    ? '8. Verify the app builds: npm run build (must be green) — there is no shared smoke endpoint for a standalone app.'
+    : '8. Smoke-test: curl -sf http://localhost:3000/api/smoke-test | grep \'"ok":true\' || echo "ESCALATION: smoke-test failed — UI regression detected"'
 
   return `You are an autonomous software engineering agent working on **ForgePilot** — a local-first AI Workflow OS built with Next.js 14, TypeScript strict, Tailwind CSS, and Vitest.
 
@@ -191,6 +255,7 @@ ${dod}
 - Branch: \`${branch}\`
 - Max budget: $${c.maxBudgetUsd} (~${maxTurns} turns)
 - Work item: ${c.workItemId}
+- Context profile: **${profile}** (token-optimized for ${profile} tasks)
 
 ## Execution protocol (follow exactly, in order)
 \`\`\`
@@ -201,8 +266,8 @@ ${dod}
 5. Verify: npm run test:run && npm run lint && npm run type-check
    (run type-check BEFORE build — never in parallel)
 6. Commit: git commit -m "${commitPrefix}: <description>"
-7. PR: gh pr create --title "${commitPrefix}: ${c.goal.substring(0, 60).replace(/"/g, "'")}" --body "## Summary\\n- <bullets>\\n\\n## Test plan\\n- [ ] tests pass"
-8. Smoke-test: curl -sf http://localhost:3000/api/smoke-test | grep '"ok":true' || echo "ESCALATION: smoke-test failed — UI regression detected"
+${prStep}
+${smokeStep}
 9. Final output: print DONE: <one-sentence summary>
 \`\`\`
 
@@ -223,11 +288,18 @@ ${dod}
 - Tests must cover the new behavior — not just type-check.
 - Never commit directly to main. Never force-push.
 - If a step fails, diagnose root cause before retrying.
-${skillBlock}
+
+## Token efficiency (follow strictly to keep costs low)
+- **Never re-read a file you already have in context** — use what you read.
+- **One WebFetch attempt per URL** — if it fails (4xx/5xx), try a different approach.
+- **Diagnose before retrying commands** — read error output fully before repeating.
+- **Config files stay in context** — never reload tsconfig.json, package.json twice.
+${skillBlock}${knowledgeBlock}${codebaseBlock}${buildingBlocksBlock}
+
 Start now.`
 }
 
-// buildSubTaskPrompt and buildSkillBlock are imported from @/lib/delegation-execution
+// buildSubTaskPrompt is imported from @/lib/delegation-execution
 
 type SkillCategory = NonNullable<import('@/lib/models/delegation').TaskContract['skillCategory']>
 
@@ -235,22 +307,8 @@ type SkillCategory = NonNullable<import('@/lib/models/delegation').TaskContract[
  * Detect credit/auth errors in claude CLI output.
  * Returns a user-friendly message or undefined if no known error.
  */
-function detectKnownError(output: string): string | undefined {
-  const lower = output.toLowerCase()
-  if (lower.includes('credit balance') || lower.includes('insufficient_quota') || lower.includes('billing')) {
-    return 'Anthropic-Guthaben aufgebraucht. Bitte unter console.anthropic.com aufladen.'
-  }
-  if (lower.includes('authentication') || lower.includes('invalid x-api-key') || lower.includes('api_key')) {
-    return 'Anthropic API Key ungültig oder nicht konfiguriert. Bitte in den Einstellungen prüfen.'
-  }
-  if (lower.includes('rate limit') || lower.includes('rate_limit')) {
-    return 'Anthropic Rate Limit erreicht. Warte kurz und versuche es erneut.'
-  }
-  if (lower.includes('reached max turns') || lower.includes('max turns')) {
-    return 'Claude CLI hat das Turn-Limit erreicht. Erhöhe das Budget oder schneide die Delegation kleiner zu.'
-  }
-  return undefined
-}
+// detectKnownError and classifyError are imported from @/lib/runner-health/error-classifier
+// This keeps the execute route using a shared, testable classifier.
 
 function isClaudeCliFallbackError(message: string | undefined): boolean {
   if (!message) return false
@@ -408,7 +466,7 @@ async function autoMergePRIfEligible(prUrl: string, delegation: Delegation): Pro
   }
 }
 
-function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd: number, riskClass: string, targetRepo?: string) {
+function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd: number, riskClass: string, targetRepo?: string, existingWorkspace?: RunnerWorkspace, scaffold?: { goal: string; context: string }) {
   const storedKeys = readStoredApiKeys()
   const anthropicKey = storedKeys.ANTHROPIC_API_KEY?.trim() || undefined
   const maxTurns = budgetToClaudeCliMaxTurns(budgetUsd)
@@ -427,7 +485,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
 
   let runnerWorkspace: RunnerWorkspace
   try {
-    runnerWorkspace = prepareRunnerWorkspace({ delegationId: id, targetRepo })
+    runnerWorkspace = prepareRunnerWorkspace({ delegationId: id, targetRepo, existingWorkspace })
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
     void appendLogs(id, [{
@@ -453,6 +511,31 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     type: 'info',
     message: `Runner-Workspace vorbereitet: ${runnerWorkspace.path}`,
   }])
+
+  // Pre-scaffold a fresh workspace with the FOUNDATION blocks — copies vetted
+  // test + app-shell (+ landing) files with ZERO tokens so the agent only writes
+  // app-specific code. Guarded to fresh repos (no package.json) and first runs.
+  //
+  // ON by default (opt out with FORGEPILOT_PRESCAFFOLD=false). The full-bundle
+  // scaffold cost +18%, but the foundation-only scaffold measured CHEAPER than
+  // no scaffold ($2.99 vs $3.16) and -35% vs the full one. See finding memo.
+  if (scaffold && targetRepo && !existingWorkspace && process.env.FORGEPILOT_PRESCAFFOLD !== 'false') {
+    try {
+      const result = autoScaffoldWorkspace({
+        workspacePath: runnerWorkspace.path,
+        goal: scaffold.goal,
+        context: scaffold.context,
+        resolveBlockIds: scopedScaffoldBlockIds,
+      })
+      if (result.scaffolded) {
+        void appendLogs(id, [{
+          timestamp: new Date().toISOString(),
+          type: 'success',
+          message: `🧱 Pre-Scaffold: ${result.fileCount} Dateien (${result.reason}) ohne Tokens kopiert — Agent baut nur App-Spezifisches.`,
+        }])
+      }
+    } catch { /* pre-scaffold is best-effort */ }
+  }
 
   const proc = spawn(
     'claude',
@@ -515,7 +598,10 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       timestamp: new Date().toISOString(),
       type: 'error',
       message,
-    }])
+    }], 'failed') // set terminal status — otherwise the delegation hangs on 'running' forever
+    createDelegationRepository(SINGLE_TENANT_USER_ID)
+      .update(id, { errorMessage: message, completedAt: new Date().toISOString() })
+      .catch(() => {})
     try {
       if (proc.pid) process.kill(-proc.pid, 'SIGTERM')
     } catch {
@@ -552,7 +638,27 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       const msg = event.message as { content?: Array<{ type: string; text?: string; name?: string; input?: Record<string, unknown> }> }
       for (const block of msg?.content ?? []) {
         if (block.type === 'text' && block.text?.trim()) {
-          logBuffer.push({ timestamp: new Date().toISOString(), type: 'thought', message: block.text.trim().slice(0, 500) })
+          const text = block.text.trim()
+          logBuffer.push({ timestamp: new Date().toISOString(), type: 'thought', message: text.slice(0, 500) })
+
+          // M109: Checkpoint detection — agent prints "CHECKPOINT: <phase>"
+          // Guard: skip if a test run is already in progress (concurrent CHECKPOINTs).
+          if (text.startsWith('CHECKPOINT:') && !checkpointTestRunning) {
+            const phase = text.slice('CHECKPOINT:'.length).trim()
+            checkpointTestRunning = true
+            logBuffer.push({ timestamp: new Date().toISOString(), type: 'info', message: `🔖 Checkpoint: ${phase} — Tests laufen…` })
+            scheduleFlush()
+            runPostExecutionTestsAsync(runnerWorkspace.path).then(testResult => {
+              checkpointTestRunning = false
+              return appendLogs(id, [{
+                timestamp: new Date().toISOString(),
+                type: testResult.passed ? 'info' : 'error',
+                message: testResult.passed
+                  ? `✅ Checkpoint bestanden: ${phase}`
+                  : `❌ Checkpoint-Tests fehlgeschlagen: ${phase} — Agent läuft weiter`,
+              }])
+            }).catch(() => { checkpointTestRunning = false })
+          }
         } else if (block.type === 'tool_use' && block.name) {
           const summary = summariseTool(block.name, block.input ?? {})
           logBuffer.push({ timestamp: new Date().toISOString(), type: 'command', message: summary })
@@ -571,10 +677,90 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
         }
       }
     } else if (type === 'result') {
-      // Extract final cost from the result event
+      // Extract cost + token counts from the result event
       const cost = event.total_cost_usd as number | undefined
       if (cost != null) fullOutput += `\nCost: $${cost.toFixed(4)}`
+
+      // Token tracking — Claude CLI stream-json includes usage in result event
+      const usage = event.usage as { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number } | undefined
+      if (usage) {
+        const inp = usage.input_tokens ?? 0
+        const out = usage.output_tokens ?? 0
+        const cached = usage.cache_read_input_tokens ?? 0
+        fullOutput += `\nTokens: ${inp} in / ${out} out${cached ? ` / ${cached} cached` : ''}`
+        // Store on delegation for analytics (non-blocking update)
+        if (inp > 0 || out > 0) {
+          createDelegationRepository(SINGLE_TENANT_USER_ID).update(id, {
+            inputTokens: inp,
+            outputTokens: out,
+            cachedTokens: cached,
+          }).catch(() => {})
+        }
+      }
     }
+  }
+
+  // M107/M109: Async test runner — used both during checkpoints and post-execution.
+  // Guard against concurrent runs: if a test is already running for this workspace, skip.
+  let checkpointTestRunning = false
+  function runPostExecutionTestsAsync(workspacePath: string): Promise<{ passed: boolean; output: string; timedOut?: boolean }> {
+    return new Promise(resolve => {
+      const child = spawn('npm', ['run', 'test:run'], { cwd: workspacePath, stdio: ['ignore', 'pipe', 'pipe'] })
+      let out = ''
+      child.stdout?.on('data', (chunk: Buffer) => { out += chunk.toString() })
+      child.stderr?.on('data', (chunk: Buffer) => { out += chunk.toString() })
+      // 300s: full suite in a fresh worktree takes 2-4 min (collect + 3500+ tests).
+      // A timeout is an INFRA signal (slow machine, npm install missing) — never a code-failure.
+      const timer = setTimeout(() => {
+        child.kill()
+        resolve({ passed: false, output: 'Test runner timed out after 300s', timedOut: true })
+      }, 300_000)
+      child.on('close', (code: number | null) => {
+        clearTimeout(timer)
+        resolve({ passed: code === 0, output: out.slice(-3000) })
+      })
+    })
+  }
+
+  // Build-Gate: a phase must produce a green `npm run build` before the next
+  // chain phase may start — otherwise broken foundations cascade.
+  // Skips gracefully if the workspace has no build script (returns passed=true).
+  function runBuildGateAsync(workspacePath: string): Promise<{ passed: boolean; output: string; skipped?: boolean }> {
+    return new Promise(resolve => {
+      let hasBuild = false
+      try {
+        const pkg = JSON.parse(fsSync.readFileSync(pathMod.join(workspacePath, 'package.json'), 'utf-8')) as { scripts?: Record<string, string> }
+        hasBuild = Boolean(pkg.scripts?.build)
+      } catch { /* no package.json yet */ }
+      if (!hasBuild) { resolve({ passed: true, output: 'kein build-Script — Gate übersprungen', skipped: true }); return }
+
+      const child = spawn('npm', ['run', 'build'], {
+        cwd: workspacePath,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, NODE_ENV: 'production' },
+      })
+      let out = ''
+      child.stdout?.on('data', (c: Buffer) => { out += c.toString() })
+      child.stderr?.on('data', (c: Buffer) => { out += c.toString() })
+      const timer = setTimeout(() => { child.kill(); resolve({ passed: false, output: 'Build-Timeout nach 300s' }) }, 300_000)
+      child.on('close', (code: number | null) => {
+        clearTimeout(timer)
+        resolve({ passed: code === 0, output: out.slice(-3000) })
+      })
+    })
+  }
+
+  // Test-Gate: after a green build, a phase must also pass `npm run test:run`
+  // before the next chain phase starts. Skips gracefully when there is no
+  // test:run script. A timeout is an infra signal (handled by decidePhaseGate).
+  function runTestGateAsync(workspacePath: string): Promise<{ passed: boolean; output: string; timedOut?: boolean; skipped?: boolean }> {
+    let hasTest = false
+    try {
+      const pkg = JSON.parse(fsSync.readFileSync(pathMod.join(workspacePath, 'package.json'), 'utf-8')) as { scripts?: Record<string, string> }
+      hasTest = Boolean(pkg.scripts?.['test:run'])
+    } catch { /* no package.json yet */ }
+    if (!hasTest) return Promise.resolve({ passed: true, output: 'kein test:run-Script — Test-Gate übersprungen', skipped: true })
+    return runPostExecutionTestsAsync(workspacePath)
   }
 
   proc.stdout?.on('data', (chunk: Buffer) => {
@@ -650,7 +836,92 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       : undefined
 
     const cleanupRunnerWorkspace = async () => {
+      // Persistent multi-phase build: if this delegation has a NEXT chain phase,
+      // keep the workspace alive so the next phase builds on this one's work.
+      // Only the LAST phase writes back to the target repo + cleans up.
+      const _chainState = await createDelegationRepository(SINGLE_TENANT_USER_ID).findById(id).catch(() => null)
+      const hasNextPhase = Boolean(_chainState?.chainNextId)
+      if (success && hasNextPhase) {
+        // Keep the workspace alive for the next phase. The Build-Gate already ran
+        // (before triggerChain) and confirmed this phase builds — see below.
+        await createDelegationRepository(SINGLE_TENANT_USER_ID)
+          .update(id, { worktreePath: runnerWorkspace.path })
+          .catch(() => {})
+        await appendLogs(id, [{
+          timestamp: new Date().toISOString(),
+          type: 'info',
+          message: `⛓️ Workspace bleibt erhalten für die nächste Phase: ${runnerWorkspace.path}`,
+        }])
+        return // do NOT writeback or clean up — the next phase continues here
+      }
+
+      // Writeback + outcome verification: for a LOCAL target repo, push the agent's
+      // result back BEFORE the temp clone is deleted — otherwise the code is lost.
+      if (success && targetRepo) {
+        const writeback = writebackLocalResult({
+          workspacePath: runnerWorkspace.path,
+          targetRepo,
+          delegationId: id,
+        })
+        if (writeback) {
+          if (writeback.mergedToMain) {
+            await appendLogs(id, [{
+              timestamp: new Date().toISOString(),
+              type: 'success',
+              message: `✅ Ergebnis autonom in ${targetRepo} (${writeback.defaultBranch}) übernommen — ${writeback.fileCount} Dateien.${writeback.installed ? ' Abhängigkeiten installiert (npm install) — sofort startklar.' : ''} Backup-Branch: ${writeback.branch}`,
+            }])
+            // Runtime-Bootstrap: make the merged app actually runnable (env + DB),
+            // not just compilable. Best-effort — never fails the delegation.
+            try {
+              const bootstrap = bootstrapRuntime({ targetRepo })
+              const summary = summarizeBootstrap(bootstrap)
+              if (summary !== 'Kein Runtime-Bootstrap nötig') {
+                await appendLogs(id, [{
+                  timestamp: new Date().toISOString(),
+                  type: 'info',
+                  message: `🚀 Runtime-Bootstrap: ${summary}`,
+                }])
+              }
+              // Live smoke test: prove the app actually BOOTS, not just compiles.
+              const smoke = await smokeTestApp({ targetRepo })
+              if (smoke.ran) {
+                await appendLogs(id, [{
+                  timestamp: new Date().toISOString(),
+                  type: smoke.ok ? 'success' : 'error',
+                  message: `${smoke.ok ? '🟢' : '🔴'} Smoke-Test: ${smoke.detail}`,
+                }])
+              }
+            } catch { /* bootstrap + smoke are best-effort */ }
+          } else {
+            await appendLogs(id, [{
+              timestamp: new Date().toISOString(),
+              type: 'info',
+              message: `⚠ Auto-Merge nicht möglich (${writeback.defaultBranch} divergiert). Ergebnis liegt im Branch \`${writeback.branch}\` (${writeback.fileCount} Dateien). Mergen mit: git merge ${writeback.branch}`,
+            }])
+          }
+          // Outcome verification: a "completed" build that wrote almost nothing is suspect
+          if (writeback.fileCount <= 1) {
+            await appendLogs(id, [{
+              timestamp: new Date().toISOString(),
+              type: 'error',
+              message: `❌ Outcome-Warnung: Der Lauf meldete Erfolg, aber das Ergebnis enthält nur ${writeback.fileCount} Datei(en). Der Agent hat vermutlich nichts Substanzielles erzeugt.`,
+            }])
+            await createDelegationRepository(SINGLE_TENANT_USER_ID)
+              .update(id, { errorMessage: `Outcome-Verifikation fehlgeschlagen: nur ${writeback.fileCount} Datei(en) im Ergebnis` })
+              .catch(() => {})
+          }
+        } else {
+          await appendLogs(id, [{
+            timestamp: new Date().toISOString(),
+            type: 'error',
+            message: `❌ Writeback fehlgeschlagen — Code konnte nicht ins Ziel-Repo ${targetRepo} geschrieben werden. Bitte Logs prüfen.`,
+          }])
+        }
+      }
       if (shouldKeepRunnerWorktree({ success, env: process.env })) {
+        // M120: Store workspace path in delegation for preview access
+        const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
+        await repo.update(id, { worktreePath: runnerWorkspace.path }).catch(() => {})
         await appendLogs(id, [{
           timestamp: new Date().toISOString(),
           type: success ? 'info' : 'error',
@@ -692,6 +963,32 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       const current = await repo.findById(id)
       if (!current || current.status !== 'running') return
 
+      // M107: Post-execution test verification + auto-retry (max 3 attempts)
+      const autoRetryEnabled = true
+      const currentRetryCount = current.retryCount ?? 0
+      if (success && autoRetryEnabled && currentRetryCount < 3) {
+        const testResult = await runPostExecutionTestsAsync(runnerWorkspace.path)
+        if (testResult.timedOut) {
+          // Infra problem, not a code problem — do NOT burn a retry on it
+          void appendLogs(id, [{
+            timestamp: new Date().toISOString(),
+            type: 'info',
+            message: '⚠ Test-Runner-Timeout (Infra) — kein Auto-Retry, Lauf wird als abgeschlossen gewertet. Tests bitte manuell prüfen.',
+          }])
+        } else if (!testResult.passed) {
+          void appendLogs(id, [{
+            timestamp: new Date().toISOString(),
+            type: 'error',
+            message: `🔄 Auto-Retry ${currentRetryCount + 1}/3 — Tests fehlgeschlagen:\n${testResult.output.slice(0, 600)}`,
+          }])
+          await repo.update(id, { retryCount: currentRetryCount + 1 })
+          // Use compact retry prompt — saves ~70% tokens vs repeating full original prompt
+          const retryPrompt = buildRetryPrompt(current, currentRetryCount + 1, 3, testResult.output)
+          runWithClaudeCLI(id, retryPrompt, startTime, budgetUsd, riskClass, targetRepo, runnerWorkspace)
+          return // Don't cleanup the workspace — the retry run will handle it
+        }
+      }
+
       if (!success && isClaudeCliFallbackError(knownError) && !alreadyAttemptedCodexFallback(current)) {
         if (isCodexFallbackReady()) {
           const fallbackLog: AgentLog = {
@@ -716,11 +1013,17 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       }
 
       const finalStatus = success ? 'completed' : 'failed'
+      // M4: Use full classifier for rich error message
+      const classifiedFailure = !success ? classifyError(fullOutput) : null
+      const friendlyError = classifiedFailure && classifiedFailure.category !== 'unknown'
+        ? `${classifiedFailure.title} — ${classifiedFailure.fix}`
+        : knownError ?? (code !== 0 ? `Prozess beendet mit Exit-Code ${code ?? 'unbekannt'}` : undefined)
+
       const finishedDelegation = await repo.update(id, {
         status: finalStatus,
         completedAt: new Date().toISOString(),
         ...(!success
-          ? { errorMessage: knownError ?? `Claude CLI failed with exit code ${code ?? 'unknown'}` }
+          ? { errorMessage: friendlyError }
           : {}),
         ...(actualCost ? { actualCostUsd: actualCost } : {}),
         ...(report ? { summaryReport: report } : {}),
@@ -747,10 +1050,54 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       // M207: Fan-in — notify parent if this is a parallel sub-delegation
       void checkParallelCompletion(finishedDelegation)
 
-      // M230: Delegation chaining — fire-and-forget, never blocks or fails the parent
+      // M230: Delegation chaining — gated on a green build for multi-phase builds.
+      // The next phase must NOT start on a broken foundation.
       if (success) {
-        void triggerChain(finishedDelegation, fullOutput).catch(() => {})
+        if (finishedDelegation.chainNextId) {
+          // Gate the next phase on a green build AND green tests — a phase must
+          // not start on a broken foundation. Test timeouts are an infra signal.
+          const buildGate = await runBuildGateAsync(runnerWorkspace.path)
+          const testGate = buildGate.passed
+            ? await runTestGateAsync(runnerWorkspace.path)
+            : { passed: false, output: '', skipped: true }
+          const decision = decidePhaseGate({
+            buildPassed: buildGate.passed,
+            buildSkipped: buildGate.skipped,
+            testPassed: testGate.passed,
+            testTimedOut: testGate.timedOut,
+            testSkipped: testGate.skipped,
+          })
+          if (!decision.proceed) {
+            const failOutput = (buildGate.passed ? testGate.output : buildGate.output).slice(-800)
+            await appendLogs(id, [{
+              timestamp: new Date().toISOString(),
+              type: 'error',
+              message: `⛔ ${decision.reason} Nächste Phase wird NICHT gestartet.\n${failOutput}`,
+            }], 'failed')
+            await repo.update(id, {
+              errorMessage: decision.reason,
+              chainNextId: undefined,
+            }).catch(() => {})
+          } else {
+            if (!(buildGate.skipped && testGate.skipped)) {
+              await appendLogs(id, [{ timestamp: new Date().toISOString(), type: 'success', message: `✅ ${decision.reason}` }])
+            }
+            void triggerChain(finishedDelegation, fullOutput).catch(() => {})
+          }
+        } else {
+          void triggerChain(finishedDelegation, fullOutput).catch(() => {})
+        }
       }
+
+      // Loop-Closure: in autopilot mode, auto-start the next safe delegation
+      // after a successful completion (fills the gap between chain steps)
+      try {
+        const config = getNBAConfig()
+        if (success && config.approvalMode === 'autopilot' && !finishedDelegation.chainNextId) {
+          const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+          fetch(`${baseUrl}/api/delegations/next-safe`, { method: 'POST' }).catch(() => {})
+        }
+      } catch { /* non-critical */ }
 
       {
 
@@ -787,6 +1134,29 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
           durationMinutes,
         })
         recordOutcome('claude-code', skillCategory, result)
+
+        // Record outcomes for all global skills — feeds the self-improving optimizer
+        try {
+          seedBuiltinSkills()
+          const globalSkills = listSkills({ scope: 'global', status: 'active' })
+          const now = new Date().toISOString()
+          for (const skill of globalSkills) {
+            recordSkillOutcome({
+              skillId: skill.id,
+              qualityScore: result.qualityScore,
+              tokensSaved: 0,
+              success,
+              recordedAt: now,
+            })
+          }
+          // Auto-optimize every 10 completed runs
+          const totalRuns = globalSkills.reduce((sum, s) => sum + s.metrics.runsCount, 0)
+          if (globalSkills.length > 0 && totalRuns > 0 && totalRuns % 10 === 0) {
+            applyAutoOptimizations(85)
+          }
+        } catch {
+          // Non-critical telemetry — never break execution
+        }
       } catch {
         // Non-critical — never break execution due to telemetry
       }
@@ -825,6 +1195,11 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
                 pr: true,
                 notes: 'PR evidence recorded after automatic PR creation.',
               })
+              // Auto-review: assess DoD satisfaction against the git diff
+              const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+              fetch(`${baseUrl}/api/delegations/${finishedDelegation.id}/quality-check`, {
+                method: 'POST',
+              }).catch(() => {})
               void autoMergePRIfEligible(result.prUrl, updated)
             }
           }
@@ -850,6 +1225,11 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
             }
           })
           .catch(() => {})
+      }
+
+      // M108b: Failure Lesson Writeback — closes the intelligence loop for failed runs
+      if (!success) {
+        void writeFailureLessonCard(finishedDelegation).catch(() => {})
       }
 
       if (success && report) {
@@ -1058,7 +1438,7 @@ async function runWithClaudeAPI(id: string, delegation: Delegation, startTime: D
   const retryContext = buildRetryContext(delegation)
   const prompt = delegation.contract.orchestratedRunId
     ? buildSubTaskPrompt(delegation)
-    : buildPrompt(delegation, contextCards, retryContext || undefined)
+    : buildPrompt(delegation, contextCards, retryContext || undefined, delegation.targetRepo)
 
   try {
     const result = await runWithToolUse(prompt, {
@@ -1320,11 +1700,15 @@ function runWithCodexCLI(id: string, prompt: string, startTime: Date, budgetUsd:
   startupTimer = setTimeout(() => {
     if (sawOutput) return
     const timeoutSeconds = Math.round(startupTimeoutMs / 1000)
+    const codexStallMessage = `Codex CLI hat nach ${timeoutSeconds}s keine Ausgabe geliefert. Bitte Codex CLI lokal mit \`codex exec "ping"\` testen und erneut starten.`
     void appendLogs(id, [{
       timestamp: new Date().toISOString(),
       type: 'error',
-      message: `Codex CLI hat nach ${timeoutSeconds}s keine Ausgabe geliefert. Bitte Codex CLI lokal mit \`codex exec "ping"\` testen und erneut starten.`,
-    }])
+      message: codexStallMessage,
+    }], 'failed')
+    createDelegationRepository(SINGLE_TENANT_USER_ID)
+      .update(id, { errorMessage: codexStallMessage, completedAt: new Date().toISOString() })
+      .catch(() => {})
     try {
       if (proc.pid) process.kill(-proc.pid, 'SIGTERM')
     } catch {
@@ -1543,6 +1927,19 @@ export async function POST(
     return NextResponse.json({ error: blocker.error }, { status: blocker.status })
   }
 
+  // M4: Quick pre-flight — verify critical tools available before starting
+  if (delegation.executionRoute === 'local-agent') {
+    const preflightError = quickPreflightCheck()
+    if (preflightError) {
+      await appendLogs(id, [{
+        timestamp: new Date().toISOString(),
+        type: 'error',
+        message: `⛔ Pre-Flight-Check fehlgeschlagen: ${preflightError}`,
+      }], 'failed')
+      return NextResponse.json({ error: preflightError, category: 'tool_missing' }, { status: 424 })
+    }
+  }
+
   // M209: Pre-execution budget guard — reject before starting if estimate exceeds limit
   if (wouldExceedBudget(delegation, delegation.costEstimateUsd)) {
     const limit = getBudgetLimit(delegation)
@@ -1623,7 +2020,7 @@ export async function POST(
   const retryContext = buildRetryContext(delegation)
   const prompt = delegation.contract.orchestratedRunId
     ? buildSubTaskPrompt(delegation)
-    : buildPrompt(delegation, contextCards, retryContext || undefined)
+    : buildPrompt(delegation, contextCards, retryContext || undefined, delegation.targetRepo)
 
   // OTel: trace execution start + routing decision
   let runnerReadiness = getCachedOrShallowRunnerReadiness()
@@ -1657,7 +2054,38 @@ export async function POST(
   }
 
   if (mode === 'claude-cli') {
-    runWithClaudeCLI(id, prompt, startTime, delegation.contract.maxBudgetUsd, delegation.contract.riskClass, delegation.targetRepo)
+    // Workspace reuse — two cases that both let the agent build on existing work
+    // instead of starting from a fresh clone:
+    //   (a) Resume: this delegation already has its own worktree (e.g. budget-paused
+    //       and resumed with more budget) — continue right where it left off.
+    //   (b) Chain: build on top of the previous chain phase's workspace.
+    let chainWorkspace: RunnerWorkspace | undefined
+    if (delegation.worktreePath) {
+      const own = reuseExistingWorkspace(delegation.worktreePath)
+      if (own) {
+        chainWorkspace = own
+        await appendLogs(id, [{
+          timestamp: new Date().toISOString(),
+          type: 'info',
+          message: `↩️ Setze im eigenen Workspace fort: ${delegation.worktreePath}`,
+        }])
+      }
+    }
+    if (!chainWorkspace && delegation.chainedFromId) {
+      const prev = await repo.findById(delegation.chainedFromId)
+      if (prev?.worktreePath) {
+        const reused = reuseExistingWorkspace(prev.worktreePath)
+        if (reused) {
+          chainWorkspace = reused
+          await appendLogs(id, [{
+            timestamp: new Date().toISOString(),
+            type: 'info',
+            message: `⛓️ Baue auf Workspace der vorherigen Phase auf: ${prev.worktreePath}`,
+          }])
+        }
+      }
+    }
+    runWithClaudeCLI(id, prompt, startTime, delegation.contract.maxBudgetUsd, delegation.contract.riskClass, delegation.targetRepo, chainWorkspace, { goal: delegation.contract.goal, context: delegation.contract.context ?? '' })
     return NextResponse.json({ started: true, mode: 'claude-cli', delegationId: id })
   }
 

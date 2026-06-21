@@ -38,6 +38,13 @@ type NavKey =
   | 'activityDigest'
   | 'tools'
   | 'settings'
+  | 'skills'
+  | 'planMode'
+  | 'conceptAnalyzer'
+  | 'suggestions'
+  | 'ideaStudio'
+  | 'deploy'
+  | 'reverse'
 
 type UiKey =
   | 'workspace'
@@ -145,6 +152,13 @@ export const dictionaries: Record<Locale, Dictionary> = {
       activityDigest: { label: 'Aktivitäts-Digest', short: 'Digest' },
       tools: { label: 'Werkzeuge', short: 'Werkzeuge' },
       settings: { label: 'Einstellungen', short: 'Settings' },
+      skills: { label: 'Skills', short: 'Skills' },
+      planMode: { label: 'Plan Mode', short: 'Plan' },
+      conceptAnalyzer: { label: 'Konzept analysieren', short: 'Konzept' },
+      suggestions: { label: 'Vorschläge', short: 'Ideen' },
+      ideaStudio: { label: 'Idea Studio', short: 'Studio' },
+      deploy: { label: 'Live schalten', short: 'Deploy' },
+      reverse: { label: 'Reverse Engineering', short: 'Reverse' },
     },
     ui: {
       workspace: 'Workspace',
@@ -247,6 +261,13 @@ export const dictionaries: Record<Locale, Dictionary> = {
       activityDigest: { label: 'Activity Digest', short: 'Digest' },
       tools: { label: 'Tools', short: 'Tools' },
       settings: { label: 'Settings', short: 'Settings' },
+      skills: { label: 'Skills', short: 'Skills' },
+      planMode: { label: 'Plan Mode', short: 'Plan' },
+      conceptAnalyzer: { label: 'Concept Analyzer', short: 'Concept' },
+      suggestions: { label: 'Suggestions', short: 'Ideas' },
+      ideaStudio: { label: 'Idea Studio', short: 'Studio' },
+      deploy: { label: 'Go Live', short: 'Deploy' },
+      reverse: { label: 'Reverse Engineering', short: 'Reverse' },
     },
     ui: {
       workspace: 'Workspace',

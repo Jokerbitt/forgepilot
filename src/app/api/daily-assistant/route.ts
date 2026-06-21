@@ -10,6 +10,7 @@ import {
   type DailyAssistantInput,
   type DailyAssistantQueueItem,
 } from '@/lib/daily-assistant/next-action'
+import { generateDailyBriefing, generateFallbackBriefing } from '@/lib/daily-assistant/briefing-generator'
 import { buildAppBuilderCapability } from '@/lib/daily-assistant/app-builder'
 import { buildAssistantRoadmap } from '@/lib/daily-assistant/roadmap'
 import { buildQueueHygieneSummary } from '@/lib/daily-assistant/queue-hygiene'
@@ -51,6 +52,22 @@ function countByStatus(delegations: Delegation[]) {
     prOpen,
     prMerged,
   }
+}
+
+function computeTodayStats(delegations: Delegation[]) {
+  const today = new Date().toISOString().slice(0, 10)
+  const completedToday = delegations.filter(
+    d => d.status === 'completed' && d.completedAt?.startsWith(today),
+  ).length
+  const prToday = delegations.filter(
+    d => d.summaryReport?.prUrl && d.completedAt?.startsWith(today),
+  ).length
+  const checksWithVerdict = delegations.filter(d => d.qualityCheck?.verdict)
+  const passed = checksWithVerdict.filter(d => d.qualityCheck?.verdict === 'passed').length
+  const qualityPassRate = checksWithVerdict.length > 0
+    ? Math.round((passed / checksWithVerdict.length) * 100)
+    : null
+  return { completedToday, prToday, qualityPassRate, checksTotal: checksWithVerdict.length }
 }
 
 function toQueueItem(delegation: Delegation): DailyAssistantQueueItem {
@@ -113,6 +130,7 @@ export async function GET() {
     authDisabled: process.env.FORGEPILOT_AUTH_DISABLED === 'true',
     storageMode: getDelegationStorageMode(process.env),
     approvalMode: config.approvalMode,
+    completedCount: stats.completed,
   }
 
   const action = buildDailyAssistantAction(input)
@@ -131,12 +149,32 @@ export async function GET() {
     ? await findExistingRepairDelegation(repo, deliveryAction.delegation)
     : null
 
+  // Our addition: today stats + AI morning briefing
+  const todayStats = computeTodayStats(delegations)
+  const briefingInput = {
+    pending: stats.pending,
+    approved: stats.approved,
+    running: stats.running,
+    failed: stats.failed,
+    completedToday: todayStats.completedToday,
+    prOpen: stats.prOpen,
+    qualityPassRate: todayStats.qualityPassRate,
+    topPendingGoal: queue[0]?.title,
+  }
+  let briefing: string
+  try {
+    briefing = await generateDailyBriefing(briefingInput)
+  } catch {
+    briefing = generateFallbackBriefing(briefingInput)
+  }
+
   return NextResponse.json({
     generatedAt: new Date().toISOString(),
     status: action.tone,
     readinessScore: computeReadiness(input),
     action,
     autonomyText: describeAutonomy(input),
+    briefing,
     appBuilder,
     roadmap,
     autopilot,
@@ -164,6 +202,8 @@ export async function GET() {
         : null,
     },
     stats,
+    todayStats,
+    appBuilderCapability: appBuilder,
     settings: {
       approvalMode: config.approvalMode,
       autopilotMinScore: config.autopilotMinScore,

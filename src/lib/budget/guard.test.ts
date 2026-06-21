@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { checkBudget, getBudgetLimit, wouldExceedBudget } from './guard'
+import { checkBudget, getBudgetLimit, wouldExceedBudget, effectiveBudgetLimit } from './guard'
 import type { Delegation } from '@/lib/models/delegation'
 
 const mockRepo = { update: vi.fn(), findById: vi.fn(), create: vi.fn(), delete: vi.fn(), listByStatus: vi.fn(), listByProject: vi.fn() }
@@ -11,6 +11,12 @@ vi.mock('@/lib/repositories/delegationRepository', () => ({
 vi.mock('@/lib/notifications', () => ({
   notifyExecutionResult: vi.fn().mockResolvedValue(undefined),
 }))
+vi.mock('@/lib/nba-engine/nba-config', () => ({ getNBAConfig: vi.fn() }))
+import { getNBAConfig } from '@/lib/nba-engine/nba-config'
+const mockCfg = vi.mocked(getNBAConfig)
+function cfg(enforcement: 'strict' | 'tolerant' | 'off', pct = 20) {
+  mockCfg.mockReturnValue({ budgetEnforcement: enforcement, budgetTolerancePct: pct } as never)
+}
 
 const base: Delegation = {
   id: 'del-1',
@@ -26,7 +32,7 @@ const base: Delegation = {
 }
 
 describe('checkBudget', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => { vi.clearAllMocks(); cfg('strict') })
 
   it('returns not exceeded when under limit', async () => {
     const result = await checkBudget(base)
@@ -90,4 +96,14 @@ describe('wouldExceedBudget', () => {
 
     expect(wouldExceedBudget(delegation, 1.25)).toBe(true)
   })
+})
+
+
+describe('effectiveBudgetLimit (settings-driven)', () => {
+  beforeEach(() => mockCfg.mockReset())
+  it('off → no cap', () => { cfg('off'); expect(effectiveBudgetLimit(4)).toBeNull() })
+  it('strict → exact', () => { cfg('strict'); expect(effectiveBudgetLimit(4)).toBe(4) })
+  it('tolerant 20% → +20%', () => { cfg('tolerant', 20); expect(effectiveBudgetLimit(4)).toBeCloseTo(4.8) })
+  it('tolerant 50% → +50%', () => { cfg('tolerant', 50); expect(effectiveBudgetLimit(10)).toBeCloseTo(15) })
+  it('null limit stays null', () => { cfg('strict'); expect(effectiveBudgetLimit(null)).toBeNull() })
 })
