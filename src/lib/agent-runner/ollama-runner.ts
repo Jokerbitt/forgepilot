@@ -184,6 +184,7 @@ export class OllamaAgentRunner {
 
     let turns = 0
     let noProgressTurns = 0
+    let toolCallsExecuted = 0
     let lastAssistantText = ''
     let totalPromptTokens = 0
     let totalCompletionTokens = 0
@@ -246,6 +247,21 @@ export class OllamaAgentRunner {
       const completeMatch = /\bTASK_COMPLETE\b/.test(lastAssistantText)
       const blockedMatch = /\bTASK_BLOCKED\b/.test(lastAssistantText)
       if (completeMatch) {
+        if (toolCallsExecuted === 0) {
+          // Claimed completion without executing a single tool call — nothing was
+          // actually done. Reject + nudge; fail honestly if it persists.
+          noProgressTurns += 1
+          if (noProgressTurns >= MAX_NO_PROGRESS_TURNS) {
+            this.emit(this.nowLog('error', `⛔ Abgebrochen: TASK_COMPLETE ohne jeglichen Tool-Call — es wurde nichts geändert.`))
+            return makeResult(false, lastAssistantText.trim() || 'TASK_COMPLETE ohne Änderungen.')
+          }
+          this.emit(this.nowLog('info', `↻ TASK_COMPLETE ohne Änderungen — fordere echtes Handeln (${noProgressTurns}/${MAX_NO_PROGRESS_TURNS}).`))
+          messages.push({
+            role: 'user',
+            content: 'Du hast TASK_COMPLETE gemeldet, aber KEINEN Tool-Call ausgeführt und nichts geändert — die Aufgabe ist NICHT erledigt. Führe sie jetzt wirklich aus: lies die Zieldatei mit read_file, ändere sie mit write_file, verifiziere mit bash_exec ("npm run build"), committe mit bash_exec. Erst NACH echten Änderungen TASK_COMPLETE.',
+          })
+          continue
+        }
         this.emit(this.nowLog('success', `✅ TASK_COMPLETE nach ${turns} Turns · ${(totalPromptTokens + totalCompletionTokens).toLocaleString()} Tokens total`))
         return makeResult(true, lastAssistantText.trim())
       }
@@ -274,6 +290,7 @@ export class OllamaAgentRunner {
       noProgressTurns = 0
 
       for (const call of toolCalls) {
+        toolCallsExecuted += 1
         const { name } = call.function
         const argPreview = JSON.stringify(call.function.arguments ?? {}).slice(0, 200)
         this.emit(this.nowLog('command', `🔧 ${name}(${argPreview})`))
