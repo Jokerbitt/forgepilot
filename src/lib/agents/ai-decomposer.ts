@@ -19,7 +19,7 @@ Rules for atomic tasks:
 - Each task is independent or clearly sequential
 - Prefer smaller over larger (S over M over L)
 - Assign skill categories: api-route | ui-component | data-model | test | refactor | infrastructure | documentation
-- Assign best agent: claude-code | codex | antigravity | general
+- Assign best agent: claude-code | codex | antigravity | hermes | openclaw | general
 
 Respond ONLY with a JSON array. No explanations. Schema:
 [{

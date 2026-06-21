@@ -11,6 +11,80 @@ export interface DailyAssistantInput {
   storageMode?: string
   nextFocus?: string
   approvalMode?: string
+  /** Number of successfully completed delegations (proxy for earned trust) */
+  completedCount?: number
+  /** true when Claude CLI or Codex CLI is available for zero-key execution */
+  cliReady?: boolean
+}
+
+// ─── App Builder Capability ───────────────────────────────────────────────────
+
+export type AppBuildLevel = 'single-task' | 'multi-slice-mvp' | 'large-feature' | 'full-app'
+
+export interface AppBuilderCapability {
+  level: AppBuildLevel
+  label: string
+  detail: string
+  maxPhases: number
+  recommendedAction: 'fix-blockers' | 'earn-more-runs' | 'start-single' | 'plan-multi-phase'
+  planModeReady: boolean
+}
+
+export function buildAppBuilderCapability(input: DailyAssistantInput): AppBuilderCapability {
+  const completed = input.completedCount ?? 0
+
+  if (input.failed > 0) {
+    return {
+      level: 'single-task',
+      label: 'Einzelner Fix',
+      detail: `${input.failed} fehlgeschlagene Delegation(en) müssen erst behoben werden, bevor größere Builds möglich sind.`,
+      maxPhases: 1,
+      recommendedAction: 'fix-blockers',
+      planModeReady: false,
+    }
+  }
+
+  if (completed < 3) {
+    return {
+      level: 'single-task',
+      label: 'Einzelner Task',
+      detail: `Erst ${completed} erfolgreiche Run(s). Starte einige kleinere Delegationen, um Systemvertrauen aufzubauen.`,
+      maxPhases: 1,
+      recommendedAction: 'earn-more-runs',
+      planModeReady: false,
+    }
+  }
+
+  if (completed < 8) {
+    return {
+      level: 'multi-slice-mvp',
+      label: 'Multi-Slice MVP',
+      detail: `${completed} Runs bewiesen. Bis zu 3 Phasen können autonom hintereinander laufen.`,
+      maxPhases: 3,
+      recommendedAction: 'plan-multi-phase',
+      planModeReady: true,
+    }
+  }
+
+  if (input.approvalMode === 'autopilot') {
+    return {
+      level: 'large-feature',
+      label: 'Large Feature',
+      detail: `${completed} Runs + Autopilot aktiv. Bis zu 6 Phasen vollständig autonom — Antigravity-Level.`,
+      maxPhases: 6,
+      recommendedAction: 'plan-multi-phase',
+      planModeReady: true,
+    }
+  }
+
+  return {
+    level: 'multi-slice-mvp',
+    label: 'Multi-Slice MVP',
+    detail: `${completed} Runs bewiesen. Autopilot aktivieren in Settings für Large-Feature-Modus (bis zu 6 Phasen).`,
+    maxPhases: 3,
+    recommendedAction: 'plan-multi-phase',
+    planModeReady: true,
+  }
 }
 
 export interface DailyAssistantAction {
@@ -324,13 +398,17 @@ export function buildDailyAssistantSteps(input: DailyAssistantInput): DailyAssis
 
 export function buildDailyAssistantBlockers(input: DailyAssistantInput, queue: DailyAssistantQueueItem[] = []): DailyAssistantBlocker[] {
   const blockers: DailyAssistantBlocker[] = []
+  const failedItems = queue.filter(item => item.status === 'failed')
 
   if (input.failed > 0) {
+    const singleFailure = input.failed === 1 ? failedItems[0] : undefined
     blockers.push({
       id: 'failed-delegations',
-      title: 'Fehlgeschlagene Delegationen blockieren Autonomie',
-      detail: `${input.failed} Fehler müssen verstanden werden, bevor neue Arbeit automatisch starten sollte.`,
-      href: '/delegations?urgent=true',
+      title: singleFailure ? 'Eine Delegation blockiert Autonomie' : 'Fehlgeschlagene Delegationen blockieren Autonomie',
+      detail: singleFailure
+        ? `"${singleFailure.title}" braucht Review, bevor neue Arbeit automatisch starten sollte.`
+        : `${input.failed} Fehler müssen verstanden werden, bevor neue Arbeit automatisch starten sollte.`,
+      href: singleFailure ? `/delegations/${singleFailure.id}` : '/delegations?urgent=true',
       severity: 'critical',
     })
   }

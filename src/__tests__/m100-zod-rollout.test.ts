@@ -88,6 +88,8 @@ vi.mock('@/lib/nba-engine/nba-config', () => ({
     localFastModel: '',
     maxConcurrentAgents: 2,
     autoStartApproved: false,
+    budgetEnforcement: 'tolerant' as const,
+    budgetTolerancePct: 20,
     autoPmAgent: false,
   })),
   saveNBAConfig: vi.fn(),

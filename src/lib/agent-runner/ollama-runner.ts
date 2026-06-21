@@ -66,11 +66,17 @@ const DEFAULT_ENDPOINT = 'http://localhost:11434/api/chat'
 
 const SYSTEM_PROMPT = `You are an autonomous software engineering agent running locally via Ollama.
 
-You have access to EXACTLY these four tools — no others exist:
+You have access to EXACTLY these five tools — no others exist:
 - bash_exec(command): run any shell command in the project working directory (use this for git, npm, tests, etc.)
 - read_file(path): read a file from disk
-- write_file(path, content): write content to a file
+- edit_file(path, old_string, new_string): surgically replace an exact, unique snippet in an existing file
+- write_file(path, content): write a COMPLETE file (only for NEW files or full rewrites)
 - list_dir(path): list directory contents
+
+CRITICAL: To change an EXISTING file, use edit_file — NEVER write_file. write_file overwrites the
+entire file, so using it for a small change DELETES all the other code. For an additive change
+(e.g. adding one attribute), read_file first, then edit_file with the exact old_string you saw and
+the new_string that adds your change. Keep old_string small but unique.
 
 IMPORTANT: There is NO git_checkout tool, NO git tool, NO create_branch tool.
 Use bash_exec for ALL git operations: e.g. bash_exec("git checkout -b feature/my-branch")
@@ -78,11 +84,19 @@ Use bash_exec for ALL git operations: e.g. bash_exec("git checkout -b feature/my
 Rules:
 - Work in small, verifiable steps.
 - Read relevant source files before editing them.
+- Change existing files with edit_file (surgical); use write_file ONLY for brand-new files.
 - Use bash_exec for git commands (checkout, commit, push, status, diff, etc.).
-- After making changes, run tests via bash_exec (e.g. "npm run test:run").
+- After making changes, verify the build via bash_exec (e.g. "npm run build").
 - When the task is fully complete, respond with the literal text TASK_COMPLETE followed by a one-paragraph summary. Do not emit further tool calls after that.
 - If you cannot proceed (missing context, blocked by a safety rule, unclear scope), respond with TASK_BLOCKED and explain why.
 - Never commit secrets. Never run destructive commands (rm -rf, force push to main).`
+
+/**
+ * Max consecutive turns with NO tool call and no TASK_COMPLETE before we give up.
+ * A model that only talks (or returns empty) produced nothing — we nudge it to act
+ * and fail honestly after this many empty turns instead of reporting false success.
+ */
+const MAX_NO_PROGRESS_TURNS = 3
 
 function parseTextToolCall(content: string): OllamaToolCall[] {
   const trimmed = content.trim()
@@ -176,6 +190,8 @@ export class OllamaAgentRunner {
     this.emit(this.nowLog('info', `🦙 Ollama-Runner gestartet (Modell: ${this.model}, max ${maxTurns} Turns)`))
 
     let turns = 0
+    let noProgressTurns = 0
+    let toolCallsExecuted = 0
     let lastAssistantText = ''
     let totalPromptTokens = 0
     let totalCompletionTokens = 0
@@ -238,6 +254,21 @@ export class OllamaAgentRunner {
       const completeMatch = /\bTASK_COMPLETE\b/.test(lastAssistantText)
       const blockedMatch = /\bTASK_BLOCKED\b/.test(lastAssistantText)
       if (completeMatch) {
+        if (toolCallsExecuted === 0) {
+          // Claimed completion without executing a single tool call — nothing was
+          // actually done. Reject + nudge; fail honestly if it persists.
+          noProgressTurns += 1
+          if (noProgressTurns >= MAX_NO_PROGRESS_TURNS) {
+            this.emit(this.nowLog('error', `⛔ Abgebrochen: TASK_COMPLETE ohne jeglichen Tool-Call — es wurde nichts geändert.`))
+            return makeResult(false, lastAssistantText.trim() || 'TASK_COMPLETE ohne Änderungen.')
+          }
+          this.emit(this.nowLog('info', `↻ TASK_COMPLETE ohne Änderungen — fordere echtes Handeln (${noProgressTurns}/${MAX_NO_PROGRESS_TURNS}).`))
+          messages.push({
+            role: 'user',
+            content: 'Du hast TASK_COMPLETE gemeldet, aber KEINEN Tool-Call ausgeführt und nichts geändert — die Aufgabe ist NICHT erledigt. Führe sie jetzt wirklich aus: lies die Zieldatei mit read_file, ändere sie mit write_file, verifiziere mit bash_exec ("npm run build"), committe mit bash_exec. Erst NACH echten Änderungen TASK_COMPLETE.',
+          })
+          continue
+        }
         this.emit(this.nowLog('success', `✅ TASK_COMPLETE nach ${turns} Turns · ${(totalPromptTokens + totalCompletionTokens).toLocaleString()} Tokens total`))
         return makeResult(true, lastAssistantText.trim())
       }
@@ -247,11 +278,26 @@ export class OllamaAgentRunner {
       }
 
       if (toolCalls.length === 0) {
-        this.emit(this.nowLog('success', `✅ Run beendet nach ${turns} Turns`))
-        return makeResult(true, lastAssistantText.trim() || 'Run beendet ohne Tool-Calls')
+        // No tool call AND no TASK_COMPLETE/TASK_BLOCKED marker = the model did not
+        // act. Reporting success here is wrong — it produced nothing (an empty reply
+        // would otherwise "succeed" without touching a single file). Nudge it to use
+        // the tools, and fail honestly after a few unproductive turns.
+        noProgressTurns += 1
+        if (noProgressTurns >= MAX_NO_PROGRESS_TURNS) {
+          this.emit(this.nowLog('error', `⛔ Abgebrochen: Modell lieferte ${noProgressTurns}× keinen Tool-Call und kein TASK_COMPLETE — nichts umgesetzt.`))
+          return makeResult(false, lastAssistantText.trim() || 'Keine Tool-Calls — das Modell hat nicht gehandelt.')
+        }
+        this.emit(this.nowLog('info', `↻ Kein Tool-Call — fordere das Modell zum Handeln auf (${noProgressTurns}/${MAX_NO_PROGRESS_TURNS}).`))
+        messages.push({
+          role: 'user',
+          content: 'Du hast keinen Tool-Call ausgeführt. Du MUSST die Tools (bash_exec, read_file, write_file, list_dir) nutzen, um die Aufgabe tatsächlich umzusetzen — beschreibe sie nicht nur. Mache JETZT den nächsten konkreten Schritt als Tool-Call. Wenn ALLES erledigt und verifiziert ist, antworte mit TASK_COMPLETE und kurzer Zusammenfassung. Bist du blockiert, antworte mit TASK_BLOCKED und Begründung.',
+        })
+        continue
       }
+      noProgressTurns = 0
 
       for (const call of toolCalls) {
+        toolCallsExecuted += 1
         const { name } = call.function
         const argPreview = JSON.stringify(call.function.arguments ?? {}).slice(0, 200)
         this.emit(this.nowLog('command', `🔧 ${name}(${argPreview})`))

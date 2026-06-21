@@ -1,12 +1,6 @@
-export const dynamic = 'force-dynamic'
+import { redirect } from 'next/navigation'
 
-import { readKnowledgeCards } from '@/lib/knowledge/knowledge-card'
-import { KnowledgeCardsClientPage } from './KnowledgeCardsClientPage'
-
+// Consolidated into /knowledge — the unified knowledge hub
 export default function KnowledgeCardsPage() {
-  const cards = readKnowledgeCards().sort(
-    (a, b) => b.createdAt.localeCompare(a.createdAt),
-  )
-
-  return <KnowledgeCardsClientPage cards={cards} />
+  redirect('/knowledge')
 }
