@@ -35,6 +35,21 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
+/**
+ * Env for a ZERO-KEY readiness probe: strip provider API keys so the CLI is
+ * forced to use its own login (Claude Max OAuth / Codex), not a (possibly
+ * credit-less) API key. Otherwise the probe tests the wrong path — a dead
+ * ANTHROPIC_API_KEY makes `claude -p` 401, and we wrongly conclude the CLI
+ * isn't headless-ready and fall back to the failing API runner.
+ */
+function zeroKeyProbeEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env }
+  delete env.ANTHROPIC_API_KEY
+  delete env.ANTHROPIC_AUTH_TOKEN
+  delete env.OPENAI_API_KEY
+  return env
+}
+
 function firstLine(value: string): string {
   return value.trim().split('\n')[0]?.trim() ?? ''
 }
@@ -87,6 +102,7 @@ function probeClaudeHeadless(cwd: string, timeoutMs: number): RunnerProbe {
         encoding: 'utf8',
         timeout: timeoutMs,
         stdio: ['ignore', 'pipe', 'pipe'],
+        env: zeroKeyProbeEnv(),
       },
     )
     const durationMs = Date.now() - started
@@ -124,6 +140,7 @@ function probeCodexHeadless(cwd: string, timeoutMs: number): RunnerProbe {
         encoding: 'utf8',
         timeout: timeoutMs,
         stdio: ['ignore', 'pipe', 'pipe'],
+        env: zeroKeyProbeEnv(),
       },
     )
     const durationMs = Date.now() - started

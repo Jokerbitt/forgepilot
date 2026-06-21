@@ -2058,6 +2058,23 @@ export async function POST(
     anthropicApiKeySet: Boolean(readStoredApiKeys().ANTHROPIC_API_KEY?.trim()),
   })
 
+  // Safety: the claude-api and ollama-agent runners execute in ForgePilot's OWN
+  // working directory and do NOT honor an external targetRepo yet — running them
+  // against a different project would silently edit ForgePilot itself. Refuse
+  // loudly instead (the Claude CLI runner handles external repos via a workspace).
+  if ((mode === 'claude-api' || mode === 'ollama-agent') && delegation.targetRepo) {
+    const home = process.env.HOME ?? ''
+    const targetResolved = pathMod.resolve(delegation.targetRepo.replace(/^~(?=\/|$)/, home))
+    if (targetResolved !== pathMod.resolve(process.cwd())) {
+      await appendLogs(id, [{
+        timestamp: new Date().toISOString(),
+        type: 'error',
+        message: `⛔ Runner '${mode}' kann (noch) nicht in ein externes Ziel-Repo schreiben — das würde ForgePilot selbst ändern. Ziel: ${delegation.targetRepo}. Für externe Repos den Claude-CLI-Runner nutzen (ggf. \`claude login\`).`,
+      }], 'failed')
+      return NextResponse.json({ started: false, mode, error: 'external-target-not-supported-by-runner', delegationId: id }, { status: 409 })
+    }
+  }
+
   void withSpan('delegation.execute', {
     'delegation.id':          id,
     'delegation.mode':        mode,
