@@ -59,7 +59,7 @@ Plan zuerst sehen und anpassen, bevor er als Delegations-Kette ausgeführt wird 
 **Zweck:** Vorschläge generieren und bauen — Kernseite für Ablauf **A** (neue App) und „bestehende App verbessern".
 - **Modus „Neue Idee":** Ziel + optional Kontext + optional Ziel-Repo → **„Vorschläge generieren"**, oder mit einer der 6 **Vorlagen** starten (CRM, Buchungstool, Online-Shop, Blog/CMS, Aufgaben-Board, Bestandsverwaltung).
 - **Modus „Bestehende App verbessern":** Repo-Pfad + optional Fokus → **„App analysieren & Vorschläge"**.
-- **Danach:** Vorschläge per Checkbox auswählen, optional eigenen Schritt unter „Sonstiges" ergänzen, optional **„💶 Was kostet das?"**, dann **„Planen & bauen (N)"**. Nach dem Build erscheinen Build-Fortschritt, Qualitäts-Report, Kosten-Rückblick und die [geführte Journey](04-gefuehrte-journey.md).
+- **Danach:** Vorschläge per Checkbox auswählen, optional eigenen Schritt unter „Sonstiges" ergänzen, optional **„💶 Was kostet das?"**, optional ein **Gesamtbudget (USD)** eintragen (leer = Standard je Phase, sonst nach Aufwand verteilt), dann **„Planen & bauen (N)"**. Nach dem Build erscheinen Build-Fortschritt, Qualitäts-Report, Kosten-Rückblick und die [geführte Journey](04-gefuehrte-journey.md).
 
 ### `/concept` — Concept Analyzer
 **Zweck:** PDF, Text oder Bild hochladen → KI plant Meilensteine, Tasks und Schätzungen.
@@ -71,7 +71,7 @@ Plan zuerst sehen und anpassen, bevor er als Delegations-Kette ausgeführt wird 
 
 ### `/reverse` — Reverse Engineering
 **Zweck:** Bestehende App analysieren und plattformunabhängig nachbauen. → ausführlich im [RE-Beispiel](06-beispiel-reverse-engineering.md).
-**So bedienst du es:** Repo-Pfad → **„Pfad analysieren"** oder **„📦 ZIP hochladen"** (max. 50 MB). Der Report zeigt Sprachen, Frameworks, Plattform, Datenbank, Sicherheitslücken, Tech-Schuld, Modernisierungs-Vorschläge — als **„📄 Report (.md)"** herunterladbar. Dann Nachbau konfigurieren (Ziel-Stack, DB-Migration, Checkboxen „Logik 1:1", „Plattformunabhängig", „Sicherheitslücken fixen", „Bugs beheben", „UI modernisieren") → **„Nachbau planen & starten"**.
+**So bedienst du es:** Repo-Pfad → **„Pfad analysieren"** oder **„📦 ZIP hochladen"** (max. 50 MB). Der Report zeigt Sprachen, Frameworks, Plattform, Datenbank, Sicherheitslücken, Tech-Schuld, Modernisierungs-Vorschläge — als **„📄 Report (.md)"** herunterladbar. Dann Nachbau konfigurieren (Ziel-Stack, DB-Migration, Checkboxen „Logik 1:1", „Plattformunabhängig", „Sicherheitslücken fixen", „Bugs beheben", „UI modernisieren", optional **Gesamtbudget**) → **„Nachbau planen & starten"**. Nach dem Nachbau zeigt **„📊 Paritäts-Check"** den Vergleich Original vs. Nachbau.
 **Wichtig:** Bei **kritischer** Software (Leitrechner/SCADA/PLC) erscheint ein rotes Banner und der Start ist gesperrt, bis du die Bestätigungs-Checkbox setzt → [Sicherheit & Guardrails](08-sicherheit-guardrails.md).
 
 ## 🛠 Weitere Seiten (über `/tools`-Hub erreichbar)

@@ -116,7 +116,7 @@ Erst wenn du die Checkbox aktivierst —
 
 ## Nach dem Nachbau: Paritäts-Report
 
-Wenn der Nachbau steht, vergleicht der **Paritäts-Report** (`POST /api/reverse/parity`, Body `{ originalPath, rebuiltPath, migrateDatabase? }`) die Alt-App mit dem Nachbau und sagt in Klartext, welche Modernisierungsziele **nachweislich** erreicht sind:
+Wenn der Nachbau steht, klick in `/reverse` (im Ergebnis-Bereich) auf **„📊 Paritäts-Check (Original vs. Nachbau)"** — oder rufe `POST /api/reverse/parity` (Body `{ originalPath, rebuiltPath, migrateDatabase? }`) direkt. Der **Paritäts-Report** vergleicht die Alt-App mit dem Nachbau und sagt in Klartext, welche Modernisierungsziele **nachweislich** erreicht sind:
 
 > 🟡 *„App v2: Paritäts-Check 80/100 — überwiegend erreicht, 1 Punkt(e) offen."* mit Einzelprüfungen: Plattformunabhängigkeit · Datenbank-Migration → PostgreSQL · Sicherheitslücken behoben (Original 2 → Nachbau 0) · Moderner Stack · Substanz.
 

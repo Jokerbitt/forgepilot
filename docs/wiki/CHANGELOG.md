@@ -8,6 +8,8 @@ Format pro Eintrag: **Datum · Was sich geändert hat · betroffene Wiki-Seite(n
 
 ## 2026-06-21
 
+- **Gesamtbudget-Feld (UI):** In `/suggestions` und `/reverse` gibt es jetzt ein optionales Feld „Gesamtbudget (USD)" — leer = Standard pro Phase, sonst wird das Budget nach Aufwand auf die Phasen verteilt. → [03-seiten-referenz.md](03-seiten-referenz.md), [05-beispiel-app-entwicklung.md](05-beispiel-app-entwicklung.md)
+- **Paritäts-Check-Button (UI):** In `/reverse` startet nach dem Nachbau ein Button „📊 Paritäts-Check" den Vergleich Original vs. Nachbau direkt aus der Oberfläche. → [03-seiten-referenz.md](03-seiten-referenz.md), [06-beispiel-reverse-engineering.md](06-beispiel-reverse-engineering.md)
 - **Paritäts-Report (neu):** vergleicht eine Alt-App mit ihrem Nachbau und zeigt in Klartext, welche Modernisierungsziele nachweislich erreicht sind (Plattform, DB-Migration, Sicherheit, Stack, Substanz). `POST /api/reverse/parity`. → [06-beispiel-reverse-engineering.md](06-beispiel-reverse-engineering.md) · Commit `200c61a`
 - **Doku-Ingest (neu):** die Reverse-Analyse liest jetzt die Doku der Alt-App (README/ARCHITECTURE) und zieht Feature-/Domänen-Hinweise heraus. → [06-beispiel-reverse-engineering.md](06-beispiel-reverse-engineering.md) · Commit `200c61a`
 - **PLC-Erkennung erweitert:** der Critical-Guardrail erkennt zusätzlich PLC-/SPS-Programmierumgebungen und IEC-Sprachen (Codesys, TIA Portal, Step 7, Simatic, Structured Text, Ladder Logic). → [08-sicherheit-guardrails.md](08-sicherheit-guardrails.md) · Commit `200c61a`
