@@ -189,6 +189,56 @@ describe('prepareRunnerWorkspace — clone mode', () => {
     }
   })
 
+  it('symlinks node_modules from a LOCAL target after clone so the agent can build', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-clone-local-root-'))
+    const target = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-clone-local-target-'))
+    fs.mkdirSync(path.join(target, 'node_modules'))
+    const workspacePath = path.join(root, sanitizeWorktreeName('del-local-clone'))
+    // Mocked git clone is a no-op — simulate it creating the workspace directory.
+    execFileSyncMock.mockImplementation(((_cmd: unknown, args: unknown) => {
+      if (Array.isArray(args) && args.includes('clone')) {
+        fs.mkdirSync(workspacePath, { recursive: true })
+      }
+      return Buffer.from('')
+    }) as typeof execFileSync)
+
+    try {
+      const workspace = prepareRunnerWorkspace({
+        delegationId: 'del-local-clone',
+        env: { FORGEPILOT_RUNNER_ROOT: root },
+        targetRepo: target,
+      })
+
+      expect(fs.existsSync(path.join(workspace.path, 'node_modules'))).toBe(true)
+      expect(fs.lstatSync(path.join(workspace.path, 'node_modules')).isSymbolicLink()).toBe(true)
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+      fs.rmSync(target, { recursive: true, force: true })
+    }
+  })
+
+  it('does NOT symlink node_modules for a remote URL target (no local deps to link)', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-clone-remote-root-'))
+    const workspacePath = path.join(root, sanitizeWorktreeName('del-remote-clone'))
+    execFileSyncMock.mockImplementation(((_cmd: unknown, args: unknown) => {
+      if (Array.isArray(args) && args.includes('clone')) {
+        fs.mkdirSync(workspacePath, { recursive: true })
+      }
+      return Buffer.from('')
+    }) as typeof execFileSync)
+
+    try {
+      const workspace = prepareRunnerWorkspace({
+        delegationId: 'del-remote-clone',
+        env: { FORGEPILOT_RUNNER_ROOT: root },
+        targetRepo: 'https://github.com/owner/target-repo.git',
+      })
+      expect(fs.existsSync(path.join(workspace.path, 'node_modules'))).toBe(false)
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('calls git clone when FORGEPILOT_RUNNER_TARGET_REPO env var is set', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-clone-env-root-'))
 

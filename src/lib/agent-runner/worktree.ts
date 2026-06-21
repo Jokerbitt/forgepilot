@@ -235,6 +235,15 @@ export function prepareRunnerWorkspace(options: {
       stdio: 'ignore',
     })
 
+    // A fresh clone has no node_modules (gitignored). For a LOCAL target, symlink
+    // its already-installed deps into the workspace so the agent can build/test
+    // immediately — otherwise `npm run build`/`test` fail on the missing deps and
+    // the run is wasted. (Remote URLs have no local deps to link; there the agent
+    // must run `npm install` itself.)
+    if (isLocalPathRepo(targetRepo)) {
+      linkNodeModules(targetRepo, workspacePath)
+    }
+
     return {
       path: workspacePath,
       cleanup: () => {
