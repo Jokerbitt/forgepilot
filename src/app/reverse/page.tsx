@@ -23,6 +23,7 @@ interface ReverseReport {
 
 interface RebuildResult { planId: string; phaseCount: number; steps: Array<{ title: string }>; targetRepo?: string; delegationIds?: string[] }
 interface ParityData { score: number; headline: string; checks: Array<{ aspect: string; status: 'ok' | 'partial' | 'open'; detail: string }> }
+interface ScreenshotHints { summary: string; screens: string[]; features: string[]; uiElements: string[] }
 
 const PLATFORM_LABEL: Record<ReverseReport['platform'], string> = {
   windows: 'Windows-gebunden',
@@ -53,6 +54,8 @@ export default function ReversePage() {
   const [totalBudget, setTotalBudget] = useState('')
   const [parity, setParity] = useState<ParityData | null>(null)
   const [parityBusy, setParityBusy] = useState(false)
+  const [screenshotBusy, setScreenshotBusy] = useState(false)
+  const [shots, setShots] = useState<ScreenshotHints | null>(null)
 
   async function analyze() {
     setError(''); setReport(null); setResult(null); setAnalyzing(true)
@@ -138,6 +141,29 @@ export default function ReversePage() {
       })
       if (res.ok) setParity(await res.json() as ParityData)
     } catch { /* non-critical */ } finally { setParityBusy(false) }
+  }
+
+  async function ingestScreenshot(file: File) {
+    setError(''); setScreenshotBusy(true); setShots(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/reverse/screenshot', { method: 'POST', body: fd })
+      const data = await res.json() as ScreenshotHints & { error?: string }
+      if (!res.ok) { setError(data.error ?? 'Screenshot-Analyse fehlgeschlagen'); return }
+      setShots(data)
+    } catch { setError('Netzwerkfehler') } finally { setScreenshotBusy(false) }
+  }
+
+  function applyShotsToCustom() {
+    if (!shots) return
+    const note = [
+      shots.summary,
+      shots.screens.length ? `Screens: ${shots.screens.join(', ')}.` : '',
+      shots.features.length ? `Funktionen: ${shots.features.join(', ')}.` : '',
+      shots.uiElements.length ? `UI-Elemente: ${shots.uiElements.join(', ')}.` : '',
+    ].filter(Boolean).join(' ')
+    setCustom(custom.trim() ? `${custom.trim()} ${note}` : note)
   }
 
   const inputCls = 'w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none'
@@ -232,6 +258,26 @@ export default function ReversePage() {
             {check(redesign, setRedesign, 'UI modernisieren', 'Modernes Web-UI statt alter Desktop-Oberfläche')}
           </div>
           <textarea className={inputCls} rows={2} placeholder="Sonstiges (optional) — eigener Nachbau-Schritt …" value={custom} onChange={e => setCustom(e.target.value)} />
+          <div className="rounded-lg border border-slate-700 bg-slate-900/40 p-3">
+            <p className="text-xs font-medium text-slate-300">🖼 Screenshot der alten App (optional)</p>
+            <p className="mt-0.5 text-[11px] text-slate-500">Lade einen UI-Screenshot hoch — eine Vision-KI erkennt Screens, Funktionen und Elemente und ergänzt den Nachbau.</p>
+            <label className="mt-2 inline-block cursor-pointer rounded-lg border border-slate-600 bg-slate-900 px-3 py-1.5 text-xs text-slate-200 hover:border-slate-500">
+              {screenshotBusy ? 'Analysiere …' : '🖼 Screenshot hochladen'}
+              <input type="file" accept="image/*" className="hidden" disabled={screenshotBusy}
+                onChange={e => { const f = e.target.files?.[0]; if (f) ingestScreenshot(f) }} />
+            </label>
+            {shots && (
+              <div className="mt-2 rounded-lg border border-slate-700 bg-slate-900 p-2">
+                {shots.summary && <p className="text-[11px] text-slate-300">{shots.summary}</p>}
+                <ul className="mt-1 space-y-0.5 text-[11px] text-slate-400">
+                  {shots.screens.length > 0 && <li>Screens: {shots.screens.join(', ')}</li>}
+                  {shots.features.length > 0 && <li>Funktionen: {shots.features.join(', ')}</li>}
+                  {shots.uiElements.length > 0 && <li>UI-Elemente: {shots.uiElements.join(', ')}</li>}
+                </ul>
+                <button onClick={applyShotsToCustom} className="mt-2 rounded-lg bg-indigo-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-indigo-500">In Nachbau-Schritt übernehmen ↑</button>
+              </div>
+            )}
+          </div>
           <input className={inputCls} placeholder="Ziel-Repo (optional) — wird sonst automatisch angelegt" value={targetRepo} onChange={e => setTargetRepo(e.target.value)} />
           <input className={inputCls} type="number" min="0" step="0.5" inputMode="decimal" placeholder="Gesamtbudget USD (optional) — leer = Standard je Phase, sonst nach Aufwand verteilt" value={totalBudget} onChange={e => setTotalBudget(e.target.value)} />
           {report.criticality.level === 'critical' && (
