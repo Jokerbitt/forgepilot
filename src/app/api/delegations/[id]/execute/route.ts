@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/auth/require-auth'
 import { delegationLogger } from '@/lib/logger'
 import { withSpan } from '@/lib/tracing/tracer'
 import { checkRateLimit, buildRateLimitHeaders } from '@/lib/rate-limit'
-import { spawn, execSync } from 'child_process'
+import { spawn, execSync, execFileSync } from 'child_process'
 import fsSync from 'fs'
 import pathMod from 'path'
 import type { Delegation, AgentLog, DelegationReport } from '@/lib/models/delegation'
@@ -1322,12 +1322,92 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
   })
 }
 
+/**
+ * Commit the Ollama agent's work in its clone workspace and write it back to the
+ * external target repo — mirrors the CLI runner's writeback (writeback ->
+ * bootstrap -> smoke -> outcome warning). A local model may not commit reliably,
+ * so we auto-commit any uncommitted changes first. execFileSync (arg arrays, no
+ * shell) keeps the goal label injection-safe.
+ */
+async function finalizeOllamaExternalResult(opts: {
+  id: string
+  workspacePath: string
+  targetRepo: string
+  goalLabel: string
+}): Promise<void> {
+  const { id, workspacePath, targetRepo, goalLabel } = opts
+
+  // 1. Ensure the agent's work is committed so writeback has something to push.
+  try {
+    execFileSync('git', ['add', '-A'], { cwd: workspacePath, stdio: 'ignore', timeout: 10_000 })
+    let hasStaged = false
+    try {
+      execFileSync('git', ['diff', '--cached', '--quiet'], { cwd: workspacePath, stdio: 'ignore', timeout: 5_000 })
+    } catch {
+      hasStaged = true
+    }
+    if (hasStaged) {
+      const msg = `feat: ${goalLabel.replace(/[^a-zA-Z0-9 _.\-]/g, '').slice(0, 60).trim() || 'ollama delegation'}`
+      execFileSync('git', [
+        '-c', 'user.email=agent@forgepilot.local',
+        '-c', 'user.name=ForgePilot Ollama Agent',
+        'commit', '-m', msg,
+      ], { cwd: workspacePath, stdio: 'ignore', timeout: 10_000 })
+    }
+  } catch { /* commit is best-effort — writeback verifies the outcome below */ }
+
+  // 2. Writeback to the local target repo.
+  const writeback = writebackLocalResult({ workspacePath, targetRepo, delegationId: id })
+  if (!writeback) {
+    await appendLogs(id, [{
+      timestamp: new Date().toISOString(),
+      type: 'error',
+      message: `❌ Writeback fehlgeschlagen — Code konnte nicht ins Ziel-Repo ${targetRepo} geschrieben werden.`,
+    }])
+    return
+  }
+
+  if (writeback.mergedToMain) {
+    await appendLogs(id, [{
+      timestamp: new Date().toISOString(),
+      type: 'success',
+      message: `✅ Ergebnis autonom in ${targetRepo} (${writeback.defaultBranch}) übernommen — ${writeback.fileCount} Dateien.${writeback.installed ? ' Abhängigkeiten installiert.' : ''} Backup-Branch: ${writeback.branch}`,
+    }])
+    try {
+      const summary = summarizeBootstrap(bootstrapRuntime({ targetRepo }))
+      if (summary !== 'Kein Runtime-Bootstrap nötig') {
+        await appendLogs(id, [{ timestamp: new Date().toISOString(), type: 'info', message: `🚀 Runtime-Bootstrap: ${summary}` }])
+      }
+      const smoke = await smokeTestApp({ targetRepo })
+      if (smoke.ran) {
+        await appendLogs(id, [{ timestamp: new Date().toISOString(), type: smoke.ok ? 'success' : 'error', message: `${smoke.ok ? '🟢' : '🔴'} Smoke-Test: ${smoke.detail}` }])
+      }
+    } catch { /* bootstrap + smoke are best-effort */ }
+  } else {
+    await appendLogs(id, [{
+      timestamp: new Date().toISOString(),
+      type: 'info',
+      message: `⚠ Auto-Merge nicht möglich (${writeback.defaultBranch} divergiert). Ergebnis im Branch \`${writeback.branch}\` (${writeback.fileCount} Dateien). Mergen mit: git merge ${writeback.branch}`,
+    }])
+  }
+
+  // Outcome verification: a "completed" run that wrote almost nothing is suspect.
+  if (writeback.fileCount <= 1) {
+    await appendLogs(id, [{
+      timestamp: new Date().toISOString(),
+      type: 'error',
+      message: `❌ Outcome-Warnung: Erfolg gemeldet, aber das Ergebnis enthält nur ${writeback.fileCount} Datei(en) — der Agent hat vermutlich nichts Substanzielles erzeugt.`,
+    }])
+  }
+}
+
 async function runWithOllamaAgent(
   id: string,
   prompt: string,
   startTime: Date,
   budgetUsd: number,
   model: string,
+  targetRepo?: string,
 ) {
   const maxTurns = budgetToMaxTurns(budgetUsd)
   const reachable = await isOllamaReachable()
@@ -1351,7 +1431,30 @@ async function runWithOllamaAgent(
     return
   }
 
-  const runner = new OllamaAgentRunner(id, model, process.cwd(), {
+  // External target → isolated clone (writeback after); else ForgePilot's own cwd.
+  let runnerWorkspace: RunnerWorkspace | undefined
+  let agentCwd = process.cwd()
+  if (targetRepo) {
+    try {
+      runnerWorkspace = prepareRunnerWorkspace({ delegationId: id, targetRepo })
+      agentCwd = runnerWorkspace.path
+      await appendLogs(id, [{
+        timestamp: new Date().toISOString(),
+        type: 'info',
+        message: `Runner-Workspace vorbereitet: ${runnerWorkspace.path}`,
+      }])
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error)
+      await appendLogs(id, [{
+        timestamp: new Date().toISOString(),
+        type: 'error',
+        message: `❌ Runner-Workspace konnte nicht vorbereitet werden: ${msg}`,
+      }], 'failed')
+      return
+    }
+  }
+
+  const runner = new OllamaAgentRunner(id, model, agentCwd, {
     onLog: logs => void appendLogs(id, logs),
   })
 
@@ -1379,6 +1482,17 @@ async function runWithOllamaAgent(
     const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
     const finished = await repo.findById(id)
     if (finished) {
+      // External target: write the agent's workspace result back to the target repo
+      // (A2 — the Ollama runner now honors targetRepo via workspace + writeback).
+      if (result.success && targetRepo && runnerWorkspace) {
+        await finalizeOllamaExternalResult({
+          id,
+          workspacePath: runnerWorkspace.path,
+          targetRepo,
+          goalLabel: finished.title || finished.contract.goal,
+        })
+      }
+
       recordRuntimeExecuteLoopEvidence(finished, {
         blocker: result.success ? undefined : `Ollama run failed after ${result.turns} turns`,
         notes: result.success
@@ -1394,8 +1508,9 @@ async function runWithOllamaAgent(
         void triggerChain(finished, result.summary).catch(() => {})
       }
 
-      // Auto-PR: if Ollama run succeeded and git changes exist, open a PR
-      if (result.success) {
+      // Auto-PR: only for ForgePilot self-runs (no external target — those use the
+      // writeback above). Opens a PR from git changes in ForgePilot's own cwd.
+      if (result.success && !targetRepo) {
         const prUrl = tryCreatePrFromGitChanges({
           workdir: process.cwd(),
           branchName: `ollama/${id.slice(0, 8)}-${Date.now()}`,
@@ -1444,6 +1559,12 @@ async function runWithOllamaAgent(
       message: `❌ Ollama-Runner-Fehler: ${msg}`,
     }
     await appendLogs(id, [errLog], 'failed')
+  } finally {
+    if (runnerWorkspace) {
+      try {
+        runnerWorkspace.cleanup()
+      } catch { /* cleanup is best-effort — writeback already pushed a backup branch */ }
+    }
   }
 }
 
@@ -2067,18 +2188,18 @@ export async function POST(
     anthropicApiKeySet: Boolean(readStoredApiKeys().ANTHROPIC_API_KEY?.trim()),
   })
 
-  // Safety: the claude-api and ollama-agent runners execute in ForgePilot's OWN
-  // working directory and do NOT honor an external targetRepo yet — running them
-  // against a different project would silently edit ForgePilot itself. Refuse
-  // loudly instead (the Claude CLI runner handles external repos via a workspace).
-  if ((mode === 'claude-api' || mode === 'ollama-agent') && delegation.targetRepo) {
+  // Safety: the claude-api runner executes in ForgePilot's OWN working directory
+  // and does NOT honor an external targetRepo yet — running it against a different
+  // project would silently edit ForgePilot itself. Refuse loudly. (The Claude CLI
+  // and Ollama runners handle external repos via a workspace + writeback.)
+  if (mode === 'claude-api' && delegation.targetRepo) {
     const home = process.env.HOME ?? ''
     const targetResolved = pathMod.resolve(delegation.targetRepo.replace(/^~(?=\/|$)/, home))
     if (targetResolved !== pathMod.resolve(process.cwd())) {
       await appendLogs(id, [{
         timestamp: new Date().toISOString(),
         type: 'error',
-        message: `⛔ Runner '${mode}' kann (noch) nicht in ein externes Ziel-Repo schreiben — das würde ForgePilot selbst ändern. Ziel: ${delegation.targetRepo}. Für externe Repos den Claude-CLI-Runner nutzen (ggf. \`claude login\`).`,
+        message: `⛔ Runner 'claude-api' kann (noch) nicht in ein externes Ziel-Repo schreiben — das würde ForgePilot selbst ändern. Ziel: ${delegation.targetRepo}. Für externe Repos den Claude-CLI- oder Ollama-Runner nutzen.`,
       }], 'failed')
       return NextResponse.json({ started: false, mode, error: 'external-target-not-supported-by-runner', delegationId: id }, { status: 409 })
     }
@@ -2094,7 +2215,7 @@ export async function POST(
 
   if (mode === 'ollama-agent') {
     const model = delegation.contract.llmModel?.trim() || 'qwen2.5-coder:14b'
-    void runWithOllamaAgent(id, prompt, startTime, delegation.contract.maxBudgetUsd, model)
+    void runWithOllamaAgent(id, prompt, startTime, delegation.contract.maxBudgetUsd, model, delegation.targetRepo)
     return NextResponse.json({ started: true, mode: 'ollama-agent', delegationId: id, model })
   }
 
