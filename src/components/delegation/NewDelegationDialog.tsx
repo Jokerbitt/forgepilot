@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import type { Delegation, ExecutionRoute, OutputMode, TaskContract, TaskType } from '@/lib/models/delegation'
 import type { RiskClass } from '@/lib/models/work-item'
 import { DELEGATION_TEMPLATES, templateToContract } from '@/lib/delegations/templates'
 import type { FeatureSuggestion } from '@/app/api/delegations/suggest-features/route'
+import { estimateComplexity } from '@/lib/budget-utils'
 
 interface Props {
   onClose: () => void
@@ -62,6 +63,12 @@ export function NewDelegationDialog({
   const [customProject, setCustomProject] = useState('')
   const [projectOptions, setProjectOptions] = useState<string[]>([])
 
+  // M110: complexity estimate — updates as user edits goal + DoD
+  const complexityEstimate = useMemo(
+    () => estimateComplexity(dodItems, goal, branchStrategy),
+    [dodItems, goal, branchStrategy],
+  )
+
   useEffect(() => {
     fetch('/api/delegations/projects')
       .then(r => r.json() as Promise<{ projects: string[] }>)
@@ -93,6 +100,7 @@ export function NewDelegationDialog({
       'extend-data-model': TEMPLATES[0], 'add-cron-job': TEMPLATES[3],
       'fix-bug': TEMPLATES[1], 'add-tests': TEMPLATES[2],
       'refactor-module': TEMPLATES[3], 'write-docs': TEMPLATES[2],
+      'large-feature': TEMPLATES[0],
     }
     if (simpleMap[templateId]) setSelectedTemplate(simpleMap[templateId])
   }
@@ -583,7 +591,18 @@ export function NewDelegationDialog({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Budget ($)</label>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+                    Budget ($)
+                    <span className={`ml-2 text-[10px] font-normal px-1.5 py-0.5 rounded-full ${
+                      complexityEstimate.complexity === 'large'
+                        ? 'bg-orange-900/50 text-orange-300 border border-orange-700/40'
+                        : complexityEstimate.complexity === 'medium'
+                        ? 'bg-blue-900/40 text-blue-300 border border-blue-700/40'
+                        : 'bg-gray-800 text-gray-400 border border-gray-700'
+                    }`}>
+                      {complexityEstimate.label}
+                    </span>
+                  </label>
                   <input
                     type="number"
                     step="0.5"
@@ -592,6 +611,11 @@ export function NewDelegationDialog({
                     onChange={e => setMaxBudgetUsd(Number(e.target.value))}
                     className="w-full bg-gray-950 border border-gray-800 rounded p-2 text-white text-xs focus:border-blue-500 focus:outline-none"
                   />
+                  {maxBudgetUsd < complexityEstimate.recommendedBudgetUsd && (
+                    <p className="text-[10px] text-orange-400 mt-1">
+                      ⚠ Empfohlen: ${complexityEstimate.recommendedBudgetUsd.toFixed(0)} ({complexityEstimate.reason})
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Risk Class</label>

@@ -110,7 +110,7 @@ function useDebounced<T>(value: T, delay: number): T {
 
 // ─── tabs ────────────────────────────────────────────────────────
 
-type Tab = 'cards' | 'lessons' | 'sources'
+type Tab = 'cards' | 'lessons' | 'sources' | 'packages'
 
 // ─── page ────────────────────────────────────────────────────────
 
@@ -327,6 +327,12 @@ export default function KnowledgeCenterPage() {
           >
             Quellen ({sources.length})
           </button>
+          <button
+            onClick={() => setTab('packages')}
+            className={cx('border-b-2 px-4 py-2.5 text-sm font-medium transition-colors', tab === 'packages' ? 'border-violet-500 text-white' : 'border-transparent text-slate-500 hover:text-slate-300')}
+          >
+            Context Packages
+          </button>
         </div>
 
         {loading ? (
@@ -348,8 +354,10 @@ export default function KnowledgeCenterPage() {
           />
         ) : tab === 'lessons' ? (
           <LessonsTab lessons={lessons} loading={lessonsLoading} />
-        ) : (
+        ) : tab === 'sources' ? (
           <SourcesTab sources={sources} />
+        ) : (
+          <ContextPackagesTab />
         )}
       </div>
     </main>
@@ -753,6 +761,104 @@ function SourcesTab({ sources }: { sources: KnowledgeSource[] }) {
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+// ─── Context Packages Tab ─────────────────────────────────────────────────────
+
+interface ContextPackageSummary {
+  id: string
+  name: string
+  description?: string
+  privacyMode: string
+  readinessScore?: number
+  tokenCount?: number
+  updatedAt: string
+}
+
+function ContextPackagesTab() {
+  const [packages, setPackages] = useState<ContextPackageSummary[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/context-packages')
+      .then(r => r.ok ? r.json() as Promise<ContextPackageSummary[]> : Promise.resolve([]))
+      .then(data => setPackages(Array.isArray(data) ? data : []))
+      .catch(() => setPackages([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {[1, 2, 3].map(i => <div key={i} className="h-24 animate-pulse rounded-xl border border-slate-800 bg-slate-900" />)}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-slate-500">
+          Kontext-Pakete werden automatisch in Agent-Prompts injiziert.
+        </p>
+        <Link
+          href="/context-packages"
+          className="rounded-lg border border-violet-500/30 bg-violet-500/[0.07] px-3 py-1.5 text-xs font-medium text-violet-300 transition-colors hover:bg-violet-500/[0.12]"
+        >
+          Vollständige Verwaltung →
+        </Link>
+      </div>
+
+      {packages.length === 0 ? (
+        <div className="rounded-xl border border-slate-800 bg-slate-900/30 p-10 text-center">
+          <p className="text-3xl mb-2">📦</p>
+          <p className="text-slate-400 font-medium">Keine Context Packages</p>
+          <p className="mt-1 text-sm text-slate-600">Erstelle das erste Paket unter Context Packages.</p>
+          <Link href="/context-packages" className="mt-3 inline-block text-xs text-violet-400 hover:text-violet-300">
+            Zu Context Packages →
+          </Link>
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {packages.map(pkg => (
+            <Link
+              key={pkg.id}
+              href={`/context-packages`}
+              className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-900/40 p-4 transition-colors hover:border-violet-500/30 hover:bg-violet-500/[0.04]"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-200 leading-tight">{pkg.name}</p>
+                <span className={cx(
+                  'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium',
+                  pkg.privacyMode === 'local-only' ? 'bg-emerald-900/40 text-emerald-400'
+                    : pkg.privacyMode === 'hybrid' ? 'bg-amber-900/40 text-amber-400'
+                    : 'bg-sky-900/40 text-sky-400'
+                )}>
+                  {pkg.privacyMode === 'local-only' ? 'Lokal' : pkg.privacyMode === 'hybrid' ? 'Hybrid' : 'Cloud'}
+                </span>
+              </div>
+              {pkg.description && (
+                <p className="text-xs text-slate-500 line-clamp-2">{pkg.description}</p>
+              )}
+              <div className="flex items-center gap-3 mt-auto pt-1">
+                {pkg.readinessScore !== undefined && (
+                  <span className={cx('text-xs font-medium', pkg.readinessScore >= 70 ? 'text-emerald-400' : pkg.readinessScore >= 40 ? 'text-amber-400' : 'text-red-400')}>
+                    Score: {pkg.readinessScore}%
+                  </span>
+                )}
+                {pkg.tokenCount !== undefined && (
+                  <span className="text-xs text-slate-600">{pkg.tokenCount.toLocaleString()} Tokens</span>
+                )}
+                <span className="ml-auto text-[10px] text-slate-700">
+                  {new Date(pkg.updatedAt).toLocaleDateString('de-DE')}
+                </span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

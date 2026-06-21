@@ -29,8 +29,12 @@ vi.mock('@/lib/logger', () => ({
   },
 }))
 
+vi.mock('@/lib/knowledge/nas-writeback', () => ({
+  writeKnowledgeCardToNas: vi.fn(),
+}))
+
 // Import AFTER mocks are set up
-import { writebackDelegationKnowledge } from './writeback'
+import { writebackDelegationKnowledge, writeFailureLessonCard } from './writeback'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -174,5 +178,92 @@ describe('writebackDelegationKnowledge', () => {
     const truncatedPart = afterMarker.split('\n')[0] ?? ''
     expect(truncatedPart.length).toBeLessThanOrEqual(500)
     expect(truncatedPart).toBe('x'.repeat(500))
+  })
+})
+
+// ─── writeFailureLessonCard ───────────────────────────────────────────────────
+
+describe('writeFailureLessonCard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFindBySource.mockReturnValue([])
+    mockWriteKnowledgeCard.mockReturnValue({
+      id: 'failure-card-1',
+      title: '[FAILED] test goal',
+      content: '- something went wrong',
+      source: 'delegation',
+      sourceId: 'del-fail',
+      tags: ['failure-lesson', 'unknown', 'B', 'local-agent'],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+  })
+
+  it('writes a failure lesson card and returns written:true', async () => {
+    mockGenerateText.mockResolvedValue({ text: '- something went wrong\n- avoid X', provider: 'anthropic', model: 'haiku' })
+
+    const delegation = makeDelegation({
+      id: 'del-fail',
+      status: 'failed',
+      errorMessage: 'TypeScript compilation failed',
+      logs: [
+        { timestamp: new Date().toISOString(), type: 'error', message: 'error TS2345: Argument ...' },
+      ],
+    })
+
+    const result = await writeFailureLessonCard(delegation)
+    expect(result.written).toBe(true)
+    expect(result.cardId).toBe('failure-card-1')
+    expect(mockWriteKnowledgeCard).toHaveBeenCalledOnce()
+  })
+
+  it('tags include failure-lesson, targetRepo, riskClass, and executionRoute', async () => {
+    mockGenerateText.mockResolvedValue({ text: '- lesson', provider: 'anthropic', model: 'haiku' })
+
+    await writeFailureLessonCard(
+      makeDelegation({
+        id: 'del-fail',
+        status: 'failed',
+        targetRepo: '/workspaces/my-repo',
+        errorMessage: 'failed',
+      }),
+    )
+
+    const callArg = mockWriteKnowledgeCard.mock.calls[0][0] as Record<string, unknown>
+    expect((callArg.tags as string[])).toContain('failure-lesson')
+    expect((callArg.tags as string[])).toContain('/workspaces/my-repo')
+  })
+
+  it('skips when a failure-lesson card already exists for the delegation', async () => {
+    mockFindBySource.mockReturnValue([
+      { id: 'existing', tags: ['failure-lesson'], sourceId: 'del-fail' },
+    ])
+
+    const result = await writeFailureLessonCard(makeDelegation({ id: 'del-fail', status: 'failed' }))
+    expect(result.written).toBe(false)
+    expect(result.reason).toContain('Failure card already exists')
+    expect(mockWriteKnowledgeCard).not.toHaveBeenCalled()
+  })
+
+  it('falls back to raw content when LLM fails', async () => {
+    mockGenerateText.mockRejectedValue(new Error('LLM timeout'))
+
+    const result = await writeFailureLessonCard(
+      makeDelegation({ id: 'del-fail', status: 'failed', errorMessage: 'some raw error' }),
+    )
+
+    // Falls back to raw content — card is still written
+    expect(result.written).toBe(true)
+    const callArg = mockWriteKnowledgeCard.mock.calls[0][0] as Record<string, unknown>
+    expect(callArg.content as string).toContain('some raw error')
+  })
+
+  it('returns written:false when writeKnowledgeCard throws', async () => {
+    mockGenerateText.mockResolvedValue({ text: '- ok', provider: 'anthropic', model: 'haiku' })
+    mockWriteKnowledgeCard.mockImplementation(() => { throw new Error('disk full') })
+
+    const result = await writeFailureLessonCard(makeDelegation({ id: 'del-fail', status: 'failed' }))
+    expect(result.written).toBe(false)
+    expect(result.reason).toContain('disk full')
   })
 })

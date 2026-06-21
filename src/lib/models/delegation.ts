@@ -96,6 +96,8 @@ export interface TaskContract {
   autoChain?: boolean
   /** G2: If true, automatically queue a retry delegation when critic score < 70 */
   autoRetryOnCriticFail?: boolean
+  /** Context profile used for this delegation (from context-router.ts) */
+  contextProfile?: string
   createdAt: string
   // Expert Mode Policy Fields (#19)
   llmProvider?: string
@@ -193,6 +195,18 @@ export interface Delegation {
   targetRepo?: string
   /** Auto-generated DoD quality check result after execution */
   qualityCheck?: DoDQualityCheck
+  /** M120: Path to the runner workspace / worktree where the agent wrote code */
+  worktreePath?: string
+  /** M120: Detected app type in the worktree for preview purposes */
+  worktreeAppType?: 'static' | 'nextjs' | 'vite' | 'unknown'
+  /** Token tracking — populated from Claude CLI stream-json result event */
+  inputTokens?: number
+  outputTokens?: number
+  cachedTokens?: number
+  /** Budget-paused: hit the cost cap but the work may be resumable with more budget.
+   *  Distinguishes a budget stop from a real failure. */
+  budgetPaused?: boolean
+  budgetPausedReason?: string
   createdAt: string
   updatedAt: string
 }

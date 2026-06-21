@@ -2,10 +2,11 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { ArrowRight, Bot, CheckCircle2, Clock3, Loader2, Play, RefreshCw, ShieldAlert, Sparkles } from 'lucide-react'
+import { ArrowRight, Bot, CheckCircle2, Clock3, Layers, Loader2, Play, RefreshCw, ShieldAlert, Sparkles, Zap } from 'lucide-react'
 import { buttonClassName, cx } from '@/components/ui/primitives'
 import {
   canStartAutonomously,
+  type AppBuilderCapability,
   type DailyAssistantAction,
   type DailyAssistantBlocker,
   type DailyAssistantQueueItem,
@@ -34,11 +35,22 @@ interface AssistantSnapshot {
   readinessScore: number
   action: DailyAssistantAction
   autonomyText: string
+  briefing?: string
   steps: DailyAssistantStep[]
   blockers: DailyAssistantBlocker[]
   stats: DelegationStats
   settings: SettingsResponse
   queue: DailyAssistantQueueItem[]
+  appBuilderCapability?: AppBuilderCapability
+}
+
+interface AutonomyCycleResponse {
+  ok?: boolean
+  status?: 'blocked' | 'waiting' | 'idle' | 'ready' | 'started' | 'start_failed'
+  message?: string
+  started?: boolean
+  candidate?: { id: string; title: string; href: string } | null
+  error?: string
 }
 
 function toneClasses(tone: 'ready' | 'attention' | 'blocked') {
@@ -93,27 +105,33 @@ export function DailyAssistantPanel() {
   const autopilotMinScore = snapshot?.settings.autopilotMinScore ?? 85
   const autopilotMaxRiskClass = snapshot?.settings.autopilotMaxRiskClass ?? 'A'
   const maxConcurrentAgents = snapshot?.settings.maxConcurrentAgents ?? 2
-  const safeStartItems = (snapshot?.queue ?? []).filter(item => item.status === 'approved' && item.riskClass !== 'C')
+  const safeStartItems = (snapshot?.queue ?? []).filter(item => (
+    item.status === 'approved'
+    && item.riskClass !== 'C'
+    && item.requiresApproval !== true
+  ))
   const nextSafeStart = safeStartItems[0]
 
-  const runAutopilotOnce = async () => {
+  const runAssistantCycle = async () => {
     setWorking(true)
     setError(null)
     setMessage(null)
     try {
-      const response = await fetch('/api/autopilot/tick', { method: 'POST' })
-      const data = await response.json() as { skipped?: boolean; reason?: string; count?: number; triggered?: string[] }
-      if (!response.ok) throw new Error('Autopilot konnte nicht gestartet werden.')
-      if (data.skipped) {
-        setMessage(`Autopilot wartet: ${data.reason ?? 'nicht aktiv'}.`)
-      } else {
-        setMessage(data.count && data.count > 0
-          ? `Autopilot hat ${data.count} Delegation(en) gestartet.`
-          : 'Autopilot hat geprüft: gerade keine passende sichere Aufgabe startbereit.')
+      const response = await fetch('/api/daily-assistant/autonomy-cycle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: approvalMode !== 'autopilot' }),
+      })
+      const data = await response.json() as AutonomyCycleResponse
+      if (!response.ok || data.ok === false) {
+        throw new Error(data.message ?? data.error ?? 'Assistant konnte den Autonomie-Zyklus nicht ausführen.')
       }
+      setMessage(data.message ?? (data.started
+        ? 'Assistant hat eine sichere Delegation gestartet.'
+        : 'Assistant hat geprüft: gerade nichts sicher startbereit.'))
       await refresh()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Autopilot konnte nicht ausgeführt werden.')
+      setError(err instanceof Error ? err.message : 'Assistant konnte den Autonomie-Zyklus nicht ausführen.')
     } finally {
       setWorking(false)
     }
@@ -175,6 +193,11 @@ export function DailyAssistantPanel() {
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
             {action.detail}
           </p>
+          {snapshot?.briefing && (
+            <p className="text-sm text-slate-200 leading-relaxed border-l-2 border-violet-500 pl-3 mt-3 max-w-3xl">
+              {snapshot.briefing}
+            </p>
+          )}
           <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
             {autonomyText}
           </p>
@@ -235,6 +258,10 @@ export function DailyAssistantPanel() {
           ))}
         </div>
       </div>
+
+      {snapshot?.appBuilderCapability && (
+        <AppBuilderBlock capability={snapshot.appBuilderCapability} />
+      )}
 
       <div className="mt-5 rounded-xl border border-white/[0.07] bg-black/20 p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -314,7 +341,7 @@ export function DailyAssistantPanel() {
         ) : snapshot?.queue.length ? (
           <div className="mt-4 space-y-2">
             {snapshot.queue.map(item => {
-              const canStartNow = item.status === 'approved' && item.riskClass !== 'C'
+              const canStartNow = item.status === 'approved' && item.riskClass !== 'C' && item.requiresApproval !== true
               return (
               <div
                 key={item.id}
@@ -416,12 +443,12 @@ export function DailyAssistantPanel() {
         </Link>
         <button
           type="button"
-          onClick={() => void runAutopilotOnce()}
+          onClick={() => void runAssistantCycle()}
           disabled={working || loading}
           className={buttonClassName('secondary', 'min-h-11 flex-1 disabled:opacity-50')}
         >
           {working ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-          Autopilot prüfen
+          Assistant übernehmen lassen
         </button>
         <button
           type="button"
@@ -464,6 +491,69 @@ function PolicyCard({
     <div className={cx('rounded-lg border px-3 py-3', classes)}>
       <p className="text-sm font-semibold text-white">{title}</p>
       <p className="mt-1 text-xs leading-5 text-slate-400">{body}</p>
+    </div>
+  )
+}
+
+const LEVEL_COLORS: Record<string, string> = {
+  'single-task': 'border-slate-500/25 bg-slate-500/10 text-slate-300',
+  'multi-slice-mvp': 'border-blue-500/25 bg-blue-500/10 text-blue-200',
+  'large-feature': 'border-violet-500/25 bg-violet-500/10 text-violet-200',
+  'full-app': 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200',
+}
+
+function AppBuilderBlock({ capability }: { capability: AppBuilderCapability }) {
+  const colorClass = LEVEL_COLORS[capability.level] ?? LEVEL_COLORS['single-task']!
+  return (
+    <div className="mt-5 rounded-xl border border-white/[0.07] bg-black/20 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-white">App Builder Fähigkeit</h3>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">
+            Wie groß kann ForgePilot heute autonom bauen? Basiert auf abgeschlossenen Runs und Autopilot-Status.
+          </p>
+        </div>
+        <span className={cx('shrink-0 rounded-full border px-3 py-1 text-xs font-semibold', colorClass)}>
+          {capability.label}
+        </span>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className="rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-3">
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+            <Layers className="h-3.5 w-3.5" />
+            Max. Phasen
+          </div>
+          <p className="mt-1 text-2xl font-semibold text-white">{capability.maxPhases}</p>
+          <p className="mt-1 text-xs text-slate-500">{capability.detail}</p>
+        </div>
+        <div className={cx('rounded-lg border px-3 py-3', capability.planModeReady ? 'border-violet-500/20 bg-violet-500/[0.08]' : 'border-white/[0.06] bg-white/[0.025]')}>
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+            <Zap className="h-3.5 w-3.5" />
+            Plan Mode
+          </div>
+          {capability.planModeReady ? (
+            <>
+              <p className="mt-1 text-sm font-semibold text-white">Bereit — großes Feature starten</p>
+              <Link
+                href="/delegations/plan"
+                className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-violet-200 hover:text-violet-100"
+              >
+                Plan Mode öffnen
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className="mt-1 text-sm font-semibold text-white">Noch nicht freigeschaltet</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {capability.recommendedAction === 'fix-blockers'
+                  ? 'Behebe zuerst fehlgeschlagene Delegationen.'
+                  : 'Schließe mehr Runs erfolgreich ab.'}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

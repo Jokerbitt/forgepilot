@@ -1,6 +1,7 @@
 import type { Delegation } from '@/lib/models/delegation'
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import { apiLogger } from '@/lib/logger'
+import { getNBAConfig } from '@/lib/nba-engine/nba-config'
 
 export interface BudgetCheckResult {
   exceeded: boolean
@@ -9,16 +10,39 @@ export interface BudgetCheckResult {
   reason?: string
 }
 
+export function getBudgetLimit(delegation: Delegation): number | null {
+  const limit = delegation.contract?.maxCostUsd ?? delegation.contract?.maxBudgetUsd
+  return typeof limit === 'number' && limit > 0 ? limit : null
+}
+
 /**
  * Check if a delegation has exceeded its budget.
  * If exceeded, updates delegation status to 'failed' with error message and notifies operator.
  * Never throws.
  */
-export async function checkBudget(delegation: Delegation): Promise<BudgetCheckResult> {
-  const limit = delegation.contract?.maxCostUsd
-  const actual = delegation.actualCostUsd ?? delegation.costEstimateUsd ?? 0
+/**
+ * Resolve the EFFECTIVE budget limit given the user's enforcement settings.
+ * Returns null when enforcement is 'off' (no cap), or the limit raised by the
+ * tolerance percentage when 'tolerant'.
+ */
+export function effectiveBudgetLimit(rawLimit: number | null): number | null {
+  if (rawLimit == null) return null
+  const cfg = getNBAConfig()
+  if (cfg.budgetEnforcement === 'off') return null
+  if (cfg.budgetEnforcement === 'tolerant') {
+    const pct = Math.max(0, cfg.budgetTolerancePct ?? 0)
+    return rawLimit * (1 + pct / 100)
+  }
+  return rawLimit // strict
+}
 
-  if (!limit || limit <= 0) {
+export async function checkBudget(delegation: Delegation): Promise<BudgetCheckResult> {
+  const rawLimit = getBudgetLimit(delegation)
+  const actual = delegation.actualCostUsd ?? delegation.costEstimateUsd ?? 0
+  const limit = effectiveBudgetLimit(rawLimit)
+
+  if (!limit) {
+    // enforcement 'off' or no contract limit → never stop
     return { exceeded: false, limit: null, actual }
   }
 
@@ -26,23 +50,27 @@ export async function checkBudget(delegation: Delegation): Promise<BudgetCheckRe
     return { exceeded: false, limit, actual }
   }
 
-  const reason = `Budget exceeded: $${actual.toFixed(4)} > $${limit.toFixed(4)} limit`
+  const overPct = rawLimit ? Math.round(((actual - rawLimit) / rawLimit) * 100) : 0
+  const reason = `Budget pausiert: $${actual.toFixed(4)} überschreitet das Limit $${rawLimit?.toFixed(2)} um ${overPct}% (Toleranzgrenze $${limit.toFixed(2)}). Mit höherem Budget fortsetzbar.`
   apiLogger.warn(
-    { event: 'budget.exceeded', delegationId: delegation.id, actual, limit },
+    { event: 'budget.paused', delegationId: delegation.id, actual, limit, rawLimit },
     reason,
   )
 
-  // Update delegation to failed with budget error
+  // Budget stop is NOT a real failure — mark it as budget-paused so the UI can
+  // offer "resume with more budget" instead of treating it as broken.
   try {
     const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
     await repo.update(delegation.id, {
       status: 'failed',
       errorMessage: reason,
+      budgetPaused: true,
+      budgetPausedReason: reason,
     })
   } catch (error) {
     apiLogger.error(
       { event: 'budget.update_failed', error: error instanceof Error ? error.message : String(error) },
-      'Failed to update delegation status after budget exceeded',
+      'Failed to update delegation status after budget paused',
     )
   }
 
@@ -66,7 +94,7 @@ export function wouldExceedBudget(
   delegation: Delegation,
   estimatedCostUsd: number,
 ): boolean {
-  const limit = delegation.contract?.maxCostUsd
-  if (!limit || limit <= 0) return false
+  const limit = effectiveBudgetLimit(getBudgetLimit(delegation))
+  if (!limit) return false
   return estimatedCostUsd > limit
 }

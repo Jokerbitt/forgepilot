@@ -35,6 +35,8 @@ vi.mock('@/lib/nba-engine/nba-config', () => ({
     approvalMode: 'autopilot',
     maxConcurrentAgents: 2,
     autoStartApproved: false,
+    budgetEnforcement: 'tolerant' as const,
+    budgetTolerancePct: 20,
   })),
 }))
 

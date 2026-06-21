@@ -6,6 +6,7 @@ import {
   execBash,
   readFileTool,
   writeFileTool,
+  editFileTool,
   listDirTool,
   isCommandSafe,
   executeToolCall,
@@ -76,6 +77,31 @@ describe('tool executor', () => {
     expect(result.ok).toBe(true)
     expect(result.output).toContain('a.txt')
     expect(result.output).toContain('sub/')
+  })
+
+  it('edit_file surgically replaces a unique snippet, preserving the rest', () => {
+    const original = 'line A\n<div>\n  body\n</div>\nline B'
+    fs.writeFileSync(path.join(tmpDir, 'page.tsx'), original)
+    const result = editFileTool('page.tsx', '<div>', '<div data-testid="home-root">', tmpDir)
+    expect(result.ok).toBe(true)
+    const onDisk = fs.readFileSync(path.join(tmpDir, 'page.tsx'), 'utf-8')
+    expect(onDisk).toBe('line A\n<div data-testid="home-root">\n  body\n</div>\nline B')
+  })
+
+  it('edit_file refuses when old_string is missing', () => {
+    fs.writeFileSync(path.join(tmpDir, 'f.txt'), 'hello world')
+    const result = editFileTool('f.txt', 'NOT THERE', 'x', tmpDir)
+    expect(result.ok).toBe(false)
+    expect(result.output).toContain('not found')
+    expect(fs.readFileSync(path.join(tmpDir, 'f.txt'), 'utf-8')).toBe('hello world')
+  })
+
+  it('edit_file refuses when old_string is not unique', () => {
+    fs.writeFileSync(path.join(tmpDir, 'f.txt'), 'x x x')
+    const result = editFileTool('f.txt', 'x', 'y', tmpDir)
+    expect(result.ok).toBe(false)
+    expect(result.output).toContain('not unique')
+    expect(fs.readFileSync(path.join(tmpDir, 'f.txt'), 'utf-8')).toBe('x x x')
   })
 
   it('executeToolCall dispatches to the right tool', () => {
