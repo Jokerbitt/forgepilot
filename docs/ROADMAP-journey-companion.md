@@ -49,12 +49,12 @@ Nächste Stufe, nach Hebel priorisiert. Arbeitsweise wie gehabt: additiv, getest
 
 | # | Feature | Ansatz | Status |
 |---|---------|--------|--------|
-| 4.1 | **Funktionsbeweis** (höchster Hebel) | Nach dem Build App starten + Kernpfade durchklicken (Preview-Infra vorhanden) → Klartext-Beweis + Screenshot „funktioniert". Verwandelt „sollte gehen" in „nachweislich getestet". | ⬜ |
+| 4.1 | **Funktionsbeweis** (höchster Hebel) | Nach dem Build App starten + Kernpfade durchklicken (Preview-Infra vorhanden) → Klartext-Beweis + Screenshot „funktioniert". Verwandelt „sollte gehen" in „nachweislich getestet". `src/lib/journey/function-proof.ts`, `/api/journey/function-proof`, `FunctionProof`. | ✅ |
 | 4.2 | **Real-Kosten-Rückblick** | Ist-Kosten nach dem Build (Summe `actualCostUsd`) vs. Vorab-Schätzung (Summe `costEstimateUsd`) + Budget, in Klartext (günstiger/im Rahmen/teurer/kostenlos). Logik USD, Anzeige EUR. `src/lib/journey/cost-review.ts`, `/api/journey/cost-review`, `CostReview` in `/suggestions`. | ✅ |
-| 4.3 | **Betriebs-Monitoring** | Health-/Fehler-Check für live geschaltete Apps in Klartext; macht ForgePilot vom Generator zum Betreiber. | ⬜ |
-| 4.4 | **Mobile / PWA-Apps** | Apps auch fürs Handy (PWA-Manifest/Service-Worker bzw. React Native/Expo) — Reichweiten-Sprung über Web hinaus. | ⬜ |
+| 4.3 | **Betriebs-Monitoring** | Health-/Fehler-Check für live geschaltete Apps in Klartext (🟢/🟡/🔴), mit Antwortzeit + Ausfall-Serie über mehrere Prüfungen; macht ForgePilot vom Generator zum Betreiber. `src/lib/journey/monitoring.ts` + `monitoring-store.ts`, `/api/journey/monitoring`, `Monitoring`. | ✅ |
+| 4.4 | **Mobile / PWA-Apps** | Apps auch fürs Handy: PWA-Check (installierbar?) + 1-Klick-Einrichtung (Manifest + Service-Worker via Plan-Executor). Reichweiten-Sprung über Web hinaus. `src/lib/journey/pwa.ts`, `/api/journey/pwa`, `PwaSetup`. | ✅ |
 
-4.1 + 4.2 erledigt (2026-06-21). Empfehlung als Nächstes: 4.3 Betriebs-Monitoring (Generator → Betreiber).
+**Phase 4 komplett (2026-06-21):** 4.1 Funktionsbeweis · 4.2 Real-Kosten · 4.3 Monitoring · 4.4 Mobile/PWA — alle additiv, getestet, gepusht auf `feature/nav-cleanup-workbench`.
 
 ## Reuse-Prinzip
 Jeder Schritt baut auf Bestehendem auf: Delegation-/Plan-Executor (Status, chainPosition/
