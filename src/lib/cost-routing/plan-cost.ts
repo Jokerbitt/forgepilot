@@ -54,7 +54,7 @@ const TOKEN_BUDGET: Record<TaskComplexity, number> = {
 }
 
 /** Coarse USD→EUR factor for plain-language display; not a billing rate. */
-const USD_TO_EUR = 0.92
+export const USD_TO_EUR = 0.92
 
 const COMPLEX_HINTS = ['architekt', 'architecture', 'refactor', 'migrat', 'redesign', 'security', 'sicherheit', 'skalier', 'scal', 'auth', 'infrastruct', 'infrastruktur']
 const CODING_HINTS = ['implement', 'build', 'baue', 'code', 'api', 'function', 'funktion', 'feature', 'fix', 'bug', 'test', 'endpoint', 'component', 'komponente', 'integration', 'datenbank', 'database', 'schema']
@@ -67,7 +67,8 @@ export function classifyComplexity(step: PlanStep): TaskComplexity {
   return 'simple'
 }
 
-function eur(amount: number): string {
+/** Format a EUR amount in plain German (e.g. "0,46 €", "<0,01 €"). */
+export function eur(amount: number): string {
   if (amount === 0) return '0 €'
   if (amount < 0.01) return '<0,01 €'
   return `${amount.toFixed(2).replace('.', ',')} €`

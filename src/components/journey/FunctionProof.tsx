@@ -35,7 +35,7 @@ export function FunctionProof() {
   return (
     <div className="mt-4 rounded-lg border border-slate-700 bg-slate-900/40 p-3">
       <p className="text-xs font-medium text-slate-300">🔬 Funktionsbeweis</p>
-      <p className="mt-0.5 text-[11px] text-slate-500">Prüft, ob die laufende App wirklich antwortet (URL z.B. von „App live schalten").</p>
+      <p className="mt-0.5 text-[11px] text-slate-500">Prüft, ob die laufende App wirklich antwortet (URL z.B. von „App live schalten&quot;).</p>
       <div className="mt-2 flex flex-wrap gap-2">
         <input className="flex-1 min-w-[180px] rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
           placeholder="http://localhost:3001" value={url} onChange={e => setUrl(e.target.value)} />
