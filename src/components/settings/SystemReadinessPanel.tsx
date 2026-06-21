@@ -5,10 +5,26 @@ import Link from 'next/link'
 import type { AIStatus } from '@/app/api/ai/status/route'
 import type { ConnectorHealth } from '@/lib/connectors/types'
 import type { SmokeTestResult } from '@/app/api/smoke-test/route'
+import type { StorageStatus } from '@/lib/storage/cutover-config'
 import { cx } from '@/components/ui/primitives'
 
 interface ConnectorHealthResponse {
   connectors: Array<{ manifest: { id: string; name: string }; health: ConnectorHealth }>
+}
+
+interface CliStatusResponse {
+  zeroKeyReady: boolean
+  activeMode: 'claude-cli' | 'codex-cli' | 'claude-api' | 'openai-api' | 'simulation'
+  claudeCliAvailable: boolean
+  claudeCliVersion: string | null
+  codexCliAvailable: boolean
+  codexCliVersion: string | null
+  apiKeysOptional: boolean
+  recommendation: string
+}
+
+interface StorageStatusResponse extends StorageStatus {
+  inventory?: unknown
 }
 
 type Readiness = 'ok' | 'warn' | 'error' | 'loading'
@@ -21,6 +37,28 @@ interface SystemCard {
   detail: string
   hint?: string
   hintHref?: string
+}
+
+const CLI_MODE_LABEL: Record<CliStatusResponse['activeMode'], string> = {
+  'claude-cli': 'Claude CLI (Zero-Key)',
+  'codex-cli': 'Codex CLI (Zero-Key)',
+  'claude-api': 'Claude API-Key',
+  'openai-api': 'OpenAI API-Key',
+  simulation: 'Simulation (keine Ausführung)',
+}
+
+const ACTION_PRIORITY = ['devserver', 'runner', 'ai', 'github', 'storage', 'smoke', 'linear', 'ollama']
+
+export function computeNextAction(cards: SystemCard[]): { label: string; href?: string } | null {
+  const byId = new Map(cards.map(c => [c.id, c]))
+  for (const id of ACTION_PRIORITY) {
+    const card = byId.get(id)
+    if (!card) continue
+    if (card.status === 'error' || card.status === 'warn') {
+      if (card.hint) return { label: `${card.label}: ${card.hint}`, href: card.hintHref }
+    }
+  }
+  return null
 }
 
 function StatusIcon({ status }: { status: Readiness }) {
@@ -65,22 +103,99 @@ function SystemCardView({ card }: { card: SystemCard }) {
 
 export function SystemReadinessPanel() {
   const [cards, setCards] = useState<SystemCard[]>([
+    { id: 'devserver', label: 'Dev Server', icon: '◐', status: 'loading', detail: 'Prüfe lokale App…' },
+    { id: 'runner', label: 'Runner', icon: '▶', status: 'loading', detail: 'Prüfe Ausführungsmodus…' },
+    { id: 'storage', label: 'Storage', icon: '⛁', status: 'loading', detail: 'Prüfe Persistenz…' },
     { id: 'github', label: 'GitHub', icon: '⎇', status: 'loading', detail: 'Prüfe Verbindung…' },
     { id: 'linear', label: 'Linear', icon: '▲', status: 'loading', detail: 'Prüfe Verbindung…' },
     { id: 'ai', label: 'AI Provider', icon: '⚡', status: 'loading', detail: 'Prüfe Verfügbarkeit…' },
     { id: 'ollama', label: 'Ollama (lokal)', icon: '🖥', status: 'loading', detail: 'Prüfe lokalen Server…' },
     { id: 'smoke', label: 'Smoke Test', icon: '🔬', status: 'loading', detail: 'Prüfe Systemgesundheit…' },
   ])
+  const [nextAction, setNextAction] = useState<{ label: string; href?: string } | null>(null)
 
   useEffect(() => {
     const load = async () => {
-      const [connRes, aiRes, smokeRes] = await Promise.allSettled([
+      const [connRes, aiRes, smokeRes, cliRes, storageRes] = await Promise.allSettled([
         fetch('/api/connectors/health'),
         fetch('/api/ai/status'),
         fetch('/api/smoke-test'),
+        fetch('/api/system/cli-status'),
+        fetch('/api/storage-status'),
       ])
 
       const updated: SystemCard[] = []
+
+      // ── Dev Server ────────────────────────────────────────────────────────────
+      // Wenn dieser Panel überhaupt rendert läuft Next.js — wir verifizieren
+      // zusätzlich, dass mindestens eine API-Route erreichbar war.
+      const anyApiReachable = [connRes, aiRes, smokeRes, cliRes, storageRes].some(
+        r => r.status === 'fulfilled' && r.value.ok,
+      )
+
+      updated.push({
+        id: 'devserver',
+        label: 'Dev Server',
+        icon: '◐',
+        status: anyApiReachable ? 'ok' : 'error',
+        detail: anyApiReachable
+          ? `Next.js läuft · API erreichbar`
+          : 'Keine API-Route antwortet — Dev-Server prüfen',
+        hint: anyApiReachable ? undefined : 'npm run dev neu starten',
+      })
+
+      // ── Runner (CLI / API / Simulation) ───────────────────────────────────────
+      let cliStatus: CliStatusResponse | undefined
+      if (cliRes.status === 'fulfilled' && cliRes.value.ok) {
+        try { cliStatus = await cliRes.value.json() as CliStatusResponse } catch { /* ignore */ }
+      }
+
+      const runnerReady = cliStatus?.zeroKeyReady === true
+      const runnerSimulating = cliStatus?.activeMode === 'simulation'
+      updated.push({
+        id: 'runner',
+        label: 'Runner',
+        icon: '▶',
+        status: runnerReady ? 'ok' : runnerSimulating ? 'error' : cliStatus ? 'warn' : 'warn',
+        detail: cliStatus
+          ? CLI_MODE_LABEL[cliStatus.activeMode]
+          : 'Runner-Status nicht verfügbar',
+        hint: runnerReady
+          ? undefined
+          : runnerSimulating
+            ? 'Claude oder Codex CLI installieren & einloggen'
+            : 'Runner konfigurieren',
+        hintHref: !runnerReady ? '/settings#api-keys' : undefined,
+      })
+
+      // ── Storage (PostgreSQL / JSON) ───────────────────────────────────────────
+      let storage: StorageStatusResponse | undefined
+      if (storageRes.status === 'fulfilled' && storageRes.value.ok) {
+        try { storage = await storageRes.value.json() as StorageStatusResponse } catch { /* ignore */ }
+      }
+
+      const storageMode = storage?.mode
+      const storageOk = storageMode === 'postgres' && storage?.postgresConfigured === true
+      const storageBlocking = storageMode === 'postgres' && storage?.postgresConfigured === false
+      updated.push({
+        id: 'storage',
+        label: 'Storage',
+        icon: '⛁',
+        status: storageOk ? 'ok' : storageBlocking ? 'error' : storage ? 'warn' : 'warn',
+        detail: storage
+          ? storageMode === 'postgres' && storage.postgresConfigured
+            ? 'PostgreSQL aktiv · production-ready'
+            : storageMode === 'dual'
+              ? `Dual-Write · ${storage.postgresConfigured ? 'PG verbunden' : 'PG fehlt → fällt auf JSON'}`
+              : storageMode === 'json'
+                ? 'JSON-Dateien · nur Dev/Bootstrap'
+                : storage.recommendation
+          : 'Storage-Status nicht verfügbar',
+        hint: storageOk
+          ? undefined
+          : storage?.risks[0] ?? storage?.recommendation ?? 'STORAGE_MODE prüfen',
+        hintHref: !storageOk ? '/settings#storage' : undefined,
+      })
 
       // ── Connectors ────────────────────────────────────────────────────────────
       let githubHealth: ConnectorHealth | undefined
@@ -180,6 +295,7 @@ export function SystemReadinessPanel() {
       })
 
       setCards(updated)
+      setNextAction(computeNextAction(updated))
     }
 
     void load()
@@ -213,11 +329,31 @@ export function SystemReadinessPanel() {
           {anyError ? 'Aktion erforderlich' : anyWarn ? 'Optionale Verbindungen fehlen' : 'Alle Systeme verbunden'}
         </span>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
         {cards.map(card => (
           <SystemCardView key={card.id} card={card} />
         ))}
       </div>
+      {nextAction && (
+        <div
+          data-testid="system-readiness-next-action"
+          className={cx(
+            'mt-3 rounded-lg border px-3 py-2 text-xs',
+            anyError
+              ? 'border-red-500/30 bg-red-500/[0.06] text-red-200'
+              : 'border-amber-500/30 bg-amber-500/[0.06] text-amber-200',
+          )}
+        >
+          <span className="font-semibold uppercase tracking-wide mr-2">Nächste sichere Aktion:</span>
+          {nextAction.href ? (
+            <Link href={nextAction.href} className="underline underline-offset-2 hover:text-white">
+              {nextAction.label} →
+            </Link>
+          ) : (
+            <span>{nextAction.label}</span>
+          )}
+        </div>
+      )}
     </div>
   )
 }
