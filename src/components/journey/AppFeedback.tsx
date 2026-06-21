@@ -8,6 +8,7 @@ import { Snapshots } from './Snapshots'
 import { MobileCheck } from './MobileCheck'
 import { ShareLink } from './ShareLink'
 import { FunctionProof } from './FunctionProof'
+import { Monitoring } from './Monitoring'
 import { Maintenance } from './Maintenance'
 import { NextSteps } from './NextSteps'
 
@@ -126,6 +127,7 @@ export function AppFeedback({ targetRepo }: { targetRepo: string }) {
       <Maintenance targetRepo={targetRepo} />
       <Snapshots targetRepo={targetRepo} />
       <FunctionProof />
+      <Monitoring />
       <ShareLink />
     </div>
   )
