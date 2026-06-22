@@ -5,6 +5,10 @@ import {
   formatBuildSuccessLog,
   formatTestSuccessLog,
   formatFailureLog,
+  formatVerifyGateBuildSuccessLog,
+  formatVerifyGateTestSuccessLog,
+  formatVerifyGateSkippedLog,
+  formatVerifyGateUngatedLog,
 } from './runner-log-summary'
 
 describe('lastOutputLines', () => {
@@ -76,5 +80,40 @@ describe('formatFailureLog', () => {
 
   it('returns just the label when output is empty', () => {
     expect(formatFailureLog('🔴 failed', '')).toBe('🔴 failed')
+  })
+})
+
+describe('formatVerifyGateBuildSuccessLog', () => {
+  it('marks the verify-gate build green and carries the build verdict', () => {
+    const log = formatVerifyGateBuildSuccessLog('compiling\nbuild done in 4s')
+    expect(log).toContain('🟢 Verify-Gate Build grün —')
+    expect(log).toContain('✅ Build grün.')
+    expect(log).toContain('build done in 4s')
+  })
+})
+
+describe('formatVerifyGateTestSuccessLog', () => {
+  it('marks the verify-gate tests green incl. the passed count', () => {
+    const log = formatVerifyGateTestSuccessLog('Tests  42 passed (42)')
+    expect(log).toContain('🟢 Verify-Gate Tests grün —')
+    expect(log).toContain('42 passed')
+  })
+})
+
+describe('formatVerifyGateSkippedLog', () => {
+  it('reports a skipped build step', () => {
+    expect(formatVerifyGateSkippedLog('build')).toBe('ℹ️ Verify-Gate übersprungen — kein build-Befehl erkannt.')
+  })
+
+  it('reports a skipped test step', () => {
+    expect(formatVerifyGateSkippedLog('test')).toBe('ℹ️ Verify-Gate übersprungen — kein test-Befehl erkannt.')
+  })
+})
+
+describe('formatVerifyGateUngatedLog', () => {
+  it('flags an unrecognised stack as ungated', () => {
+    const log = formatVerifyGateUngatedLog()
+    expect(log).toContain('ungated')
+    expect(log).toContain('Node/Python/Go/Rust')
   })
 })

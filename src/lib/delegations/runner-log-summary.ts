@@ -61,3 +61,37 @@ export function formatFailureLog(label: string, output: string, maxChars = 800):
   const tail = (output ?? '').slice(-maxChars).trimEnd()
   return tail ? `${label}\n${tail}` : label
 }
+
+/**
+ * Verify-gate success line for the WRITEBACK gate (the gate that runs right
+ * before the agent's result is written into the target repo). Without this, a
+ * green gate left NO trace in the API logs — only failures were logged — so it
+ * looked as if no gate ran at all. Reuses the build/test success formatters so
+ * the green verdict (incl. a short output tail / passed count) stays visible.
+ */
+export function formatVerifyGateBuildSuccessLog(output: string): string {
+  return `🟢 Verify-Gate Build grün — ${formatBuildSuccessLog(output)}`
+}
+
+export function formatVerifyGateTestSuccessLog(output: string): string {
+  return `🟢 Verify-Gate Tests grün — ${formatTestSuccessLog(output)}`
+}
+
+/**
+ * Neutral info line when a verify-gate step is skipped because the workspace has
+ * no matching command for it (e.g. no build script). Keeps the skip explicit in
+ * the logs instead of silently omitting the gate.
+ */
+export function formatVerifyGateSkippedLog(step: 'build' | 'test'): string {
+  const label = step === 'build' ? 'build' : 'test'
+  return `ℹ️ Verify-Gate übersprungen — kein ${label}-Befehl erkannt.`
+}
+
+/**
+ * Info line when the workspace stack is not recognised (no Node/Python/Go/Rust
+ * markers): the gate cannot verify anything, so the run is explicitly flagged as
+ * "ungated" rather than silently passing.
+ */
+export function formatVerifyGateUngatedLog(): string {
+  return 'ℹ️ Verify-Gate ungated — kein bekannter Stack (Node/Python/Go/Rust) im Workspace erkannt; Ergebnis konnte nicht automatisch verifiziert werden.'
+}
