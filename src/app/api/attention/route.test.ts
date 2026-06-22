@@ -9,20 +9,20 @@ import type { Delegation } from '@/lib/models/delegation'
 
 // ── Attention store mock ───────────────────────────────────────────────────────
 
-const getOpenAttentionItems = vi.fn<[], AttentionItem[]>()
-const upsertAttentionItem   = vi.fn<[AttentionItem], void>()
+const getOpenAttentionItems = vi.fn<() => AttentionItem[]>()
+const upsertAttentionItem   = vi.fn<(a: AttentionItem) => void>()
 
 vi.mock('@/lib/attention/store', () => ({ getOpenAttentionItems, upsertAttentionItem }))
 
 // ── Attention engine mock ──────────────────────────────────────────────────────
 
-const syncAttentionFromDelegations = vi.fn<[Delegation[]], void>()
+const syncAttentionFromDelegations = vi.fn<(a: Delegation[]) => void>()
 
 vi.mock('@/lib/attention/engine', () => ({ syncAttentionFromDelegations }))
 
 // ── Repository mock ────────────────────────────────────────────────────────────
 
-const repoListByStatus = vi.fn<[], Promise<Delegation[]>>()
+const repoListByStatus = vi.fn<() => Promise<Delegation[]>>()
 
 vi.mock('@/lib/repositories/delegationRepository', () => ({
   SINGLE_TENANT_USER_ID: 'user-1',

@@ -8,7 +8,7 @@ import type { Delegation } from '@/lib/models/delegation'
 
 // ── Repository mock ────────────────────────────────────────────────────────────
 
-const findById = vi.fn<[string], Promise<Delegation | null>>()
+const findById = vi.fn<(a: string) => Promise<Delegation | null>>()
 const update   = vi.fn()
 
 vi.mock('@/lib/repositories/delegationRepository', () => ({

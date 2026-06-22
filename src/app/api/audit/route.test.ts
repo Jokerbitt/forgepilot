@@ -8,8 +8,8 @@ import type { AuditEntry } from '@/lib/audit'
 
 // ── Audit mock ─────────────────────────────────────────────────────────────────
 
-const getAuditLog   = vi.fn<[number?, string?], AuditEntry[]>()
-const getAuditStats = vi.fn<[], { total: number; last24h: number; byAction: Record<string, number> }>()
+const getAuditLog   = vi.fn<(a?: number, b?: string) => AuditEntry[]>()
+const getAuditStats = vi.fn<() => { total: number; last24h: number; byAction: Record<string, number> }>()
 
 vi.mock('@/lib/audit', () => ({ getAuditLog, getAuditStats }))
 

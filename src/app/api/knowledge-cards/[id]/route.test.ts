@@ -8,9 +8,9 @@ import type { KnowledgeCard } from '@/lib/knowledge/knowledge-card'
 
 // ── Knowledge store mocks ──────────────────────────────────────────────────────
 
-const findKnowledgeCardById  = vi.fn<[string], KnowledgeCard | undefined>()
-const deleteKnowledgeCard    = vi.fn<[string], KnowledgeCard | undefined>()
-const updateKnowledgeCard    = vi.fn<[string, Partial<KnowledgeCard>], KnowledgeCard | undefined>()
+const findKnowledgeCardById  = vi.fn<(a: string) => KnowledgeCard | undefined>()
+const deleteKnowledgeCard    = vi.fn<(a: string) => KnowledgeCard | undefined>()
+const updateKnowledgeCard    = vi.fn<(a: string, b: Partial<KnowledgeCard>) => KnowledgeCard | undefined>()
 
 vi.mock('@/lib/knowledge/knowledge-card', () => ({
   findKnowledgeCardById,

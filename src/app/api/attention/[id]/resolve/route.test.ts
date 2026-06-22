@@ -8,7 +8,7 @@ import type { AttentionItem } from '@/lib/models/attention'
 
 // ── Store mock ─────────────────────────────────────────────────────────────────
 
-const resolveAttentionItem = vi.fn<[string, string], AttentionItem | null>()
+const resolveAttentionItem = vi.fn<(a: string, b: string) => AttentionItem | null>()
 
 vi.mock('@/lib/attention/store', () => ({ resolveAttentionItem }))
 

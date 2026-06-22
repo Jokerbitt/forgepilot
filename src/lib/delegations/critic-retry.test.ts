@@ -9,8 +9,8 @@ import { computeCompositeScore, triggerCriticRetry } from './critic-retry'
 
 // ── Repository mock ────────────────────────────────────────────────────────────
 
-const repoCreate = vi.fn<[Partial<Delegation>], Promise<Delegation>>()
-const repoFindById = vi.fn<[string], Promise<Delegation | null>>()
+const repoCreate = vi.fn<(a: Partial<Delegation>) => Promise<Delegation>>()
+const repoFindById = vi.fn<(a: string) => Promise<Delegation | null>>()
 
 vi.mock('@/lib/repositories/delegationRepository', () => ({
   SINGLE_TENANT_USER_ID: 'user-1',

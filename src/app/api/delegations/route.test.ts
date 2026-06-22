@@ -8,11 +8,11 @@ import type { Delegation } from '@/lib/models/delegation'
 
 // ── Repository mock ────────────────────────────────────────────────────────────
 
-const repoListByStatus = vi.fn<[Delegation['status'][]?], Promise<Delegation[]>>()
-const repoFindById     = vi.fn<[string], Promise<Delegation | null>>()
-const repoCreate       = vi.fn<[unknown], Promise<Delegation>>()
-const repoUpdate       = vi.fn<[string, Partial<Delegation>], Promise<Delegation | null>>()
-const repoDelete       = vi.fn<[string], Promise<boolean>>()
+const repoListByStatus = vi.fn<(a?: Delegation['status'][]) => Promise<Delegation[]>>()
+const repoFindById     = vi.fn<(a: string) => Promise<Delegation | null>>()
+const repoCreate       = vi.fn<(a: unknown) => Promise<Delegation>>()
+const repoUpdate       = vi.fn<(a: string, b: Partial<Delegation>) => Promise<Delegation | null>>()
+const repoDelete       = vi.fn<(a: string) => Promise<boolean>>()
 const getDelegationStorageMode = vi.fn(() => 'json')
 const defaultVisibleStatuses: Delegation['status'][] = [
   'pending',

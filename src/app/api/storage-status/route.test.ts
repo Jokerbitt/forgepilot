@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ── Storage config mock ────────────────────────────────────────────────────────
 
-const getStorageStatus = vi.fn<[], { mode: string; hasDatabase: boolean }>()
+const getStorageStatus = vi.fn<() => { mode: string; hasDatabase: boolean }>()
 
 vi.mock('@/lib/storage/cutover-config', () => ({ getStorageStatus }))
 

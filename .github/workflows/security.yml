@@ -28,9 +28,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: npm audit (high + critical only)
-        run: npm audit --audit-level=high
-        continue-on-error: true
+      # Real gate on PRODUCTION dependencies: a critical advisory fails the job.
+      # Dev/build tooling (vitest, and vite via an optional Sentry peer) is not
+      # shipped in the Next.js bundle, so it is reported (see summary below) but
+      # does not block. This replaces the previous always-red, never-blocking
+      # `--audit-level=high` + continue-on-error setup.
+      - name: npm audit (production deps — critical blocks)
+        run: npm audit --omit=dev --audit-level=critical
         id: audit
 
       - name: Write audit summary

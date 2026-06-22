@@ -8,7 +8,7 @@ import type { AIProviderConfig } from '@/lib/ai/providers/types'
 
 // ── Config store mock ──────────────────────────────────────────────────────────
 
-const getAllProviderConfigs = vi.fn<[], AIProviderConfig[]>()
+const getAllProviderConfigs = vi.fn<() => AIProviderConfig[]>()
 
 vi.mock('@/lib/ai/providers/config-store', () => ({
   getAllProviderConfigs,
@@ -17,8 +17,8 @@ vi.mock('@/lib/ai/providers/config-store', () => ({
 
 // ── Registry mock ──────────────────────────────────────────────────────────────
 
-const isAvailable = vi.fn<[string, string?], Promise<boolean>>()
-const getProviderInstance = vi.fn<[string], { isAvailable: typeof isAvailable } | null>()
+const isAvailable = vi.fn<(a: string, b?: string) => Promise<boolean>>()
+const getProviderInstance = vi.fn<(a: string) => { isAvailable: typeof isAvailable } | null>()
 
 vi.mock('@/lib/ai/providers/registry', () => ({ getProviderInstance }))
 

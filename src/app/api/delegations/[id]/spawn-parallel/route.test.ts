@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ── Spawn mock ─────────────────────────────────────────────────────────────────
 
-const spawnParallelDelegations = vi.fn<[unknown], Promise<string[]>>()
+const spawnParallelDelegations = vi.fn<(a: unknown) => Promise<string[]>>()
 
 vi.mock('@/lib/delegation-parallel', () => ({ spawnParallelDelegations }))
 

@@ -8,7 +8,7 @@ import type { Notification } from '@/lib/models/notification'
 
 // ── Store mock ─────────────────────────────────────────────────────────────────
 
-const readNotifications = vi.fn<[], Notification[]>()
+const readNotifications = vi.fn<() => Notification[]>()
 
 vi.mock('@/lib/notifications/notification-store', () => ({ readNotifications }))
 

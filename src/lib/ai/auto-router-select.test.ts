@@ -18,7 +18,7 @@ vi.mock('@/lib/ai/ollama-client', () => ({
   getOllamaBaseUrl: vi.fn(() => 'http://localhost:11434'),
 }))
 
-const mockWhichSync = vi.fn<[string], string | null>()
+const mockWhichSync = vi.fn<(a: string) => string | null>()
 vi.mock('@/lib/ai/providers/cli-runner', () => ({
   whichSync: (bin: string) => mockWhichSync(bin),
 }))
