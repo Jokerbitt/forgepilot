@@ -920,7 +920,17 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       ? buildClaudeCliSummaryReport(fullOutput, elapsed, prUrl, workspaceChangedFiles)
       : undefined
 
+    // Set when an auto-retry is scheduled on the SAME workspace: the finally must
+    // not writeback/verify/clean up — the retry run owns the workspace and will
+    // run the verify-gate + writeback itself when it finishes.
+    let retryScheduled = false
+
     const cleanupRunnerWorkspace = async () => {
+      if (retryScheduled) return // retry run owns the workspace — leave it intact
+      // A red verify-gate before writeback means a "successful" exit produced
+      // broken code. We then keep the workspace for diagnosis regardless of the
+      // exit code (success stays true), mirroring the failure-keep behaviour.
+      let verifyGateFailed = false
       // Persistent multi-phase build: if this delegation has a NEXT chain phase,
       // keep the workspace alive so the next phase builds on this one's work.
       // Only the LAST phase writes back to the target repo + cleans up.
@@ -943,7 +953,36 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       // Writeback + outcome verification: for a LOCAL target repo, push the agent's
       // result back BEFORE the temp clone is deleted — otherwise the code is lost.
       if (success && targetRepo) {
-        const writeback = writebackLocalResult({
+        // FIX #4: verify-gate BEFORE writeback. Never write broken code into the
+        // target repo just because the agent exited 0. Build must be green; tests
+        // must be green UNLESS there is no test script (skipped = allowed) or the
+        // run timed out (infra signal, not a code failure). A red gate aborts the
+        // writeback and fails the delegation with a clear log. Skipped stays
+        // allowed so repos without build/test scripts are not blocked.
+        const wbBuildGate = await runBuildGateAsync(runnerWorkspace.path)
+        const wbTestGate = wbBuildGate.passed
+          ? await runTestGateAsync(runnerWorkspace.path)
+          : { passed: false, output: '', skipped: true }
+        const wbDecision = decidePhaseGate({
+          buildPassed: wbBuildGate.passed,
+          buildSkipped: wbBuildGate.skipped,
+          testPassed: wbTestGate.passed,
+          testTimedOut: wbTestGate.timedOut,
+          testSkipped: wbTestGate.skipped,
+        })
+        if (!wbDecision.proceed) {
+          const gateOutput = wbBuildGate.passed ? wbTestGate.output : wbBuildGate.output
+          await appendLogs(id, [{
+            timestamp: new Date().toISOString(),
+            type: 'error',
+            message: formatFailureLog(`⛔ Verify-Gate rot vor Writeback: ${wbDecision.reason} Ergebnis wird NICHT ins Ziel-Repo ${targetRepo} übernommen.`, gateOutput),
+          }], 'failed')
+          await createDelegationRepository(SINGLE_TENANT_USER_ID)
+            .update(id, { errorMessage: wbDecision.reason })
+            .catch(() => {})
+          verifyGateFailed = true // skip writeback — broken code must not reach the target
+        }
+        const writeback = verifyGateFailed ? null : writebackLocalResult({
           workspacePath: runnerWorkspace.path,
           targetRepo,
           delegationId: id,
@@ -995,7 +1034,9 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
               .update(id, { errorMessage: `Outcome-Verifikation fehlgeschlagen: nur ${writeback.fileCount} Datei(en) im Ergebnis` })
               .catch(() => {})
           }
-        } else {
+        } else if (!verifyGateFailed) {
+          // verifyGateFailed already logged the red-gate reason — don't double-log
+          // a misleading "writeback failed" here.
           await appendLogs(id, [{
             timestamp: new Date().toISOString(),
             type: 'error',
@@ -1003,14 +1044,17 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
           }])
         }
       }
-      if (shouldKeepRunnerWorktree({ success, env: process.env })) {
+      // A red verify-gate counts as a failure for the keep/cleanup decision so the
+      // workspace is retained for diagnosis (same as any other failed run).
+      const keepAsSuccess = success && !verifyGateFailed
+      if (shouldKeepRunnerWorktree({ success: keepAsSuccess, env: process.env })) {
         // M120: Store workspace path in delegation for preview access
         const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
         await repo.update(id, { worktreePath: runnerWorkspace.path }).catch(() => {})
         await appendLogs(id, [{
           timestamp: new Date().toISOString(),
-          type: success ? 'info' : 'error',
-          message: success
+          type: keepAsSuccess ? 'info' : 'error',
+          message: keepAsSuccess
             ? `Runner-Workspace behalten: ${runnerWorkspace.path}`
             : `Runner-Workspace nach Fehler behalten: ${runnerWorkspace.path}`,
         }])
@@ -1018,7 +1062,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
           {
             event: 'delegation.runner_workspace_kept',
             delegationId: id,
-            success,
+            success: keepAsSuccess,
             workspacePath: runnerWorkspace.path,
           },
           'Runner workspace retained',
@@ -1069,6 +1113,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
           await repo.update(id, { retryCount: currentRetryCount + 1 })
           // Use compact retry prompt — saves ~70% tokens vs repeating full original prompt
           const retryPrompt = buildRetryPrompt(current, currentRetryCount + 1, 3, testResult.output)
+          retryScheduled = true // the retry owns the workspace — finally must not touch it
           runWithClaudeCLI(id, retryPrompt, startTime, budgetUsd, riskClass, targetRepo, runnerWorkspace)
           return // Don't cleanup the workspace — the retry run will handle it
         }
@@ -1506,6 +1551,45 @@ function runWorkspaceBuildGate(id: string, workspacePath: string): Promise<boole
   })
 }
 
+/**
+ * Test-Gate for a workspace before writeback (Ollama path). Mirrors
+ * runWorkspaceBuildGate: skips gracefully when no test script exists, treats a
+ * timeout as an infra signal (passed=true) rather than a code failure, and logs
+ * the verdict (incl. output tail) either way. Never writes broken code back.
+ */
+function runWorkspaceTestGate(id: string, workspacePath: string): Promise<{ passed: boolean; skipped: boolean; timedOut: boolean }> {
+  const testScript = resolveVerifyScripts(readWorkspaceScripts(workspacePath)).test
+  if (!testScript) return Promise.resolve({ passed: true, skipped: true, timedOut: false })
+  void appendLogs(id, [{ timestamp: new Date().toISOString(), type: 'info', message: `🔍 Test-Gate: npm run ${testScript} …` }])
+  return new Promise(resolve => {
+    const child = spawn('npm', ['run', testScript], { cwd: workspacePath, stdio: ['ignore', 'pipe', 'pipe'] })
+    let out = ''
+    const cap = (d: Buffer) => { out = (out + d.toString()).slice(-4000) }
+    child.stdout.on('data', cap)
+    child.stderr.on('data', cap)
+    let done = false
+    const finish = (passed: boolean, timedOut: boolean, note: string) => {
+      if (done) return
+      done = true
+      clearTimeout(timer)
+      void appendLogs(id, [{
+        timestamp: new Date().toISOString(),
+        type: passed ? 'success' : 'error',
+        message: timedOut
+          ? `⚠ Test-Gate Timeout (Infra-Signal, kein Code-Fehler) — Ergebnis wird übernommen.`
+          : passed
+            ? `🟢 Test-Gate bestanden — ${formatTestSuccessLog(out)}`
+            : formatFailureLog(`🔴 Test-Gate fehlgeschlagen (${note}) — Ergebnis wird NICHT ins Ziel-Repo übernommen.`, out),
+      }])
+      resolve({ passed, skipped: false, timedOut })
+    }
+    // Timeout is infra, not a code failure — pass the gate so the run is not lost.
+    const timer = setTimeout(() => { child.kill('SIGKILL'); finish(true, true, 'Timeout 300s') }, 300_000)
+    child.on('close', code => finish(code === 0, false, `exit ${code}`))
+    child.on('error', err => finish(false, false, err.message))
+  })
+}
+
 async function runWithOllamaAgent(
   id: string,
   prompt: string,
@@ -1567,11 +1651,17 @@ async function runWithOllamaAgent(
     const result = await runner.run(prompt, maxTurns)
     const elapsed = Math.round((Date.now() - startTime.getTime()) / 60000)
 
-    // Build-gate for external targets: never write broken code back to the target.
-    const buildPassed = result.success && targetRepo && runnerWorkspace
-      ? await runWorkspaceBuildGate(id, runnerWorkspace.path)
+    // Build- + test-gate for external targets: never write broken code back to
+    // the target. Build must be green; tests must be green unless there is no
+    // test script (skipped) or the run timed out (infra signal). FIX #4.
+    const gateContext = result.success && targetRepo && runnerWorkspace
+    const buildPassed = gateContext
+      ? await runWorkspaceBuildGate(id, runnerWorkspace!.path)
       : true
-    const success = result.success && buildPassed
+    const testGate = gateContext && buildPassed
+      ? await runWorkspaceTestGate(id, runnerWorkspace!.path)
+      : { passed: true, skipped: true, timedOut: false }
+    const success = result.success && buildPassed && testGate.passed
 
     const finalLog: AgentLog = {
       timestamp: new Date().toISOString(),
@@ -1580,7 +1670,9 @@ async function runWithOllamaAgent(
         ? `✅ Ollama-Run abgeschlossen (${result.turns} Turns)`
         : !buildPassed
           ? `❌ Ollama-Run: Build-Gate fehlgeschlagen — Ergebnis nicht ins Ziel übernommen`
-          : `❌ Ollama-Run fehlgeschlagen nach ${result.turns} Turns`,
+          : !testGate.passed
+            ? `❌ Ollama-Run: Test-Gate fehlgeschlagen — Ergebnis nicht ins Ziel übernommen`
+            : `❌ Ollama-Run fehlgeschlagen nach ${result.turns} Turns`,
     }
     const report: DelegationReport | undefined = success
       ? {
