@@ -246,4 +246,52 @@ describe('createGitHubPRIfNeeded', () => {
     vi.unstubAllEnvs()
     vi.unstubAllGlobals()
   })
+
+  it.each([
+    ['absolute path', '/tmp/disposable-app'],
+    ['home-relative path', '~/dev/some-app'],
+    ['dot-relative path', './local-app'],
+  ])('skips with reason "local_target" for a local %s (no GitHub PR attempt)', async (_label, targetRepo) => {
+    vi.stubEnv('GITHUB_TOKEN', 'tok')
+    vi.stubEnv('GITHUB_REPO', 'owner/repo')
+
+    // fetch must NOT be called for a local target — fail loudly if it is.
+    const fetchSpy = vi.fn()
+    vi.stubGlobal('fetch', fetchSpy)
+
+    const result = await createGitHubPRIfNeeded(
+      { ...base, targetRepo },
+      'git checkout -b feature/fix-login created',
+    )
+
+    expect(result.prUrl).toBeNull()
+    expect(result.skipped).toBe(true)
+    expect(result.reason).toBe('local_target')
+    expect(fetchSpy).not.toHaveBeenCalled()
+
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+  })
+
+  it('still attempts a PR for a github.com URL target (unchanged behavior)', async () => {
+    vi.stubEnv('GITHUB_TOKEN', 'tok')
+    vi.stubEnv('GITHUB_REPO', 'owner/repo')
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      status: 201,
+      ok: true,
+      json: async () => ({ html_url: 'https://github.com/owner/repo/pull/99', number: 99 }),
+    }))
+
+    const result = await createGitHubPRIfNeeded(
+      { ...base, targetRepo: 'https://github.com/owner/repo' },
+      'git checkout -b feature/fix-login created',
+    )
+
+    expect(result.reason).not.toBe('local_target')
+    expect(result.prUrl).toBe('https://github.com/owner/repo/pull/99')
+
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+  })
 })

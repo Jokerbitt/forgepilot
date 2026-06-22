@@ -281,6 +281,11 @@ export interface GitHubPRResult {
   reason?: string
 }
 
+/** True when targetRepo is a local filesystem path (not a github.com URL). */
+function isLocalTargetRepo(targetRepo: string | undefined): boolean {
+  return Boolean(targetRepo && /^[~./]/.test(targetRepo))
+}
+
 /**
  * Attempt to create a GitHub draft PR for a completed delegation.
  * Only fires when:
@@ -288,6 +293,9 @@ export interface GitHubPRResult {
  * - GITHUB_REPO or GITHUB_REPOSITORY is set (format: "owner/repo")
  * - delegation.summaryReport.prUrl is not already set
  * - delegation.status is 'completed'
+ * - the delegation does NOT target a local repo (a local path has no GitHub
+ *   remote — committing locally is the deliverable; the writeback already
+ *   merged the result, so attempting `gh pr create` only produces 422 noise)
  * - execution produced a branch name in agentOutput or contract fields
  * Never throws.
  */
@@ -302,6 +310,12 @@ export async function createGitHubPRIfNeeded(
 
   if (delegation.status !== 'completed') {
     return { prUrl: null, skipped: true, reason: 'delegation not completed' }
+  }
+
+  // Local target repos have no GitHub remote — skip the PR attempt entirely so
+  // the caller can log a calm "local target" line instead of a 422 warning.
+  if (isLocalTargetRepo(delegation.targetRepo)) {
+    return { prUrl: null, skipped: true, reason: 'local_target' }
   }
 
   const stored = readStoredApiKeys()

@@ -112,10 +112,13 @@ export async function POST(request: NextRequest) {
     if (isValidationError(body)) return body
     const delegation = body as unknown as Delegation
 
-    // Ensure title is set
+    // Ensure title is set; default status to 'pending' so a delegation created
+    // without an explicit status still enters the approval flow (and the Risk-A
+    // auto-approval below) instead of getting stuck with an undefined status.
     const withTitle: Delegation = {
       ...delegation,
       title: delegation.title || delegation.contract.goal.slice(0, 80),
+      status: delegation.status ?? 'pending',
     }
 
     // Auto-approve Risk-A delegations that don't require human approval
