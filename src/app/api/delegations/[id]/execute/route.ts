@@ -82,6 +82,7 @@ function buildRetryPrompt(
   retryN: number,
   maxRetries: number,
   testOutput: string,
+  workspacePath: string,
 ): string {
   const c = delegation.contract
   const slug = (c.workItemId ?? delegation.id).replace(/[^a-z0-9-]/gi, '-').toLowerCase()
@@ -90,6 +91,10 @@ function buildRetryPrompt(
     .filter(Boolean)
     .map(d => `- [ ] ${d}`)
     .join('\n') || '- [ ] Task erfolgreich abgeschlossen'
+  // Use the stack-specific test command (npm / pytest / go test / cargo) so the
+  // retry instruction is correct for non-Node repos too (matches the gate).
+  const testGate = resolveWorkspaceGate(workspacePath).test
+  const testCmd = testGate ? `${testGate.cmd} ${testGate.args.join(' ')}` : "your project's test command"
 
   return `You are continuing work on the same task. DO NOT re-read files you already have in context.
 
@@ -107,7 +112,7 @@ Do not break passing tests. Only fix what is failing:
 ${testOutput.slice(-2500)}
 \`\`\`
 
-Run \`npm run test:run\` to verify your fix. Then commit.`
+Run \`${testCmd}\` to verify your fix. Then commit.`
 }
 
 
@@ -1164,7 +1169,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
           }])
           await repo.update(id, { retryCount: currentRetryCount + 1 })
           // Use compact retry prompt — saves ~70% tokens vs repeating full original prompt
-          const retryPrompt = buildRetryPrompt(current, currentRetryCount + 1, 3, testResult.output)
+          const retryPrompt = buildRetryPrompt(current, currentRetryCount + 1, 3, testResult.output, runnerWorkspace.path)
           retryScheduled = true // the retry owns the workspace — finally must not touch it
           runWithClaudeCLI(id, retryPrompt, startTime, budgetUsd, riskClass, targetRepo, runnerWorkspace)
           return // Don't cleanup the workspace — the retry run will handle it
