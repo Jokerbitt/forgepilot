@@ -73,9 +73,21 @@ export async function buildContextPackage(
         })
 
         const maxCards = options?.maxCards ?? 4
+        // Dedup by origin (source delegation/item): a single run produces several
+        // cards (extraction / Report: / Execution: …) that all match the same
+        // query, so without dedup the prompt gets 3 variants of ONE run instead of
+        // lessons from 3 different runs. Keep the highest-scored card per source →
+        // more diverse lessons + fewer tokens.
+        const seenSources = new Set<string>()
         const top = scored
           .filter(s => s.score > 0)
           .sort((a, b) => b.score - a.score)
+          .filter(s => {
+            const key = s.card.sourceIds?.[0] ?? s.card.id
+            if (seenSources.has(key)) return false
+            seenSources.add(key)
+            return true
+          })
           .slice(0, maxCards)
           .map(s => s.card)
 
