@@ -90,6 +90,79 @@ function gitOut(cwd: string, args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
 }
 
+export type WorkspaceChangeType = 'ADDED' | 'MODIFIED' | 'DELETED' | 'RENAMED'
+
+export interface WorkspaceChangedFile {
+  path: string
+  changeType: WorkspaceChangeType
+}
+
+/** Map a `git diff --name-status` status letter to a change type. */
+function mapNameStatus(status: string): WorkspaceChangeType {
+  const code = status.trim().charAt(0).toUpperCase()
+  if (code === 'A') return 'ADDED'
+  if (code === 'D') return 'DELETED'
+  if (code === 'R') return 'RENAMED'
+  return 'MODIFIED' // M, C, T, U, … → treat as modified
+}
+
+/** Parse the porcelain output of `git diff --name-status` into change entries. */
+export function parseNameStatus(output: string): WorkspaceChangedFile[] {
+  return output
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      // Format: "<status>\t<path>" — for renames: "R100\t<old>\t<new>".
+      const parts = line.split('\t')
+      const status = parts[0]
+      const path = parts.length > 2 ? parts[parts.length - 1] : parts[1]
+      if (!path) return null
+      return { path, changeType: mapNameStatus(status) }
+    })
+    .filter((entry): entry is WorkspaceChangedFile => entry !== null)
+}
+
+/**
+ * Resolve the base ref the agent's commits sit on top of, so a diff against it
+ * yields exactly the files the run changed.
+ *
+ * - Clone mode (external / local target): the depth-1 clone tracks an upstream,
+ *   so `@{upstream}` is the original tip the agent built upon.
+ * - Worktree mode (ForgePilot's own repo, detached HEAD): no upstream — fall
+ *   back to the reflog parent `HEAD@{1}` (the commit the worktree started at).
+ * Returns null when no base can be resolved (e.g. no commits yet).
+ */
+function resolveDiffBase(workspacePath: string): string | null {
+  for (const candidate of ['@{upstream}', 'HEAD@{1}']) {
+    try {
+      gitOut(workspacePath, ['rev-parse', '--verify', '--quiet', candidate])
+      return candidate
+    } catch {
+      // try next candidate
+    }
+  }
+  return null
+}
+
+/**
+ * Compute the files an agent changed in its workspace, independent of whether a
+ * PR was opened. Used to fill the summary report for LOCAL targets (no PR → no
+ * gh-based file list). Best-effort: returns [] when git is unavailable, the
+ * workspace is missing, or no base ref can be resolved. Never throws.
+ */
+export function getWorkspaceChangedFiles(workspacePath: string): WorkspaceChangedFile[] {
+  if (!workspacePath || !fs.existsSync(workspacePath)) return []
+  try {
+    const base = resolveDiffBase(workspacePath)
+    if (!base) return []
+    const output = gitOut(workspacePath, ['diff', '--name-status', `${base}`, 'HEAD'])
+    return parseNameStatus(output)
+  } catch {
+    return []
+  }
+}
+
 /**
  * Decide whether to run `npm install` in the target after a writeback merge.
  * Pure + unit-tested. Installs when there is a package.json AND either deps are

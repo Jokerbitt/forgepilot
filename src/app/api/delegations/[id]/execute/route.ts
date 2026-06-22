@@ -43,7 +43,7 @@ import type { MemoryCard } from '@/lib/knowledge/types'
 import { checkParallelCompletion } from '@/lib/delegation-parallel'
 import { triggerCriticRetry } from '@/lib/delegations/critic-retry'
 import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-runtime-evidence'
-import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, writebackLocalResult, reuseExistingWorkspace, type RunnerWorkspace } from '@/lib/agent-runner/worktree'
+import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, writebackLocalResult, reuseExistingWorkspace, getWorkspaceChangedFiles, type RunnerWorkspace, type WorkspaceChangedFile } from '@/lib/agent-runner/worktree'
 import { bootstrapRuntime, summarizeBootstrap, smokeTestApp } from '@/lib/agent-runner/runtime-bootstrap'
 import { autoScaffoldWorkspace } from '@/lib/building-blocks/create-app'
 import { scopedScaffoldBlockIds } from '@/lib/building-blocks/catalog'
@@ -107,9 +107,20 @@ Run \`npm run test:run\` to verify your fix. Then commit.`
 }
 
 
-function buildClaudeCliSummaryReport(fullOutput: string, elapsed: number, prUrl?: string): DelegationReport {
+function buildClaudeCliSummaryReport(
+  fullOutput: string,
+  elapsed: number,
+  prUrl?: string,
+  changedFiles?: WorkspaceChangedFile[],
+): DelegationReport {
   const prMetadata = prUrl ? readPrMetadata(prUrl) : null
-  const files = prMetadata?.files ?? []
+  // Primary source: the PR's file list (GitHub target). Fallback source: the
+  // workspace git diff (LOCAL target without a PR) — so the report still lists
+  // the files that changed even when no PR exists.
+  const files: Array<{ path: string; changeType?: string }> =
+    prMetadata?.files && prMetadata.files.length > 0
+      ? prMetadata.files
+      : changedFiles ?? []
   const filePaths = files.map(file => file.path)
   const filesAdded = files.filter(file => file.changeType === 'ADDED').map(file => file.path)
   const filesDeleted = files.filter(file => file.changeType === 'DELETED').map(file => file.path)
@@ -130,6 +141,7 @@ function buildClaudeCliSummaryReport(fullOutput: string, elapsed: number, prUrl?
     keyPoints,
     changes: filePaths,
     timeTakenMinutes: elapsed,
+    executionMode: 'claude-cli',
     ...(filesAdded.length > 0 ? { filesAdded } : {}),
     ...(filesModified.length > 0 ? { filesModified } : {}),
     ...(filesDeleted.length > 0 ? { filesDeleted } : {}),
@@ -860,8 +872,14 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
           : `❌ Ausführung fehlgeschlagen (Exit-Code: ${code})`,
     }
 
+    // Workspace diff is the file source when no PR exists (LOCAL target): the
+    // workspace is still present here (writeback + cleanup run afterwards), so
+    // the report can list added/modified files even without GitHub PR metadata.
+    const workspaceChangedFiles: WorkspaceChangedFile[] = success && !prUrl
+      ? getWorkspaceChangedFiles(runnerWorkspace.path)
+      : []
     const report: DelegationReport | undefined = success
-      ? buildClaudeCliSummaryReport(fullOutput, elapsed, prUrl)
+      ? buildClaudeCliSummaryReport(fullOutput, elapsed, prUrl, workspaceChangedFiles)
       : undefined
 
     const cleanupRunnerWorkspace = async () => {
@@ -1198,12 +1216,15 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       // M197: Auto-PR creation — fire-and-forget
       if (success) {
         void createGitHubPRIfNeeded(finishedDelegation, fullOutput).then(async (result) => {
+          const isLocalTarget = result.reason === 'local_target'
           const prLog: AgentLog = {
             timestamp: new Date().toISOString(),
             type: result.prUrl ? 'success' : 'info',
             message: result.prUrl
               ? `🔗 GitHub PR bereit: ${result.prUrl}${result.reason === 'already_exists' ? ' (bereits vorhanden)' : ''}`
-              : `⚠️ GitHub PR nicht erstellt: ${result.reason ?? 'unbekannter Grund'}`,
+              : isLocalTarget
+                ? 'ℹ️ Lokales Ziel — kein GitHub-PR nötig (Änderungen wurden übernommen)'
+                : `⚠️ GitHub PR nicht erstellt: ${result.reason ?? 'unbekannter Grund'}`,
           }
           await appendLogs(finishedDelegation.id, [prLog])
 

@@ -13,6 +13,8 @@ import {
   writebackLocalResult,
   reuseExistingWorkspace,
   shouldRunInstall,
+  parseNameStatus,
+  getWorkspaceChangedFiles,
 } from './worktree'
 
 vi.mock('child_process', () => ({
@@ -399,6 +401,106 @@ describe('reuseExistingWorkspace', () => {
       expect(ws).not.toBeNull()
       expect(ws?.path).toBe(dir)
       expect(typeof ws?.cleanup).toBe('function')
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('parseNameStatus', () => {
+  it('maps status letters to change types', () => {
+    const out = 'A\tsrc/new.ts\nM\tsrc/app.ts\nD\tsrc/old.ts'
+    expect(parseNameStatus(out)).toEqual([
+      { path: 'src/new.ts', changeType: 'ADDED' },
+      { path: 'src/app.ts', changeType: 'MODIFIED' },
+      { path: 'src/old.ts', changeType: 'DELETED' },
+    ])
+  })
+
+  it('treats copies/type-changes as modified', () => {
+    expect(parseNameStatus('C\ta.ts\nT\tb.ts')).toEqual([
+      { path: 'a.ts', changeType: 'MODIFIED' },
+      { path: 'b.ts', changeType: 'MODIFIED' },
+    ])
+  })
+
+  it('uses the new path for renames (status with score)', () => {
+    // git rename rows: "R100\t<old>\t<new>"
+    expect(parseNameStatus('R100\told/name.ts\tnew/name.ts')).toEqual([
+      { path: 'new/name.ts', changeType: 'RENAMED' },
+    ])
+  })
+
+  it('ignores blank lines and trims whitespace', () => {
+    expect(parseNameStatus('\n  \nA\tonly.ts\n')).toEqual([
+      { path: 'only.ts', changeType: 'ADDED' },
+    ])
+  })
+
+  it('returns [] for empty output', () => {
+    expect(parseNameStatus('')).toEqual([])
+  })
+})
+
+describe('getWorkspaceChangedFiles', () => {
+  it('returns [] for a non-existent workspace', () => {
+    expect(getWorkspaceChangedFiles('/tmp/does-not-exist-wcf-123')).toEqual([])
+  })
+
+  it('returns [] when no base ref resolves (rev-parse fails for all candidates)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-wcf-nobase-'))
+    try {
+      execFileSyncMock.mockImplementation(() => {
+        throw new Error('unknown revision')
+      })
+      expect(getWorkspaceChangedFiles(dir)).toEqual([])
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('diffs against the resolved base and parses the changed files', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-wcf-ok-'))
+    try {
+      execFileSyncMock.mockReset()
+      execFileSyncMock.mockImplementation((_cmd, args) => {
+        const argv = args as string[]
+        // First resolvable candidate is @{upstream} (rev-parse succeeds).
+        // gitOut() calls .trim() on the result, so return strings (encoding: utf-8).
+        if (argv[0] === 'rev-parse') return 'deadbeef\n'
+        if (argv[0] === 'diff') return 'A\tsrc/feature.ts\nM\tREADME.md\n'
+        return ''
+      })
+      expect(getWorkspaceChangedFiles(dir)).toEqual([
+        { path: 'src/feature.ts', changeType: 'ADDED' },
+        { path: 'README.md', changeType: 'MODIFIED' },
+      ])
+      // base resolution used @{upstream} (the clone-mode base)
+      const diffCall = execFileSyncMock.mock.calls.find(c => (c[1] as string[])[0] === 'diff')
+      expect(diffCall?.[1]).toEqual(['diff', '--name-status', '@{upstream}', 'HEAD'])
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back to HEAD@{1} when @{upstream} does not resolve', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-wcf-fallback-'))
+    try {
+      execFileSyncMock.mockReset()
+      execFileSyncMock.mockImplementation((_cmd, args) => {
+        const argv = args as string[]
+        if (argv[0] === 'rev-parse') {
+          if (argv.includes('@{upstream}')) throw new Error('no upstream')
+          return 'cafef00d\n' // HEAD@{1} resolves
+        }
+        if (argv[0] === 'diff') return 'A\tonly.ts\n'
+        return ''
+      })
+      expect(getWorkspaceChangedFiles(dir)).toEqual([
+        { path: 'only.ts', changeType: 'ADDED' },
+      ])
+      const diffCall = execFileSyncMock.mock.calls.find(c => (c[1] as string[])[0] === 'diff')
+      expect(diffCall?.[1]).toEqual(['diff', '--name-status', 'HEAD@{1}', 'HEAD'])
     } finally {
       fs.rmSync(dir, { recursive: true, force: true })
     }

@@ -60,6 +60,8 @@ export interface DelegationReport {
   prMergedAt?: string
   /** G1: true when this report was produced by the API plan-only fallback (no code was written) */
   planOnly?: boolean
+  /** Which runner produced this result (e.g. 'claude-cli', 'ollama-agent', 'codex-cli', 'claude-api'). */
+  executionMode?: 'ollama-agent' | 'claude-cli' | 'codex-cli' | 'claude-api' | 'simulation'
 }
 
 export interface DelegationNote {
