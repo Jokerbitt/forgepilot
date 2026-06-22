@@ -55,6 +55,7 @@ import { quickPreflightCheck } from '@/lib/runner-health/runner-detector'
 import { getCachedOrShallowRunnerReadiness, getRunnerReadiness, writeCachedRunnerReadiness } from '@/lib/system/runner-readiness'
 import { selectDelegationExecutionMode } from '@/lib/delegations/execution-mode'
 import { resolveCliAnthropicKey } from '@/lib/delegations/runner-auth'
+import { buildRunnerBaseEnv } from '@/lib/delegations/runner-env'
 import { buildOllamaTaskPrompt } from '@/lib/delegations/ollama-prompt'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
@@ -514,13 +515,14 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
   })
   const maxTurns = budgetToClaudeCliMaxTurns(budgetUsd)
 
-  // Strip ANTHROPIC_API_KEY from inherited env so Claude CLI uses its own
-  // session auth (Max OAuth token / subscription). Only re-inject if a key is
-  // configured AND no OAuth token is present (see resolveCliAnthropicKey).
-  const { ANTHROPIC_API_KEY: _stripped, ...baseEnv } = process.env
+  // Inherit the server env but drop ANTHROPIC_API_KEY (so Claude CLI uses its own
+  // session auth; re-injected below only if configured AND no OAuth token, see
+  // resolveCliAnthropicKey) and NODE_ENV (so the target repo's tooling picks its
+  // own default instead of the dev server's 'development' — see buildRunnerBaseEnv).
+  const baseEnv = buildRunnerBaseEnv(process.env, 'ANTHROPIC_API_KEY')
   // Ensure GH_TOKEN reaches the subprocess so agents can run `gh pr create`
   const ghToken = storedKeys.GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim() || process.env.GITHUB_TOKEN?.trim()
-  const childEnv = {
+  const childEnv: NodeJS.ProcessEnv = {
     ...baseEnv,
     ...(anthropicKey ? { ANTHROPIC_API_KEY: anthropicKey } : {}),
     ...(ghToken ? { GH_TOKEN: ghToken, GITHUB_TOKEN: ghToken } : {}),
@@ -1810,8 +1812,10 @@ function runWithCodexCLI(id: string, prompt: string, startTime: Date, budgetUsd:
   const storedKeys = readStoredApiKeys()
   const ghToken = storedKeys.GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim() || process.env.GITHUB_TOKEN?.trim()
   const maxTurns = budgetToClaudeCliMaxTurns(budgetUsd)
-  const { OPENAI_API_KEY: _strippedOpenAI, ...baseEnv } = process.env
-  const childEnv = {
+  // Inherit the server env but drop OPENAI_API_KEY and NODE_ENV (see the Claude
+  // CLI path above and buildRunnerBaseEnv).
+  const baseEnv = buildRunnerBaseEnv(process.env, 'OPENAI_API_KEY')
+  const childEnv: NodeJS.ProcessEnv = {
     ...baseEnv,
     ...(ghToken ? { GH_TOKEN: ghToken, GITHUB_TOKEN: ghToken } : {}),
   }
