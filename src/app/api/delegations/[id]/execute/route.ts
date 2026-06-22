@@ -55,7 +55,7 @@ import { quickPreflightCheck } from '@/lib/runner-health/runner-detector'
 import { getCachedOrShallowRunnerReadiness, getRunnerReadiness, writeCachedRunnerReadiness } from '@/lib/system/runner-readiness'
 import { selectDelegationExecutionMode } from '@/lib/delegations/execution-mode'
 import { resolveCliAnthropicKey } from '@/lib/delegations/runner-auth'
-import { buildRunnerBaseEnv } from '@/lib/delegations/runner-env'
+import { buildRunnerBaseEnv, resolveRunnerTimeoutMs } from '@/lib/delegations/runner-env'
 import { buildOllamaTaskPrompt } from '@/lib/delegations/ollama-prompt'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
@@ -607,17 +607,30 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
   let stdoutBuffer = ''
   let flushTimer: ReturnType<typeof setTimeout> | null = null
   let startupTimer: ReturnType<typeof setTimeout> | null = null
+  let overallTimer: ReturnType<typeof setTimeout> | null = null
   let sawOutput = false
 
   const startupTimeoutMs = Math.max(
     30_000,
     Number(process.env.FORGEPILOT_CLI_STARTUP_TIMEOUT_MS ?? 180_000),
   )
+  const overallTimeoutMs = resolveRunnerTimeoutMs(process.env)
 
   const clearStartupTimer = () => {
     if (startupTimer) {
       clearTimeout(startupTimer)
       startupTimer = null
+    }
+  }
+
+  // Wall-clock deadline: terminate the run when it exceeds overallTimeoutMs even
+  // if it is still producing occasional output. The startupTimer alone only
+  // covers a NO-output stall; without this, a slow/stuck agent leaves the
+  // delegation pinned at status=running forever (the 24/7 failure mode).
+  const clearOverallTimer = () => {
+    if (overallTimer) {
+      clearTimeout(overallTimer)
+      overallTimer = null
     }
   }
 
@@ -653,6 +666,25 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       proc.kill('SIGTERM')
     }
   }, startupTimeoutMs)
+
+  overallTimer = setTimeout(() => {
+    overallTimer = null
+    const timeoutSeconds = Math.round(overallTimeoutMs / 1000)
+    const message = `⏱️ Runner-Timeout nach ${timeoutSeconds}s — abgebrochen. Der Agent lief über die Wall-Clock-Deadline (FORGEPILOT_RUNNER_TIMEOUT_MS) hinaus, ohne zu terminieren.`
+    void appendLogs(id, [{
+      timestamp: new Date().toISOString(),
+      type: 'error',
+      message,
+    }], 'failed') // terminal status — otherwise the delegation hangs on 'running' forever
+    createDelegationRepository(SINGLE_TENANT_USER_ID)
+      .update(id, { errorMessage: message, completedAt: new Date().toISOString() })
+      .catch(() => {})
+    try {
+      if (proc.pid) process.kill(-proc.pid, 'SIGTERM')
+    } catch {
+      proc.kill('SIGTERM')
+    }
+  }, overallTimeoutMs)
 
   // Summarise a tool input into a human-readable one-liner
   function summariseTool(name: string, input: Record<string, unknown>): string {
@@ -848,6 +880,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
   proc.on('close', (code: number | null) => {
     if (flushTimer) clearTimeout(flushTimer)
     clearStartupTimer()
+    clearOverallTimer()
     unregisterProcess(id)
 
     const success = code === 0
@@ -1894,12 +1927,14 @@ function runWithCodexCLI(id: string, prompt: string, startTime: Date, budgetUsd:
   let fullOutput = ''
   let flushTimer: ReturnType<typeof setTimeout> | null = null
   let startupTimer: ReturnType<typeof setTimeout> | null = null
+  let overallTimer: ReturnType<typeof setTimeout> | null = null
   let sawOutput = false
 
   const startupTimeoutMs = Math.max(
     30_000,
     Number(process.env.FORGEPILOT_CLI_STARTUP_TIMEOUT_MS ?? 180_000),
   )
+  const overallTimeoutMs = resolveRunnerTimeoutMs(process.env)
 
   const flush = () => {
     if (flushTimer) clearTimeout(flushTimer)
@@ -1915,6 +1950,16 @@ function runWithCodexCLI(id: string, prompt: string, startTime: Date, budgetUsd:
     if (startupTimer) {
       clearTimeout(startupTimer)
       startupTimer = null
+    }
+  }
+
+  // Wall-clock deadline — see the Claude CLI path: terminates a run that keeps
+  // producing occasional output but never finishes, so the delegation can't hang
+  // on status=running forever.
+  const clearOverallTimer = () => {
+    if (overallTimer) {
+      clearTimeout(overallTimer)
+      overallTimer = null
     }
   }
 
@@ -1936,6 +1981,25 @@ function runWithCodexCLI(id: string, prompt: string, startTime: Date, budgetUsd:
       proc.kill('SIGTERM')
     }
   }, startupTimeoutMs)
+
+  overallTimer = setTimeout(() => {
+    overallTimer = null
+    const timeoutSeconds = Math.round(overallTimeoutMs / 1000)
+    const message = `⏱️ Runner-Timeout nach ${timeoutSeconds}s — abgebrochen. Codex CLI lief über die Wall-Clock-Deadline (FORGEPILOT_RUNNER_TIMEOUT_MS) hinaus, ohne zu terminieren.`
+    void appendLogs(id, [{
+      timestamp: new Date().toISOString(),
+      type: 'error',
+      message,
+    }], 'failed') // terminal status — otherwise the delegation hangs on 'running' forever
+    createDelegationRepository(SINGLE_TENANT_USER_ID)
+      .update(id, { errorMessage: message, completedAt: new Date().toISOString() })
+      .catch(() => {})
+    try {
+      if (proc.pid) process.kill(-proc.pid, 'SIGTERM')
+    } catch {
+      proc.kill('SIGTERM')
+    }
+  }, overallTimeoutMs)
 
   const addOutputLog = (type: AgentLog['type'], message: string) => {
     const cleaned = message.replace(/\s+/g, ' ').trim()
@@ -1980,6 +2044,7 @@ function runWithCodexCLI(id: string, prompt: string, startTime: Date, budgetUsd:
   proc.on('close', (code: number | null) => {
     if (flushTimer) clearTimeout(flushTimer)
     clearStartupTimer()
+    clearOverallTimer()
     unregisterProcess(id)
 
     const success = code === 0

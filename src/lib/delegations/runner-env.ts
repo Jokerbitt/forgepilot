@@ -23,3 +23,30 @@ export function buildRunnerBaseEnv(
   }
   return base as NodeJS.ProcessEnv
 }
+
+/** Default wall-clock deadline for a single runner process: 30 minutes. */
+export const DEFAULT_RUNNER_TIMEOUT_MS = 1_800_000
+
+/** Lower bound so a misconfigured tiny value can't kill the agent instantly. */
+const MIN_RUNNER_TIMEOUT_MS = 60_000
+
+/**
+ * Resolve the wall-clock deadline (ms) after which a runner process is forcibly
+ * terminated, independent of whether it is still producing output. The
+ * `startupTimer` only fires when the agent produces NO output at all; a long-
+ * running or mid-task-stuck agent (occasional output, never finishing) would
+ * otherwise leave the delegation pinned at `status=running` forever. This
+ * deadline is the 24/7 safety net.
+ *
+ * Env override: `FORGEPILOT_RUNNER_TIMEOUT_MS`. Pure + unit-tested. Invalid,
+ * non-positive, or below-floor values fall back to the default / floor.
+ */
+export function resolveRunnerTimeoutMs(
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  const raw = env.FORGEPILOT_RUNNER_TIMEOUT_MS?.trim()
+  if (!raw) return DEFAULT_RUNNER_TIMEOUT_MS
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_RUNNER_TIMEOUT_MS
+  return Math.max(MIN_RUNNER_TIMEOUT_MS, Math.floor(parsed))
+}
