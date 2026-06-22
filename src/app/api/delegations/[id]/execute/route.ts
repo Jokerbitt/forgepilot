@@ -57,6 +57,7 @@ import { selectDelegationExecutionMode } from '@/lib/delegations/execution-mode'
 import { resolveCliAnthropicKey } from '@/lib/delegations/runner-auth'
 import { buildRunnerBaseEnv, resolveRunnerTimeoutMs } from '@/lib/delegations/runner-env'
 import { buildIsolatedTargetIntro, WORKSPACE_ISOLATION_RULE } from '@/lib/delegations/runner-isolation'
+import { formatBuildSuccessLog, formatTestSuccessLog, formatFailureLog } from '@/lib/delegations/runner-log-summary'
 import { buildOllamaTaskPrompt } from '@/lib/delegations/ollama-prompt'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
@@ -1152,17 +1153,25 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
             testSkipped: testGate.skipped,
           })
           if (!decision.proceed) {
-            const failOutput = (buildGate.passed ? testGate.output : buildGate.output).slice(-800)
+            const failOutput = buildGate.passed ? testGate.output : buildGate.output
             await appendLogs(id, [{
               timestamp: new Date().toISOString(),
               type: 'error',
-              message: `⛔ ${decision.reason} Nächste Phase wird NICHT gestartet.\n${failOutput}`,
+              message: formatFailureLog(`⛔ ${decision.reason} Nächste Phase wird NICHT gestartet.`, failOutput),
             }], 'failed')
             await repo.update(id, {
               errorMessage: decision.reason,
               chainNextId: undefined,
             }).catch(() => {})
           } else {
+            // Persist the green build/test verdict (incl. a short output tail) so
+            // the outcome is reconstructable from the API logs, not just on failure.
+            if (!buildGate.skipped) {
+              await appendLogs(id, [{ timestamp: new Date().toISOString(), type: 'success', message: formatBuildSuccessLog(buildGate.output) }])
+            }
+            if (!testGate.skipped) {
+              await appendLogs(id, [{ timestamp: new Date().toISOString(), type: 'success', message: formatTestSuccessLog(testGate.output) }])
+            }
             if (!(buildGate.skipped && testGate.skipped)) {
               await appendLogs(id, [{ timestamp: new Date().toISOString(), type: 'success', message: `✅ ${decision.reason}` }])
             }
@@ -1486,8 +1495,8 @@ function runWorkspaceBuildGate(id: string, workspacePath: string): Promise<boole
         timestamp: new Date().toISOString(),
         type: passed ? 'success' : 'error',
         message: passed
-          ? `🟢 Build-Gate bestanden.`
-          : `🔴 Build-Gate fehlgeschlagen (${note}) — Ergebnis wird NICHT ins Ziel-Repo übernommen.\n${out.slice(-600)}`,
+          ? `🟢 Build-Gate bestanden — ${formatBuildSuccessLog(out)}`
+          : formatFailureLog(`🔴 Build-Gate fehlgeschlagen (${note}) — Ergebnis wird NICHT ins Ziel-Repo übernommen.`, out),
       }])
       resolve(passed)
     }
