@@ -9,7 +9,7 @@ import type { AttentionItem } from '@/lib/models/attention'
 
 // ── Repository mock ────────────────────────────────────────────────────────────
 
-const repoFindById = vi.fn<[string], Promise<Delegation | null>>()
+const repoFindById = vi.fn<(a: string) => Promise<Delegation | null>>()
 
 vi.mock('@/lib/repositories/delegationRepository', () => ({
   SINGLE_TENANT_USER_ID: 'user-1',
@@ -18,7 +18,7 @@ vi.mock('@/lib/repositories/delegationRepository', () => ({
 
 // ── Attention store mock ───────────────────────────────────────────────────────
 
-const upsertAttentionItem = vi.fn<[AttentionItem], void>()
+const upsertAttentionItem = vi.fn<(a: AttentionItem) => void>()
 
 vi.mock('@/lib/attention/store', () => ({ upsertAttentionItem }))
 

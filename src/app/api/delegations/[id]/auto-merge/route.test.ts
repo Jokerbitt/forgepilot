@@ -209,8 +209,8 @@ describe('evaluateSafetyGates', () => {
 
 // ── POST handler integration tests ────────────────────────────────────────────
 
-const repoFindById = vi.fn<[string], Promise<Delegation | null>>()
-const repoUpdate   = vi.fn<[string, Partial<Delegation>], Promise<Delegation | null>>()
+const repoFindById = vi.fn<(a: string) => Promise<Delegation | null>>()
+const repoUpdate   = vi.fn<(a: string, b: Partial<Delegation>) => Promise<Delegation | null>>()
 
 vi.mock('@/lib/repositories/delegationRepository', () => ({
   SINGLE_TENANT_USER_ID: 'user-1',

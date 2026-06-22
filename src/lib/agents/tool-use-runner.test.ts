@@ -7,9 +7,9 @@ import { execFileSync } from 'child_process'
 vi.mock('@anthropic-ai/sdk', () => {
   const mockCreate = vi.fn()
   return {
-    default: vi.fn().mockImplementation(() => ({
+    default: vi.fn().mockImplementation(function () { return ({
       messages: { create: mockCreate },
-    })),
+    }) }),
     __mockCreate: mockCreate,
   }
 })
@@ -47,14 +47,14 @@ function makeTempDir() { return fs.mkdtempSync(path.join(os.tmpdir(), 'tool-test
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(Anthropic).mockImplementation(() => ({ messages: { create: vi.fn() } }) as unknown as InstanceType<typeof Anthropic>)
+  vi.mocked(Anthropic).mockImplementation(function () { return ({ messages: { create: vi.fn() } }) as unknown as InstanceType<typeof Anthropic> })
 })
 
 describe('runWithToolUse', () => {
   it('returns success when task_complete is called', async () => {
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: { create: vi.fn().mockResolvedValue(taskCompleteResponse('Fixed the bug', ['src/fix.ts'])) },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     const result = await runWithToolUse('Fix bug', { apiKey: 'k', projectRoot: makeTempDir() })
@@ -66,9 +66,9 @@ describe('runWithToolUse', () => {
   })
 
   it('returns success=false on end_turn without task_complete', async () => {
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: { create: vi.fn().mockResolvedValue(endTurnResponse()) },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     const result = await runWithToolUse('Task', { apiKey: 'k', projectRoot: makeTempDir() })
@@ -81,7 +81,7 @@ describe('runWithToolUse', () => {
     fs.writeFileSync(path.join(dir, 'hello.ts'), 'export const x = 42')
 
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('read_file', { path: 'hello.ts' }))
@@ -92,7 +92,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Read', { apiKey: 'k', projectRoot: dir })
@@ -102,7 +102,7 @@ describe('runWithToolUse', () => {
   it('blocks path traversal in read_file', async () => {
     const dir = makeTempDir()
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('read_file', { path: '../../../etc/passwd' }))
@@ -112,7 +112,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Traverse', { apiKey: 'k', projectRoot: dir })
@@ -121,13 +121,13 @@ describe('runWithToolUse', () => {
 
   it('writes a file to disk', async () => {
     const dir = makeTempDir()
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('write_file', { path: 'src/new.ts', content: 'export const y = 1' }))
           .mockResolvedValueOnce(taskCompleteResponse()),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Write', { apiKey: 'k', projectRoot: dir })
@@ -137,7 +137,7 @@ describe('runWithToolUse', () => {
   it('blocks writes to .env files', async () => {
     const dir = makeTempDir()
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('write_file', { path: '.env.local', content: 'SECRET=x' }))
@@ -146,7 +146,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Leak', { apiKey: 'k', projectRoot: dir })
@@ -157,7 +157,7 @@ describe('runWithToolUse', () => {
   it('allows git status command', async () => {
     const dir = makeTempDir()
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('run_command', { command: 'git status' }))
@@ -166,7 +166,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Git', { apiKey: 'k', projectRoot: dir })
@@ -176,7 +176,7 @@ describe('runWithToolUse', () => {
   it('blocks rm -rf command', async () => {
     const dir = makeTempDir()
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('run_command', { command: 'rm -rf /tmp' }))
@@ -185,7 +185,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Rm', { apiKey: 'k', projectRoot: dir })
@@ -195,7 +195,7 @@ describe('runWithToolUse', () => {
   it('blocks shell injection after an allowed command prefix', async () => {
     const dir = makeTempDir()
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('run_command', { command: 'grep TODO README.md; rm -rf /tmp' }))
@@ -204,7 +204,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Inject', { apiKey: 'k', projectRoot: dir })
@@ -214,7 +214,7 @@ describe('runWithToolUse', () => {
   it('blocks file commands with absolute paths', async () => {
     const dir = makeTempDir()
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('run_command', { command: 'cat /etc/passwd' }))
@@ -223,7 +223,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Absolute path', { apiKey: 'k', projectRoot: dir })
@@ -233,7 +233,7 @@ describe('runWithToolUse', () => {
   it('blocks git push --force', async () => {
     const dir = makeTempDir()
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('run_command', { command: 'git push --force origin main' }))
@@ -242,7 +242,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Force', { apiKey: 'k', projectRoot: dir })
@@ -252,7 +252,7 @@ describe('runWithToolUse', () => {
   it('blocks branch named main', async () => {
     const dir = makeTempDir()
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('git_create_branch', { name: 'main' }))
@@ -261,7 +261,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Branch', { apiKey: 'k', projectRoot: dir })
@@ -269,9 +269,9 @@ describe('runWithToolUse', () => {
   })
 
   it('stops after maxTurns and returns success=false', async () => {
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: { create: vi.fn().mockResolvedValue(toolUseResponse('list_files', { dir: '.' })) },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     const result = await runWithToolUse('Loop', { apiKey: 'k', projectRoot: makeTempDir(), maxTurns: 3 })
@@ -282,7 +282,7 @@ describe('runWithToolUse', () => {
   it('blocks git_push_branch to main', async () => {
     const dir = makeTempDir()
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('git_push_branch', { branch: 'main' }))
@@ -291,7 +291,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Push main', { apiKey: 'k', projectRoot: dir })
@@ -301,7 +301,7 @@ describe('runWithToolUse', () => {
   it('blocks git_push_branch with invalid characters', async () => {
     const dir = makeTempDir()
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('git_push_branch', { branch: 'feat/bad;rm -rf' }))
@@ -310,7 +310,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Push inject', { apiKey: 'k', projectRoot: dir })
@@ -320,7 +320,7 @@ describe('runWithToolUse', () => {
   it('requires title for git_create_pr', async () => {
     const dir = makeTempDir()
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('git_create_pr', { body: 'no title here' }))
@@ -329,7 +329,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('PR no title', { apiKey: 'k', projectRoot: dir })
@@ -339,7 +339,7 @@ describe('runWithToolUse', () => {
   it('blocks git_create_pr with unsafe base branch', async () => {
     const dir = makeTempDir()
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('git_create_pr', { title: 'PR', body: 'Body', base: 'main;rm-rf' }))
@@ -348,7 +348,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('PR bad base', { apiKey: 'k', projectRoot: dir })
@@ -356,7 +356,7 @@ describe('runWithToolUse', () => {
   })
 
   it('estimates cost from token usage', async () => {
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn().mockResolvedValue({
           content: [{ type: 'tool_use', id: 't1', name: 'task_complete', input: { summary: 'done' } }],
@@ -364,7 +364,7 @@ describe('runWithToolUse', () => {
           usage: { input_tokens: 1_000_000, output_tokens: 1_000_000 },
         }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     const result = await runWithToolUse('Cost', { apiKey: 'k', projectRoot: makeTempDir() })
@@ -375,9 +375,9 @@ describe('runWithToolUse', () => {
   it('stops immediately when budget is already exceeded before first turn', async () => {
     // 1M input + 1M output from a single prior turn would cost $18 — well over $0.01
     const mockCreate = vi.fn().mockResolvedValue(taskCompleteResponse())
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: { create: mockCreate },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     // Set a $0 budget — agent should stop without making any API calls
@@ -394,9 +394,9 @@ describe('runWithToolUse', () => {
       .mockResolvedValueOnce({ ...toolUseResponse('list_files', { dir: '.' }), usage: { input_tokens: 1_000_000, output_tokens: 1_000_000 } })
       .mockResolvedValueOnce(taskCompleteResponse())
 
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: { create: mockCreate },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     const result = await runWithToolUse('Task', { apiKey: 'k', projectRoot: makeTempDir(), budgetUsd: 0.01 })
@@ -408,14 +408,14 @@ describe('runWithToolUse', () => {
 
   it('uses claude-sonnet-4-6 as default model', async () => {
     let capturedModel = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn().mockImplementationOnce(async (req: { model: string }) => {
           capturedModel = req.model
           return taskCompleteResponse()
         }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Task', { apiKey: 'k', projectRoot: makeTempDir() })
@@ -425,13 +425,13 @@ describe('runWithToolUse', () => {
   it('edit_file replaces exact string in a file', async () => {
     const dir = makeTempDir()
     fs.writeFileSync(path.join(dir, 'mod.ts'), 'const x = 1\nconst y = 2\n')
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('edit_file', { path: 'mod.ts', old_string: 'const x = 1', new_string: 'const x = 99' }))
           .mockResolvedValueOnce(taskCompleteResponse()),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Edit', { apiKey: 'k', projectRoot: dir })
@@ -442,7 +442,7 @@ describe('runWithToolUse', () => {
     const dir = makeTempDir()
     fs.writeFileSync(path.join(dir, 'mod.ts'), 'const x = 1\n')
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('edit_file', { path: 'mod.ts', old_string: 'const z = 999', new_string: 'const z = 0' }))
@@ -451,7 +451,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Edit not found', { apiKey: 'k', projectRoot: dir })
@@ -462,7 +462,7 @@ describe('runWithToolUse', () => {
     const dir = makeTempDir()
     fs.writeFileSync(path.join(dir, 'mod.ts'), 'const x = 1\nconst x = 1\n')
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('edit_file', { path: 'mod.ts', old_string: 'const x = 1', new_string: 'const x = 99' }))
@@ -471,7 +471,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Edit ambiguous', { apiKey: 'k', projectRoot: dir })
@@ -481,13 +481,13 @@ describe('runWithToolUse', () => {
   it('edit_file with replace_all replaces all occurrences', async () => {
     const dir = makeTempDir()
     fs.writeFileSync(path.join(dir, 'mod.ts'), 'foo\nfoo\nfoo\n')
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('edit_file', { path: 'mod.ts', old_string: 'foo', new_string: 'bar', replace_all: true }))
           .mockResolvedValueOnce(taskCompleteResponse()),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Edit all', { apiKey: 'k', projectRoot: dir })
@@ -504,7 +504,7 @@ describe('runWithToolUse', () => {
     }))
 
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('fetch_url', { url: 'https://example.com/doc.txt' }))
@@ -513,7 +513,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Read doc', { apiKey: 'k', projectRoot: makeTempDir() })
@@ -523,7 +523,7 @@ describe('runWithToolUse', () => {
 
   it('fetch_url blocks localhost URLs', async () => {
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('fetch_url', { url: 'http://localhost:3000/secret' }))
@@ -532,7 +532,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Try localhost', { apiKey: 'k', projectRoot: makeTempDir() })
@@ -541,7 +541,7 @@ describe('runWithToolUse', () => {
 
   it('fetch_url blocks private IP ranges', async () => {
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('fetch_url', { url: 'http://192.168.1.1/admin' }))
@@ -550,7 +550,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Try private IP', { apiKey: 'k', projectRoot: makeTempDir() })
@@ -565,7 +565,7 @@ describe('runWithToolUse', () => {
     fs.writeFileSync(path.join(dir, 'big.txt'), longContent)
 
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('run_command', { command: 'cat big.txt' }))
@@ -574,7 +574,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Read big file', { apiKey: 'k', projectRoot: dir })
@@ -600,7 +600,7 @@ describe('runWithToolUse', () => {
     execFileSync('git', ['commit', '--allow-empty', '-m', 'init'], { cwd: dir })
 
     let captured = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('git_commit', { message: 'feat: bad commit' }))
@@ -609,7 +609,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Commit on main', { apiKey: 'k', projectRoot: dir })
@@ -619,7 +619,7 @@ describe('runWithToolUse', () => {
 
   it('npm install is allowed for a safe package name', async () => {
     let capturedCmd = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn()
           .mockResolvedValueOnce(toolUseResponse('run_command', { command: 'npm install zod' }))
@@ -628,7 +628,7 @@ describe('runWithToolUse', () => {
             return taskCompleteResponse()
           }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     // We only verify the command isn't blocked (result won't contain "Blocked")
@@ -638,14 +638,14 @@ describe('runWithToolUse', () => {
 
   it('passes system prompt to every API call', async () => {
     let capturedSystem = ''
-    vi.mocked(Anthropic).mockImplementationOnce(() => ({
+    vi.mocked(Anthropic).mockImplementationOnce(function () { return ({
       messages: {
         create: vi.fn().mockImplementationOnce(async (req: { system?: string }) => {
           capturedSystem = req.system ?? ''
           return taskCompleteResponse()
         }),
       },
-    }) as unknown as InstanceType<typeof Anthropic>)
+    }) as unknown as InstanceType<typeof Anthropic> })
 
     const { runWithToolUse } = await import('./tool-use-runner')
     await runWithToolUse('Task', { apiKey: 'k', projectRoot: makeTempDir() })

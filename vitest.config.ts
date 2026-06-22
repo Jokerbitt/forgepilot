@@ -2,6 +2,16 @@ import { defineConfig } from 'vitest/config'
 import path from 'path'
 
 export default defineConfig({
+  // The project tsconfig sets `jsx: "preserve"` (Next.js transforms JSX itself).
+  // Under Vitest 4 (Vite 6 + oxc) that setting is inherited, so imported `.tsx`
+  // modules keep raw JSX and the import-analysis / define parser rejects them.
+  // Tell the oxc transformer to compile JSX with the automatic runtime instead.
+  oxc: {
+    jsx: {
+      runtime: 'automatic',
+      importSource: 'react',
+    },
+  },
   test: {
     environment: 'node',
     globals: true,

@@ -10,7 +10,7 @@ import type { DelegationStats } from './route'
 
 // ── Repository mock ────────────────────────────────────────────────────────────
 
-const repoListByStatus = vi.fn<[], Promise<Delegation[]>>()
+const repoListByStatus = vi.fn<() => Promise<Delegation[]>>()
 
 vi.mock('@/lib/repositories/delegationRepository', () => ({
   SINGLE_TENANT_USER_ID: 'user-1',

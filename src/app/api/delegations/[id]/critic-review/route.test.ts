@@ -9,8 +9,8 @@ import type { GrokCriticResult, CodeReviewResult } from '@/lib/eval/grok-critic'
 
 // ── Repository mock ────────────────────────────────────────────────────────────
 
-const repoFindById = vi.fn<[string], Promise<Delegation | null>>()
-const repoUpdate   = vi.fn<[string, Partial<Delegation>], Promise<Delegation | null>>()
+const repoFindById = vi.fn<(a: string) => Promise<Delegation | null>>()
+const repoUpdate   = vi.fn<(a: string, b: Partial<Delegation>) => Promise<Delegation | null>>()
 
 vi.mock('@/lib/repositories/delegationRepository', () => ({
   SINGLE_TENANT_USER_ID: 'user-1',
@@ -19,8 +19,8 @@ vi.mock('@/lib/repositories/delegationRepository', () => ({
 
 // ── Critic mocks ───────────────────────────────────────────────────────────────
 
-const runGrokCritic     = vi.fn<[unknown], Promise<GrokCriticResult | null>>()
-const runGrokCodeReview = vi.fn<[unknown], Promise<CodeReviewResult | null>>()
+const runGrokCritic     = vi.fn<(a: unknown) => Promise<GrokCriticResult | null>>()
+const runGrokCodeReview = vi.fn<(a: unknown) => Promise<CodeReviewResult | null>>()
 const getCriticProviderPlan = vi.fn(() => 'mock-plan')
 const mapGrokResultToCriticScore = vi.fn(() => ({ correctness: 85, efficiency: 80, drift: 90, verdict: 'approved', summary: 'ok', runAt: '' }))
 

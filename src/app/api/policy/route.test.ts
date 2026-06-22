@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ── Policy engine mock ─────────────────────────────────────────────────────────
 
-const evaluatePolicy = vi.fn<[unknown], { verdict: 'allow' | 'deny' | 'review'; reason?: string }>()
+const evaluatePolicy = vi.fn<(a: unknown) => { verdict: 'allow' | 'deny' | 'review'; reason?: string }>()
 
 vi.mock('@/lib/policy/engine', () => ({ evaluatePolicy }))
 

@@ -8,8 +8,8 @@ import type { Delegation } from '@/lib/models/delegation'
 
 // ── Repository mock ────────────────────────────────────────────────────────────
 
-const repoFindById = vi.fn<[string], Promise<Delegation | null>>()
-const repoUpdate   = vi.fn<[string, Partial<Delegation>], Promise<Delegation | null>>()
+const repoFindById = vi.fn<(a: string) => Promise<Delegation | null>>()
+const repoUpdate   = vi.fn<(a: string, b: Partial<Delegation>) => Promise<Delegation | null>>()
 
 vi.mock('@/lib/repositories/delegationRepository', () => ({
   SINGLE_TENANT_USER_ID: 'user-1',
@@ -18,7 +18,7 @@ vi.mock('@/lib/repositories/delegationRepository', () => ({
 
 // ── GitHub PR mock ─────────────────────────────────────────────────────────────
 
-const createGitHubPR = vi.fn<[unknown], Promise<{ url: string; number: number; status: string }>>()
+const createGitHubPR = vi.fn<(a: unknown) => Promise<{ url: string; number: number; status: string }>>()
 
 vi.mock('@/lib/github/pr-creator', () => ({ createGitHubPR }))
 

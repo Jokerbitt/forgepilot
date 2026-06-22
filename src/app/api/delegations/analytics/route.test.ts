@@ -8,7 +8,7 @@ import type { Delegation } from '@/lib/models/delegation'
 
 // ── Repository mock ────────────────────────────────────────────────────────────
 
-const listByStatus = vi.fn<[], Promise<Delegation[]>>()
+const listByStatus = vi.fn<() => Promise<Delegation[]>>()
 
 vi.mock('@/lib/repositories/delegationRepository', () => ({
   SINGLE_TENANT_USER_ID: 'user-1',

@@ -8,11 +8,11 @@ import type { AIProviderConfig, AIModelSelection } from '@/lib/ai/providers/type
 
 // ── Config store mocks ─────────────────────────────────────────────────────────
 
-const getAllProviderConfigs = vi.fn<[], AIProviderConfig[]>()
-const getModelSelection    = vi.fn<[], AIModelSelection>()
-const saveModelSelection   = vi.fn<[AIModelSelection], void>()
-const upsertProviderConfig = vi.fn<[Partial<AIProviderConfig> & { id: string }], void>()
-const deleteCustomProvider = vi.fn<[string], void>()
+const getAllProviderConfigs = vi.fn<() => AIProviderConfig[]>()
+const getModelSelection    = vi.fn<() => AIModelSelection>()
+const saveModelSelection   = vi.fn<(a: AIModelSelection) => void>()
+const upsertProviderConfig = vi.fn<(a: Partial<AIProviderConfig> & { id: string }) => void>()
+const deleteCustomProvider = vi.fn<(a: string) => void>()
 
 vi.mock('@/lib/ai/providers/config-store', () => ({
   getAllProviderConfigs,

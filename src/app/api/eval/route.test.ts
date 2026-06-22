@@ -8,12 +8,12 @@ import type { EvalCase, EvalResult, EvalAlert } from '@/lib/eval/harness'
 
 // ── Harness mocks ──────────────────────────────────────────────────────────────
 
-const listEvalCases    = vi.fn<[], EvalCase[]>()
-const listEvalResults  = vi.fn<[string?], EvalResult[]>()
-const upsertEvalCase   = vi.fn<[Partial<EvalCase>], EvalCase>()
-const deleteEvalCase   = vi.fn<[string], void>()
-const listEvalAlerts   = vi.fn<[], EvalAlert[]>()
-const acknowledgeAlert = vi.fn<[string], void>()
+const listEvalCases    = vi.fn<() => EvalCase[]>()
+const listEvalResults  = vi.fn<(a?: string) => EvalResult[]>()
+const upsertEvalCase   = vi.fn<(a: Partial<EvalCase>) => EvalCase>()
+const deleteEvalCase   = vi.fn<(a: string) => void>()
+const listEvalAlerts   = vi.fn<() => EvalAlert[]>()
+const acknowledgeAlert = vi.fn<(a: string) => void>()
 
 vi.mock('@/lib/eval/harness', () => ({
   listEvalCases,
