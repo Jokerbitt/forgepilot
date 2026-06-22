@@ -56,6 +56,7 @@ import { getCachedOrShallowRunnerReadiness, getRunnerReadiness, writeCachedRunne
 import { selectDelegationExecutionMode } from '@/lib/delegations/execution-mode'
 import { resolveCliAnthropicKey } from '@/lib/delegations/runner-auth'
 import { buildRunnerBaseEnv, resolveRunnerTimeoutMs } from '@/lib/delegations/runner-env'
+import { buildIsolatedTargetIntro, WORKSPACE_ISOLATION_RULE } from '@/lib/delegations/runner-isolation'
 import { buildOllamaTaskPrompt } from '@/lib/delegations/ollama-prompt'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
@@ -269,7 +270,7 @@ function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryC
     ? verifyCommand(readWorkspaceScripts(targetRepo))
     : 'npm run test:run && npm run lint && npm run type-check'
   const intro = isLocalTarget && targetRepo
-    ? `You are an autonomous software engineering agent working on the project at \`${targetRepo}\`. FIRST read its CLAUDE.md / README.md and package.json to learn its stack, scripts and conventions — do NOT assume ForgePilot's stack.`
+    ? buildIsolatedTargetIntro(targetRepo)
     : 'You are an autonomous software engineering agent working on **ForgePilot** — a local-first AI Workflow OS built with Next.js 14, TypeScript strict, Tailwind CSS, and Vitest.'
   const prStep = isLocalTarget
     ? '7. Commit only: this is a LOCAL repo with no GitHub remote — do NOT run `gh pr create`. Your committed work is written back automatically.'
@@ -308,6 +309,7 @@ ${smokeStep}
 \`\`\`
 
 ## Anti-drift rules (critical — read before each major action)
+${WORKSPACE_ISOLATION_RULE}
 - **Stay in scope**: only modify files directly needed for this task. Touching unrelated files = scope drift.
 - **No gold-plating**: implement exactly what the Definition of Done requires. Nothing more.
 - **Turn checkpoint**: at turn ${checkpointTurn}, stop and re-read "## Task" and "## Definition of Done" above before continuing.
