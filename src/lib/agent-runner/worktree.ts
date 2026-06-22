@@ -213,12 +213,12 @@ export function writebackLocalResult(options: {
     return null
   }
 
-  // Count files in the result tree (outcome signal)
-  let fileCount = 0
-  try {
-    const tree = gitOut(workspacePath, ['ls-tree', '-r', 'HEAD', '--name-only'])
-    fileCount = tree ? tree.split('\n').filter(Boolean).length : 0
-  } catch { /* keep 0 */ }
+  // Count the files the agent actually CHANGED (the real diff). Using the whole
+  // result tree (git ls-tree) counted every tracked file — including tracked
+  // node_modules in some repos — and wildly overstated the blast radius
+  // ("859 Dateien" for a 3-file change). getWorkspaceChangedFiles is best-effort
+  // (returns [] on failure) and matches the summaryReport's file list.
+  const fileCount = getWorkspaceChangedFiles(workspacePath).length
 
   // 2. Try to fast-forward the target's default branch in place
   let defaultBranch = 'main'
