@@ -1,6 +1,6 @@
 version: 2
 updates:
-  # npm / Node.js Pakete
+  # npm / Node.js packages
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
@@ -12,6 +12,14 @@ updates:
       - "tech-debt"
     commit-message:
       prefix: "chore"
+    # One grouped PR for all non-major updates instead of one PR per package
+    # (prevents the bump-flood). Major updates stay individual + ignored below.
+    groups:
+      npm-minor-patch:
+        patterns: ["*"]
+        update-types:
+          - "minor"
+          - "patch"
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
@@ -21,7 +29,11 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 5
     labels:
       - "tech-debt"
     commit-message:
       prefix: "chore"
+    groups:
+      github-actions:
+        patterns: ["*"]
