@@ -229,8 +229,19 @@ export function writebackLocalResult(options: {
     const beforeSha = gitOut(targetRepo, ['rev-parse', 'HEAD'])
     // Fetch the clone's commits into the target repo without touching its working tree
     execFileSync('git', ['fetch', workspacePath, 'HEAD'], { cwd: targetRepo, stdio: 'ignore' })
-    // Fast-forward only — safe: never rewrites history, fails cleanly if not a descendant
-    execFileSync('git', ['merge', '--ff-only', 'FETCH_HEAD'], { cwd: targetRepo, stdio: 'ignore' })
+    // Prefer a clean fast-forward. But if the target moved on since this run's
+    // clone was made (e.g. a previous run in a sequence merged first), ff-only
+    // fails and the work would be stranded on the backup branch. Fall back to a
+    // 3-way merge so the result still lands in the target. A real content
+    // conflict aborts cleanly (work stays safe on the backup branch).
+    try {
+      execFileSync('git', ['merge', '--ff-only', 'FETCH_HEAD'], { cwd: targetRepo, stdio: 'ignore' })
+    } catch {
+      execFileSync('git', [
+        '-c', 'user.name=ForgePilot', '-c', 'user.email=runner@forgepilot.local',
+        'merge', '--no-edit', '-m', `forgepilot: merge runner result ${delegationId}`, 'FETCH_HEAD',
+      ], { cwd: targetRepo, stdio: 'ignore' })
+    }
     mergedToMain = true
     // Did the merge touch package.json? (a feature adding a new dependency)
     try {
@@ -238,7 +249,9 @@ export function writebackLocalResult(options: {
       packageJsonChanged = changed.split('\n').some(f => f === 'package.json' || f.endsWith('/package.json'))
     } catch { /* keep false */ }
   } catch {
-    // ff-merge not possible (target default branch diverged) — backup branch still has the work
+    // Even a 3-way merge failed (real conflict) — abort cleanly so the target
+    // working tree is left pristine; the backup branch still has the work.
+    try { execFileSync('git', ['merge', '--abort'], { cwd: targetRepo, stdio: 'ignore' }) } catch { /* nothing to abort */ }
     mergedToMain = false
   }
 
