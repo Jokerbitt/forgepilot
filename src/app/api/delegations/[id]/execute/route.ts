@@ -36,6 +36,7 @@ import { checkBudget, getBudgetLimit, wouldExceedBudget } from '@/lib/budget/gua
 import { triggerChain } from '@/lib/delegations/chaining'
 import { decidePhaseGate } from '@/lib/delegations/phase-gate'
 import { resolveVerifyScripts, verifyCommand } from '@/lib/delegations/verify-scripts'
+import { resolveStackGate, type GateCommand } from '@/lib/delegations/stack-gate'
 
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
 import { buildContextPackage } from '@/lib/knowledge/context-package'
@@ -57,7 +58,7 @@ import { selectDelegationExecutionMode } from '@/lib/delegations/execution-mode'
 import { resolveCliAnthropicKey } from '@/lib/delegations/runner-auth'
 import { buildRunnerBaseEnv, resolveRunnerTimeoutMs } from '@/lib/delegations/runner-env'
 import { buildIsolatedTargetIntro, WORKSPACE_ISOLATION_RULE } from '@/lib/delegations/runner-isolation'
-import { formatBuildSuccessLog, formatTestSuccessLog, formatFailureLog } from '@/lib/delegations/runner-log-summary'
+import { formatBuildSuccessLog, formatTestSuccessLog, formatFailureLog, formatVerifyGateBuildSuccessLog, formatVerifyGateTestSuccessLog, formatVerifyGateSkippedLog, formatVerifyGateUngatedLog } from '@/lib/delegations/runner-log-summary'
 import { buildOllamaTaskPrompt } from '@/lib/delegations/ollama-prompt'
 
 async function appendLogs(id: string, newLogs: AgentLog[], statusOverride?: Delegation['status'], report?: DelegationReport) {
@@ -81,6 +82,7 @@ function buildRetryPrompt(
   retryN: number,
   maxRetries: number,
   testOutput: string,
+  workspacePath: string,
 ): string {
   const c = delegation.contract
   const slug = (c.workItemId ?? delegation.id).replace(/[^a-z0-9-]/gi, '-').toLowerCase()
@@ -89,6 +91,10 @@ function buildRetryPrompt(
     .filter(Boolean)
     .map(d => `- [ ] ${d}`)
     .join('\n') || '- [ ] Task erfolgreich abgeschlossen'
+  // Use the stack-specific test command (npm / pytest / go test / cargo) so the
+  // retry instruction is correct for non-Node repos too (matches the gate).
+  const testGate = resolveWorkspaceGate(workspacePath).test
+  const testCmd = testGate ? `${testGate.cmd} ${testGate.args.join(' ')}` : "your project's test command"
 
   return `You are continuing work on the same task. DO NOT re-read files you already have in context.
 
@@ -106,7 +112,7 @@ Do not break passing tests. Only fix what is failing:
 ${testOutput.slice(-2500)}
 \`\`\`
 
-Run \`npm run test:run\` to verify your fix. Then commit.`
+Run \`${testCmd}\` to verify your fix. Then commit.`
 }
 
 
@@ -230,6 +236,59 @@ function readWorkspaceScripts(workspacePath: string): Record<string, string> | u
   } catch {
     return undefined
   }
+}
+
+/** Top-level file/dir names in a workspace (empty on read failure). */
+function listWorkspaceFiles(workspacePath: string): string[] {
+  try {
+    return fsSync.readdirSync(workspacePath)
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Resolve the language-agnostic verify-gate for a workspace by reading its
+ * top-level marker files. For a Node repo this yields the SAME `npm run …`
+ * commands as before; for Python/Go/Rust it yields the matching toolchain
+ * commands; an unrecognised stack yields no commands (caller logs "ungated").
+ */
+function resolveWorkspaceGate(workspacePath: string) {
+  return resolveStackGate({
+    files: listWorkspaceFiles(workspacePath),
+    scripts: readWorkspaceScripts(workspacePath),
+  })
+}
+
+/**
+ * Spawn a gate command and resolve to a pass/fail + captured output. Shared by
+ * the build/test gates so every stack runs through one code path. A 300s
+ * timeout is treated as an infra signal (handled by decidePhaseGate), never a
+ * code failure.
+ */
+function runGateCommandAsync(
+  command: GateCommand,
+  workspacePath: string,
+  options?: { env?: NodeJS.ProcessEnv; timeoutLabel?: string },
+): Promise<{ passed: boolean; output: string; timedOut?: boolean }> {
+  return new Promise(resolve => {
+    const child = spawn(command.cmd, command.args, {
+      cwd: workspacePath,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      ...(options?.env ? { env: options.env } : {}),
+    })
+    let out = ''
+    child.stdout?.on('data', (c: Buffer) => { out += c.toString() })
+    child.stderr?.on('data', (c: Buffer) => { out += c.toString() })
+    const timer = setTimeout(() => {
+      child.kill()
+      resolve({ passed: false, output: options?.timeoutLabel ?? 'Gate-Timeout nach 300s', timedOut: true })
+    }, 300_000)
+    child.on('close', (code: number | null) => {
+      clearTimeout(timer)
+      resolve({ passed: code === 0, output: out.slice(-3000) })
+    })
+  })
 }
 
 function buildPrompt(delegation: Delegation, contextCards?: MemoryCard[], retryContext?: string, targetRepo?: string): string {
@@ -784,51 +843,28 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
   // Guard against concurrent runs: if a test is already running for this workspace, skip.
   let checkpointTestRunning = false
   function runPostExecutionTestsAsync(workspacePath: string): Promise<{ passed: boolean; output: string; timedOut?: boolean; skipped?: boolean }> {
-    const testScript = resolveVerifyScripts(readWorkspaceScripts(workspacePath)).test
-    if (!testScript) return Promise.resolve({ passed: true, output: 'kein Test-Script — übersprungen', skipped: true })
-    return new Promise(resolve => {
-      const child = spawn('npm', ['run', testScript], { cwd: workspacePath, stdio: ['ignore', 'pipe', 'pipe'] })
-      let out = ''
-      child.stdout?.on('data', (chunk: Buffer) => { out += chunk.toString() })
-      child.stderr?.on('data', (chunk: Buffer) => { out += chunk.toString() })
-      // 300s: full suite in a fresh worktree takes 2-4 min (collect + 3500+ tests).
-      // A timeout is an INFRA signal (slow machine, npm install missing) — never a code-failure.
-      const timer = setTimeout(() => {
-        child.kill()
-        resolve({ passed: false, output: 'Test runner timed out after 300s', timedOut: true })
-      }, 300_000)
-      child.on('close', (code: number | null) => {
-        clearTimeout(timer)
-        resolve({ passed: code === 0, output: out.slice(-3000) })
-      })
-    })
+    // Language-agnostic: Node yields `npm run <test>` (unchanged); Python/Go/Rust
+    // yield the matching toolchain test command; an unrecognised stack has no
+    // test command → skipped (gate stays explicit, never a silent false-green).
+    const testCmd = resolveWorkspaceGate(workspacePath).test
+    if (!testCmd) return Promise.resolve({ passed: true, output: 'kein Test-Befehl — übersprungen', skipped: true })
+    // 300s: full suite in a fresh worktree takes 2-4 min (collect + 3500+ tests).
+    // A timeout is an INFRA signal (slow machine, npm install missing) — never a code-failure.
+    return runGateCommandAsync(testCmd, workspacePath, { timeoutLabel: 'Test runner timed out after 300s' })
   }
 
   // Build-Gate: a phase must produce a green `npm run build` before the next
   // chain phase may start — otherwise broken foundations cascade.
   // Skips gracefully if the workspace has no build script (returns passed=true).
   function runBuildGateAsync(workspacePath: string): Promise<{ passed: boolean; output: string; skipped?: boolean }> {
-    return new Promise(resolve => {
-      let hasBuild = false
-      try {
-        const pkg = JSON.parse(fsSync.readFileSync(pathMod.join(workspacePath, 'package.json'), 'utf-8')) as { scripts?: Record<string, string> }
-        hasBuild = Boolean(pkg.scripts?.build)
-      } catch { /* no package.json yet */ }
-      if (!hasBuild) { resolve({ passed: true, output: 'kein build-Script — Gate übersprungen', skipped: true }); return }
-
-      const child = spawn('npm', ['run', 'build'], {
-        cwd: workspacePath,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...process.env, NODE_ENV: 'production' },
-      })
-      let out = ''
-      child.stdout?.on('data', (c: Buffer) => { out += c.toString() })
-      child.stderr?.on('data', (c: Buffer) => { out += c.toString() })
-      const timer = setTimeout(() => { child.kill(); resolve({ passed: false, output: 'Build-Timeout nach 300s' }) }, 300_000)
-      child.on('close', (code: number | null) => {
-        clearTimeout(timer)
-        resolve({ passed: code === 0, output: out.slice(-3000) })
-      })
+    // Language-agnostic: Node yields `npm run build` (unchanged — present only
+    // when a build script exists, run with NODE_ENV=production); Go/Rust yield
+    // their toolchain build; Python/unknown have no build command → skipped.
+    const buildCmd = resolveWorkspaceGate(workspacePath).build
+    if (!buildCmd) return Promise.resolve({ passed: true, output: 'kein build-Befehl — Gate übersprungen', skipped: true })
+    return runGateCommandAsync(buildCmd, workspacePath, {
+      env: { ...process.env, NODE_ENV: 'production' },
+      timeoutLabel: 'Build-Timeout nach 300s',
     })
   }
 
@@ -959,6 +995,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
         // run timed out (infra signal, not a code failure). A red gate aborts the
         // writeback and fails the delegation with a clear log. Skipped stays
         // allowed so repos without build/test scripts are not blocked.
+        const wbStack = resolveWorkspaceGate(runnerWorkspace.path).stack
         const wbBuildGate = await runBuildGateAsync(runnerWorkspace.path)
         const wbTestGate = wbBuildGate.passed
           ? await runTestGateAsync(runnerWorkspace.path)
@@ -981,6 +1018,23 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
             .update(id, { errorMessage: wbDecision.reason })
             .catch(() => {})
           verifyGateFailed = true // skip writeback — broken code must not reach the target
+        } else {
+          // FIX B: make the GREEN gate visible in the API logs too — previously a
+          // passing gate logged nothing, so the run looked ungated. Persist a
+          // concise verdict per step (green / skipped), and flag an unrecognised
+          // stack explicitly as "ungated" instead of silently passing.
+          const gateLogs: AgentLog[] = []
+          if (wbStack === 'unknown') {
+            gateLogs.push({ timestamp: new Date().toISOString(), type: 'info', message: formatVerifyGateUngatedLog() })
+          } else {
+            gateLogs.push(wbBuildGate.skipped
+              ? { timestamp: new Date().toISOString(), type: 'info', message: formatVerifyGateSkippedLog('build') }
+              : { timestamp: new Date().toISOString(), type: 'success', message: formatVerifyGateBuildSuccessLog(wbBuildGate.output) })
+            gateLogs.push(wbTestGate.skipped
+              ? { timestamp: new Date().toISOString(), type: 'info', message: formatVerifyGateSkippedLog('test') }
+              : { timestamp: new Date().toISOString(), type: 'success', message: formatVerifyGateTestSuccessLog(wbTestGate.output) })
+          }
+          await appendLogs(id, gateLogs)
         }
         const writeback = verifyGateFailed ? null : writebackLocalResult({
           workspacePath: runnerWorkspace.path,
@@ -1023,15 +1077,18 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
               message: `⚠ Auto-Merge nicht möglich (${writeback.defaultBranch} divergiert). Ergebnis liegt im Branch \`${writeback.branch}\` (${writeback.fileCount} Dateien). Mergen mit: git merge ${writeback.branch}`,
             }])
           }
-          // Outcome verification: a "completed" build that wrote almost nothing is suspect
-          if (writeback.fileCount <= 1) {
+          // Outcome verification: a "completed" run that changed NOTHING is suspect.
+          // (Only 0 files — a 1-file change is perfectly legitimate, e.g. a bugfix
+          // or refactor; the old `<= 1` flagged those as false negatives now that
+          // fileCount reports the real diff instead of the whole tree.)
+          if (writeback.fileCount === 0) {
             await appendLogs(id, [{
               timestamp: new Date().toISOString(),
               type: 'error',
-              message: `❌ Outcome-Warnung: Der Lauf meldete Erfolg, aber das Ergebnis enthält nur ${writeback.fileCount} Datei(en). Der Agent hat vermutlich nichts Substanzielles erzeugt.`,
+              message: `❌ Outcome-Warnung: Der Lauf meldete Erfolg, aber das Ergebnis enthält keine geänderten Dateien. Der Agent hat vermutlich nichts erzeugt.`,
             }])
             await createDelegationRepository(SINGLE_TENANT_USER_ID)
-              .update(id, { errorMessage: `Outcome-Verifikation fehlgeschlagen: nur ${writeback.fileCount} Datei(en) im Ergebnis` })
+              .update(id, { errorMessage: `Outcome-Verifikation fehlgeschlagen: keine geänderten Dateien im Ergebnis` })
               .catch(() => {})
           }
         } else if (!verifyGateFailed) {
@@ -1112,7 +1169,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
           }])
           await repo.update(id, { retryCount: currentRetryCount + 1 })
           // Use compact retry prompt — saves ~70% tokens vs repeating full original prompt
-          const retryPrompt = buildRetryPrompt(current, currentRetryCount + 1, 3, testResult.output)
+          const retryPrompt = buildRetryPrompt(current, currentRetryCount + 1, 3, testResult.output, runnerWorkspace.path)
           retryScheduled = true // the retry owns the workspace — finally must not touch it
           runWithClaudeCLI(id, retryPrompt, startTime, budgetUsd, riskClass, targetRepo, runnerWorkspace)
           return // Don't cleanup the workspace — the retry run will handle it
@@ -1504,12 +1561,13 @@ async function finalizeOllamaExternalResult(opts: {
     }])
   }
 
-  // Outcome verification: a "completed" run that wrote almost nothing is suspect.
-  if (writeback.fileCount <= 1) {
+  // Outcome verification: a "completed" run that changed NOTHING is suspect
+  // (0 files — a 1-file change is legitimate; see the Claude-CLI path above).
+  if (writeback.fileCount === 0) {
     await appendLogs(id, [{
       timestamp: new Date().toISOString(),
       type: 'error',
-      message: `❌ Outcome-Warnung: Erfolg gemeldet, aber das Ergebnis enthält nur ${writeback.fileCount} Datei(en) — der Agent hat vermutlich nichts Substanzielles erzeugt.`,
+      message: `❌ Outcome-Warnung: Erfolg gemeldet, aber das Ergebnis enthält keine geänderten Dateien — der Agent hat vermutlich nichts erzeugt.`,
     }])
   }
 }

@@ -105,6 +105,30 @@ describe('buildContextPackage', () => {
     expect(result.cards.length).toBeLessThanOrEqual(2)
   })
 
+  it('dedupes cards from the same source delegation (diverse lessons, not 3 variants of one run)', async () => {
+    const cards = [
+      makeCard({ id: 'a', title: 'fix failing test report', body: 'fix the failing test in the suite', sourceIds: ['del-1'], tags: ['fix'] }),
+      makeCard({ id: 'b', title: 'fix failing test execution', body: 'fix the failing test', sourceIds: ['del-1'], tags: ['fix'] }),
+      makeCard({ id: 'c', title: 'fix failing test learning', body: 'fix the failing test edge case', sourceIds: ['del-2'], tags: ['fix'] }),
+    ]
+    vi.mocked(createKnowledgeCardRepository).mockReturnValue({
+      listAll: vi.fn().mockResolvedValue(cards),
+      create: vi.fn(),
+      findById: vi.fn(),
+      listByDelegation: vi.fn(),
+      listByType: vi.fn(),
+      upsert: vi.fn(),
+    })
+
+    const result = await buildContextPackage('fix failing test', { maxCards: 4 })
+    const origins = result.cards.map(c => c.sourceIds[0])
+    // no source delegation appears more than once
+    expect(new Set(origins).size).toBe(origins.length)
+    // both distinct source delegations are represented
+    expect(origins).toContain('del-1')
+    expect(origins).toContain('del-2')
+  })
+
   it('returns empty result when repository throws', async () => {
     vi.mocked(createKnowledgeCardRepository).mockReturnValue({
       listAll: vi.fn().mockRejectedValue(new Error('DB connection failed')),
