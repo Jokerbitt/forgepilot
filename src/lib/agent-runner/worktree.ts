@@ -84,6 +84,10 @@ export interface WritebackResult {
   defaultBranch: string
   /** True when npm install ran successfully in the target after merge */
   installed?: boolean
+  /** The target's HEAD sha AFTER a successful merge. Lets an orchestrator confirm
+   *  the result actually LANDED in main (not just that the run flipped to
+   *  completed) — closes the writeback-vs-status observability gap. */
+  headSha?: string
 }
 
 function gitOut(cwd: string, args: string[]): string {
@@ -224,6 +228,7 @@ export function writebackLocalResult(options: {
   let defaultBranch = 'main'
   let mergedToMain = false
   let packageJsonChanged = false
+  let headSha: string | undefined
   try {
     defaultBranch = gitOut(targetRepo, ['rev-parse', '--abbrev-ref', 'HEAD']) || 'main'
     const beforeSha = gitOut(targetRepo, ['rev-parse', 'HEAD'])
@@ -243,6 +248,9 @@ export function writebackLocalResult(options: {
       ], { cwd: targetRepo, stdio: 'ignore' })
     }
     mergedToMain = true
+    // Confirm where the result landed so an orchestrator can verify the merge
+    // really reached main instead of racing on a stale `git rev-parse HEAD`.
+    try { headSha = gitOut(targetRepo, ['rev-parse', 'HEAD']) } catch { /* keep undefined */ }
     // Did the merge touch package.json? (a feature adding a new dependency)
     try {
       const changed = gitOut(targetRepo, ['diff', '--name-only', `${beforeSha}..HEAD`])
@@ -271,7 +279,7 @@ export function writebackLocalResult(options: {
     } catch { /* install best-effort — user can run it manually */ }
   }
 
-  return { branch, fileCount, mergedToMain, defaultBranch, installed }
+  return { branch, fileCount, mergedToMain, defaultBranch, installed, headSha }
 }
 
 /**
