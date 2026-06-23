@@ -1046,7 +1046,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
             await appendLogs(id, [{
               timestamp: new Date().toISOString(),
               type: 'success',
-              message: `✅ Ergebnis autonom in ${targetRepo} (${writeback.defaultBranch}) übernommen — ${writeback.fileCount} Dateien.${writeback.installed ? ' Abhängigkeiten installiert (npm install) — sofort startklar.' : ''} Backup-Branch: ${writeback.branch}`,
+              message: `✅ Ergebnis autonom in ${targetRepo} (${writeback.defaultBranch}${writeback.headSha ? ` @ ${writeback.headSha.slice(0, 8)}` : ''}) übernommen — ${writeback.fileCount} Dateien.${writeback.installed ? ' Abhängigkeiten installiert (npm install) — sofort startklar.' : ''} Backup-Branch: ${writeback.branch}`,
             }])
             // Runtime-Bootstrap: make the merged app actually runnable (env + DB),
             // not just compilable. Best-effort — never fails the delegation.
