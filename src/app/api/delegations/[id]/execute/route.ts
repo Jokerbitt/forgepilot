@@ -2503,10 +2503,20 @@ export async function POST(
 
   // OTel: trace execution start + routing decision
   let runnerReadiness = getCachedOrShallowRunnerReadiness()
+  // Fail-fast for the execute path: a cloud runner that probed "ready" up to the
+  // cache TTL ago (default 24h) may have a since-expired token / drained credit.
+  // Re-probe deep when the cloud runner is claimed ready but the probe is stale,
+  // so a dead credential is caught BEFORE dispatch and routed to the Ollama
+  // fallback instead of 401-ing mid-run. Override window via RUNNER_EXECUTE_FRESHNESS_MS.
+  const executeFreshnessMs = Number.parseInt(process.env.RUNNER_EXECUTE_FRESHNESS_MS ?? '', 10) || 10 * 60 * 1000
+  const probeAgeMs = Date.now() - Date.parse(runnerReadiness.checkedAt)
+  const probeStale = !Number.isFinite(probeAgeMs) || probeAgeMs > executeFreshnessMs
   if (
     delegation.executionRoute !== 'ollama-agent'
-    && !runnerReadiness.zeroKeyReady
-    && (runnerReadiness.claude.available || runnerReadiness.codex.available)
+    && (
+      (!runnerReadiness.zeroKeyReady && (runnerReadiness.claude.available || runnerReadiness.codex.available))
+      || (runnerReadiness.zeroKeyReady && probeStale)
+    )
   ) {
     runnerReadiness = getRunnerReadiness({ deep: true })
     writeCachedRunnerReadiness(runnerReadiness)
