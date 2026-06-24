@@ -935,6 +935,10 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     unregisterProcess(id)
 
     const success = code === 0
+    // An agent run that exits 0 but produces ZERO file changes is a false success
+    // (it claimed done without doing anything). Flagged at writeback and folded into
+    // the final status so an unattended pipeline does not read it as a real result.
+    let emptyResultNoChanges = false
     const elapsed = Math.round((Date.now() - startTime.getTime()) / 60000)
     const actualCost = parseCostFromOutput(fullOutput)
     const prUrl = parsePrUrlFromOutput(fullOutput)
@@ -1094,6 +1098,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
           // or refactor; the old `<= 1` flagged those as false negatives now that
           // fileCount reports the real diff instead of the whole tree.)
           if (writeback.fileCount === 0) {
+            emptyResultNoChanges = true
             await appendLogs(id, [{
               timestamp: new Date().toISOString(),
               type: 'error',
@@ -1231,7 +1236,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
         }])
       }
 
-      const finalStatus = success ? 'completed' : 'failed'
+      const finalStatus = (success && !emptyResultNoChanges) ? 'completed' : 'failed'
       // M4: Use full classifier for rich error message
       const classifiedFailure = !success ? classifyError(fullOutput) : null
       const friendlyError = classifiedFailure && classifiedFailure.category !== 'unknown'
