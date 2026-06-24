@@ -1204,10 +1204,30 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
           return
         }
 
+        // Codex unavailable — try the local Ollama agent before giving up. This
+        // keeps an unattended run alive when the cloud token is dead/expired and
+        // Codex is not installed, instead of hard-failing the delegation.
+        if (await isOllamaReachable()) {
+          const model = current.contract.llmModel?.trim() || 'qwen2.5-coder:14b'
+          const ollamaPrompt = buildOllamaTaskPrompt(current.contract)
+          const fallbackLog: AgentLog = {
+            timestamp: new Date().toISOString(),
+            type: 'info',
+            message: `Fallback auf lokales Ollama-Modell (${model}): Claude CLI blockiert (${knownError}), Codex nicht bereit.`,
+          }
+          await repo.update(id, {
+            errorMessage: undefined,
+            logs: [...(current.logs ?? []), ...logBuffer, finalLog, fallbackLog],
+          })
+          await cleanupRunnerWorkspace()
+          void runWithOllamaAgent(id, ollamaPrompt, new Date(), budgetUsd, model, targetRepo)
+          return
+        }
+
         await appendLogs(id, [{
           timestamp: new Date().toISOString(),
           type: 'error',
-          message: 'Codex CLI Fallback nicht bereit. Bitte Codex CLI lokal anmelden oder in Settings pruefen.',
+          message: 'Weder Codex CLI noch lokales Ollama-Modell als Fallback bereit. Bitte Codex CLI anmelden oder Ollama starten (ollama serve).',
         }])
       }
 
