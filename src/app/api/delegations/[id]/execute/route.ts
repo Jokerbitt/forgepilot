@@ -2492,10 +2492,19 @@ export async function POST(
     writeCachedRunnerReadiness(runnerReadiness)
   }
 
+  const anthropicApiKeySet = Boolean(readStoredApiKeys().ANTHROPIC_API_KEY?.trim())
+  // When no cloud provider is available, probe the local Ollama agent so an
+  // unattended run falls back to it instead of degrading to a no-op simulation
+  // (this is what survives a dead/expired Claude token). Probe only on that path
+  // to avoid added latency when a cloud runner is already usable.
+  const cloudUnavailable = !runnerReadiness.zeroKeyReady && !anthropicApiKeySet
+  const ollamaReady = cloudUnavailable ? await isOllamaReachable() : false
+
   const mode = selectDelegationExecutionMode({
     executionRoute: delegation.executionRoute,
     runnerReadiness,
-    anthropicApiKeySet: Boolean(readStoredApiKeys().ANTHROPIC_API_KEY?.trim()),
+    anthropicApiKeySet,
+    ollamaReady,
   })
 
   // Safety: the claude-api runner executes in ForgePilot's OWN working directory
