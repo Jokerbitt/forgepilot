@@ -11,6 +11,7 @@ import {
   sanitizeWorktreeName,
   shouldKeepRunnerWorktree,
   writebackLocalResult,
+  rescuePartialWork,
   reuseExistingWorkspace,
   shouldRunInstall,
   parseNameStatus,
@@ -504,5 +505,57 @@ describe('getWorkspaceChangedFiles', () => {
     } finally {
       fs.rmSync(dir, { recursive: true, force: true })
     }
+  })
+})
+
+describe('rescuePartialWork', () => {
+  afterEach(() => { execFileSyncMock.mockReset() })
+
+  it('commits uncommitted work and pushes a timeout backup branch', () => {
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-rescue-ws-'))
+    try {
+      const calls: string[][] = []
+      execFileSyncMock.mockImplementation(((_cmd: unknown, args: unknown) => {
+        const a = args as string[]
+        calls.push(a)
+        const joined = a.join(' ')
+        if (joined.includes('status --porcelain')) return 'M src/app.tsx\n' as never
+        if (joined.includes('rev-parse --verify')) return '' as never // base resolves
+        if (joined.includes('diff --name-status')) return 'M\tsrc/app.tsx\nA\tsrc/new.tsx' as never
+        return '' as never
+      }) as unknown as typeof execFileSync)
+
+      const result = rescuePartialWork({ workspacePath: ws, targetRepo: '/fake/target', delegationId: 'del-timeout-123' })
+      expect(result).not.toBeNull()
+      expect(result!.committed).toBe(true)
+      expect(result!.fileCount).toBe(2)
+      expect(result!.branch).toBe('forgepilot/timeout-del-timeout-123')
+      expect(calls.some(a => a.includes('add') && a.includes('-A'))).toBe(true)
+      expect(calls.some(a => a.includes('commit'))).toBe(true)
+      expect(calls.some(a => a.includes('push') && a.join(' ').includes('forgepilot/timeout-'))).toBe(true)
+    } finally {
+      fs.rmSync(ws, { recursive: true, force: true })
+    }
+  })
+
+  it('returns null when there is nothing to rescue (clean worktree, no base)', () => {
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-rescue-empty-'))
+    try {
+      execFileSyncMock.mockImplementation(((_cmd: unknown, args: unknown) => {
+        const joined = (args as string[]).join(' ')
+        if (joined.includes('status --porcelain')) return '' as never // clean
+        if (joined.includes('rev-parse --verify')) throw new Error('no base') // → 0 files
+        return '' as never
+      }) as unknown as typeof execFileSync)
+      const result = rescuePartialWork({ workspacePath: ws, targetRepo: '/fake/target', delegationId: 'del-clean' })
+      expect(result).toBeNull()
+    } finally {
+      fs.rmSync(ws, { recursive: true, force: true })
+    }
+  })
+
+  it('ignores non-local targets', () => {
+    const result = rescuePartialWork({ workspacePath: '/tmp/x', targetRepo: 'https://github.com/o/r', delegationId: 'd' })
+    expect(result).toBeNull()
   })
 })

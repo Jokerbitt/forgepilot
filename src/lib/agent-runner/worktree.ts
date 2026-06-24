@@ -282,6 +282,59 @@ export function writebackLocalResult(options: {
   return { branch, fileCount, mergedToMain, defaultBranch, installed, headSha }
 }
 
+export interface PartialWorkRescue {
+  branch: string
+  fileCount: number
+  committed: boolean
+}
+
+/**
+ * Rescue an agent's partial work BEFORE the runner kills it on a wall-clock
+ * timeout. Without this, a large task that ran out of time loses everything the
+ * agent produced. We commit whatever is uncommitted in the worktree and push it
+ * to a `forgepilot/timeout-<id>` backup branch on the target. The work is NEVER
+ * merged into the default branch (partial work may not build/pass) — it is only
+ * preserved so it can be inspected or continued with `git merge <branch>`.
+ * Best-effort: returns null when there is nothing to rescue or git fails.
+ */
+export function rescuePartialWork(options: {
+  workspacePath: string
+  targetRepo: string
+  delegationId: string
+}): PartialWorkRescue | null {
+  const { workspacePath, targetRepo, delegationId } = options
+  if (!isLocalPathRepo(targetRepo)) return null
+  if (!fs.existsSync(workspacePath)) return null
+
+  // Commit any uncommitted changes the agent left mid-task (best-effort).
+  let committed = false
+  try {
+    const status = gitOut(workspacePath, ['status', '--porcelain'])
+    if (status.trim()) {
+      const ident = ['-c', 'user.name=ForgePilot', '-c', 'user.email=runner@forgepilot.local']
+      execFileSync('git', [...ident, 'add', '-A'], { cwd: workspacePath, stdio: 'ignore' })
+      execFileSync('git', [...ident, 'commit', '-m', `forgepilot: partial work rescued before timeout (${delegationId})`], { cwd: workspacePath, stdio: 'ignore' })
+      committed = true
+    }
+  } catch {
+    // nothing staged or identity issue — fall through; HEAD may still hold work
+  }
+
+  // How much did the agent actually change vs the clone base?
+  const fileCount = getWorkspaceChangedFiles(workspacePath).length
+  if (fileCount === 0 && !committed) return null // genuinely nothing to rescue
+
+  const branch = `forgepilot/timeout-${sanitizeWorktreeName(delegationId).slice(0, 16)}`
+  try {
+    execFileSync('git', ['push', 'origin', `HEAD:refs/heads/${branch}`, '--force'], {
+      cwd: workspacePath, stdio: 'ignore',
+    })
+  } catch {
+    return null
+  }
+  return { branch, fileCount, committed }
+}
+
 /**
  * Wrap an EXISTING workspace path as a RunnerWorkspace so a later chain phase
  * can keep building on the previous phase's work (persistent multi-phase build).

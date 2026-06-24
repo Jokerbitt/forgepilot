@@ -44,7 +44,7 @@ import type { MemoryCard } from '@/lib/knowledge/types'
 import { checkParallelCompletion } from '@/lib/delegation-parallel'
 import { triggerCriticRetry } from '@/lib/delegations/critic-retry'
 import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-runtime-evidence'
-import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, writebackLocalResult, reuseExistingWorkspace, getWorkspaceChangedFiles, type RunnerWorkspace, type WorkspaceChangedFile } from '@/lib/agent-runner/worktree'
+import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, writebackLocalResult, rescuePartialWork, reuseExistingWorkspace, getWorkspaceChangedFiles, type RunnerWorkspace, type WorkspaceChangedFile } from '@/lib/agent-runner/worktree'
 import { bootstrapRuntime, summarizeBootstrap, smokeTestApp } from '@/lib/agent-runner/runtime-bootstrap'
 import { autoScaffoldWorkspace } from '@/lib/building-blocks/create-app'
 import { scopedScaffoldBlockIds } from '@/lib/building-blocks/catalog'
@@ -732,7 +732,19 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
   overallTimer = setTimeout(() => {
     overallTimer = null
     const timeoutSeconds = Math.round(overallTimeoutMs / 1000)
-    const message = `⏱️ Runner-Timeout nach ${timeoutSeconds}s — abgebrochen. Der Agent lief über die Wall-Clock-Deadline (FORGEPILOT_RUNNER_TIMEOUT_MS) hinaus, ohne zu terminieren.`
+    // Rescue the agent's partial work BEFORE killing it. A large task that ran
+    // out of time often produced substantial work; without this it is lost
+    // entirely. The rescue commits + pushes to a backup branch (never main).
+    let rescueNote = ''
+    try {
+      if (targetRepo) {
+        const rescued = rescuePartialWork({ workspacePath: runnerWorkspace.path, targetRepo, delegationId: id })
+        if (rescued && (rescued.committed || rescued.fileCount > 0)) {
+          rescueNote = ` Teilarbeit (${rescued.fileCount} Dateien) im Branch \`${rescued.branch}\` gesichert — fortsetzbar mit \`git merge ${rescued.branch}\`.`
+        }
+      }
+    } catch { /* rescue is best-effort — never block the kill */ }
+    const message = `⏱️ Runner-Timeout nach ${timeoutSeconds}s — abgebrochen.${rescueNote} Der Agent lief über die Wall-Clock-Deadline (FORGEPILOT_RUNNER_TIMEOUT_MS) hinaus, ohne zu terminieren.`
     void appendLogs(id, [{
       timestamp: new Date().toISOString(),
       type: 'error',
