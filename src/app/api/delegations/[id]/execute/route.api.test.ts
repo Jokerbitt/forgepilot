@@ -14,6 +14,15 @@ vi.mock('child_process', () => ({
   execSync: vi.fn().mockImplementation(() => { throw new Error('claude not found') }),
   execFile: vi.fn(),
 }))
+// Pin Ollama as unreachable so execution-mode routing is deterministic regardless
+// of whether the test machine happens to have a local Ollama running. The route
+// now falls back to the Ollama agent when no cloud provider is available, so a
+// real reachable Ollama would otherwise turn the "simulation" path into
+// "ollama-agent". The fallback routing itself is unit-tested in execution-mode.test.ts.
+vi.mock('@/lib/agent-runner/ollama-runner', () => ({
+  OllamaAgentRunner: vi.fn(),
+  isOllamaReachable: vi.fn().mockResolvedValue(false),
+}))
 vi.mock('@/lib/connectors/config', () => ({
   readStoredApiKeys: vi.fn().mockReturnValue({}),
 }))
@@ -121,7 +130,7 @@ describe('POST /api/delegations/[id]/execute', () => {
     expect(body.error).toContain('pending')
   })
 
-  it('starts simulation mode and returns 200 when no CLI or API key is configured', async () => {
+  it('starts simulation mode and returns 200 when no CLI, API key, or Ollama is available', async () => {
     const delegation = makeDelegation()
     const mockRepo = {
       findById: vi.fn().mockResolvedValue(delegation),
