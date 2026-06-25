@@ -19,6 +19,7 @@ export const dynamic = 'force-dynamic'
 import { type NextRequest, NextResponse } from 'next/server'
 import { isCronAuthorized } from '@/lib/cron/auth'
 import { createDelegationRepository, SINGLE_TENANT_USER_ID } from '@/lib/repositories/delegationRepository'
+import { reapStaleDelegations } from '@/lib/delegations/watchdog'
 import { logger } from '@/lib/logger'
 import type { AgentLog } from '@/lib/models/delegation'
 
@@ -42,6 +43,23 @@ function getLastLogTimestamp(logs: AgentLog[] | undefined): string | undefined {
 async function runHeartbeat(): Promise<NextResponse> {
   const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
 
+  // PID-aware crash recovery FIRST: a delegation whose agent process is dead is
+  // failed after ~10 min of silence — much faster than the 30-min log-staleness
+  // threshold below, and it catches a crashed/killed runner (e.g. server restart)
+  // that the timestamp check would miss while the process still "looks" recent.
+  let reapedDead: { delegationId: string }[] = []
+  try {
+    reapedDead = await reapStaleDelegations(repo)
+    if (reapedDead.length > 0) {
+      logger.warn(
+        { event: `cron.${ROUTE}.reaped`, count: reapedDead.length, ids: reapedDead.map(r => r.delegationId) },
+        'Reaped delegations with a dead agent process',
+      )
+    }
+  } catch (err) {
+    logger.error({ err, event: `cron.${ROUTE}.reap.error` }, 'PID-aware reap failed')
+  }
+
   let allDelegations
   try {
     allDelegations = await repo.listByStatus(['running'])
@@ -59,6 +77,7 @@ async function runHeartbeat(): Promise<NextResponse> {
       checked: 0,
       stale: 0,
       zombies: 0,
+      reaped: reapedDead.length,
       timestamp: new Date().toISOString(),
     })
   }
@@ -135,6 +154,7 @@ async function runHeartbeat(): Promise<NextResponse> {
     checked: running.length,
     stale: staleIds.length,
     zombies: zombieIds.length,
+    reaped: reapedDead.length,
     affected,
     timestamp: new Date().toISOString(),
   })

@@ -44,7 +44,7 @@ import type { MemoryCard } from '@/lib/knowledge/types'
 import { checkParallelCompletion } from '@/lib/delegation-parallel'
 import { triggerCriticRetry } from '@/lib/delegations/critic-retry'
 import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-runtime-evidence'
-import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, writebackLocalResult, reuseExistingWorkspace, getWorkspaceChangedFiles, type RunnerWorkspace, type WorkspaceChangedFile } from '@/lib/agent-runner/worktree'
+import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, writebackLocalResult, rescuePartialWork, reuseExistingWorkspace, getWorkspaceChangedFiles, type RunnerWorkspace, type WorkspaceChangedFile } from '@/lib/agent-runner/worktree'
 import { bootstrapRuntime, summarizeBootstrap, smokeTestApp } from '@/lib/agent-runner/runtime-bootstrap'
 import { autoScaffoldWorkspace } from '@/lib/building-blocks/create-app'
 import { scopedScaffoldBlockIds } from '@/lib/building-blocks/catalog'
@@ -732,7 +732,19 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
   overallTimer = setTimeout(() => {
     overallTimer = null
     const timeoutSeconds = Math.round(overallTimeoutMs / 1000)
-    const message = `⏱️ Runner-Timeout nach ${timeoutSeconds}s — abgebrochen. Der Agent lief über die Wall-Clock-Deadline (FORGEPILOT_RUNNER_TIMEOUT_MS) hinaus, ohne zu terminieren.`
+    // Rescue the agent's partial work BEFORE killing it. A large task that ran
+    // out of time often produced substantial work; without this it is lost
+    // entirely. The rescue commits + pushes to a backup branch (never main).
+    let rescueNote = ''
+    try {
+      if (targetRepo) {
+        const rescued = rescuePartialWork({ workspacePath: runnerWorkspace.path, targetRepo, delegationId: id })
+        if (rescued && (rescued.committed || rescued.fileCount > 0)) {
+          rescueNote = ` Teilarbeit (${rescued.fileCount} Dateien) im Branch \`${rescued.branch}\` gesichert — fortsetzbar mit \`git merge ${rescued.branch}\`.`
+        }
+      }
+    } catch { /* rescue is best-effort — never block the kill */ }
+    const message = `⏱️ Runner-Timeout nach ${timeoutSeconds}s — abgebrochen.${rescueNote} Der Agent lief über die Wall-Clock-Deadline (FORGEPILOT_RUNNER_TIMEOUT_MS) hinaus, ohne zu terminieren.`
     void appendLogs(id, [{
       timestamp: new Date().toISOString(),
       type: 'error',
@@ -923,6 +935,10 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     unregisterProcess(id)
 
     const success = code === 0
+    // An agent run that exits 0 but produces ZERO file changes is a false success
+    // (it claimed done without doing anything). Flagged at writeback and folded into
+    // the final status so an unattended pipeline does not read it as a real result.
+    let emptyResultNoChanges = false
     const elapsed = Math.round((Date.now() - startTime.getTime()) / 60000)
     const actualCost = parseCostFromOutput(fullOutput)
     const prUrl = parsePrUrlFromOutput(fullOutput)
@@ -1082,6 +1098,7 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
           // or refactor; the old `<= 1` flagged those as false negatives now that
           // fileCount reports the real diff instead of the whole tree.)
           if (writeback.fileCount === 0) {
+            emptyResultNoChanges = true
             await appendLogs(id, [{
               timestamp: new Date().toISOString(),
               type: 'error',
@@ -1192,14 +1209,34 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
           return
         }
 
+        // Codex unavailable — try the local Ollama agent before giving up. This
+        // keeps an unattended run alive when the cloud token is dead/expired and
+        // Codex is not installed, instead of hard-failing the delegation.
+        if (await isOllamaReachable()) {
+          const model = current.contract.llmModel?.trim() || 'qwen2.5-coder:14b'
+          const ollamaPrompt = buildOllamaTaskPrompt(current.contract)
+          const fallbackLog: AgentLog = {
+            timestamp: new Date().toISOString(),
+            type: 'info',
+            message: `Fallback auf lokales Ollama-Modell (${model}): Claude CLI blockiert (${knownError}), Codex nicht bereit.`,
+          }
+          await repo.update(id, {
+            errorMessage: undefined,
+            logs: [...(current.logs ?? []), ...logBuffer, finalLog, fallbackLog],
+          })
+          await cleanupRunnerWorkspace()
+          void runWithOllamaAgent(id, ollamaPrompt, new Date(), budgetUsd, model, targetRepo)
+          return
+        }
+
         await appendLogs(id, [{
           timestamp: new Date().toISOString(),
           type: 'error',
-          message: 'Codex CLI Fallback nicht bereit. Bitte Codex CLI lokal anmelden oder in Settings pruefen.',
+          message: 'Weder Codex CLI noch lokales Ollama-Modell als Fallback bereit. Bitte Codex CLI anmelden oder Ollama starten (ollama serve).',
         }])
       }
 
-      const finalStatus = success ? 'completed' : 'failed'
+      const finalStatus = (success && !emptyResultNoChanges) ? 'completed' : 'failed'
       // M4: Use full classifier for rich error message
       const classifiedFailure = !success ? classifyError(fullOutput) : null
       const friendlyError = classifiedFailure && classifiedFailure.category !== 'unknown'
@@ -2471,19 +2508,38 @@ export async function POST(
 
   // OTel: trace execution start + routing decision
   let runnerReadiness = getCachedOrShallowRunnerReadiness()
+  // Fail-fast for the execute path: a cloud runner that probed "ready" up to the
+  // cache TTL ago (default 24h) may have a since-expired token / drained credit.
+  // Re-probe deep when the cloud runner is claimed ready but the probe is stale,
+  // so a dead credential is caught BEFORE dispatch and routed to the Ollama
+  // fallback instead of 401-ing mid-run. Override window via RUNNER_EXECUTE_FRESHNESS_MS.
+  const executeFreshnessMs = Number.parseInt(process.env.RUNNER_EXECUTE_FRESHNESS_MS ?? '', 10) || 10 * 60 * 1000
+  const probeAgeMs = Date.now() - Date.parse(runnerReadiness.checkedAt)
+  const probeStale = !Number.isFinite(probeAgeMs) || probeAgeMs > executeFreshnessMs
   if (
     delegation.executionRoute !== 'ollama-agent'
-    && !runnerReadiness.zeroKeyReady
-    && (runnerReadiness.claude.available || runnerReadiness.codex.available)
+    && (
+      (!runnerReadiness.zeroKeyReady && (runnerReadiness.claude.available || runnerReadiness.codex.available))
+      || (runnerReadiness.zeroKeyReady && probeStale)
+    )
   ) {
     runnerReadiness = getRunnerReadiness({ deep: true })
     writeCachedRunnerReadiness(runnerReadiness)
   }
 
+  const anthropicApiKeySet = Boolean(readStoredApiKeys().ANTHROPIC_API_KEY?.trim())
+  // When no cloud provider is available, probe the local Ollama agent so an
+  // unattended run falls back to it instead of degrading to a no-op simulation
+  // (this is what survives a dead/expired Claude token). Probe only on that path
+  // to avoid added latency when a cloud runner is already usable.
+  const cloudUnavailable = !runnerReadiness.zeroKeyReady && !anthropicApiKeySet
+  const ollamaReady = cloudUnavailable ? await isOllamaReachable() : false
+
   const mode = selectDelegationExecutionMode({
     executionRoute: delegation.executionRoute,
     runnerReadiness,
-    anthropicApiKeySet: Boolean(readStoredApiKeys().ANTHROPIC_API_KEY?.trim()),
+    anthropicApiKeySet,
+    ollamaReady,
   })
 
   // Safety: the claude-api runner executes in ForgePilot's OWN working directory

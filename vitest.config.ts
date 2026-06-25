@@ -15,6 +15,14 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
+    // Raise the per-test/hook timeout above Vitest's 5s default. The suite runs
+    // many file-I/O + subprocess tests in parallel, and under load a healthy test
+    // can exceed the 5s budget purely from scheduling latency — the observed
+    // flake (load-induced 5s timeouts, 0 assertion failures). 20s removes the
+    // false-red on the single required CI check without masking a real hang.
+    // Override per-environment via VITEST_TIMEOUT_MS.
+    testTimeout: Number.parseInt(process.env.VITEST_TIMEOUT_MS ?? '', 10) || 20_000,
+    hookTimeout: Number.parseInt(process.env.VITEST_TIMEOUT_MS ?? '', 10) || 20_000,
     reporters: ['verbose', ['json', { outputFile: 'config/test-results.json' }]],
     exclude: [
       '**/node_modules/**',
