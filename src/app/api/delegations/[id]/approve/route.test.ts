@@ -56,6 +56,10 @@ describe('POST /api/delegations/[id]/approve', () => {
     expect(data.contract.requiresApproval).toBe(false)
     expect(data.approvalId).toBeDefined()
     expect(data.logs.at(-1).message).toContain('n8n-autopilot')
+    // ADR-003 P2: structured approval audit trail
+    expect(data.approvedBy.actor).toBe('n8n-autopilot')
+    expect(data.approvedBy.reason).toBe('max batch 10')
+    expect(typeof data.approvedBy.approvedAt).toBe('string')
   })
 
   it('blocks RiskClass C approval through the automation endpoint', async () => {
