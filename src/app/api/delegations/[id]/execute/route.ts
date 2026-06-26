@@ -32,7 +32,7 @@ import { extractKnowledge } from '@/lib/knowledge/extraction'
 import { persistGrokCriticForDelegation } from '@/lib/eval/auto-grok-critic'
 import { writebackExecutionInsights, writebackDelegationKnowledge, writeFailureLessonCard } from '@/lib/knowledge/writeback'
 import { notifyExecutionResult, notifyBudgetWarning } from '@/lib/notifications'
-import { checkBudget, getBudgetLimit, wouldExceedBudget } from '@/lib/budget/guard'
+import { checkBudget, getBudgetLimit, wouldExceedBudget, inflightBudgetExceeded } from '@/lib/budget/guard'
 import { triggerChain } from '@/lib/delegations/chaining'
 import { decidePhaseGate } from '@/lib/delegations/phase-gate'
 import { resolveVerifyScripts, verifyCommand } from '@/lib/delegations/verify-scripts'
@@ -673,6 +673,9 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
   let startupTimer: ReturnType<typeof setTimeout> | null = null
   let overallTimer: ReturnType<typeof setTimeout> | null = null
   let sawOutput = false
+  // Set when the in-flight budget guard kills the run: the close handler then
+  // skips writeback/success handling (status is already finalized budget-paused).
+  let budgetKilled = false
 
   const startupTimeoutMs = Math.max(
     30_000,
@@ -834,6 +837,37 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       const cost = event.total_cost_usd as number | undefined
       if (cost != null) fullOutput += `\nCost: $${cost.toFixed(4)}`
 
+      // P3 — in-flight budget kill: a streamed result event carries the cumulative
+      // cost. Once it passes the (tolerance-adjusted) budget, kill the agent NOW
+      // instead of waiting for the post-hoc checkBudget that only runs after exit —
+      // that lets a runaway run burn far past the cap. Same SIGTERM-the-group kill
+      // the timeouts use; the close handler sees budgetKilled and skips writeback.
+      if (cost != null && !budgetKilled) {
+        const verdict = inflightBudgetExceeded(cost, budgetUsd)
+        if (verdict.exceeded) {
+          budgetKilled = true
+          clearStartupTimer()
+          clearOverallTimer()
+          const reason = `💸 Budget-Stopp: Live-Kosten $${cost.toFixed(4)} überschreiten das Limit $${verdict.limit?.toFixed(2)} — Lauf abgebrochen, bevor weiteres Budget verbraucht wird. Mit höherem Budget fortsetzbar.`
+          void appendLogs(id, [{ timestamp: new Date().toISOString(), type: 'error', message: reason }], 'failed')
+          createDelegationRepository(SINGLE_TENANT_USER_ID)
+            .update(id, {
+              actualCostUsd: cost,
+              budgetPaused: true,
+              budgetPausedReason: reason,
+              errorMessage: reason,
+              completedAt: new Date().toISOString(),
+            })
+            .catch(() => {})
+          try {
+            if (proc.pid) process.kill(-proc.pid, 'SIGTERM')
+          } catch {
+            proc.kill('SIGTERM')
+          }
+          return
+        }
+      }
+
       // Token tracking — Claude CLI stream-json includes usage in result event
       const usage = event.usage as { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number } | undefined
       if (usage) {
@@ -935,6 +969,12 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     clearStartupTimer()
     clearOverallTimer()
     unregisterProcess(id)
+
+    // P3 — the in-flight budget guard already killed the process and finalized
+    // the delegation (failed + budgetPaused). Skip writeback/verify/success: the
+    // partial work may not build, and the status is set. The workspace is kept
+    // (like any failure) so the run can be resumed with more budget.
+    if (budgetKilled) return
 
     const success = code === 0
     // An agent run that exits 0 but produces ZERO file changes is a false success
