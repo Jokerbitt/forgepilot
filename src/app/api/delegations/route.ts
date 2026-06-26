@@ -122,11 +122,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Auto-approve Risk-A delegations that don't require human approval
+    // ADR-003 P2: record the auto-approval in the audit trail too — not just the
+    // human approve route — so an unattended approval is never traceless.
     const autoApproved: Delegation =
       withTitle.contract.riskClass === 'A' &&
       !withTitle.contract.requiresApproval &&
       withTitle.status === 'pending'
-        ? { ...withTitle, status: 'approved', updatedAt: new Date().toISOString() }
+        ? {
+            ...withTitle,
+            status: 'approved',
+            approvedBy: {
+              actor: 'auto-approve:risk-a',
+              approvedAt: new Date().toISOString(),
+              reason: 'Risk-A ohne requiresApproval — automatisch freigegeben',
+            },
+            updatedAt: new Date().toISOString(),
+          }
         : withTitle
 
     const repo = createDelegationRepository(SINGLE_TENANT_USER_ID)
