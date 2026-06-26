@@ -577,16 +577,18 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
   })
   const maxTurns = budgetToClaudeCliMaxTurns(budgetUsd)
 
-  // Inherit the server env but drop ANTHROPIC_API_KEY (so Claude CLI uses its own
-  // session auth; re-injected below only if configured AND no OAuth token, see
-  // resolveCliAnthropicKey) and NODE_ENV (so the target repo's tooling picks its
-  // own default instead of the dev server's 'development' — see buildRunnerBaseEnv).
-  const baseEnv = buildRunnerBaseEnv(process.env, 'ANTHROPIC_API_KEY')
-  // Ensure GH_TOKEN reaches the subprocess so agents can run `gh pr create`
+  // Default-deny env: buildRunnerBaseEnv scrubs ALL secret-shaped vars (provider
+  // keys, OAuth token, GH_TOKEN, CRON/AUTH/AUDIT secrets, DATABASE_URL, …) and
+  // drops NODE_ENV. We then re-inject ONLY the credentials this agent legitimately
+  // needs: its own Claude auth (ANTHROPIC_API_KEY when no OAuth token, else the
+  // OAuth token deferred to by resolveCliAnthropicKey) and GH_TOKEN for `gh pr create`.
+  const baseEnv = buildRunnerBaseEnv(process.env)
+  const oauthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN?.trim()
   const ghToken = storedKeys.GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim() || process.env.GITHUB_TOKEN?.trim()
   const childEnv: NodeJS.ProcessEnv = {
     ...baseEnv,
     ...(anthropicKey ? { ANTHROPIC_API_KEY: anthropicKey } : {}),
+    ...(!anthropicKey && oauthToken ? { CLAUDE_CODE_OAUTH_TOKEN: oauthToken } : {}),
     ...(ghToken ? { GH_TOKEN: ghToken, GITHUB_TOKEN: ghToken } : {}),
   }
 
@@ -2043,9 +2045,10 @@ function runWithCodexCLI(id: string, prompt: string, startTime: Date, budgetUsd:
   const storedKeys = readStoredApiKeys()
   const ghToken = storedKeys.GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim() || process.env.GITHUB_TOKEN?.trim()
   const maxTurns = budgetToClaudeCliMaxTurns(budgetUsd)
-  // Inherit the server env but drop OPENAI_API_KEY and NODE_ENV (see the Claude
-  // CLI path above and buildRunnerBaseEnv).
-  const baseEnv = buildRunnerBaseEnv(process.env, 'OPENAI_API_KEY')
+  // Default-deny env: buildRunnerBaseEnv scrubs all secret-shaped vars (incl.
+  // OPENAI_API_KEY) and NODE_ENV. Codex uses its own session auth (`codex login`),
+  // not an env key, so we only re-inject GH_TOKEN for `gh pr create`.
+  const baseEnv = buildRunnerBaseEnv(process.env)
   const childEnv: NodeJS.ProcessEnv = {
     ...baseEnv,
     ...(ghToken ? { GH_TOKEN: ghToken, GITHUB_TOKEN: ghToken } : {}),
