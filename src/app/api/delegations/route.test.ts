@@ -219,6 +219,18 @@ describe('POST /api/delegations', () => {
     expect(repoCreate).not.toHaveBeenCalled()
   })
 
+  it('auto-approves Risk-A and records approvedBy in the audit trail (ADR-003 P2)', async () => {
+    repoListByStatus.mockResolvedValue([])
+    repoCreate.mockResolvedValue(makeDelegation({ id: 'del-auto', status: 'approved' }))
+    const { POST } = await import('./route')
+    const res = await POST(makePostRequest({ contract: { goal: 'Valid goal here', riskClass: 'A', requiresApproval: false } }))
+    expect(res.status).toBe(200)
+    const createdArg = repoCreate.mock.calls[0]?.[0] as { status: string; approvedBy?: { actor: string; approvedAt: string } }
+    expect(createdArg.status).toBe('approved')
+    expect(createdArg.approvedBy?.actor).toBe('auto-approve:risk-a')
+    expect(typeof createdArg.approvedBy?.approvedAt).toBe('string')
+  })
+
   it('updates existing delegation when id matches', async () => {
     const existing = makeDelegation({ id: 'del-001' })
     const updated  = makeDelegation({ id: 'del-001', status: 'running' })
