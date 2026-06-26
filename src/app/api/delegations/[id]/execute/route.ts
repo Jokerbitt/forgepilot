@@ -55,7 +55,7 @@ import { applyAutoOptimizations } from '@/lib/skills/skill-optimizer'
 import { detectKnownError, classifyError, extractErrorSnippet } from '@/lib/runner-health/error-classifier'
 import { quickPreflightCheck } from '@/lib/runner-health/runner-detector'
 import { getCachedOrShallowRunnerReadiness, getRunnerReadiness, writeCachedRunnerReadiness } from '@/lib/system/runner-readiness'
-import { selectDelegationExecutionMode } from '@/lib/delegations/execution-mode'
+import { selectDelegationExecutionMode, isDangerousRunnerMode } from '@/lib/delegations/execution-mode'
 import { resolveCliAnthropicKey } from '@/lib/delegations/runner-auth'
 import { buildRunnerBaseEnv, resolveRunnerTimeoutMs } from '@/lib/delegations/runner-env'
 import { buildIsolatedTargetIntro, WORKSPACE_ISOLATION_RULE } from '@/lib/delegations/runner-isolation'
@@ -2626,6 +2626,20 @@ export async function POST(
       }], 'failed')
       return NextResponse.json({ started: false, mode, error: 'external-target-not-supported-by-runner', delegationId: id }, { status: 409 })
     }
+  }
+
+  // ADR-003 D3: defense in depth at the spawn point. Risk-C must never reach a
+  // --dangerously runner (Claude CLI / Codex), whose own permission+sandbox gating
+  // is disabled. The enforced policy gate (D1) and the human-approval choke-point
+  // (D2) already block Risk-C upstream; this is the last line in case either is
+  // bypassed by a bug. Fail closed — do NOT silently fall back to a weaker runner.
+  if (delegation.contract.riskClass === 'C' && isDangerousRunnerMode(mode)) {
+    await appendLogs(id, [{
+      timestamp: new Date().toISOString(),
+      type: 'error',
+      message: `⛔ Risk-C darf nicht über einen --dangerously-Runner ('${mode}') ausgeführt werden (ADR-003 D3). Risk-C braucht eine menschliche Freigabe und einen pfad-gejailten Runner.`,
+    }], 'failed')
+    return NextResponse.json({ started: false, mode, error: 'riskc-blocked-from-dangerous-runner', delegationId: id }, { status: 403 })
   }
 
   void withSpan('delegation.execute', {

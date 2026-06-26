@@ -1,7 +1,7 @@
 # ADR-003: Runner Autonomy — Security Hardening of the Live Execution Path
 
 **Date:** 2026-06-26
-**Status:** Proposed
+**Status:** Accepted (D1-D4 decided + implemented — see Resolution)
 **Risk Class:** C (requires ADR + human approval)
 
 ## Context
@@ -81,3 +81,14 @@ Harden the path in **two tiers**, matched to risk:
 - **Do nothing / keep advisory policy** — rejected: leaves the unattended path unsafe (the whole point of "vollautonom").
 - **Big-bang enforce everything at once** — rejected: a too-strict default rule or a missing env var would break the runner with no evidence trail; violates the project's "live-validate before arming" pattern.
 - **Replace CLI runners with `tool-use-runner` everywhere** — deferred: the path-jail is the right model, but the API tool-runner is slower/less capable than the CLI for large tasks; reserve it for Risk-C (D3-A).
+
+## Resolution (2026-06-26)
+
+Tier-1 shipped in #685 (P1 report-only, P2 audit, P3 budget kill, P4 secret scrub) + #687 (P2 auto-approve gap, found during live validation). All Tier-1 points were **live-validated** against the real Claude-CLI runner (Max sub): P4 ran green through (secret scrub doesn't break the runner), P3 budget-paused a $0.01-budget run at $0.137 and prevented writeback, P1 logged a report-only deny.
+
+Sven decided the Tier-2 governance points (D1/D2/D4 in #688, the D3 guard in its own follow-up PR), each live-validated:
+
+- **D1 → A (arm enforce).** `FORGEPILOT_POLICY_ENFORCE=1` is the prod default (docker-compose). A policy `deny` now hard-blocks the spawn with 403. Live: a secret-tool delegation that previously ran report-only returns 403; a clean Risk-A run still starts.
+- **D2 → A (Risk-C always human).** Enforced at the central execution choke-point: `getExecutionStartBlocker` blocks any Risk-C run without a human `approvedBy` (`isHumanApproval`); `shouldRequireApproval` returns true for Risk-C in every mode. Chosen over patching ~24 approval paths individually.
+- **D3 → Defense-in-Depth guard (not the full tool-use-runner reroute).** Because D1+D2 already make Risk-C effectively un-runnable (gate blocks it, and no human Risk-C approval path exists), the original D3-A reroute would be a large, risky change for a path that no longer executes. Instead: a third fail-closed guard at the spawn point (`isDangerousRunnerMode`) blocks Risk-C from any `--dangerously` runner even if D1/D2 were ever bypassed by a bug. The `--dangerously` flags remain for Risk-A/B (the agent needs write access; the policy gate + risk class bound the blast radius) — a consciously accepted residual risk. The full path-jailed Risk-C runner stays available as future work if a human Risk-C execution path is ever introduced.
+- **D4 → A then full allowlist.** Shipped the full default-deny env allowlist directly (not just the scrub-list). Live: a real Node build ran green with the restricted env.

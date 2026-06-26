@@ -37,3 +37,17 @@ export function selectDelegationExecutionMode(input: SelectExecutionModeInput): 
 
   return 'simulation'
 }
+
+/**
+ * Runner modes that spawn an agent with the `--dangerously-*` flags, i.e. with the
+ * agent runtime's own permission/sandbox gating disabled (Claude CLI:
+ * --dangerously-skip-permissions; Codex: --dangerously-bypass-approvals-and-sandbox).
+ *
+ * ADR-003 D3: a Risk-C delegation must NEVER run through one of these. Risk-C is
+ * already blocked upstream by the enforced policy gate (D1) and the human-approval
+ * choke-point (D2); this predicate powers a third, fail-closed defense at the spawn
+ * point in case either is ever bypassed by a bug.
+ */
+export function isDangerousRunnerMode(mode: DelegationExecutionMode): boolean {
+  return mode === 'claude-cli' || mode === 'codex-cli'
+}
