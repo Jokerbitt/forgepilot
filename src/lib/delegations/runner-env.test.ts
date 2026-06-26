@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildRunnerBaseEnv, isSecretEnvName, resolveRunnerTimeoutMs, DEFAULT_RUNNER_TIMEOUT_MS } from './runner-env'
+import { buildRunnerBaseEnv, isSecretEnvName, isAllowedEnvName, resolveRunnerTimeoutMs, DEFAULT_RUNNER_TIMEOUT_MS } from './runner-env'
 
 describe('buildRunnerBaseEnv', () => {
   const parent = {
@@ -20,6 +20,8 @@ describe('buildRunnerBaseEnv', () => {
     SHELL: '/bin/zsh',
     LANG: 'en_US.UTF-8',
     FORGEPILOT_RUNNER_TIMEOUT_MS: '600000',
+    INTERNAL_SERVICE_HOST: 'http://internal.local',
+    SOME_RANDOM_VAR: 'leak-me-not',
   } as unknown as NodeJS.ProcessEnv
 
   it('drops NODE_ENV so target tooling picks its own (next build → production)', () => {
@@ -60,11 +62,44 @@ describe('buildRunnerBaseEnv', () => {
     expect(env.FORGEPILOT_RUNNER_TIMEOUT_MS).toBe('600000')
   })
 
+  it('D4 allowlist: drops non-secret vars that are not on the allowlist', () => {
+    const env = buildRunnerBaseEnv(parent)
+    expect('INTERNAL_SERVICE_HOST' in env).toBe(false)
+    expect('SOME_RANDOM_VAR' in env).toBe(false)
+  })
+
+  it('D4 allowlist: FORGEPILOT_RUNNER_ENV_ALLOW lets a specific target var through', () => {
+    const env = buildRunnerBaseEnv({ ...parent, FORGEPILOT_RUNNER_ENV_ALLOW: 'SOME_RANDOM_VAR' } as unknown as NodeJS.ProcessEnv)
+    expect(env.SOME_RANDOM_VAR).toBe('leak-me-not')
+    expect('INTERNAL_SERVICE_HOST' in env).toBe(false) // still dropped
+  })
+
   it('does not mutate the parent env', () => {
     buildRunnerBaseEnv(parent)
     expect(parent.NODE_ENV).toBe('development')
     expect(parent.ANTHROPIC_API_KEY).toBe('sk-ant-credit-less')
     expect(parent.CRON_SECRET).toBe('cron-secret')
+  })
+})
+
+describe('isAllowedEnvName', () => {
+  it('allows system + toolchain vars', () => {
+    for (const name of ['PATH', 'HOME', 'USER', 'SHELL', 'LANG', 'TMPDIR', 'CI', 'GOPATH',
+      'LC_ALL', 'XDG_CACHE_HOME', 'FORGEPILOT_RUNNER_WORKTREE', 'NODE_OPTIONS', 'npm_config_cache',
+      'PNPM_HOME', 'PYTHONPATH', 'VIRTUAL_ENV', 'CARGO_HOME', 'JAVA_HOME', 'HOMEBREW_PREFIX']) {
+      expect(isAllowedEnvName(name), name).toBe(true)
+    }
+  })
+
+  it('denies unknown vars by default', () => {
+    for (const name of ['INTERNAL_SERVICE_HOST', 'SOME_RANDOM_VAR', 'FOO', 'SLACK_WEBHOOK']) {
+      expect(isAllowedEnvName(name), name).toBe(false)
+    }
+  })
+
+  it('honors the extra-allow list', () => {
+    expect(isAllowedEnvName('FOO', ['FOO', 'BAR'])).toBe(true)
+    expect(isAllowedEnvName('BAZ', ['FOO', 'BAR'])).toBe(false)
   })
 })
 

@@ -145,32 +145,31 @@ describe('Execute route start guards', () => {
     })
   })
 
-  it('blocks RiskClass C when approval is still required', () => {
+  // ADR-003 D2: Risk-C is never self-approved — it runs ONLY with a human approvedBy.
+  it('blocks RiskClass C with no approvedBy (the old requiresApproval=false bypass is closed)', () => {
     const d = makeDelegation({
       status: 'approved',
-      contract: {
-        ...makeDelegation().contract,
-        riskClass: 'C',
-        requiresApproval: true,
-      },
+      contract: { ...makeDelegation().contract, riskClass: 'C', requiresApproval: false },
     })
-
-    expect(getExecutionStartBlocker(d)).toEqual({
-      status: 403,
-      error: 'RiskClass C: Manuelle Freigabe erforderlich. Setze requiresApproval=false nach bewusstem Review.',
-    })
+    expect(getExecutionStartBlocker(d)?.status).toBe(403)
+    expect(getExecutionStartBlocker(d)?.error).toContain('Menschliche Freigabe')
   })
 
-  it('allows RiskClass C after explicit manual override', () => {
+  it('blocks RiskClass C approved by an automated actor (auto-approve / autopilot)', () => {
     const d = makeDelegation({
       status: 'approved',
-      contract: {
-        ...makeDelegation().contract,
-        riskClass: 'C',
-        requiresApproval: false,
-      },
+      approvedBy: { actor: 'auto-approve:risk-a', approvedAt: '2026-01-01T00:00:00Z' },
+      contract: { ...makeDelegation().contract, riskClass: 'C', requiresApproval: false },
     })
+    expect(getExecutionStartBlocker(d)?.status).toBe(403)
+  })
 
+  it('allows RiskClass C only with a human approvedBy record', () => {
+    const d = makeDelegation({
+      status: 'approved',
+      approvedBy: { actor: 'sven', approvedAt: '2026-01-01T00:00:00Z', reason: 'reviewed manually' },
+      contract: { ...makeDelegation().contract, riskClass: 'C', requiresApproval: false },
+    })
     expect(getExecutionStartBlocker(d)).toBeUndefined()
   })
 

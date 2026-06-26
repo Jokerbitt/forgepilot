@@ -37,6 +37,9 @@ services:
       - STORAGE_MODE=${STORAGE_MODE:-postgres}
       - FORGEPILOT_DELEGATION_STORAGE=${FORGEPILOT_DELEGATION_STORAGE:-postgres}
       - DATABASE_URL=${DATABASE_URL:-postgresql://forgepilot:forgepilot@postgres:5432/forgepilot}
+      # ADR-003 D1: policy gate armed (deny verdict → hard 403) by default in prod.
+      # Set FORGEPILOT_POLICY_ENFORCE=0 to fall back to report-only logging.
+      - FORGEPILOT_POLICY_ENFORCE=${FORGEPILOT_POLICY_ENFORCE:-1}
     volumes:
       - forgepilot-config:/app/config
     depends_on:

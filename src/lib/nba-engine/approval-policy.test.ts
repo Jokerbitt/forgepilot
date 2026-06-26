@@ -55,4 +55,16 @@ describe('approval policy', () => {
       autopilotMaxRiskClass: 'A',
     })).toBe(true)
   })
+
+  it('ADR-003 D2: Risk-C always requires approval, even at autopilot max=C with a top score', () => {
+    // Previously this combination returned false (auto-approve). Risk-C is now
+    // never self-approved regardless of mode/score/max-risk-class.
+    expect(shouldRequireApproval({
+      approvalMode: 'autopilot',
+      riskClass: 'C',
+      scoreTotal: 100,
+      autopilotMinScore: 50,
+      autopilotMaxRiskClass: 'C',
+    })).toBe(true)
+  })
 })

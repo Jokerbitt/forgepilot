@@ -73,6 +73,24 @@ export interface ExecutionStartBlocker {
 
 const AUTOMATED_CODE_ROUTES = new Set(['local-agent', 'runner', 'ollama-agent'])
 
+/**
+ * Actor prefixes that denote an AUTOMATED approval (autopilot, auto-chain, cron,
+ * retry loops, the Risk-A auto-approve). An approval from any of these is NOT a
+ * human approval. Matched case-insensitively against approvedBy.actor.
+ */
+const AUTOMATED_APPROVAL_ACTOR = /^(auto-approve|autonomous-mode|autopilot|cron|chain|retry|loop-closure|critic-retry|next-safe|delivery-cycle|autonomy)/i
+
+/**
+ * ADR-003 D2: a Risk-C delegation may ONLY run when a HUMAN approved it. Returns
+ * true only when approvedBy has a non-empty actor that is not one of the automated
+ * approval sources. Missing approvedBy → false (fail-closed).
+ */
+export function isHumanApproval(approvedBy: Delegation['approvedBy']): boolean {
+  const actor = approvedBy?.actor?.trim()
+  if (!actor) return false
+  return !AUTOMATED_APPROVAL_ACTOR.test(actor)
+}
+
 export function getExecutionStartBlocker(delegation: Delegation): ExecutionStartBlocker | undefined {
   if (delegation.status !== 'approved') {
     return {
@@ -81,10 +99,15 @@ export function getExecutionStartBlocker(delegation: Delegation): ExecutionStart
     }
   }
 
-  if (delegation.contract.riskClass === 'C' && delegation.contract.requiresApproval) {
+  // ADR-003 D2: Risk-C is NEVER self-approved. This is the central execution
+  // choke-point — regardless of which of the many approval paths set
+  // status='approved', a Risk-C run requires a HUMAN approvedBy record or it is
+  // hard-blocked here. (Replaces the old requiresApproval-flag check, which an
+  // autopilot path could bypass by setting requiresApproval=false.)
+  if (delegation.contract.riskClass === 'C' && !isHumanApproval(delegation.approvedBy)) {
     return {
       status: 403,
-      error: 'RiskClass C: Manuelle Freigabe erforderlich. Setze requiresApproval=false nach bewusstem Review.',
+      error: 'RiskClass C: Menschliche Freigabe erforderlich — Risk-C darf nicht automatisch/selbst freigegeben werden (ADR-003 D2). Es fehlt ein menschlicher approvedBy-Eintrag.',
     }
   }
 

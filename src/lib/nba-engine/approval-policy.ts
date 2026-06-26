@@ -17,6 +17,14 @@ const RISK_WEIGHT: Record<RiskClass, number> = {
 }
 
 export function shouldRequireApproval(input: ApprovalPolicyInput): boolean {
+  // ADR-003 D2: Risk-C ALWAYS requires human approval — never auto-approved,
+  // regardless of mode, NBA score, or the configured autopilot max risk class.
+  // Keeps Risk-C from ever reaching requiresApproval=false in the autopilot/intake
+  // paths; the execution choke-point (getExecutionStartBlocker) enforces the same.
+  if (input.riskClass === 'C') {
+    return true
+  }
+
   if (input.approvalMode === 'manual') {
     return true
   }
