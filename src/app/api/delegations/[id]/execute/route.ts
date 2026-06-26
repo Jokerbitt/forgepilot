@@ -33,6 +33,7 @@ import { persistGrokCriticForDelegation } from '@/lib/eval/auto-grok-critic'
 import { writebackExecutionInsights, writebackDelegationKnowledge, writeFailureLessonCard } from '@/lib/knowledge/writeback'
 import { notifyExecutionResult, notifyBudgetWarning } from '@/lib/notifications'
 import { checkBudget, getBudgetLimit, wouldExceedBudget, inflightBudgetExceeded } from '@/lib/budget/guard'
+import { resolvePolicyGate, isPolicyEnforced } from '@/lib/policy/gate'
 import { triggerChain } from '@/lib/delegations/chaining'
 import { decidePhaseGate } from '@/lib/delegations/phase-gate'
 import { resolveVerifyScripts, verifyCommand } from '@/lib/delegations/verify-scripts'
@@ -2452,6 +2453,31 @@ export async function POST(
   const blocker = getExecutionStartBlocker(delegation)
   if (blocker) {
     return NextResponse.json({ error: blocker.error }, { status: blocker.status })
+  }
+
+  // P1 (ADR-003) — pre-spawn policy gate. The Deny-first policy engine evaluates
+  // the contract BEFORE a --dangerously-flagged agent is dispatched. Default is
+  // report-only: a 'deny' is logged as a visible warning and the run proceeds
+  // (zero behavior change), so the engine can be observed on real runs. Arming
+  // FORGEPILOT_POLICY_ENFORCE=1 turns a 'deny' into a hard 403 block (see D1).
+  const policyGate = resolvePolicyGate(delegation.contract, { enforce: isPolicyEnforced() })
+  if (policyGate.decision.verdict === 'deny') {
+    if (policyGate.blocked) {
+      await appendLogs(id, [{
+        timestamp: new Date().toISOString(),
+        type: 'error',
+        message: `⛔ Policy-Gate (enforce) hat den Start blockiert: ${policyGate.decision.reason}`,
+      }], 'failed')
+      return NextResponse.json(
+        { error: `Policy-Gate: ${policyGate.decision.reason}`, category: 'policy_denied' },
+        { status: 403 },
+      )
+    }
+    await appendLogs(id, [{
+      timestamp: new Date().toISOString(),
+      type: 'error',
+      message: `⚠️ Policy-Gate (report-only): ${policyGate.decision.reason} — im enforce-Modus (FORGEPILOT_POLICY_ENFORCE=1) würde dieser Lauf blockiert.`,
+    }])
   }
 
   // M4: Quick pre-flight — verify critical tools available before starting
