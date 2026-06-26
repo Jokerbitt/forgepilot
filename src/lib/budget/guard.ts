@@ -107,6 +107,27 @@ export function inflightBudgetExceeded(
 }
 
 /**
+ * Pull a cumulative USD cost out of a streamed runner event, trying the field
+ * names different CLIs use. Claude CLI emits `total_cost_usd`; Codex's JSON event
+ * stream is less fixed, so we also probe `cost_usd` / `total_cost` / `cost` and one
+ * level into a nested `usage` / `info` object. Returns a positive number or
+ * undefined (no cost in this event → the in-flight guard simply doesn't fire on it,
+ * and the wall-clock timeout remains the backstop).
+ */
+export function extractCostUsdFromEvent(event: Record<string, unknown>): number | undefined {
+  const pick = (obj: unknown): number | undefined => {
+    if (!obj || typeof obj !== 'object') return undefined
+    const rec = obj as Record<string, unknown>
+    for (const key of ['total_cost_usd', 'cost_usd', 'total_cost', 'cost']) {
+      const v = rec[key]
+      if (typeof v === 'number' && Number.isFinite(v) && v > 0) return v
+    }
+    return undefined
+  }
+  return pick(event) ?? pick(event.usage) ?? pick(event.info)
+}
+
+/**
  * Estimate whether a planned execution would exceed budget.
  * Used before starting execution to warn operator.
  */

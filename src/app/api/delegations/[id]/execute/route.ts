@@ -32,7 +32,7 @@ import { extractKnowledge } from '@/lib/knowledge/extraction'
 import { persistGrokCriticForDelegation } from '@/lib/eval/auto-grok-critic'
 import { writebackExecutionInsights, writebackDelegationKnowledge, writeFailureLessonCard } from '@/lib/knowledge/writeback'
 import { notifyExecutionResult, notifyBudgetWarning } from '@/lib/notifications'
-import { checkBudget, getBudgetLimit, wouldExceedBudget, inflightBudgetExceeded } from '@/lib/budget/guard'
+import { checkBudget, getBudgetLimit, wouldExceedBudget, inflightBudgetExceeded, extractCostUsdFromEvent } from '@/lib/budget/guard'
 import { resolvePolicyGate, isPolicyEnforced } from '@/lib/policy/gate'
 import { triggerChain } from '@/lib/delegations/chaining'
 import { decidePhaseGate } from '@/lib/delegations/phase-gate'
@@ -2171,6 +2171,9 @@ function runWithCodexCLI(id: string, prompt: string, startTime: Date, budgetUsd:
   let startupTimer: ReturnType<typeof setTimeout> | null = null
   let overallTimer: ReturnType<typeof setTimeout> | null = null
   let sawOutput = false
+  // P3 (Codex path): set when the in-flight budget guard kills the run, so the
+  // close handler skips finalization (status is already budget-paused).
+  let budgetKilled = false
 
   const startupTimeoutMs = Math.max(
     30_000,
@@ -2267,6 +2270,37 @@ function runWithCodexCLI(id: string, prompt: string, startTime: Date, budgetUsd:
         const eventType = String(event.type ?? event.msg ?? 'codex')
         const message = String(event.message ?? event.text ?? event.delta ?? event.event_msg ?? '')
         addOutputLog(eventType.toLowerCase().includes('error') ? 'error' : 'thought', message || eventType)
+
+        // P3 — in-flight budget kill (Codex path). Codex's event stream may carry a
+        // cumulative cost; once it passes the budget, kill now instead of waiting for
+        // the post-hoc check — same SIGTERM-the-group kill the Claude CLI path uses.
+        // If Codex emits no cost, this never fires and the wall-clock timeout backstops.
+        if (!budgetKilled) {
+          const cost = extractCostUsdFromEvent(event)
+          const verdict = cost != null ? inflightBudgetExceeded(cost, budgetUsd) : null
+          if (cost != null && verdict?.exceeded) {
+            budgetKilled = true
+            clearStartupTimer()
+            clearOverallTimer()
+            const reason = `💸 Budget-Stopp: Live-Kosten $${cost.toFixed(4)} überschreiten das Limit $${verdict.limit?.toFixed(2)} — Codex-Lauf abgebrochen, bevor weiteres Budget verbraucht wird. Mit höherem Budget fortsetzbar.`
+            void appendLogs(id, [{ timestamp: new Date().toISOString(), type: 'error', message: reason }], 'failed')
+            createDelegationRepository(SINGLE_TENANT_USER_ID)
+              .update(id, {
+                actualCostUsd: cost,
+                budgetPaused: true,
+                budgetPausedReason: reason,
+                errorMessage: reason,
+                completedAt: new Date().toISOString(),
+              })
+              .catch(() => {})
+            try {
+              if (proc.pid) process.kill(-proc.pid, 'SIGTERM')
+            } catch {
+              proc.kill('SIGTERM')
+            }
+            return
+          }
+        }
       } catch {
         addOutputLog('thought', trimmed)
       }
@@ -2288,6 +2322,11 @@ function runWithCodexCLI(id: string, prompt: string, startTime: Date, budgetUsd:
     clearStartupTimer()
     clearOverallTimer()
     unregisterProcess(id)
+
+    // P3 — the in-flight budget guard already killed the process and finalized the
+    // delegation (failed + budgetPaused). Skip finalization; the workspace is kept
+    // (like any failure) so the run can be resumed with more budget.
+    if (budgetKilled) return
 
     const success = code === 0
     const elapsed = Math.round((Date.now() - startTime.getTime()) / 60000)
