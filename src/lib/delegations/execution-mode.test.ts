@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { selectDelegationExecutionMode } from './execution-mode'
+import { selectDelegationExecutionMode, isDangerousRunnerMode } from './execution-mode'
 
 describe('selectDelegationExecutionMode', () => {
   it('uses Ollama when explicitly routed there', () => {
@@ -62,5 +62,18 @@ describe('selectDelegationExecutionMode', () => {
       anthropicApiKeySet: true,
       ollamaReady: true,
     })).toBe('claude-api')
+  })
+})
+
+describe('isDangerousRunnerMode (ADR-003 D3)', () => {
+  it('flags the --dangerously CLI runners', () => {
+    expect(isDangerousRunnerMode('claude-cli')).toBe(true)
+    expect(isDangerousRunnerMode('codex-cli')).toBe(true)
+  })
+
+  it('does not flag the path-jailed / non-spawning modes', () => {
+    expect(isDangerousRunnerMode('claude-api')).toBe(false)
+    expect(isDangerousRunnerMode('ollama-agent')).toBe(false)
+    expect(isDangerousRunnerMode('simulation')).toBe(false)
   })
 })
