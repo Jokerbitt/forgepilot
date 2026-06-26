@@ -30,6 +30,17 @@ Jede Delegation hat eine **Risk-Class A/B/C** (siehe [Glossar](07-konzepte-gloss
 
 Sobald etwas auf deine Freigabe wartet, erscheint in der Seitenleiste das **amber Banner „X awaiting approval"**.
 
+Jede Freigabe wird jetzt **mit Audit-Spur** festgehalten: `approvedBy` speichert **wer** (Person oder `autonomous-mode`), **wann** und optional **warum** — eine Delegation lässt sich nicht mehr spurlos freischalten. `src/lib/models/delegation.ts`
+
+## Runner-Sicherheit (unbeaufsichtigter Betrieb)
+Damit ein Lauf auch **ohne Aufsicht** sicher ist, sitzen drei Netze direkt vor und um die Agenten-Ausführung:
+
+- **Policy-Gate vor dem Start** (`src/lib/policy/gate.ts`): Vor jedem Agenten-Start prüft die Deny-first-Policy den Auftrag (Risk-C, Secret-/destruktive Tools, fehlendes Budget, öffentlicher Privacy-Modus). Standard ist **Report-Only** — eine Verletzung wird sichtbar protokolliert, der Lauf läuft weiter (kein Verhaltensbruch). Mit `FORGEPILOT_POLICY_ENFORCE=1` wird der Gate **scharf**: ein „deny" stoppt den Start hart (HTTP 403).
+- **Budget-Stopp mitten im Lauf** (`src/lib/budget/guard.ts`): Die Live-Kosten werden **während** des Laufs überwacht. Überschreiten sie das Budget (inkl. Toleranz-Einstellung), wird der Agent **sofort beendet** und die Delegation als *budget-pausiert* markiert — fortsetzbar mit höherem Budget. Früher wurde das Budget erst **nach** dem Lauf geprüft.
+- **Secrets bleiben beim Server** (`src/lib/delegations/runner-env.ts`): Der gespawnte Agent erbt **nicht** mehr die Server-Geheimnisse (CRON_/AUTH_/AUDIT-Secret, DATABASE_URL, Provider-Keys). Default-Deny: alles, was wie ein Credential aussieht, wird herausgefiltert; nur die wenigen wirklich nötigen Zugänge (eigener Auth-Token, `GH_TOKEN` für `gh pr create`) werden gezielt wieder hineingegeben.
+
+> Hinweis: Der Policy-Gate steht bewusst auf **Report-Only**, bis die protokollierten Verdikte aus echten Läufen geprüft sind — danach wird `FORGEPILOT_POLICY_ENFORCE=1` aktiviert. Details in `docs/adr/ADR-003-runner-autonomy-security.md`.
+
 ## Build- & Test-Gate
 `src/lib/delegations/phase-gate.ts`
 

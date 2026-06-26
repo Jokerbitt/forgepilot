@@ -6,6 +6,10 @@ Format pro Eintrag: **Datum · Was sich geändert hat · betroffene Wiki-Seite(n
 
 ---
 
+## 2026-06-26
+
+- **Runner-Sicherheit für unbeaufsichtigten Betrieb (ADR-003):** Drei neue Schutznetze um die Agenten-Ausführung. (1) **Policy-Gate vor dem Start** — die Deny-first-Policy prüft jeden Auftrag, bevor ein Agent startet; Standard Report-Only (protokolliert nur), scharf schaltbar mit `FORGEPILOT_POLICY_ENFORCE=1` (deny → HTTP 403). (2) **Budget-Stopp mitten im Lauf** — Live-Kosten werden während des Laufs überwacht; bei Überschreitung wird der Agent sofort beendet und die Delegation *budget-pausiert* (vorher nur Prüfung nach dem Lauf). (3) **Secrets bleiben beim Server** — der Agent erbt die Server-Geheimnisse (CRON_/AUTH_/AUDIT-Secret, DATABASE_URL, Provider-Keys) nicht mehr; Default-Deny mit gezielter Wieder-Einschleusung nur der nötigen Zugänge. Zusätzlich: **Freigaben mit Audit-Spur** (`approvedBy`: wer/wann/warum). → [08-sicherheit-guardrails.md](08-sicherheit-guardrails.md)
+
 ## 2026-06-21
 
 - **Lokale Autonomie für fremde Repos (Ollama, neu):** Der **Ollama**-Runner (lokales Modell, z. B. qwen2.5-coder auf dem Mac) kann jetzt auch ein **externes** Ziel-Repo bauen — er arbeitet in einem isolierten Klon-Workspace (mit verlinkten node_modules) und schreibt das Ergebnis danach ins Ziel-Repo zurück (Commit → Writeback → Runtime-Bootstrap), statt ForgePilot selbst zu ändern. Damit läuft autonome Delegation **komplett lokal, ohne Cloud-Token und ohne API-Kosten**. → intern (Delegation-Engine)
