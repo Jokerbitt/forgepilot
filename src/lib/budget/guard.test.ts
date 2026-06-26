@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { checkBudget, getBudgetLimit, wouldExceedBudget, effectiveBudgetLimit, inflightBudgetExceeded } from './guard'
+import { checkBudget, getBudgetLimit, wouldExceedBudget, effectiveBudgetLimit, inflightBudgetExceeded, extractCostUsdFromEvent } from './guard'
 import type { Delegation } from '@/lib/models/delegation'
 
 const mockRepo = { update: vi.fn(), findById: vi.fn(), create: vi.fn(), delete: vi.fn(), listByStatus: vi.fn(), listByProject: vi.fn() }
@@ -141,5 +141,29 @@ describe('inflightBudgetExceeded (mid-run kill decision)', () => {
     cfg('strict')
     expect(inflightBudgetExceeded(0, 1.0).exceeded).toBe(false)
     expect(inflightBudgetExceeded(Number.NaN, 1.0).exceeded).toBe(false)
+  })
+})
+
+describe('extractCostUsdFromEvent (Codex / multi-CLI cost parsing)', () => {
+  it('reads total_cost_usd (Claude CLI shape)', () => {
+    expect(extractCostUsdFromEvent({ type: 'result', total_cost_usd: 0.42 })).toBe(0.42)
+  })
+
+  it('reads alternate top-level field names', () => {
+    expect(extractCostUsdFromEvent({ cost_usd: 0.1 })).toBe(0.1)
+    expect(extractCostUsdFromEvent({ total_cost: 0.2 })).toBe(0.2)
+    expect(extractCostUsdFromEvent({ cost: 0.3 })).toBe(0.3)
+  })
+
+  it('reads one level into a nested usage / info object', () => {
+    expect(extractCostUsdFromEvent({ usage: { cost_usd: 0.5 } })).toBe(0.5)
+    expect(extractCostUsdFromEvent({ info: { total_cost_usd: 0.6 } })).toBe(0.6)
+  })
+
+  it('returns undefined when no usable cost is present', () => {
+    expect(extractCostUsdFromEvent({ type: 'item.completed', message: 'hi' })).toBeUndefined()
+    expect(extractCostUsdFromEvent({ cost: 0 })).toBeUndefined()
+    expect(extractCostUsdFromEvent({ cost: -1 })).toBeUndefined()
+    expect(extractCostUsdFromEvent({ cost: 'free' })).toBeUndefined()
   })
 })
