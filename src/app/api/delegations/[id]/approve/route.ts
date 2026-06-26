@@ -61,6 +61,12 @@ export async function POST(
   const updated = await repo.update(id, {
     status: 'approved',
     approvalId: delegation.approvalId ?? `approval-${Date.now()}`,
+    // ADR-003 P2: record WHO lifted the approval gate, not just that it was lifted.
+    approvedBy: {
+      actor: source,
+      approvedAt: now,
+      ...(typeof body.note === 'string' && body.note.trim() ? { reason: body.note.trim() } : {}),
+    },
     contract: {
       ...delegation.contract,
       requiresApproval: false,

@@ -135,6 +135,19 @@ export interface ChainConfig {
   passOutputAs?: 'context' | 'none'
 }
 
+/**
+ * ADR-003 P2: structured audit record of who approved a delegation and when.
+ * `actor` is a user id/name for a human approval or 'autonomous-mode' for an
+ * automated one; `reason` carries the rationale/evidence. Especially important
+ * for Risk-C, where a bare `requiresApproval=false` left no trace of who lifted
+ * the gate.
+ */
+export interface ApprovalRecord {
+  actor: string
+  approvedAt: string
+  reason?: string
+}
+
 export interface Delegation {
   id: string
   title: string
@@ -145,6 +158,8 @@ export interface Delegation {
   actualCostUsd?: number
   agentRunId?: string
   approvalId?: string
+  /** ADR-003 P2: who approved this delegation (audit trail, esp. for Risk-C). */
+  approvedBy?: ApprovalRecord
   priority?: number
   briefId?: string
   briefTitle?: string

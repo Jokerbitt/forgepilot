@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { checkBudget, getBudgetLimit, wouldExceedBudget, effectiveBudgetLimit } from './guard'
+import { checkBudget, getBudgetLimit, wouldExceedBudget, effectiveBudgetLimit, inflightBudgetExceeded } from './guard'
 import type { Delegation } from '@/lib/models/delegation'
 
 const mockRepo = { update: vi.fn(), findById: vi.fn(), create: vi.fn(), delete: vi.fn(), listByStatus: vi.fn(), listByProject: vi.fn() }
@@ -106,4 +106,40 @@ describe('effectiveBudgetLimit (settings-driven)', () => {
   it('tolerant 20% → +20%', () => { cfg('tolerant', 20); expect(effectiveBudgetLimit(4)).toBeCloseTo(4.8) })
   it('tolerant 50% → +50%', () => { cfg('tolerant', 50); expect(effectiveBudgetLimit(10)).toBeCloseTo(15) })
   it('null limit stays null', () => { cfg('strict'); expect(effectiveBudgetLimit(null)).toBeNull() })
+})
+
+describe('inflightBudgetExceeded (mid-run kill decision)', () => {
+  beforeEach(() => mockCfg.mockReset())
+
+  it('kills when accumulated cost passes the strict limit', () => {
+    cfg('strict')
+    expect(inflightBudgetExceeded(1.5, 1.0)).toEqual({ exceeded: true, limit: 1.0 })
+  })
+
+  it('does not kill while still under the limit', () => {
+    cfg('strict')
+    expect(inflightBudgetExceeded(0.8, 1.0)).toEqual({ exceeded: false, limit: 1.0 })
+  })
+
+  it('respects the tolerance band (no kill within +20%)', () => {
+    cfg('tolerant', 20)
+    expect(inflightBudgetExceeded(1.1, 1.0)).toEqual({ exceeded: false, limit: 1.2 })
+    expect(inflightBudgetExceeded(1.3, 1.0).exceeded).toBe(true)
+  })
+
+  it('never kills when enforcement is off', () => {
+    cfg('off')
+    expect(inflightBudgetExceeded(999, 1.0)).toEqual({ exceeded: false, limit: null })
+  })
+
+  it('never kills without a contract limit', () => {
+    cfg('strict')
+    expect(inflightBudgetExceeded(999, null)).toEqual({ exceeded: false, limit: null })
+  })
+
+  it('treats zero / non-finite cost-so-far as not-yet-exceeded', () => {
+    cfg('strict')
+    expect(inflightBudgetExceeded(0, 1.0).exceeded).toBe(false)
+    expect(inflightBudgetExceeded(Number.NaN, 1.0).exceeded).toBe(false)
+  })
 })

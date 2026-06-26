@@ -32,7 +32,8 @@ import { extractKnowledge } from '@/lib/knowledge/extraction'
 import { persistGrokCriticForDelegation } from '@/lib/eval/auto-grok-critic'
 import { writebackExecutionInsights, writebackDelegationKnowledge, writeFailureLessonCard } from '@/lib/knowledge/writeback'
 import { notifyExecutionResult, notifyBudgetWarning } from '@/lib/notifications'
-import { checkBudget, getBudgetLimit, wouldExceedBudget } from '@/lib/budget/guard'
+import { checkBudget, getBudgetLimit, wouldExceedBudget, inflightBudgetExceeded } from '@/lib/budget/guard'
+import { resolvePolicyGate, isPolicyEnforced } from '@/lib/policy/gate'
 import { triggerChain } from '@/lib/delegations/chaining'
 import { decidePhaseGate } from '@/lib/delegations/phase-gate'
 import { resolveVerifyScripts, verifyCommand } from '@/lib/delegations/verify-scripts'
@@ -577,16 +578,18 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
   })
   const maxTurns = budgetToClaudeCliMaxTurns(budgetUsd)
 
-  // Inherit the server env but drop ANTHROPIC_API_KEY (so Claude CLI uses its own
-  // session auth; re-injected below only if configured AND no OAuth token, see
-  // resolveCliAnthropicKey) and NODE_ENV (so the target repo's tooling picks its
-  // own default instead of the dev server's 'development' — see buildRunnerBaseEnv).
-  const baseEnv = buildRunnerBaseEnv(process.env, 'ANTHROPIC_API_KEY')
-  // Ensure GH_TOKEN reaches the subprocess so agents can run `gh pr create`
+  // Default-deny env: buildRunnerBaseEnv scrubs ALL secret-shaped vars (provider
+  // keys, OAuth token, GH_TOKEN, CRON/AUTH/AUDIT secrets, DATABASE_URL, …) and
+  // drops NODE_ENV. We then re-inject ONLY the credentials this agent legitimately
+  // needs: its own Claude auth (ANTHROPIC_API_KEY when no OAuth token, else the
+  // OAuth token deferred to by resolveCliAnthropicKey) and GH_TOKEN for `gh pr create`.
+  const baseEnv = buildRunnerBaseEnv(process.env)
+  const oauthToken = process.env.CLAUDE_CODE_OAUTH_TOKEN?.trim()
   const ghToken = storedKeys.GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim() || process.env.GITHUB_TOKEN?.trim()
   const childEnv: NodeJS.ProcessEnv = {
     ...baseEnv,
     ...(anthropicKey ? { ANTHROPIC_API_KEY: anthropicKey } : {}),
+    ...(!anthropicKey && oauthToken ? { CLAUDE_CODE_OAUTH_TOKEN: oauthToken } : {}),
     ...(ghToken ? { GH_TOKEN: ghToken, GITHUB_TOKEN: ghToken } : {}),
   }
 
@@ -671,6 +674,9 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
   let startupTimer: ReturnType<typeof setTimeout> | null = null
   let overallTimer: ReturnType<typeof setTimeout> | null = null
   let sawOutput = false
+  // Set when the in-flight budget guard kills the run: the close handler then
+  // skips writeback/success handling (status is already finalized budget-paused).
+  let budgetKilled = false
 
   const startupTimeoutMs = Math.max(
     30_000,
@@ -832,6 +838,37 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
       const cost = event.total_cost_usd as number | undefined
       if (cost != null) fullOutput += `\nCost: $${cost.toFixed(4)}`
 
+      // P3 — in-flight budget kill: a streamed result event carries the cumulative
+      // cost. Once it passes the (tolerance-adjusted) budget, kill the agent NOW
+      // instead of waiting for the post-hoc checkBudget that only runs after exit —
+      // that lets a runaway run burn far past the cap. Same SIGTERM-the-group kill
+      // the timeouts use; the close handler sees budgetKilled and skips writeback.
+      if (cost != null && !budgetKilled) {
+        const verdict = inflightBudgetExceeded(cost, budgetUsd)
+        if (verdict.exceeded) {
+          budgetKilled = true
+          clearStartupTimer()
+          clearOverallTimer()
+          const reason = `💸 Budget-Stopp: Live-Kosten $${cost.toFixed(4)} überschreiten das Limit $${verdict.limit?.toFixed(2)} — Lauf abgebrochen, bevor weiteres Budget verbraucht wird. Mit höherem Budget fortsetzbar.`
+          void appendLogs(id, [{ timestamp: new Date().toISOString(), type: 'error', message: reason }], 'failed')
+          createDelegationRepository(SINGLE_TENANT_USER_ID)
+            .update(id, {
+              actualCostUsd: cost,
+              budgetPaused: true,
+              budgetPausedReason: reason,
+              errorMessage: reason,
+              completedAt: new Date().toISOString(),
+            })
+            .catch(() => {})
+          try {
+            if (proc.pid) process.kill(-proc.pid, 'SIGTERM')
+          } catch {
+            proc.kill('SIGTERM')
+          }
+          return
+        }
+      }
+
       // Token tracking — Claude CLI stream-json includes usage in result event
       const usage = event.usage as { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number } | undefined
       if (usage) {
@@ -933,6 +970,12 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
     clearStartupTimer()
     clearOverallTimer()
     unregisterProcess(id)
+
+    // P3 — the in-flight budget guard already killed the process and finalized
+    // the delegation (failed + budgetPaused). Skip writeback/verify/success: the
+    // partial work may not build, and the status is set. The workspace is kept
+    // (like any failure) so the run can be resumed with more budget.
+    if (budgetKilled) return
 
     const success = code === 0
     // An agent run that exits 0 but produces ZERO file changes is a false success
@@ -2043,9 +2086,10 @@ function runWithCodexCLI(id: string, prompt: string, startTime: Date, budgetUsd:
   const storedKeys = readStoredApiKeys()
   const ghToken = storedKeys.GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim() || process.env.GITHUB_TOKEN?.trim()
   const maxTurns = budgetToClaudeCliMaxTurns(budgetUsd)
-  // Inherit the server env but drop OPENAI_API_KEY and NODE_ENV (see the Claude
-  // CLI path above and buildRunnerBaseEnv).
-  const baseEnv = buildRunnerBaseEnv(process.env, 'OPENAI_API_KEY')
+  // Default-deny env: buildRunnerBaseEnv scrubs all secret-shaped vars (incl.
+  // OPENAI_API_KEY) and NODE_ENV. Codex uses its own session auth (`codex login`),
+  // not an env key, so we only re-inject GH_TOKEN for `gh pr create`.
+  const baseEnv = buildRunnerBaseEnv(process.env)
   const childEnv: NodeJS.ProcessEnv = {
     ...baseEnv,
     ...(ghToken ? { GH_TOKEN: ghToken, GITHUB_TOKEN: ghToken } : {}),
@@ -2409,6 +2453,31 @@ export async function POST(
   const blocker = getExecutionStartBlocker(delegation)
   if (blocker) {
     return NextResponse.json({ error: blocker.error }, { status: blocker.status })
+  }
+
+  // P1 (ADR-003) — pre-spawn policy gate. The Deny-first policy engine evaluates
+  // the contract BEFORE a --dangerously-flagged agent is dispatched. Default is
+  // report-only: a 'deny' is logged as a visible warning and the run proceeds
+  // (zero behavior change), so the engine can be observed on real runs. Arming
+  // FORGEPILOT_POLICY_ENFORCE=1 turns a 'deny' into a hard 403 block (see D1).
+  const policyGate = resolvePolicyGate(delegation.contract, { enforce: isPolicyEnforced() })
+  if (policyGate.decision.verdict === 'deny') {
+    if (policyGate.blocked) {
+      await appendLogs(id, [{
+        timestamp: new Date().toISOString(),
+        type: 'error',
+        message: `⛔ Policy-Gate (enforce) hat den Start blockiert: ${policyGate.decision.reason}`,
+      }], 'failed')
+      return NextResponse.json(
+        { error: `Policy-Gate: ${policyGate.decision.reason}`, category: 'policy_denied' },
+        { status: 403 },
+      )
+    }
+    await appendLogs(id, [{
+      timestamp: new Date().toISOString(),
+      type: 'error',
+      message: `⚠️ Policy-Gate (report-only): ${policyGate.decision.reason} — im enforce-Modus (FORGEPILOT_POLICY_ENFORCE=1) würde dieser Lauf blockiert.`,
+    }])
   }
 
   // M4: Quick pre-flight — verify critical tools available before starting

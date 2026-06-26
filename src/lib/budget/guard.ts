@@ -87,6 +87,26 @@ export async function checkBudget(delegation: Delegation): Promise<BudgetCheckRe
 }
 
 /**
+ * In-flight budget guard: decide, from the cost accumulated SO FAR mid-run (e.g.
+ * the `total_cost_usd` of a stream `result` event), whether the runner must kill
+ * the agent NOW to stop it blowing past the budget. Pure + unit-tested — the
+ * runner stays a thin shell that just acts on the verdict.
+ *
+ * Honors the same enforcement settings as the post-hoc `checkBudget`
+ * (off → never kill; tolerant → raise the cap by the tolerance %). Returns the
+ * effective limit so the caller can log it.
+ */
+export function inflightBudgetExceeded(
+  costSoFarUsd: number,
+  rawLimitUsd: number | null,
+): { exceeded: boolean; limit: number | null } {
+  const limit = effectiveBudgetLimit(rawLimitUsd)
+  if (limit == null) return { exceeded: false, limit: null }
+  if (!Number.isFinite(costSoFarUsd) || costSoFarUsd <= 0) return { exceeded: false, limit }
+  return { exceeded: costSoFarUsd > limit, limit }
+}
+
+/**
  * Estimate whether a planned execution would exceed budget.
  * Used before starting execution to warn operator.
  */
