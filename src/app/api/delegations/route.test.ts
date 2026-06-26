@@ -221,7 +221,7 @@ describe('POST /api/delegations', () => {
 
   it('auto-approves Risk-A and records approvedBy in the audit trail (ADR-003 P2)', async () => {
     repoListByStatus.mockResolvedValue([])
-    repoCreate.mockImplementation(async (d: unknown) => d)
+    repoCreate.mockResolvedValue(makeDelegation({ id: 'del-auto', status: 'approved' }))
     const { POST } = await import('./route')
     const res = await POST(makePostRequest({ contract: { goal: 'Valid goal here', riskClass: 'A', requiresApproval: false } }))
     expect(res.status).toBe(200)
