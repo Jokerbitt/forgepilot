@@ -279,7 +279,61 @@ export function writebackLocalResult(options: {
     } catch { /* install best-effort — user can run it manually */ }
   }
 
+  // 4. Retention: prune stale result backup branches so they don't accumulate
+  // run after run. Only after a successful merge — when the merge failed the
+  // work lives ONLY on the backup branch and must be kept. Best-effort.
+  if (mergedToMain) {
+    try { pruneResultBackupBranches(targetRepo) } catch { /* best-effort */ }
+  }
+
   return { branch, fileCount, mergedToMain, defaultBranch, installed, headSha }
+}
+
+/** Keep at most this many `forgepilot/result-*` backup branches per target repo. */
+export const RESULT_BACKUP_BRANCH_KEEP = 10
+
+/**
+ * Decide which result backup branches to prune. Given branch names ordered
+ * newest-first, returns the stale tail beyond `keep`. Pure + testable; only
+ * touches `forgepilot/result-*` refs and never the protected current branch.
+ */
+export function selectStaleResultBranches(
+  orderedNewestFirst: ReadonlyArray<string>,
+  keep: number,
+  currentBranch?: string,
+): string[] {
+  return orderedNewestFirst
+    .filter((name) => name.startsWith('forgepilot/result-') && name !== currentBranch)
+    .slice(Math.max(0, keep))
+}
+
+/**
+ * Prune stale `forgepilot/result-*` backup branches in a local target repo,
+ * keeping the most recent `keep`. The merged result already lives on the default
+ * branch, so older backups are redundant. Best-effort — returns how many were
+ * removed (0 on any failure).
+ */
+export function pruneResultBackupBranches(
+  targetRepo: string,
+  keep: number = RESULT_BACKUP_BRANCH_KEEP,
+): number {
+  try {
+    const out = gitOut(targetRepo, [
+      'for-each-ref', '--sort=-committerdate',
+      '--format=%(refname:short)', 'refs/heads/forgepilot/result-*',
+    ])
+    const ordered = out.split('\n').map((s) => s.trim()).filter(Boolean)
+    const current = gitOut(targetRepo, ['rev-parse', '--abbrev-ref', 'HEAD']) || undefined
+    const stale = selectStaleResultBranches(ordered, keep, current)
+    for (const branch of stale) {
+      try {
+        execFileSync('git', ['branch', '-D', branch], { cwd: targetRepo, stdio: 'ignore' })
+      } catch { /* skip a branch that won't delete */ }
+    }
+    return stale.length
+  } catch {
+    return 0
+  }
 }
 
 export interface PartialWorkRescue {
