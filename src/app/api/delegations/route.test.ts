@@ -212,6 +212,16 @@ describe('POST /api/delegations', () => {
     expect(repoCreate).toHaveBeenCalledOnce()
   })
 
+  it('defaults contract.allowedTools to [] when omitted (prevents policy-gate crash)', async () => {
+    const created = makeDelegation({ id: 'del-tools', status: 'approved' })
+    repoListByStatus.mockResolvedValue([created])
+    repoCreate.mockResolvedValueOnce(created)
+    const { POST } = await import('./route')
+    await POST(makePostRequest({ contract: { goal: 'Valid goal here', riskClass: 'A' } }))
+    const passedContract = (repoCreate.mock.calls[0]?.[0] as { contract?: { allowedTools?: unknown } })?.contract
+    expect(passedContract?.allowedTools).toEqual([])
+  })
+
   it('returns 400 when goal is too short', async () => {
     const { POST } = await import('./route')
     const res = await POST(makePostRequest({ contract: { goal: 'Hi' } }))

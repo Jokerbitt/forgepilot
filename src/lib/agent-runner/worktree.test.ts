@@ -16,6 +16,7 @@ import {
   shouldRunInstall,
   parseNameStatus,
   getWorkspaceChangedFiles,
+  selectStaleResultBranches,
 } from './worktree'
 
 vi.mock('child_process', () => ({
@@ -141,6 +142,31 @@ describe('shouldRunInstall', () => {
   })
   it('skips when deps exist and package.json did not change', () => {
     expect(shouldRunInstall({ hasPackageJson: true, hasNodeModules: true, packageJsonChanged: false })).toBe(false)
+  })
+})
+
+describe('selectStaleResultBranches', () => {
+  const ordered = [
+    'forgepilot/result-1', 'forgepilot/result-2', 'forgepilot/result-3',
+    'forgepilot/result-4', 'forgepilot/result-5',
+  ]
+
+  it('keeps the most recent N and returns the stale tail', () => {
+    expect(selectStaleResultBranches(ordered, 2)).toEqual([
+      'forgepilot/result-3', 'forgepilot/result-4', 'forgepilot/result-5',
+    ])
+  })
+
+  it('returns nothing when count is within the keep limit', () => {
+    expect(selectStaleResultBranches(ordered, 10)).toEqual([])
+  })
+
+  it('never prunes the protected current branch', () => {
+    expect(selectStaleResultBranches(ordered, 0, 'forgepilot/result-3')).not.toContain('forgepilot/result-3')
+  })
+
+  it('ignores non-result branches', () => {
+    expect(selectStaleResultBranches(['main', 'forgepilot/result-1', 'feature/x'], 0)).toEqual(['forgepilot/result-1'])
   })
 })
 

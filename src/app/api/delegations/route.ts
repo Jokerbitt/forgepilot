@@ -23,6 +23,11 @@ const DelegationInputSchema = z.object({
     privacyMode:      z.enum(['local', 'private-cloud', 'public']).default('local'),
     requiresApproval: z.boolean().default(false),
     maxBudgetUsd:     z.number().min(0).optional(),
+    // Default to [] so a delegation can never be persisted without allowedTools.
+    // The policy rules (secret-tools / destructive-actions) iterate this list;
+    // a missing value previously crashed the execute route with a 500 (see the
+    // null-safe fix in policy/rules.ts). This closes that gap at the root.
+    allowedTools:     z.array(z.string()).default([]),
     filePatterns:     z.array(z.string()).optional(),
     skillCategory:    z.string().optional(),
     acceptanceCriteria: z.array(z.string()).optional(),
