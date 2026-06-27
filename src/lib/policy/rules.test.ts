@@ -61,6 +61,12 @@ describe('secretToolRule', () => {
   it('allows safe tools', () => {
     expect(secretToolRule.evaluate(makeContract({ allowedTools: ['bash', 'read_file', 'write_file'] }))).toHaveLength(0)
   })
+
+  it('does not crash when allowedTools is missing (persisted contract without it)', () => {
+    const contract = makeContract({ allowedTools: undefined as unknown as string[] })
+    expect(() => secretToolRule.evaluate(contract)).not.toThrow()
+    expect(secretToolRule.evaluate(contract)).toHaveLength(0)
+  })
 })
 
 describe('destructiveActionRule', () => {
@@ -80,6 +86,12 @@ describe('destructiveActionRule', () => {
 
   it('allows safe tools', () => {
     expect(destructiveActionRule.evaluate(makeContract({ allowedTools: ['git commit', 'npm test'] }))).toHaveLength(0)
+  })
+
+  it('does not crash when allowedTools is missing (persisted contract without it)', () => {
+    const contract = makeContract({ allowedTools: undefined as unknown as string[] })
+    expect(() => destructiveActionRule.evaluate(contract)).not.toThrow()
+    expect(destructiveActionRule.evaluate(contract)).toHaveLength(0)
   })
 })
 

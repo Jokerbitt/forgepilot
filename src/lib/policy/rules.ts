@@ -39,7 +39,10 @@ export const secretToolRule: PolicyRule = {
   id: 'secret-tools',
   description: 'Deny any task that grants access to secrets or credentials.',
   evaluate(contract) {
-    const hits = contract.allowedTools.filter(tool =>
+    // allowedTools is typed string[] but is not enforced by the create schema
+    // (DelegationInputSchema passes the contract through), so a delegation
+    // persisted without it would crash this rule. Default to an empty list.
+    const hits = (contract.allowedTools ?? []).filter(tool =>
       SECRET_TOOL_PATTERNS.some(p => p.test(tool)),
     )
     if (hits.length > 0) {
@@ -53,7 +56,7 @@ export const destructiveActionRule: PolicyRule = {
   id: 'destructive-actions',
   description: 'Deny destructive operations (rm -rf, DROP TABLE, force push).',
   evaluate(contract) {
-    const hits = contract.allowedTools.filter(tool =>
+    const hits = (contract.allowedTools ?? []).filter(tool =>
       DESTRUCTIVE_TOOL_PATTERNS.some(p => p.test(tool)),
     )
     if (hits.length > 0) {
