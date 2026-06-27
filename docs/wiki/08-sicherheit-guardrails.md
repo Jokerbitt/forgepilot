@@ -42,6 +42,14 @@ Damit ein Lauf auch **ohne Aufsicht** sicher ist, sitzen drei Netze direkt vor u
 
 > Hinweis: Der Policy-Gate steht bewusst auf **Report-Only**, bis die protokollierten Verdikte aus echten Läufen geprüft sind — danach wird `FORGEPILOT_POLICY_ENFORCE=1` aktiviert. Details in `docs/adr/ADR-003-runner-autonomy-security.md`.
 
+## Auto-Merge & PR-Hygiene
+`src/lib/github/merge-safety.ts`, `src/app/api/delegations/[id]/execute/route.ts`
+
+Eine **Risk-A**-Delegation kann ihren PR nach grünem CI automatisch mergen (Safety-Gate: kleine Diffs, keine sensiblen Dateien/Secrets, Critic approved). Damit das im unbeaufsichtigten Dauerbetrieb sauber bleibt, gibt es zwei Aufräum-Netze:
+
+- **Veraltete PRs werden nicht blind gemergt:** Liegt der PR hinter dem Base-Branch zurück (`mergeable_state === 'behind'`), stuft das Safety-Gate ihn auf *Review* zurück statt ihn gegen einen veralteten Stand zu mergen. Im Auto-Merge-Pfad stößt ForgePilot stattdessen einen **Branch-Update** an (GitHub „Update branch"), damit die CI gegen das aktuelle `main` neu läuft — der Merge erfolgt dann im nächsten Durchlauf.
+- **Gemergte Branches werden gelöscht:** Nach einem erfolgreichen Auto-Merge entfernt ForgePilot den Feature-Branch. Das verhindert, dass ein späterer Lauf denselben Branch wiederfindet und in eine „PR existiert bereits"-Schleife (HTTP 422, Duplikate) läuft. Der Base-Branch (`main`/`master`) ist dagegen geschützt und wird nie gelöscht; schlägt das Aufräumen fehl, bleibt der erfolgreiche Merge davon unberührt.
+
 ## Build- & Test-Gate
 `src/lib/delegations/phase-gate.ts`
 

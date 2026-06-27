@@ -6,6 +6,10 @@ Format pro Eintrag: **Datum · Was sich geändert hat · betroffene Wiki-Seite(n
 
 ---
 
+## 2026-06-27
+
+- **Sauberer Auto-Merge im Dauerbetrieb (PR-Hygiene):** Mergt ForgePilot einen Risk-A-PR automatisch, räumt es danach auf. (1) **Veraltete PRs** (hinter `main`) werden nicht mehr blind gemergt — das Safety-Gate stuft sie auf *Review* zurück und stößt ein **Branch-Update** an, damit die CI gegen den aktuellen Stand neu läuft (Merge im nächsten Durchlauf). (2) **Gemergte Feature-Branches werden gelöscht**, damit ein späterer Lauf nicht denselben Branch wiederfindet und Duplikat-PRs („PR existiert bereits", HTTP 422) erzeugt. Der `main`-Branch ist geschützt; ein fehlgeschlagenes Aufräumen gefährdet den erfolgreichen Merge nicht. → [08-sicherheit-guardrails.md](08-sicherheit-guardrails.md) · Commit `1be08846`
+
 ## 2026-06-26
 
 - **Runner-Sicherheit scharf geschaltet (ADR-003 Tier-2):** Der Policy-Gate läuft in der Produktion jetzt **scharf** (nicht mehr nur Report-Only) — eine Policy-Verletzung stoppt den Start hart (403). **Risk-C wird nie automatisch ausgeführt:** eine kritische Aufgabe läuft ausschließlich mit menschlicher Freigabe; kein Autopilot/Auto-Chain/Cron-Pfad kann Risk-C selbst freigeben (zentraler Ausführungs-Check + dritte Sicherung am Start-Punkt). Außerdem erbt der Agent nur noch die Env-Variablen einer **Allowlist** (Build-/Test-Toolchains), statt „alles außer Secrets". → [08-sicherheit-guardrails.md](08-sicherheit-guardrails.md)
