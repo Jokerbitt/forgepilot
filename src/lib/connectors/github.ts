@@ -246,6 +246,7 @@ function buildMergeRecommendation(
   if (pr.draft) reasons.push('Pull Request ist noch als Draft markiert.')
   if (pr.state !== 'open') reasons.push('Pull Request ist nicht offen.')
   if (pr.mergeable === false) reasons.push('GitHub meldet Merge-Konflikte.')
+  if (pr.mergeableState === 'behind') reasons.push('PR ist hinter dem Base-Branch zurück (Rebase nötig).')
   if (checks.state === 'failure' || checks.state === 'error') reasons.push('Mindestens ein Check ist fehlgeschlagen.')
   if (checks.state === 'pending') reasons.push('Checks laufen noch.')
   if (pr.risk === 'high') reasons.push('Hohe Risiko-Einstufung: manuelles Review empfohlen.')
@@ -383,6 +384,85 @@ export async function mergeGitHubPullRequest(
       }),
     },
   )
+}
+
+export interface GitHubUpdateBranchResult {
+  updated: boolean
+  message: string
+}
+
+/**
+ * Bring a PR's head branch up to date with its base (GitHub "Update branch").
+ * Used to clear a stale `mergeable_state === 'behind'` before an auto-merge so
+ * the PR re-runs CI against current main instead of blocking forever.
+ *
+ * GitHub merges base INTO the head branch (a merge commit), which is harmless
+ * here because the final integration is a squash merge. Returns `updated: false`
+ * (never throws) when GitHub reports the branch is already up to date or the
+ * head SHA moved underneath us — the caller treats this as a no-op.
+ */
+export async function updateGitHubPullRequestBranch(
+  config: GitHubConnectorConfig,
+  number: number,
+  expectedHeadSha?: string,
+  fetcher: Fetcher = fetch,
+): Promise<GitHubUpdateBranchResult> {
+  const repoConfig = getDefaultRepo(config)
+  const response = await fetcher(
+    `${repoConfig.apiUrl}/repos/${repoConfig.owner}/${repoConfig.repo}/pulls/${number}/update-branch`,
+    {
+      method: 'PUT',
+      headers: githubHeaders(repoConfig.token),
+      body: JSON.stringify(expectedHeadSha ? { expected_head_sha: expectedHeadSha } : {}),
+    },
+  )
+
+  // 202 Accepted = update queued. 422 = already up to date or head SHA mismatch
+  // (race) — both are non-fatal no-ops for the caller.
+  if (response.status === 202) {
+    const data = await response.json().catch(() => ({})) as { message?: string }
+    return { updated: true, message: data.message ?? 'Branch update queued.' }
+  }
+  if (response.status === 422) {
+    const data = await response.json().catch(() => ({})) as { message?: string }
+    return { updated: false, message: data.message ?? 'Branch already up to date.' }
+  }
+  const text = await response.text().catch(() => '')
+  throw new Error(`GitHub API error: HTTP ${response.status}${text ? ` ${text.slice(0, 180)}` : ''}`)
+}
+
+/**
+ * Delete a remote branch (a git ref under `refs/heads/`). Used to clean up a
+ * feature branch after its PR has been merged, so a later autonomous run does
+ * not rediscover the branch and trip the 422 "PR already exists" duplicate loop.
+ *
+ * Refuses to delete the repo's default/base branch as a safety guard. Returns
+ * `false` (never throws) when the ref is already gone (404/422).
+ */
+export async function deleteGitHubBranch(
+  config: GitHubConnectorConfig,
+  branch: string,
+  fetcher: Fetcher = fetch,
+): Promise<boolean> {
+  const ref = branch.replace(/^refs\/heads\//, '').trim()
+  if (!ref) throw new Error('deleteGitHubBranch: empty branch name')
+  if (ref === 'main' || ref === 'master') {
+    throw new Error(`deleteGitHubBranch: refusing to delete protected branch "${ref}"`)
+  }
+  const repoConfig = getDefaultRepo(config)
+  const response = await fetcher(
+    `${repoConfig.apiUrl}/repos/${repoConfig.owner}/${repoConfig.repo}/git/refs/heads/${encodeURIComponent(ref)}`,
+    {
+      method: 'DELETE',
+      headers: githubHeaders(repoConfig.token),
+    },
+  )
+
+  // 204 No Content = deleted. 404/422 = ref already gone — treat as success-ish no-op.
+  if (response.status === 204) return true
+  if (response.status === 404 || response.status === 422) return false
+  const text = await response.text().catch(() => '')
+  throw new Error(`GitHub API error: HTTP ${response.status}${text ? ` ${text.slice(0, 180)}` : ''}`)
 }
 
 export async function findGitHubIssueByTitle(
