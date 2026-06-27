@@ -15,6 +15,7 @@ import { DelegationTimeline } from '@/components/delegation/DelegationTimeline'
 import { DelegationCommentThread } from '@/components/delegation/DelegationCommentThread'
 import { AgentRunReplayView } from '@/components/delegation/AgentRunReplayView'
 import { GrokCriticCard } from '@/components/delegation/GrokCriticCard'
+import { RiskCApprovalPanel } from '@/components/delegation/RiskCApprovalPanel'
 import { DelegationPipelineBreadcrumb } from '@/components/delegation/DelegationPipelineBreadcrumb'
 import { KnowledgeWritebackPanel } from '@/components/delegation/KnowledgeWritebackPanel'
 import { PreviewAndIteratePanel } from '@/components/delegation/PreviewAndIteratePanel'
@@ -605,6 +606,14 @@ export default function DelegationDetailPage() {
             hasPr={!!d.summaryReport?.prUrl}
           />
         </div>
+
+        {d.status === 'pending' && d.contract.riskClass === 'C' && (
+          <RiskCApprovalPanel
+            delegationId={d.id}
+            delegationTitle={d.title || d.contract.goal.slice(0, 60)}
+            onApproved={loadDelegation}
+          />
+        )}
 
         <DelegationStatusWorkspace
           delegation={d}

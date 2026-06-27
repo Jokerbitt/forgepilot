@@ -2709,18 +2709,19 @@ export async function POST(
     }
   }
 
-  // ADR-003 D3: defense in depth at the spawn point. Risk-C must never reach a
-  // --dangerously runner (Claude CLI / Codex), whose own permission+sandbox gating
-  // is disabled. The enforced policy gate (D1) and the human-approval choke-point
-  // (D2) already block Risk-C upstream; this is the last line in case either is
-  // bypassed by a bug. Fail closed — do NOT silently fall back to a weaker runner.
+  // ADR-004 (E2-C): Risk-C MAY run on a --dangerously runner. Sven consciously
+  // lifted the ADR-003 D3 spawn-guard for Risk-C in exchange for the CLI's extra
+  // power on large, architecture-level tasks. The primary brake is unchanged: the
+  // human-approval choke-point (getExecutionStartBlocker / D2) already required an
+  // allowlisted human approvedBy before reaching this point, and the policy gate
+  // (D1), secret-scrub (P4) and in-flight budget kill (P3) stay in force. We do not
+  // block here, but we record the dangerous-runner choice for the audit trail.
   if (delegation.contract.riskClass === 'C' && isDangerousRunnerMode(mode)) {
     await appendLogs(id, [{
       timestamp: new Date().toISOString(),
-      type: 'error',
-      message: `⛔ Risk-C darf nicht über einen --dangerously-Runner ('${mode}') ausgeführt werden (ADR-003 D3). Risk-C braucht eine menschliche Freigabe und einen pfad-gejailten Runner.`,
-    }], 'failed')
-    return NextResponse.json({ started: false, mode, error: 'riskc-blocked-from-dangerous-runner', delegationId: id }, { status: 403 })
+      type: 'info',
+      message: `⚠️ Risk-C läuft auf einem --dangerously-Runner ('${mode}') — bewusst freigegeben (ADR-004 E2-C). Voraussetzung war eine menschliche Freigabe (ADR-003 D2); Policy-Gate, Secret-Scrub und Budget-Kill bleiben aktiv.`,
+    }])
   }
 
   void withSpan('delegation.execute', {

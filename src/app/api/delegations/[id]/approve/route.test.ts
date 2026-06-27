@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { POST } from './route'
 
 const pendingDelegation = {
@@ -62,10 +62,50 @@ describe('POST /api/delegations/[id]/approve', () => {
     expect(typeof data.approvedBy.approvedAt).toBe('string')
   })
 
-  it('blocks RiskClass C approval through the automation endpoint', async () => {
-    store.data = JSON.stringify([{ ...pendingDelegation, contract: { ...pendingDelegation.contract, riskClass: 'C' } }])
-    const res = await POST(makeRequest(), { params: Promise.resolve({ id: 'del-approve-1' }) })
-    expect(res.status).toBe(403)
+  describe('RiskClass C approval path (ADR-004)', () => {
+    const riskC = { ...pendingDelegation, contract: { ...pendingDelegation.contract, riskClass: 'C' as const } }
+
+    afterEach(() => {
+      vi.unstubAllEnvs()
+    })
+
+    it('rejects Risk-C without a reason (400)', async () => {
+      store.data = JSON.stringify([riskC])
+      const res = await POST(makeRequest({ source: 'sven' }), { params: Promise.resolve({ id: 'del-approve-1' }) })
+      expect(res.status).toBe(400)
+    })
+
+    it('rejects Risk-C from an automated actor (403)', async () => {
+      vi.stubEnv('FORGEPILOT_RISK_C_APPROVERS', 'sven')
+      store.data = JSON.stringify([riskC])
+      const res = await POST(makeRequest({ source: 'autonomous-mode', note: 'auto' }), { params: Promise.resolve({ id: 'del-approve-1' }) })
+      expect(res.status).toBe(403)
+    })
+
+    it('rejects Risk-C from a human not on the allowlist (403)', async () => {
+      vi.stubEnv('FORGEPILOT_RISK_C_APPROVERS', 'sven')
+      store.data = JSON.stringify([riskC])
+      const res = await POST(makeRequest({ source: 'mallory', note: 'trust me' }), { params: Promise.resolve({ id: 'del-approve-1' }) })
+      expect(res.status).toBe(403)
+    })
+
+    it('approves Risk-C for an allowlisted human with a reason and records the audit trail', async () => {
+      vi.stubEnv('FORGEPILOT_RISK_C_APPROVERS', 'sven')
+      store.data = JSON.stringify([riskC])
+      const res = await POST(makeRequest({ source: 'sven', note: 'schema migration reviewed manually' }), { params: Promise.resolve({ id: 'del-approve-1' }) })
+      expect(res.status).toBe(200)
+      const data = await res.json()
+      expect(data.status).toBe('approved')
+      expect(data.approvedBy.actor).toBe('sven')
+      expect(data.approvedBy.reason).toBe('schema migration reviewed manually')
+    })
+
+    it('stays blocked when no allowlist is configured (fail-closed)', async () => {
+      vi.stubEnv('FORGEPILOT_RISK_C_APPROVERS', '')
+      store.data = JSON.stringify([riskC])
+      const res = await POST(makeRequest({ source: 'sven', note: 'reason' }), { params: Promise.resolve({ id: 'del-approve-1' }) })
+      expect(res.status).toBe(403)
+    })
   })
 
   it('returns conflict for already approved delegations', async () => {

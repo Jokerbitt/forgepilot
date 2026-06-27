@@ -7,6 +7,7 @@ import {
   SINGLE_TENANT_USER_ID,
 } from '@/lib/repositories/delegationRepository'
 import { logAuditEvent } from '@/lib/audit'
+import { validateRiskCApproval } from '@/lib/delegations/risk-c-approval'
 
 export async function POST(
   request: Request,
@@ -27,22 +28,33 @@ export async function POST(
     )
   }
 
-  if (delegation.contract.riskClass === 'C') {
-    return NextResponse.json(
-      { error: 'RiskClass C braucht manuelle Freigabe in der App.' },
-      { status: 403 },
-    )
+  const body = await safeReadBody(request)
+  const now = new Date().toISOString()
+
+  // ADR-004 (E1-A/E3-A): Risk-C has a guarded human-approval path. Only an
+  // allowlisted human actor (FORGEPILOT_RISK_C_APPROVERS) with a typed reason may
+  // lift the gate; everything else stays blocked. The central execution
+  // choke-point (getExecutionStartBlocker / ADR-003 D2) independently re-checks
+  // for a human approvedBy before the run can actually start.
+  const isRiskC = delegation.contract.riskClass === 'C'
+  if (isRiskC) {
+    const actor = typeof body.source === 'string' ? body.source.trim() : ''
+    const reason = typeof body.note === 'string' ? body.note.trim() : ''
+    const check = validateRiskCApproval(actor, reason)
+    if (!check.ok) {
+      return NextResponse.json({ error: check.error }, { status: check.status })
+    }
   }
 
-  // Autonomous mode: determine source based on config
+  // Autonomous mode: determine source based on config. Never applies to Risk-C —
+  // a Risk-C approval is always an explicit human act (validated above).
   const autonomousConfig = getAutonomousConfig()
   const isAutoApprove =
+    !isRiskC &&
     autonomousConfig.enabled &&
     autonomousConfig.autoApproveDelegations &&
     riskClassFitsThreshold(delegation.contract.riskClass, autonomousConfig.riskThreshold)
 
-  const body = await safeReadBody(request)
-  const now = new Date().toISOString()
   const source = isAutoApprove
     ? 'autonomous-mode'
     : typeof body.source === 'string' && body.source.trim()
