@@ -10,7 +10,12 @@ import pathMod from 'path'
 import type { Delegation, AgentLog, DelegationReport } from '@/lib/models/delegation'
 import { registerProcess, unregisterProcess } from '@/lib/process-registry'
 import { readConnectorConfigs, readStoredApiKeys } from '@/lib/connectors/config'
-import { getGitHubPullRequestPreview, mergeGitHubPullRequest } from '@/lib/connectors/github'
+import {
+  deleteGitHubBranch,
+  getGitHubPullRequestPreview,
+  mergeGitHubPullRequest,
+  updateGitHubPullRequestBranch,
+} from '@/lib/connectors/github'
 import { postLinearCompletionComment } from '@/lib/connectors/linear-writeback'
 import { createGitHubPRIfNeeded } from '@/lib/github/pr-creator'
 import { evaluateMergeSafety } from '@/lib/github/merge-safety'
@@ -525,6 +530,24 @@ async function autoMergePRIfEligible(prUrl: string, delegation: Delegation): Pro
     const safety = evaluateMergeSafety(preview, { delegation, mode: 'auto' })
 
     if (safety.status !== 'ready') {
+      // Stale-base self-heal: if the only thing standing between us and a clean
+      // merge is that the branch fell behind main, kick off a branch update so
+      // CI re-runs against current main. The next autonomous pass (or the user)
+      // can then merge — we never block on the queued update here.
+      if (preview.mergeableState === 'behind' && preview.state === 'open') {
+        try {
+          const update = await updateGitHubPullRequestBranch(config, prNumber, preview.headSha)
+          delegationLogger.info(
+            { event: 'pr.auto_merge.rebase_triggered', prUrl, delegationId: delegation.id, updated: update.updated },
+            update.updated ? 'Stale PR branch update queued; merge deferred to next pass' : 'PR branch already current',
+          )
+        } catch (rebaseErr) {
+          delegationLogger.warn(
+            { event: 'pr.auto_merge.rebase_failed', error: String(rebaseErr), prUrl, delegationId: delegation.id },
+            'Stale PR branch update failed',
+          )
+        }
+      }
       delegationLogger.info(
         { event: 'pr.auto_merge.skipped', prUrl, delegationId: delegation.id, reasons: safety.reasons },
         'Auto-merge skipped by safety gate',
@@ -556,6 +579,25 @@ async function autoMergePRIfEligible(prUrl: string, delegation: Delegation): Pro
         { event: 'pr.auto_merge.merged', prUrl, delegationId: delegation.id, sha: result.sha },
         'Auto-merge completed after safety gate passed',
       )
+
+      // PR hygiene: delete the now-merged feature branch so a later autonomous
+      // run does not rediscover it and trip the 422 "PR already exists" loop.
+      // Best-effort — a leftover branch must never fail the (successful) merge.
+      const mergedBranch = preview.headRef
+      if (mergedBranch && mergedBranch !== preview.baseRef) {
+        try {
+          const deleted = await deleteGitHubBranch(config, mergedBranch)
+          delegationLogger.info(
+            { event: 'pr.auto_merge.branch_cleanup', prUrl, delegationId: delegation.id, branch: mergedBranch, deleted },
+            deleted ? 'Merged feature branch deleted' : 'Merged feature branch already gone',
+          )
+        } catch (cleanupErr) {
+          delegationLogger.warn(
+            { event: 'pr.auto_merge.branch_cleanup_failed', error: String(cleanupErr), prUrl, delegationId: delegation.id, branch: mergedBranch },
+            'Merged feature branch cleanup failed',
+          )
+        }
+      }
     }
   } catch (err) {
     delegationLogger.warn(

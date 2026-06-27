@@ -140,4 +140,14 @@ describe('evaluateMergeSafety', () => {
     expect(verdict.status).toBe('review')
     expect(verdict.reasons.join(' ')).toContain('Budget überschritten')
   })
+
+  it('keeps a stale (behind-base) PR out of auto-merge', () => {
+    const verdict = evaluateMergeSafety(preview({
+      mergeableState: 'behind',
+      mergeRecommendation: { status: 'review', reasons: ['PR ist hinter dem Base-Branch zurück (Rebase nötig).'] },
+    }), { delegation: delegation(), mode: 'auto' })
+
+    expect(verdict.status).toBe('review')
+    expect(verdict.reasons.join(' ')).toContain('hinter dem Base-Branch')
+  })
 })
