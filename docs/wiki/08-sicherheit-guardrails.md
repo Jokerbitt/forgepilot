@@ -30,13 +30,24 @@ Jede Delegation hat eine **Risk-Class A/B/C** (siehe [Glossar](07-konzepte-gloss
 
 Sobald etwas auf deine Freigabe wartet, erscheint in der Seitenleiste das **amber Banner „X awaiting approval"**.
 
+### Risk-C-Freigabe (Auth, Zahlungen, Schema)
+`src/lib/delegations/risk-c-approval.ts` · ADR-004
+
+Risk-C startet **nie** automatisch. Es gibt aber jetzt einen **bewussten menschlichen Freigabe-Pfad**: In der Detailansicht einer Risk-C-Delegation erscheint ein rotes **Risk-C-Freigabe-Panel**. Eine Freigabe gelingt nur, wenn **alle** drei Bedingungen erfüllt sind:
+
+1. **Autorisierter Freigeber** — der eingetragene Name steht auf der Allowlist `FORGEPILOT_RISK_C_APPROVERS` (komma-separiert). Ist die Liste leer/ungesetzt, kann **niemand** Risk-C freigeben (fail-closed).
+2. **Mensch** — automatische Akteure (`autonomous-mode`, Autopilot, Cron …) sind ausgeschlossen.
+3. **Begründung** — eine getippte Begründung ist Pflicht und wird im Audit-Eintrag (`approvedBy.reason`) gespeichert.
+
+Erst danach darf der Lauf starten — der zentrale Ausführungs-Check verlangt weiterhin unabhängig einen menschlichen `approvedBy`-Eintrag.
+
 Jede Freigabe wird jetzt **mit Audit-Spur** festgehalten: `approvedBy` speichert **wer** (Person oder `autonomous-mode`), **wann** und optional **warum** — eine Delegation lässt sich nicht mehr spurlos freischalten. `src/lib/models/delegation.ts`
 
 ## Runner-Sicherheit (unbeaufsichtigter Betrieb)
 Damit ein Lauf auch **ohne Aufsicht** sicher ist, sitzen drei Netze direkt vor und um die Agenten-Ausführung:
 
 - **Policy-Gate vor dem Start** (`src/lib/policy/gate.ts`): Vor jedem Agenten-Start prüft die Deny-first-Policy den Auftrag (Risk-C, Secret-/destruktive Tools, fehlendes Budget, öffentlicher Privacy-Modus). **Scharf** (Standard in der Produktion, `FORGEPILOT_POLICY_ENFORCE=1`): ein „deny" stoppt den Start hart (HTTP 403). Mit `FORGEPILOT_POLICY_ENFORCE=0` läuft er als Report-Only (protokolliert nur).
-- **Risk-C wird nie automatisch ausgeführt** (`src/lib/delegation-execution.ts`): Eine Risk-C-Aufgabe läuft ausschließlich mit einer **menschlichen** Freigabe (`approvedBy`). Kein Autopilot-, Auto-Chain-, Cron- oder Retry-Pfad kann Risk-C selbst freigeben — der zentrale Ausführungs-Check blockt jeden Risk-C-Lauf ohne menschliche Freigabe (403). Zusätzlich darf Risk-C nie über einen `--dangerously`-Runner laufen (dritte Sicherung am Start-Punkt).
+- **Risk-C wird nie automatisch ausgeführt** (`src/lib/delegation-execution.ts`): Eine Risk-C-Aufgabe läuft ausschließlich mit einer **menschlichen** Freigabe (`approvedBy`). Kein Autopilot-, Auto-Chain-, Cron- oder Retry-Pfad kann Risk-C selbst freigeben — der zentrale Ausführungs-Check blockt jeden Risk-C-Lauf ohne menschliche Freigabe (403). Dies bleibt die zentrale Bremse. **Hinweis (ADR-004 E2-C):** Eine freigegebene Risk-C-Aufgabe darf bewusst über den mächtigeren `--dangerously`-CLI-Runner laufen (früher gesperrt). Der Schutz liegt dann bei deiner menschlichen Einzelfreigabe plus Policy-Gate, Secret-Scrub und Budget-Stopp; der Lauf wird als Risk-C-auf-dangerous-Runner protokolliert.
 - **Budget-Stopp mitten im Lauf** (`src/lib/budget/guard.ts`): Die Live-Kosten werden **während** des Laufs überwacht. Überschreiten sie das Budget (inkl. Toleranz-Einstellung), wird der Agent **sofort beendet** und die Delegation als *budget-pausiert* markiert — fortsetzbar mit höherem Budget. Früher wurde das Budget erst **nach** dem Lauf geprüft.
 - **Secrets bleiben beim Server** (`src/lib/delegations/runner-env.ts`): Der gespawnte Agent erbt **nicht** mehr die Server-Geheimnisse (CRON_/AUTH_/AUDIT-Secret, DATABASE_URL, Provider-Keys). Default-Deny: alles, was wie ein Credential aussieht, wird herausgefiltert; nur die wenigen wirklich nötigen Zugänge (eigener Auth-Token, `GH_TOKEN` für `gh pr create`) werden gezielt wieder hineingegeben.
 

@@ -37,8 +37,8 @@ Jede Seite mit Zweck, was angezeigt wird und wie du sie bedienst. Gegliedert nac
 
 ### `/delegations/[id]` — Delegation-Detail
 **Zweck:** Das Kontroll-Center eines einzelnen Auftrags.
-**Du siehst:** Kontext (Titel, Ziel, **Risk-Class**, Freigabe-Status), Phasen-Anzeige, betroffene Dateien, Metriken (Status/Kosten/PR), und je nach Status Live-Logs, Preflight-Checks, Quality-Check, PR-Verwaltung, Knowledge-Writeback (Memory Cards). Zusatz-Aktionen: **„⚙ Orchestrieren"** (in Sub-Tasks zerlegen), **„⧉ Klonen"**, **„⬇ Logs"**, **„🔗 Link"**.
-**So bedienst du es:** `pending` → **„✔ Freigeben"**; `approved` → Preflight prüfen, **„▶ Starten"**; `running` → Live-Logs, ggf. **„■ Abbrechen"**; `completed` → Preview öffnen, Quality-Check, PR ansehen/mergen.
+**Du siehst:** Kontext (Titel, Ziel, **Risk-Class**, Freigabe-Status), Phasen-Anzeige, betroffene Dateien, Metriken (Status/Kosten/PR), und je nach Status Live-Logs, Preflight-Checks, Quality-Check, PR-Verwaltung, Knowledge-Writeback (Memory Cards). Bei einer **pending Risk-C-Aufgabe** erscheint zusätzlich ein rotes **Risk-C-Freigabe-Panel** (Freigeber + Pflicht-Begründung + Bestätigung → siehe [Sicherheit & Guardrails](08-sicherheit-guardrails.md)). Zusatz-Aktionen: **„⚙ Orchestrieren"** (in Sub-Tasks zerlegen), **„⧉ Klonen"**, **„⬇ Logs"**, **„🔗 Link"**.
+**So bedienst du es:** `pending` (Risk A/B) → **„✔ Freigeben"**; `pending` (Risk-C) → Freigeber + Begründung im Risk-C-Panel; `approved` → Preflight prüfen, **„▶ Starten"**; `running` → Live-Logs, ggf. **„■ Abbrechen"**; `completed` → Preview öffnen, Quality-Check, PR ansehen/mergen.
 
 ### `/settings` — Engine-Einstellungen
 **Zweck:** Zentrale Konfiguration. Abschnitte: Betriebsbereitschaft, Claude-CLI-Auth, KI-Anbieter-Status, **API-Keys**, **Lokale KI** (Ollama/LM Studio), **LLM-Modus**, Critic-Routing, Monitoring (Sentry), **Wissen & NAS-Indexer**, Anzeige-Limits, **Freigabe & Autopilot** (manual/balanced/autopilot), Backup/Export.

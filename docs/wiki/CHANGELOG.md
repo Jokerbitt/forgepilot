@@ -6,6 +6,10 @@ Format pro Eintrag: **Datum · Was sich geändert hat · betroffene Wiki-Seite(n
 
 ---
 
+## 2026-06-27
+
+- **Risk-C kann jetzt freigegeben werden (ADR-004):** Risk-C (Auth, Zahlungen, Schema) war faktisch komplett gesperrt — jetzt gibt es einen **bewussten menschlichen Freigabe-Pfad**. In der Detailansicht einer Risk-C-Delegation erscheint ein rotes **Freigabe-Panel**: Freigabe nur durch einen **autorisierten** Freigeber (Allowlist `FORGEPILOT_RISK_C_APPROVERS`, leer = niemand), **mit Pflicht-Begründung** und bewusster Bestätigung; automatische/Selbst-Freigabe bleibt gesperrt. Bewusste Entscheidung (E2-C): eine freigegebene Risk-C-Aufgabe darf den mächtigeren `--dangerously`-Runner nutzen — abgesichert durch deine Einzelfreigabe + Policy-Gate + Secret-Scrub + Budget-Stopp. Damit lassen sich große, architektur-relevante Aufgaben autonom ausführen. → [08-sicherheit-guardrails.md](08-sicherheit-guardrails.md) · ADR-004
+
 ## 2026-06-26
 
 - **Runner-Sicherheit scharf geschaltet (ADR-003 Tier-2):** Der Policy-Gate läuft in der Produktion jetzt **scharf** (nicht mehr nur Report-Only) — eine Policy-Verletzung stoppt den Start hart (403). **Risk-C wird nie automatisch ausgeführt:** eine kritische Aufgabe läuft ausschließlich mit menschlicher Freigabe; kein Autopilot/Auto-Chain/Cron-Pfad kann Risk-C selbst freigeben (zentraler Ausführungs-Check + dritte Sicherung am Start-Punkt). Außerdem erbt der Agent nur noch die Env-Variablen einer **Allowlist** (Build-/Test-Toolchains), statt „alles außer Secrets". → [08-sicherheit-guardrails.md](08-sicherheit-guardrails.md)
