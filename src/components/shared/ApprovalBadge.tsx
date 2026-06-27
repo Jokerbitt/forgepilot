@@ -29,13 +29,13 @@ export function ApprovalBadge({ requiresApproval, riskClass, compact = false, cl
   const labels: Record<ApprovalBadgeState, string> = {
     'auto-approved': compact ? 'Auto' : 'Auto-freigegeben',
     'approval-required': compact ? 'Freigabe' : 'Freigabe noetig',
-    'risk-blocked': compact ? 'Blockiert' : 'Blockiert durch RiskClass',
+    'risk-blocked': compact ? 'Risk-C' : 'Risk-C: Freigabe noetig',
   }
 
   const title: Record<ApprovalBadgeState, string> = {
     'auto-approved': 'Diese Delegation darf ohne zusaetzlichen Klick weiterlaufen.',
     'approval-required': 'Diese Delegation wartet auf eine bewusste Freigabe.',
-    'risk-blocked': 'RiskClass C darf nicht automatisch starten.',
+    'risk-blocked': 'RiskClass C startet nie automatisch — braucht eine bewusste menschliche Freigabe in der Detailansicht (ADR-004).',
   }
 
   return (
