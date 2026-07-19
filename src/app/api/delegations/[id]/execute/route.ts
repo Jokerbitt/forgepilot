@@ -52,7 +52,7 @@ import { checkParallelCompletion } from '@/lib/delegation-parallel'
 import { triggerCriticRetry } from '@/lib/delegations/critic-retry'
 import { recordRuntimeExecuteLoopEvidence } from '@/lib/reports/execute-loop-runtime-evidence'
 import { prepareRunnerWorkspace, shouldKeepRunnerWorktree, writebackLocalResult, rescuePartialWork, reuseExistingWorkspace, getWorkspaceChangedFiles, type RunnerWorkspace, type WorkspaceChangedFile } from '@/lib/agent-runner/worktree'
-import { bootstrapRuntime, summarizeBootstrap, smokeTestApp } from '@/lib/agent-runner/runtime-bootstrap'
+import { bootstrapRuntime, summarizeBootstrap, smokeTestApp, isSmokeGateEnabled, pickSmokePort } from '@/lib/agent-runner/runtime-bootstrap'
 import { autoScaffoldWorkspace } from '@/lib/building-blocks/create-app'
 import { scopedScaffoldBlockIds } from '@/lib/building-blocks/catalog'
 import { getNBAConfig } from '@/lib/nba-engine/nba-config'
@@ -1138,6 +1138,35 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
           }
           await appendLogs(id, gateLogs)
         }
+        // Smoke-Gate (armed via FORGEPILOT_SMOKE_GATE): boot the app from the
+        // agent's WORKSPACE and probe key routes BEFORE writeback. Closes the
+        // verify-gate blind spot where build+tests are green but the app crashes
+        // at runtime (e.g. an RSC error) — previously the smoke ran only AFTER
+        // the merge, as a diagnostic log on already-written-back code. A red
+        // smoke aborts the writeback like any other red gate. Unarmed, the
+        // post-writeback diagnostic smoke below keeps today's behaviour.
+        let smokeGateRan = false
+        if (!verifyGateFailed && isSmokeGateEnabled()) {
+          const gateSmoke = await smokeTestApp({ targetRepo: runnerWorkspace.path, port: pickSmokePort() })
+          smokeGateRan = gateSmoke.ran
+          if (gateSmoke.ran && !gateSmoke.ok) {
+            await appendLogs(id, [{
+              timestamp: new Date().toISOString(),
+              type: 'error',
+              message: `⛔ Smoke-Gate rot vor Writeback: ${gateSmoke.detail} — Ergebnis wird NICHT ins Ziel-Repo ${targetRepo} übernommen.`,
+            }], 'failed')
+            await createDelegationRepository(SINGLE_TENANT_USER_ID)
+              .update(id, { errorMessage: `Smoke-Gate: ${gateSmoke.detail}` })
+              .catch(() => {})
+            verifyGateFailed = true
+          } else if (gateSmoke.ran) {
+            await appendLogs(id, [{
+              timestamp: new Date().toISOString(),
+              type: 'success',
+              message: `🟢 Smoke-Gate vor Writeback: ${gateSmoke.detail}`,
+            }])
+          }
+        }
         const writeback = verifyGateFailed ? null : writebackLocalResult({
           workspacePath: runnerWorkspace.path,
           targetRepo,
@@ -1163,13 +1192,17 @@ function runWithClaudeCLI(id: string, prompt: string, startTime: Date, budgetUsd
                 }])
               }
               // Live smoke test: prove the app actually BOOTS, not just compiles.
-              const smoke = await smokeTestApp({ targetRepo })
-              if (smoke.ran) {
-                await appendLogs(id, [{
-                  timestamp: new Date().toISOString(),
-                  type: smoke.ok ? 'success' : 'error',
-                  message: `${smoke.ok ? '🟢' : '🔴'} Smoke-Test: ${smoke.detail}`,
-                }])
+              // Skipped when the pre-writeback Smoke-Gate already booted+probed
+              // this result — no point starting the same app twice.
+              if (!smokeGateRan) {
+                const smoke = await smokeTestApp({ targetRepo })
+                if (smoke.ran) {
+                  await appendLogs(id, [{
+                    timestamp: new Date().toISOString(),
+                    type: smoke.ok ? 'success' : 'error',
+                    message: `${smoke.ok ? '🟢' : '🔴'} Smoke-Test: ${smoke.detail}`,
+                  }])
+                }
               }
             } catch { /* bootstrap + smoke are best-effort */ }
           } else {
@@ -1649,7 +1682,31 @@ async function finalizeOllamaExternalResult(opts: {
     }
   } catch { /* commit is best-effort — writeback verifies the outcome below */ }
 
-  // 2. Writeback to the local target repo.
+  // 2. Smoke-Gate (armed via FORGEPILOT_SMOKE_GATE): boot + probe from the
+  // agent's workspace BEFORE writeback — same blind-spot fix as the Claude-CLI
+  // path. A red smoke fails the delegation and never reaches the target repo.
+  let smokeGateRan = false
+  if (isSmokeGateEnabled()) {
+    const gateSmoke = await smokeTestApp({ targetRepo: workspacePath, port: pickSmokePort() })
+    smokeGateRan = gateSmoke.ran
+    if (gateSmoke.ran && !gateSmoke.ok) {
+      await appendLogs(id, [{
+        timestamp: new Date().toISOString(),
+        type: 'error',
+        message: `⛔ Smoke-Gate rot vor Writeback: ${gateSmoke.detail} — Ergebnis wird NICHT ins Ziel-Repo ${targetRepo} übernommen.`,
+      }], 'failed')
+      return
+    }
+    if (gateSmoke.ran) {
+      await appendLogs(id, [{
+        timestamp: new Date().toISOString(),
+        type: 'success',
+        message: `🟢 Smoke-Gate vor Writeback: ${gateSmoke.detail}`,
+      }])
+    }
+  }
+
+  // 3. Writeback to the local target repo.
   const writeback = writebackLocalResult({ workspacePath, targetRepo, delegationId: id })
   if (!writeback) {
     await appendLogs(id, [{
@@ -1671,9 +1728,12 @@ async function finalizeOllamaExternalResult(opts: {
       if (summary !== 'Kein Runtime-Bootstrap nötig') {
         await appendLogs(id, [{ timestamp: new Date().toISOString(), type: 'info', message: `🚀 Runtime-Bootstrap: ${summary}` }])
       }
-      const smoke = await smokeTestApp({ targetRepo })
-      if (smoke.ran) {
-        await appendLogs(id, [{ timestamp: new Date().toISOString(), type: smoke.ok ? 'success' : 'error', message: `${smoke.ok ? '🟢' : '🔴'} Smoke-Test: ${smoke.detail}` }])
+      // Skipped when the pre-writeback Smoke-Gate already booted+probed this result.
+      if (!smokeGateRan) {
+        const smoke = await smokeTestApp({ targetRepo })
+        if (smoke.ran) {
+          await appendLogs(id, [{ timestamp: new Date().toISOString(), type: smoke.ok ? 'success' : 'error', message: `${smoke.ok ? '🟢' : '🔴'} Smoke-Test: ${smoke.detail}` }])
+        }
       }
     } catch { /* bootstrap + smoke are best-effort */ }
   } else {

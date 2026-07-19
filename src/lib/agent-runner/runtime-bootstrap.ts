@@ -235,6 +235,29 @@ export function summarizeBootstrap(r: RuntimeBootstrapResult): string {
 
 // ─── Live smoke test ──────────────────────────────────────────────────────────
 
+/**
+ * Whether the live smoke test acts as a hard PRE-writeback gate (a red smoke
+ * blocks the writeback and fails the delegation) instead of the default
+ * post-writeback diagnostic log. Closes the verify-gate blind spot where
+ * build+tests are green but the app crashes at runtime (e.g. an RSC error) —
+ * without the flag, broken code reaches the target repo and the red smoke is
+ * only a log line after the fact. Same arming pattern as
+ * FORGEPILOT_POLICY_ENFORCE: off by default, truthy = 1/true/on/yes.
+ */
+export function isSmokeGateEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env.FORGEPILOT_SMOKE_GATE?.trim().toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'on' || raw === 'yes'
+}
+
+/**
+ * Ephemeral port for a gate smoke run. Randomized per call so two delegations
+ * smoking concurrently in the same server process don't collide on the fixed
+ * default port (which would probe the WRONG app and yield a false verdict).
+ */
+export function pickSmokePort(): number {
+  return 3900 + Math.floor(Math.random() * 500)
+}
+
 export interface ProbeResult {
   path: string
   status: number | null

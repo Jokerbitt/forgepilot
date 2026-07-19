@@ -16,6 +16,8 @@ import {
   writeLaunchJson,
   hasCrashSignature,
   evaluateSmoke,
+  isSmokeGateEnabled,
+  pickSmokePort,
 } from './runtime-bootstrap'
 
 describe('isSecretKey', () => {
@@ -217,6 +219,32 @@ describe('evaluateSmoke', () => {
   it('treats a 404 health route as non-fatal', () => {
     const r = evaluateSmoke([{ path: '/', status: 200 }, { path: '/api/health', status: 404 }], '')
     expect(r.ok).toBe(true)
+  })
+})
+
+describe('isSmokeGateEnabled', () => {
+  it('defaults to off when the flag is unset', () => {
+    expect(isSmokeGateEnabled({} as NodeJS.ProcessEnv)).toBe(false)
+  })
+  it('arms on the documented truthy values', () => {
+    for (const v of ['1', 'true', 'on', 'yes', 'TRUE', ' On ']) {
+      expect(isSmokeGateEnabled({ FORGEPILOT_SMOKE_GATE: v } as unknown as NodeJS.ProcessEnv), v).toBe(true)
+    }
+  })
+  it('stays off for falsy / other values', () => {
+    for (const v of ['0', 'false', 'off', 'no', '']) {
+      expect(isSmokeGateEnabled({ FORGEPILOT_SMOKE_GATE: v } as unknown as NodeJS.ProcessEnv), v).toBe(false)
+    }
+  })
+})
+
+describe('pickSmokePort', () => {
+  it('stays inside the 3900-4399 gate range, off the fixed default 3987-only behaviour', () => {
+    for (let i = 0; i < 50; i++) {
+      const p = pickSmokePort()
+      expect(p).toBeGreaterThanOrEqual(3900)
+      expect(p).toBeLessThan(4400)
+    }
   })
 })
 
