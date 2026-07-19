@@ -57,6 +57,47 @@ describe('resolvePolicyGate', () => {
     expect(result.blocked).toBe(true)
   })
 
+  // The risk-class-c and privacy-public rules state "human approval required" —
+  // they are SATISFIED by a real human sign-off, not absolute prohibitions.
+  // Without this, arming enforce (the prod default) silently kills the ADR-004
+  // Risk-C approval path: a human approves via the allowlist panel and the run
+  // still 403s at the gate.
+  it('enforce: a human-approved Risk-C run is no longer blocked', () => {
+    const result = resolvePolicyGate(contract({ riskClass: 'C' }), { enforce: true, humanApproved: true })
+    expect(result.decision.verdict).toBe('allow')
+    expect(result.blocked).toBe(false)
+    expect(result.waivedByApproval.map(v => v.ruleId)).toEqual(['risk-class-c'])
+  })
+
+  it('enforce: a human-approved public-privacy run is no longer blocked', () => {
+    const result = resolvePolicyGate(contract({ privacyMode: 'public' }), { enforce: true, humanApproved: true })
+    expect(result.decision.verdict).toBe('allow')
+    expect(result.blocked).toBe(false)
+  })
+
+  it('enforce: a human approval does NOT waive absolute rules (secret tools)', () => {
+    const result = resolvePolicyGate(
+      contract({ riskClass: 'C', allowedTools: ['Bash', 'read-api-key'] }),
+      { enforce: true, humanApproved: true },
+    )
+    expect(result.decision.verdict).toBe('deny')
+    expect(result.blocked).toBe(true)
+    expect(result.decision.reason).toContain('read-api-key')
+  })
+
+  it('enforce: a human approval does NOT waive a destructive tool or a zero budget', () => {
+    for (const override of [{ allowedTools: ['rm -rf /'] }, { maxBudgetUsd: 0 }]) {
+      const result = resolvePolicyGate(contract(override), { enforce: true, humanApproved: true })
+      expect(result.blocked, JSON.stringify(override)).toBe(true)
+    }
+  })
+
+  it('without humanApproved the gate behaves exactly as before', () => {
+    const result = resolvePolicyGate(contract({ riskClass: 'C' }), { enforce: true })
+    expect(result.blocked).toBe(true)
+    expect(result.waivedByApproval).toEqual([])
+  })
+
   it('enforce: a deny verdict (secret tool) blocks the run', () => {
     const result = resolvePolicyGate(contract({ allowedTools: ['Bash', 'read-api-key'] }), { enforce: true })
     expect(result.decision.verdict).toBe('deny')
