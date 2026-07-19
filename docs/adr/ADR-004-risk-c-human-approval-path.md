@@ -140,6 +140,11 @@ Sven decided **E1-A / E2-C / E3-A / E4-A**:
   - **D2 human approval** — every Risk-C run needs a human `approvedBy` from the allowlist (E1). No
     automated/self-approval path exists. This is the primary brake and is *not* loosened.
   - **Policy gate (D1)** enforced (`FORGEPILOT_POLICY_ENFORCE=1`) — evaluates the contract before spawn.
+    Note: the gate's `risk-class-c` and `privacy-public` rules read "human approval required" — they are
+    *satisfied* by the E1 approval, not re-applied on top of it. `resolvePolicyGate(..., {humanApproved})`
+    waives exactly those two and logs what the approval covered; secret-tool, destructive-tool, budget and
+    goal rules stay absolute. Without this waiver, arming D1 would 403 every run E1 had just legitimised,
+    silently disabling this ADR's whole approval path.
   - **Secret-scrubbed env (P4)** — the agent does not inherit server secrets.
   - **In-flight budget kill (P3)** — a runaway Risk-C agent is SIGTERM'd at the budget ceiling.
 

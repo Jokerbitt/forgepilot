@@ -26,6 +26,7 @@ import {
   getExecutionStartBlocker,
   buildSubTaskPrompt,
   buildRetryContext,
+  isHumanApproval,
 } from '@/lib/delegation-execution'
 import { buildSelectiveContext } from '@/lib/delegations/context-router'
 import { OllamaAgentRunner, isOllamaReachable } from '@/lib/agent-runner/ollama-runner'
@@ -2541,7 +2542,20 @@ export async function POST(
   // report-only: a 'deny' is logged as a visible warning and the run proceeds
   // (zero behavior change), so the engine can be observed on real runs. Arming
   // FORGEPILOT_POLICY_ENFORCE=1 turns a 'deny' into a hard 403 block (see D1).
-  const policyGate = resolvePolicyGate(delegation.contract, { enforce: isPolicyEnforced() })
+  // A human approval satisfies the "human approval required" rules (Risk-C,
+  // public privacy) — without that, enforce mode would 403 exactly those runs
+  // the ADR-004 approval path just legitimised. Absolute rules still deny.
+  const policyGate = resolvePolicyGate(delegation.contract, {
+    enforce: isPolicyEnforced(),
+    humanApproved: isHumanApproval(delegation.approvedBy),
+  })
+  if (policyGate.waivedByApproval.length > 0) {
+    await appendLogs(id, [{
+      timestamp: new Date().toISOString(),
+      type: 'info',
+      message: `Policy-Gate: durch menschliche Freigabe (${delegation.approvedBy?.actor}) erfüllt: ${policyGate.waivedByApproval.map(v => v.ruleId).join(', ')}`,
+    }])
+  }
   if (policyGate.decision.verdict === 'deny') {
     if (policyGate.blocked) {
       await appendLogs(id, [{
